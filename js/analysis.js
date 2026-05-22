@@ -111,7 +111,8 @@ const Analyzer = (() => {
       } else if (game.in_check()) {
         if (madeMove.captured) {
           const pieceName = PIECE_NAMES_FR[madeMove.captured];
-          tipFr = `Les ${side} capturent le ${pieceName} avec échec ! Un coup très efficace qui gagne du matériel tout en menaçant le roi.`;
+          const artCap = PIECE_ARTICLE_FR[madeMove.captured];
+          tipFr = `Les ${side} capturent ${artCap} ${pieceName} avec échec ! Un coup très efficace qui gagne du matériel tout en menaçant le roi.`;
           type = matSwing >= 2 ? 'good' : 'neutral';
         } else {
           tipFr = `Échec au roi ! Les ${side} mettent la pression sur le roi adverse.`;
@@ -121,18 +122,21 @@ const Analyzer = (() => {
       } else if (madeMove.captured) {
         const capturedName = PIECE_NAMES_FR[madeMove.captured];
         const pieceName = PIECE_NAMES_FR[madeMove.piece];
+        const artPiece = PIECE_ARTICLE_FR[madeMove.piece];
+        const artCap = PIECE_ARTICLE_FR[madeMove.captured];
+        const ArtPiece = artPiece.charAt(0).toUpperCase() + artPiece.slice(1);
 
         if (matSwing >= 3) {
           type = 'good';
-          tipFr = `Excellent ! Le ${pieceName} capture le ${capturedName}. Les ${side} gagnent du matériel significatif.`;
+          tipFr = `Excellent ! ${ArtPiece} ${pieceName} capture ${artCap} ${capturedName}. Les ${side} gagnent du matériel significatif.`;
         } else if (matSwing <= -3) {
           type = 'blunder';
-          tipFr = `Le ${pieceName} prend le ${capturedName}, mais c'est un mauvais échange. Les ${side} perdent du matériel dans l'affaire.`;
+          tipFr = `${ArtPiece} ${pieceName} prend ${artCap} ${capturedName}, mais c'est un mauvais échange. Les ${side} perdent du matériel dans l'affaire.`;
         } else if (matSwing <= -1) {
           type = 'mistake';
-          tipFr = `Échange légèrement défavorable : le ${pieceName} prend le ${capturedName}, mais les ${side} y perdent un peu.`;
+          tipFr = `Échange légèrement défavorable : ${artPiece} ${pieceName} prend ${artCap} ${capturedName}, mais les ${side} y perdent un peu.`;
         } else {
-          tipFr = `Le ${pieceName} capture le ${capturedName}. Échange équilibré.`;
+          tipFr = `${ArtPiece} ${pieceName} capture ${artCap} ${capturedName}. Échange équilibré.`;
         }
         arrow = { from: madeMove.from, to: madeMove.to };
       } else {
