@@ -71,8 +71,18 @@ const App = (() => {
 
   function sanitizePgn(pgn) {
     let cleaned = pgn.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    cleaned = cleaned.replace(/\\'/g, "'");
+    cleaned = cleaned.replace(/\\\\/g, '\\');
     cleaned = cleaned.replace(/\[Date\s+"[^"]*"\]/g, '[Date "2025.01.01"]');
     cleaned = cleaned.replace(/(\])\n(\d)/, '$1\n\n$2');
+    cleaned = cleaned.replace(/(\])\n(\[)/g, '$1\n$2');
+    const lastBracket = cleaned.lastIndexOf(']');
+    if (lastBracket > -1) {
+      const headers = cleaned.substring(0, lastBracket + 1);
+      let movesText = cleaned.substring(lastBracket + 1).trim();
+      movesText = movesText.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+      cleaned = headers + '\n\n' + movesText;
+    }
     return cleaned;
   }
 
@@ -84,16 +94,41 @@ const App = (() => {
     }
 
     const chess = new Chess();
-    let loaded = chess.load_pgn(pgnText, { sloppy: true });
-    if (!loaded) loaded = chess.load_pgn(sanitizePgn(pgnText), { sloppy: true });
-    if (!loaded) {
+    const cleaned = sanitizePgn(pgnText);
+    chess.load_pgn(cleaned, { sloppy: true });
+    if (chess.history().length === 0) {
+      chess.load_pgn(pgnText, { sloppy: true });
+    }
+    if (chess.history().length === 0) {
       showError('PGN invalide. Vérifiez le format et réessayez.');
       return;
     }
 
-    hideError();
     const header = chess.header();
-    const moves = chess.history({ verbose: true });
+    let moves = chess.history({ verbose: true });
+
+    const movesText = (cleaned.substring(cleaned.lastIndexOf(']') + 1)
+      || pgnText.replace(/\[[^\]]*\]/g, '')).trim();
+    const moveTokens = movesText.split(/\s+/)
+      .filter(t => !t.match(/^\d+\.+$/) && !t.match(/^(1-0|0-1|1\/2-1\/2|\*)$/));
+
+    if (moveTokens.length > moves.length) {
+      const replay = new Chess();
+      for (const tok of moveTokens) {
+        let r = replay.move(tok, { sloppy: true });
+        if (!r) {
+          const legal = replay.moves({ verbose: true });
+          const sanMatch = legal.find(m => m.san.replace(/[+#]/, '') === tok.replace(/[+#]/, ''));
+          if (sanMatch) r = replay.move({ from: sanMatch.from, to: sanMatch.to, promotion: sanMatch.promotion });
+        }
+        if (!r) break;
+      }
+      if (replay.history().length > moves.length) {
+        moves = replay.history({ verbose: true });
+      }
+    }
+
+    hideError();
 
     if (moves.length === 0) {
       showError('Aucun coup trouvé dans ce PGN.');

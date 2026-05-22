@@ -75,7 +75,8 @@ const Analyzer = (() => {
     for (let i = 0; i < moves.length; i++) {
       const move = moves[i];
       const prevFen = game.fen();
-      const madeMove = game.move(move.san);
+      let madeMove = game.move(move.san, { sloppy: true });
+      if (!madeMove) madeMove = game.move({ from: move.from, to: move.to, promotion: move.promotion });
       if (!madeMove) {
         results.push({ type: 'neutral', text: '', tipFr: 'Coup non reconnu.', san: move.san, sanFr: move.san });
         continue;
