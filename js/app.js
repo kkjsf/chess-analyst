@@ -436,12 +436,16 @@ const App = (() => {
       const side = isUserMove ? 'vous' : (isWhite ? 'les Blancs' : 'les Noirs');
       const sideCapital = isUserMove ? 'Vous' : (isWhite ? 'Les Blancs' : 'Les Noirs');
 
+      const badgeSuffix = user ? (isUserMove ? '' : ' adverse') : '';
+
       if (r.move.san === 'O-O' || r.move.san === 'O-O-O') {
         const sideRoque = r.move.san === 'O-O' ? 'côté roi' : 'côté dame';
         const desc = isUserMove
           ? `Vous roquez ${sideRoque} — bon réflexe pour mettre votre roi en sécurité.`
-          : `${sideCapital} roquent ${sideRoque}, mettant le roi en sécurité.`;
-        candidates.push({ index: i, label, score: 3, desc, badge: 'Bon coup', badgeClass: 'bon-coup' });
+          : user
+            ? `Votre adversaire roque ${sideRoque}.`
+            : `${sideCapital} roquent ${sideRoque}, mettant le roi en sécurité.`;
+        candidates.push({ index: i, label, score: 3, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: 'bon-coup' });
       }
 
       if (i === analysis.length - 1 && (header.Result === '1-0' || header.Result === '0-1')) {
@@ -449,7 +453,9 @@ const App = (() => {
         if (termLower.includes('checkmate') || termLower.includes('mat') || r.san.includes('#')) {
           const desc = isUserMove
             ? 'Échec et mat ! Belle conclusion.'
-            : `Échec et mat par votre adversaire.`;
+            : user
+              ? 'Échec et mat par votre adversaire.'
+              : `Échec et mat ! ${sideCapital} concluent la partie.`;
           candidates.push({ index: i, label, score: 20, desc, badge: 'Moment clé', badgeClass: 'moment-cle' });
         }
       }
@@ -457,7 +463,9 @@ const App = (() => {
       if (r.move.promotion) {
         const desc = isUserMove
           ? 'Vous promouvez un pion en dame — moment décisif, bien amené !'
-          : 'Promotion adverse en dame — un moment décisif.';
+          : user
+            ? 'Promotion adverse en dame — danger !'
+            : 'Promotion du pion en dame — un moment décisif.';
         candidates.push({ index: i, label, score: 12, desc, badge: 'Moment clé', badgeClass: 'moment-cle' });
       }
 
@@ -466,13 +474,14 @@ const App = (() => {
         const swing = Math.abs(r.materialDiff - prevDiff);
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
         if (isUserMove) desc += ' À retenir pour la prochaine fois.';
-        candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe', badgeClass: 'gaffe' });
+        else if (user) desc += ' Une erreur adverse à exploiter !';
+        candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe' + badgeSuffix, badgeClass: 'gaffe' });
       }
 
       if (r.type === 'mistake') {
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
         if (isUserMove) desc += ' Un point à travailler.';
-        candidates.push({ index: i, label, score: 5, desc, badge: 'Imprécision', badgeClass: 'imprecision' });
+        candidates.push({ index: i, label, score: 5, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision' });
       }
 
       if (r.type === 'good' && r.move.captured) {
@@ -480,7 +489,8 @@ const App = (() => {
         if (capturedVal >= 5) {
           let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
           if (isUserMove) desc += ' Bien vu !';
-          candidates.push({ index: i, label, score: 8 + capturedVal, desc, badge: 'Bon coup', badgeClass: 'bon-coup' });
+          else if (user) desc += ' Aïe, un coup douloureux pour vous.';
+          candidates.push({ index: i, label, score: 8 + capturedVal, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: isUserMove ? 'bon-coup' : 'gaffe' });
         }
       }
     }
@@ -514,7 +524,10 @@ const App = (() => {
         <span class="highlight-move">${p.label}</span>
         <span class="highlight-desc">${p.desc}</span>
         <span class="highlight-badge ${p.badgeClass}">${p.badge}</span>`;
-      item.addEventListener('click', () => goTo(p.index + 1));
+      item.addEventListener('click', () => {
+        goTo(p.index + 1);
+        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
       list.appendChild(item);
     }
     card.hidden = false;
