@@ -50,6 +50,19 @@
   </div>
 
   <div class="analysis-body">
+    <div class="intro-card" id="intro-card" hidden>
+      <div class="intro-header">
+        <span class="intro-icon">📋</span>
+        <span class="intro-label">Résumé</span>
+      </div>
+      <div class="intro-text" id="intro-text"></div>
+    </div>
+
+    <div class="highlights-card" id="highlights-card" hidden>
+      <h3>Moments clés</h3>
+      <div class="highlights-list" id="highlights-list"></div>
+    </div>
+
     <div class="board-wrapper">
       <div class="player-bar" id="top-player">
         <span class="piece-icon">⚫</span>
@@ -110,10 +123,10 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=4"></script>
-<script src="js/board.js?v=4"></script>
-<script src="js/analysis.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/chess.min.js?v=5"></script>
+<script src="js/board.js?v=5"></script>
+<script src="js/analysis.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

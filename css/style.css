@@ -188,6 +188,79 @@ html, body {
   width: 100%;
 }
 
+/* Intro card */
+.intro-card {
+  background: var(--bg-card);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 16px;
+}
+.intro-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.intro-header .intro-icon { font-size: 20px; }
+.intro-header .intro-label { font-weight: 600; font-size: 14px; color: var(--accent); }
+.intro-text { font-size: 14px; line-height: 1.7; color: var(--text); }
+
+/* Highlights card */
+.highlights-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.highlights-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.highlights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.highlight-item {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.highlight-item:hover { background: var(--bg-elevated); }
+.highlight-move {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 52px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.highlight-body { flex: 1; min-width: 0; }
+.highlight-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.highlight-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  align-self: center;
+}
+.highlight-badge.gaffe { background: #3b1a1a; color: var(--danger); }
+.highlight-badge.imprecision { background: #3b2e1a; color: var(--warning); }
+.highlight-badge.bon-coup { background: #1a3b2a; color: var(--success); }
+.highlight-badge.moment-cle { background: #2a2a3a; color: var(--accent); }
+
 /* Board */
 .board-wrapper {
   display: flex;

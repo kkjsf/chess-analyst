@@ -180,6 +180,8 @@ const App = (() => {
     $('#move-slider').max = analysis.length;
     $('#move-slider').value = 0;
 
+    buildIntro(header, analysis, summary);
+    buildHighlights(header, analysis);
     buildMoveList(analysis);
     buildSummary(summary, analysis);
 
@@ -250,6 +252,272 @@ const App = (() => {
         cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
+  }
+
+  function detectUser(header) {
+    const name = 'nimokaji';
+    const w = (header.White || '').toLowerCase();
+    const b = (header.Black || '').toLowerCase();
+    if (w === name) return 'w';
+    if (b === name) return 'b';
+    return null;
+  }
+
+  function buildIntro(header, analysis, summary) {
+    const white = header.White || 'Blancs';
+    const black = header.Black || 'Noirs';
+    const whiteElo = header.WhiteElo;
+    const blackElo = header.BlackElo;
+    const result = header.Result || '*';
+    const termination = header.Termination || '';
+    const tc = header.TimeControl || '';
+    const user = detectUser(header);
+    const userIsWhite = user === 'w';
+    const opponent = user ? (userIsWhite ? black : white) : null;
+    const opponentElo = user ? (userIsWhite ? blackElo : whiteElo) : null;
+
+    let tcLabel = '';
+    if (tc.includes('86400') || tc.includes('172800')) tcLabel = 'en partie journalière';
+    else if (tc.includes('+')) {
+      const secs = parseInt(tc);
+      if (secs <= 180) tcLabel = 'en Bullet';
+      else if (secs <= 600) tcLabel = 'en Blitz';
+      else tcLabel = 'en Rapide';
+    }
+
+    let line1 = '';
+    if (user) {
+      line1 = `Vous jouez les ${userIsWhite ? 'Blancs' : 'Noirs'} contre ${opponent}`;
+      if (opponentElo) line1 += ` (${opponentElo})`;
+      if (tcLabel) line1 += ` ${tcLabel}`;
+      line1 += '.';
+    } else {
+      line1 = `${white}`;
+      if (whiteElo) line1 += ` (${whiteElo})`;
+      line1 += ` contre ${black}`;
+      if (blackElo) line1 += ` (${blackElo})`;
+      if (tcLabel) line1 += ` ${tcLabel}`;
+      line1 += '.';
+    }
+
+    let line2 = '';
+    const termLower = termination.toLowerCase();
+    const userWon = user && ((userIsWhite && result === '1-0') || (!userIsWhite && result === '0-1'));
+    const userLost = user && ((userIsWhite && result === '0-1') || (!userIsWhite && result === '1-0'));
+    const isDraw = result === '1/2-1/2';
+
+    if (user) {
+      if (userWon) {
+        if (termLower.includes('checkmate') || termLower.includes('mat')) {
+          line2 = `Vous gagnez par échec et mat en ${analysis.length} coups — bien joué !`;
+        } else if (termLower.includes('resign') || termLower.includes('abandon')) {
+          line2 = `Votre adversaire abandonne après ${analysis.length} coups.`;
+        } else if (termLower.includes('time')) {
+          line2 = `Vous gagnez au temps après ${analysis.length} coups.`;
+        } else {
+          line2 = `Victoire en ${analysis.length} coups, bravo !`;
+        }
+      } else if (userLost) {
+        if (termLower.includes('checkmate') || termLower.includes('mat')) {
+          line2 = `Défaite par mat en ${analysis.length} coups — voyons ce qui s'est passé.`;
+        } else if (termLower.includes('resign') || termLower.includes('abandon')) {
+          line2 = `Vous abandonnez après ${analysis.length} coups.`;
+        } else if (termLower.includes('time')) {
+          line2 = `Défaite au temps après ${analysis.length} coups.`;
+        } else {
+          line2 = `Défaite en ${analysis.length} coups — analysons pour progresser.`;
+        }
+      } else if (isDraw) {
+        line2 = `Partie nulle en ${analysis.length} coups.`;
+      } else {
+        line2 = `Partie de ${analysis.length} coups.`;
+      }
+    } else {
+      if (result === '1-0') {
+        if (termLower.includes('checkmate') || termLower.includes('mat')) {
+          line2 = `Victoire des Blancs par échec et mat en ${analysis.length} coups.`;
+        } else if (termLower.includes('resign') || termLower.includes('abandon')) {
+          line2 = `Les Noirs ont abandonné après ${analysis.length} coups.`;
+        } else if (termLower.includes('time')) {
+          line2 = `Les Blancs gagnent au temps après ${analysis.length} coups.`;
+        } else {
+          line2 = `Victoire des Blancs en ${analysis.length} coups.`;
+        }
+      } else if (result === '0-1') {
+        if (termLower.includes('checkmate') || termLower.includes('mat')) {
+          line2 = `Victoire des Noirs par échec et mat en ${analysis.length} coups.`;
+        } else if (termLower.includes('resign') || termLower.includes('abandon')) {
+          line2 = `Les Blancs ont abandonné après ${analysis.length} coups.`;
+        } else if (termLower.includes('time')) {
+          line2 = `Les Noirs gagnent au temps après ${analysis.length} coups.`;
+        } else {
+          line2 = `Victoire des Noirs en ${analysis.length} coups.`;
+        }
+      } else if (isDraw) {
+        if (termLower.includes('stalemate') || termLower.includes('pat')) {
+          line2 = `Partie nulle par pat après ${analysis.length} coups.`;
+        } else if (termLower.includes('repetition') || termLower.includes('répétition')) {
+          line2 = `Partie nulle par répétition après ${analysis.length} coups.`;
+        } else if (termLower.includes('agreement') || termLower.includes('accord')) {
+          line2 = `Partie nulle par accord mutuel après ${analysis.length} coups.`;
+        } else {
+          line2 = `Partie nulle en ${analysis.length} coups.`;
+        }
+      } else {
+        line2 = `Partie de ${analysis.length} coups.`;
+      }
+    }
+
+    const s = summary.stats;
+    const userStats = user ? (userIsWhite ? s.w : s.b) : null;
+    const oppStats = user ? (userIsWhite ? s.b : s.w) : null;
+    const totalBlunders = s.w.blunders + s.b.blunders;
+    const totalMistakes = s.w.mistakes + s.b.mistakes;
+    const totalGood = s.w.good + s.b.good;
+
+    let line3 = '';
+    if (user) {
+      if (userStats.blunders === 0 && userStats.mistakes === 0) {
+        line3 = 'Aucune gaffe ni imprécision de votre part — partie solide !';
+      } else if (userStats.blunders === 0 && userStats.mistakes <= 2) {
+        line3 = 'Très peu d\'imprécisions de votre côté, c\'est du bon travail.';
+      } else if (userStats.blunders >= 2 && userWon) {
+        line3 = 'Vous avez gagné malgré quelques gaffes — votre adversaire n\'a pas su en profiter.';
+      } else if (userStats.blunders >= 2 && userLost) {
+        line3 = 'Plusieurs gaffes vous ont coûté la partie. Regardez les moments clés pour comprendre.';
+      } else if (userStats.blunders === 1 && userLost) {
+        line3 = 'Une seule gaffe, mais elle a été décisive. Voyons laquelle.';
+      } else if (userStats.good >= 5) {
+        line3 = 'Vous avez trouvé de nombreux bons coups — continuez comme ça !';
+      } else if (userLost && oppStats.blunders === 0) {
+        line3 = 'Votre adversaire a joué solidement. Voyons où vous pouviez faire mieux.';
+      } else {
+        line3 = 'Voyons les moments clés pour identifier les axes de progression.';
+      }
+    } else {
+      if (totalBlunders >= 4) {
+        line3 = 'Une partie mouvementée avec beaucoup d\'erreurs des deux côtés.';
+      } else if (totalBlunders === 0 && totalMistakes <= 2) {
+        line3 = 'Une partie propre et bien jouée, avec très peu d\'imprécisions.';
+      } else if (s.w.blunders >= 2 && s.b.blunders === 0 && result === '0-1') {
+        line3 = 'Les Blancs ont commis plusieurs gaffes, permettant aux Noirs de prendre le contrôle.';
+      } else if (s.b.blunders >= 2 && s.w.blunders === 0 && result === '1-0') {
+        line3 = 'Les Noirs ont commis plusieurs gaffes, donnant l\'avantage aux Blancs.';
+      } else if (s.w.blunders >= 2 || s.b.blunders >= 2) {
+        line3 = 'Une partie marquée par des erreurs qui ont fait basculer l\'avantage.';
+      } else if (analysis.length <= 30) {
+        line3 = 'Une partie courte, décidée rapidement.';
+      } else if (analysis.length >= 80) {
+        line3 = 'Une longue bataille qui s\'est prolongée jusqu\'en finale.';
+      } else if (totalGood >= 10) {
+        line3 = 'Les deux joueurs ont trouvé de nombreux bons coups au fil de la partie.';
+      } else {
+        line3 = 'Une partie avec quelques moments décisifs qui ont fait basculer l\'avantage.';
+      }
+    }
+
+    const card = $('#intro-card');
+    $('#intro-text').innerHTML = `${line1} ${line2} ${line3}`;
+    card.hidden = false;
+  }
+
+  function buildHighlights(header, analysis) {
+    const candidates = [];
+    const user = detectUser(header);
+
+    for (let i = 0; i < analysis.length; i++) {
+      const r = analysis[i];
+      if (!r.move) continue;
+      const moveNum = Math.floor(i / 2) + 1;
+      const dot = i % 2 === 0 ? '.' : '...';
+      const label = `${moveNum}${dot} ${r.sanFr}`;
+      const isWhite = r.move.color === 'w';
+      const isUserMove = user && ((user === 'w' && isWhite) || (user === 'b' && !isWhite));
+      const side = isUserMove ? 'vous' : (isWhite ? 'les Blancs' : 'les Noirs');
+      const sideCapital = isUserMove ? 'Vous' : (isWhite ? 'Les Blancs' : 'Les Noirs');
+
+      if (r.move.san === 'O-O' || r.move.san === 'O-O-O') {
+        const sideRoque = r.move.san === 'O-O' ? 'côté roi' : 'côté dame';
+        const desc = isUserMove
+          ? `Vous roquez ${sideRoque} — bon réflexe pour mettre votre roi en sécurité.`
+          : `${sideCapital} roquent ${sideRoque}, mettant le roi en sécurité.`;
+        candidates.push({ index: i, label, score: 3, desc, badge: 'Bon coup', badgeClass: 'bon-coup' });
+      }
+
+      if (i === analysis.length - 1 && (header.Result === '1-0' || header.Result === '0-1')) {
+        const termLower = (header.Termination || '').toLowerCase();
+        if (termLower.includes('checkmate') || termLower.includes('mat') || r.san.includes('#')) {
+          const desc = isUserMove
+            ? 'Échec et mat ! Belle conclusion.'
+            : `Échec et mat par votre adversaire.`;
+          candidates.push({ index: i, label, score: 20, desc, badge: 'Moment clé', badgeClass: 'moment-cle' });
+        }
+      }
+
+      if (r.move.promotion) {
+        const desc = isUserMove
+          ? 'Vous promouvez un pion en dame — moment décisif, bien amené !'
+          : 'Promotion adverse en dame — un moment décisif.';
+        candidates.push({ index: i, label, score: 12, desc, badge: 'Moment clé', badgeClass: 'moment-cle' });
+      }
+
+      if (r.type === 'blunder') {
+        const prevDiff = i > 0 ? analysis[i - 1].materialDiff : 0;
+        const swing = Math.abs(r.materialDiff - prevDiff);
+        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        if (isUserMove) desc += ' À retenir pour la prochaine fois.';
+        candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe', badgeClass: 'gaffe' });
+      }
+
+      if (r.type === 'mistake') {
+        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        if (isUserMove) desc += ' Un point à travailler.';
+        candidates.push({ index: i, label, score: 5, desc, badge: 'Imprécision', badgeClass: 'imprecision' });
+      }
+
+      if (r.type === 'good' && r.move.captured) {
+        const capturedVal = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }[r.move.captured] || 0;
+        if (capturedVal >= 5) {
+          let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+          if (isUserMove) desc += ' Bien vu !';
+          candidates.push({ index: i, label, score: 8 + capturedVal, desc, badge: 'Bon coup', badgeClass: 'bon-coup' });
+        }
+      }
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+
+    const seen = new Set();
+    const picks = [];
+    for (const c of candidates) {
+      if (seen.has(c.index)) continue;
+      seen.add(c.index);
+      picks.push(c);
+      if (picks.length >= 5) break;
+    }
+
+    picks.sort((a, b) => a.index - b.index);
+
+    const card = $('#highlights-card');
+    const list = $('#highlights-list');
+
+    if (picks.length === 0) {
+      card.hidden = true;
+      return;
+    }
+
+    list.innerHTML = '';
+    for (const p of picks) {
+      const item = document.createElement('div');
+      item.className = 'highlight-item';
+      item.innerHTML = `
+        <span class="highlight-move">${p.label}</span>
+        <span class="highlight-desc">${p.desc}</span>
+        <span class="highlight-badge ${p.badgeClass}">${p.badge}</span>`;
+      item.addEventListener('click', () => goTo(p.index + 1));
+      list.appendChild(item);
+    }
+    card.hidden = false;
   }
 
   function buildMoveList(analysis) {
