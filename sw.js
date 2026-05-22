@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v2';
+const CACHE_NAME = 'chess-analyst-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -25,6 +25,9 @@ self.addEventListener('activate', (e) => {
     )
   );
   self.clients.claim();
+  self.clients.matchAll().then(clients => {
+    clients.forEach(client => client.postMessage({ type: 'SW_UPDATED' }));
+  });
 });
 
 self.addEventListener('fetch', (e) => {
