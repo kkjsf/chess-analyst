@@ -89,7 +89,7 @@ const App = (() => {
     return cleaned;
   }
 
-  function onAnalyze() {
+  async function onAnalyze() {
     const pgnText = $('#pgn-input').value.trim();
     if (!pgnText) {
       showError('Collez un PGN pour commencer.');
@@ -138,11 +138,49 @@ const App = (() => {
       return;
     }
 
-    const analysis = Analyzer.analyzeGame(chess, moves);
+    let analysis;
+    let engineUsed = false;
+
+    showProgressBar('Chargement du moteur Stockfish...');
+
+    try {
+      await StockfishEngine.init();
+      engineUsed = true;
+      analysis = await Analyzer.analyzeGameAsync(chess, moves, (done, total) => {
+        const pct = Math.round(100 * done / total);
+        updateProgressBar(pct, `Analyse en cours... ${done}/${total} positions`);
+      });
+    } catch (_) {
+      analysis = Analyzer.analyzeGame(chess, moves);
+    }
+
+    hideProgressBar();
+
     const summary = Analyzer.generateSummary(analysis);
+    summary.engineUsed = engineUsed;
 
     saveGame(pgnText, header, moves.length);
     showAnalysis(header, moves, analysis, summary);
+  }
+
+  function showProgressBar(text) {
+    $('#btn-analyze').hidden = true;
+    $('#progress-container').hidden = false;
+    $('#progress-fill').style.width = '0%';
+    $('#progress-fill').classList.add('indeterminate');
+    $('#progress-text').textContent = text;
+  }
+
+  function updateProgressBar(pct, text) {
+    $('#progress-fill').classList.remove('indeterminate');
+    $('#progress-fill').style.width = pct + '%';
+    $('#progress-text').textContent = text;
+  }
+
+  function hideProgressBar() {
+    $('#btn-analyze').hidden = false;
+    $('#progress-container').hidden = true;
+    $('#progress-fill').classList.remove('indeterminate');
   }
 
   function showAnalysis(header, moves, analysis, summary) {
@@ -214,8 +252,14 @@ const App = (() => {
     $('#top-captured').textContent = captured.white;
     $('#bottom-captured').textContent = captured.black;
 
-    const matDiff = Analyzer.materialCount(fen);
-    const evalPct = Math.max(5, Math.min(95, 50 + matDiff.diff * 5));
+    let evalPct;
+    if (index > 0 && currentAnalysis[index - 1].eval !== undefined && currentAnalysis[index - 1].eval !== 0) {
+      const cp = currentAnalysis[index - 1].eval;
+      evalPct = Math.max(5, Math.min(95, 50 + 50 * (2 / (1 + Math.exp(-0.004 * cp)) - 1)));
+    } else {
+      const matDiff = Analyzer.materialCount(fen);
+      evalPct = Math.max(5, Math.min(95, 50 + matDiff.diff * 5));
+    }
     $('#eval-bar').style.height = evalPct + '%';
 
     const arrowSvg = $('#arrow-overlay');
@@ -237,8 +281,10 @@ const App = (() => {
 
       const badge = $('#tip-badge');
       badge.className = 'eval-badge';
-      if (r.type === 'blunder') { badge.textContent = 'Gaffe !'; badge.classList.add('blunder'); }
-      else if (r.type === 'mistake') { badge.textContent = 'Imprécision'; badge.classList.add('mistake'); }
+      if (r.type === 'brilliant') { badge.textContent = 'Brillant !'; badge.classList.add('brilliant'); }
+      else if (r.type === 'blunder') { badge.textContent = 'Gaffe !'; badge.classList.add('blunder'); }
+      else if (r.type === 'mistake') { badge.textContent = 'Erreur'; badge.classList.add('mistake'); }
+      else if (r.type === 'inaccuracy') { badge.textContent = 'Imprécision'; badge.classList.add('inaccuracy'); }
       else if (r.type === 'good') { badge.textContent = 'Bon coup'; badge.classList.add('good'); }
       else { badge.textContent = ''; }
     }
@@ -375,7 +421,7 @@ const App = (() => {
     const userStats = user ? (userIsWhite ? s.w : s.b) : null;
     const oppStats = user ? (userIsWhite ? s.b : s.w) : null;
     const totalBlunders = s.w.blunders + s.b.blunders;
-    const totalMistakes = s.w.mistakes + s.b.mistakes;
+    const totalMistakes = s.w.mistakes + s.b.mistakes + (s.w.inaccuracies || 0) + (s.b.inaccuracies || 0);
     const totalGood = s.w.good + s.b.good;
 
     let line3 = '';
@@ -481,10 +527,21 @@ const App = (() => {
         candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe' + badgeSuffix, badgeClass: 'gaffe' });
       }
 
+      if (r.type === 'inaccuracy') {
+        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        candidates.push({ index: i, label, score: 4, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision' });
+      }
+
       if (r.type === 'mistake') {
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
         if (isUserMove) desc += ' Un point à travailler.';
-        candidates.push({ index: i, label, score: 5, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision' });
+        candidates.push({ index: i, label, score: 6, desc, badge: 'Erreur' + badgeSuffix, badgeClass: 'erreur' });
+      }
+
+      if (r.type === 'brilliant') {
+        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        if (isUserMove) desc += ' Impressionnant !';
+        candidates.push({ index: i, label, score: 15, desc, badge: 'Brillant !' + badgeSuffix, badgeClass: 'brillant' });
       }
 
       if (r.type === 'good' && r.move.captured) {
@@ -564,8 +621,10 @@ const App = (() => {
     cell.className = 'move-cell';
     cell.dataset.index = index;
     cell.textContent = result.sanFr;
+    if (result.type === 'brilliant') cell.classList.add('brilliant-move');
     if (result.type === 'blunder') cell.classList.add('blunder-move');
     if (result.type === 'mistake') cell.classList.add('mistake-move');
+    if (result.type === 'inaccuracy') cell.classList.add('inaccuracy-move');
     if (result.type === 'good') cell.classList.add('good-move');
     cell.addEventListener('click', () => goTo(index + 1));
     return cell;
@@ -573,23 +632,27 @@ const App = (() => {
 
   function buildSummary(summary, analysis) {
     const s = summary.stats;
+    const pillsHtml = (side) => {
+      let pills = '';
+      if (side.brilliants) pills += `<span class="stat-pill brilliants">${side.brilliants} brillant${side.brilliants !== 1 ? 's' : ''}</span>`;
+      pills += `<span class="stat-pill good-moves">${side.good} bon${side.good !== 1 ? 's' : ''} coup${side.good !== 1 ? 's' : ''}</span>`;
+      if (side.inaccuracies) pills += `<span class="stat-pill inaccuracies">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
+      pills += `<span class="stat-pill mistakes">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
+      pills += `<span class="stat-pill blunders">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
+      return pills;
+    };
     let html = `
       <div class="summary-row">
         <span class="side-label">⚪</span>
-        <div class="stat-pills">
-          <span class="stat-pill blunders">${s.w.blunders} gaffe${s.w.blunders !== 1 ? 's' : ''}</span>
-          <span class="stat-pill mistakes">${s.w.mistakes} imprécision${s.w.mistakes !== 1 ? 's' : ''}</span>
-          <span class="stat-pill good-moves">${s.w.good} bon${s.w.good !== 1 ? 's' : ''} coup${s.w.good !== 1 ? 's' : ''}</span>
-        </div>
+        <div class="stat-pills">${pillsHtml(s.w)}</div>
       </div>
       <div class="summary-row">
         <span class="side-label">⚫</span>
-        <div class="stat-pills">
-          <span class="stat-pill blunders">${s.b.blunders} gaffe${s.b.blunders !== 1 ? 's' : ''}</span>
-          <span class="stat-pill mistakes">${s.b.mistakes} imprécision${s.b.mistakes !== 1 ? 's' : ''}</span>
-          <span class="stat-pill good-moves">${s.b.good} bon${s.b.good !== 1 ? 's' : ''} coup${s.b.good !== 1 ? 's' : ''}</span>
-        </div>
+        <div class="stat-pills">${pillsHtml(s.b)}</div>
       </div>`;
+    if (summary.engineUsed) {
+      html += `<div class="engine-badge">Analyse Stockfish · profondeur 14</div>`;
+    }
 
     if (summary.keyMoment) {
       const km = summary.keyMoment;

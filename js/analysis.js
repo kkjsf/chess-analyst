@@ -272,30 +272,31 @@ const Analyzer = (() => {
 
   function generateSummary(results) {
     const stats = {
-      w: { blunders: 0, mistakes: 0, good: 0 },
-      b: { blunders: 0, mistakes: 0, good: 0 }
+      w: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0 },
+      b: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0 }
     };
     let keyMoment = null;
-    let biggestSwing = 0;
 
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (!r.move) continue;
       const side = r.move.color;
 
+      if (r.type === 'brilliant') stats[side].brilliants++;
+      if (r.type === 'good') stats[side].good++;
+      if (r.type === 'inaccuracy') stats[side].inaccuracies++;
+      if (r.type === 'mistake') stats[side].mistakes++;
       if (r.type === 'blunder') {
         stats[side].blunders++;
-        if (!keyMoment || r.type === 'blunder') {
+        if (!keyMoment) {
           keyMoment = { index: i, result: r, moveNum: Math.floor(i / 2) + 1 };
         }
       }
-      if (r.type === 'mistake') stats[side].mistakes++;
-      if (r.type === 'good') stats[side].good++;
     }
 
     if (!keyMoment) {
       for (let i = 0; i < results.length; i++) {
-        if (results[i].type === 'mistake') {
+        if (results[i].type === 'mistake' || results[i].type === 'inaccuracy') {
           keyMoment = { index: i, result: results[i], moveNum: Math.floor(i / 2) + 1 };
           break;
         }
@@ -305,5 +306,171 @@ const Analyzer = (() => {
     return { stats, keyMoment };
   }
 
-  return { analyzeGame, generateSummary, toFrench, materialCount };
+  async function analyzeGameAsync(chess, moves, onProgress) {
+    const depth = 14;
+    const game = new Chess();
+
+    const positions = [game.fen()];
+    const madeMovesArr = [];
+    for (const move of moves) {
+      let made = game.move(move.san, { sloppy: true });
+      if (!made) made = game.move({ from: move.from, to: move.to, promotion: move.promotion });
+      madeMovesArr.push(made);
+      positions.push(made ? game.fen() : null);
+    }
+
+    const evals = [];
+    const total = positions.length;
+    for (let i = 0; i < total; i++) {
+      if (!positions[i]) {
+        evals.push(null);
+      } else {
+        const g = new Chess(positions[i]);
+        if (g.game_over()) {
+          evals.push({ score: g.in_checkmate() ? -30000 : 0, bestMove: null, pv: '', mate: g.in_checkmate() ? 0 : null });
+        } else {
+          evals.push(await StockfishEngine.evaluate(positions[i], depth));
+        }
+      }
+      if (onProgress) onProgress(i + 1, total);
+    }
+
+    const results = [];
+    for (let i = 0; i < moves.length; i++) {
+      const madeMove = madeMovesArr[i];
+      if (!madeMove) {
+        results.push({ type: 'neutral', san: moves[i].san, sanFr: moves[i].san, tipFr: 'Coup non reconnu.', move: null, fen: null, materialDiff: 0, arrow: null, eval: 0, cpLoss: 0 });
+        continue;
+      }
+
+      const newFen = positions[i + 1];
+      const newMaterial = materialCount(newFen);
+      const isWhite = madeMove.color === 'w';
+      const sanFr = toFrench(madeMove.san);
+      const side = isWhite ? 'Blancs' : 'Noirs';
+
+      const evalBefore = evals[i];
+      const evalAfter = evals[i + 1];
+
+      let cpLoss = 0;
+      let bestMoveSanFr = null;
+      let bestMoveUci = null;
+      let evalForWhite = 0;
+
+      if (evalBefore && evalAfter) {
+        cpLoss = Math.max(0, evalBefore.score + evalAfter.score);
+
+        if (evalBefore.bestMove) {
+          bestMoveUci = evalBefore.bestMove;
+          const sanRaw = uciToSan(positions[i], bestMoveUci);
+          if (sanRaw) bestMoveSanFr = toFrench(sanRaw);
+        }
+
+        const playedUci = madeMove.from + madeMove.to + (madeMove.promotion || '');
+        if (bestMoveUci && playedUci === bestMoveUci) {
+          cpLoss = 0;
+          bestMoveSanFr = null;
+        }
+
+        if (cpLoss > 0 && cpLoss < 15) cpLoss = 0;
+
+        evalForWhite = isWhite ? -evalAfter.score : evalAfter.score;
+      }
+
+      const prevMat = materialCount(positions[i]);
+      const matChange = isWhite
+        ? (newMaterial.diff - prevMat.diff)
+        : (prevMat.diff - newMaterial.diff);
+
+      let type;
+      if (madeMove.san.includes('#')) {
+        type = 'good';
+      } else if (cpLoss <= 5 && (matChange <= -2 || (evalBefore && evalBefore.score <= -150))) {
+        type = 'brilliant';
+      } else if (cpLoss > 200) {
+        type = 'blunder';
+      } else if (cpLoss > 100) {
+        type = 'mistake';
+      } else if (cpLoss > 50) {
+        type = 'inaccuracy';
+      } else if (cpLoss <= 10) {
+        type = 'good';
+      } else {
+        type = 'neutral';
+      }
+
+      const evalDesc = evalAfter ? describeEval(evalForWhite) : '';
+      let tipFr;
+      if (madeMove.san.includes('#')) {
+        tipFr = `Échec et mat ! Les ${side} remportent la partie.`;
+      } else if (type === 'brilliant') {
+        tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible. ${evalDesc}`;
+      } else if (type === 'blunder') {
+        tipFr = bestMoveSanFr
+          ? `Gaffe ! Ce coup perd ${cpLoss} centipièces d'avantage. Il fallait jouer <b>${bestMoveSanFr}</b>. ${evalDesc}`
+          : `Gaffe ! Ce coup coûte ${cpLoss} centipièces. ${evalDesc}`;
+      } else if (type === 'mistake') {
+        tipFr = bestMoveSanFr
+          ? `Erreur sérieuse (−${cpLoss} cp). Le meilleur coup était <b>${bestMoveSanFr}</b>. ${evalDesc}`
+          : `Erreur sérieuse (−${cpLoss} cp). ${evalDesc}`;
+      } else if (type === 'inaccuracy') {
+        tipFr = bestMoveSanFr
+          ? `Légère imprécision (−${cpLoss} cp). <b>${bestMoveSanFr}</b> était plus précis. ${evalDesc}`
+          : `Légère imprécision (−${cpLoss} cp). ${evalDesc}`;
+      } else if (type === 'good') {
+        if (madeMove.captured) {
+          const capName = PIECE_NAMES_FR[madeMove.captured];
+          tipFr = `Excellent ! Capture optimale${capName ? ' du ' + capName : ''}. ${evalDesc}`;
+        } else if (madeMove.san === 'O-O' || madeMove.san === 'O-O-O') {
+          tipFr = `Bon roque ! Le moteur confirme que c'est le meilleur choix ici. ${evalDesc}`;
+        } else {
+          tipFr = `Très bon coup, conforme à la recommandation du moteur. ${evalDesc}`;
+        }
+      } else {
+        tipFr = `Coup correct (−${cpLoss} cp). ${evalDesc}`;
+      }
+
+      let arrow = null;
+      if ((type === 'blunder' || type === 'mistake' || type === 'inaccuracy') && bestMoveUci && bestMoveUci.length >= 4) {
+        arrow = { from: bestMoveUci.slice(0, 2), to: bestMoveUci.slice(2, 4) };
+      } else if (madeMove.san.includes('+') || madeMove.san.includes('#')) {
+        const kingSq = findKing(newFen, isWhite ? 'b' : 'w');
+        if (kingSq) arrow = { from: madeMove.to, to: kingSq };
+      } else if (madeMove.captured) {
+        arrow = { from: madeMove.from, to: madeMove.to };
+      }
+
+      results.push({
+        type, san: madeMove.san, sanFr, tipFr,
+        move: madeMove, fen: newFen,
+        materialDiff: newMaterial.diff, arrow,
+        eval: evalForWhite, cpLoss
+      });
+    }
+
+    return results;
+  }
+
+  function uciToSan(fen, uci) {
+    if (!uci || uci.length < 4) return null;
+    try {
+      const g = new Chess(fen);
+      const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+      return m ? m.san : null;
+    } catch (_) { return null; }
+  }
+
+  function describeEval(cpWhite) {
+    if (cpWhite >= 29000) return 'Mat forcé pour les Blancs.';
+    if (cpWhite <= -29000) return 'Mat forcé pour les Noirs.';
+    if (cpWhite > 300) return 'Avantage décisif pour les Blancs.';
+    if (cpWhite > 100) return 'Les Blancs ont un avantage clair.';
+    if (cpWhite > 30) return 'Léger avantage pour les Blancs.';
+    if (cpWhite < -300) return 'Avantage décisif pour les Noirs.';
+    if (cpWhite < -100) return 'Les Noirs ont un avantage clair.';
+    if (cpWhite < -30) return 'Léger avantage pour les Noirs.';
+    return 'Position équilibrée.';
+  }
+
+  return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount };
 })();

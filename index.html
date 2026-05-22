@@ -29,12 +29,43 @@
     <textarea id="pgn-input" placeholder="Collez votre PGN ici..."></textarea>
     <div class="hint">📎 ou glissez un fichier .pgn ici</div>
     <button class="btn-primary" id="btn-analyze">Analyser la partie</button>
+    <div id="progress-container" class="progress-container" hidden>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-text" id="progress-text">Chargement...</div>
+    </div>
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
     <div id="recent-list"></div>
+  </div>
+
+  <div class="info-section">
+    <button class="info-toggle" id="info-toggle" onclick="document.getElementById('info-content').hidden = !document.getElementById('info-content').hidden">
+      <span class="info-icon">ℹ</span> Comment ça marche ?
+    </button>
+    <div class="info-content" id="info-content" hidden>
+      <p><b>Stockfish, un moteur d'échecs de classe mondiale</b><br>
+      L'analyse est réalisée par <b>Stockfish</b>, l'un des moteurs d'échecs les plus puissants au monde, directement dans votre navigateur grâce à WebAssembly. Aucune donnée n'est envoyée à un serveur — tout reste sur votre appareil.</p>
+      <p><b>Classification des coups</b><br>
+      Chaque coup est évalué en « centipièces » (cp), une unité où 100 cp ≈ l'avantage d'un pion. La perte en cp par rapport au meilleur coup détermine la classification :</p>
+      <ul>
+        <li><span class="info-badge brillant">Brillant</span> Meilleur coup trouvé dans une position difficile (sacrifice correct ou position perdante)</li>
+        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal ou quasi-optimal (perte ≤ 10 cp)</li>
+        <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp)</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp)</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp)</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (perte &gt; 200 cp)</li>
+      </ul>
+      <p><b>À savoir</b></p>
+      <ul>
+        <li>Les conseils sont générés à partir de l'évaluation du moteur, pas d'une base de parties connues.</li>
+        <li>La profondeur d'analyse est de 14 demi-coups. Des tactiques très profondes peuvent parfois échapper à l'analyse.</li>
+        <li>Si le moteur ne se charge pas, une analyse heuristique simplifiée prend le relais automatiquement.</li>
+        <li>L'application fonctionne hors-ligne une fois chargée.</li>
+      </ul>
+    </div>
   </div>
 </div>
 
@@ -123,10 +154,11 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=5"></script>
-<script src="js/board.js?v=5"></script>
-<script src="js/analysis.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/chess.min.js?v=6"></script>
+<script src="js/board.js?v=6"></script>
+<script src="js/engine.js?v=6"></script>
+<script src="js/analysis.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
