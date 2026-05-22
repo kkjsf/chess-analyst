@@ -1,0 +1,22 @@
+{
+  "name": "Chess Analyst",
+  "short_name": "Chess Analyst",
+  "description": "Analysez vos parties d'échecs avec des conseils visuels",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "share_target": {
+    "action": "/index.html",
+    "method": "GET",
+    "params": {
+      "text": "text"
+    }
+  }
+}

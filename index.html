@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Chess Analyst</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ═══════ SCREEN 1: IMPORT ═══════ -->
+<div id="screen-import" class="screen import-screen active">
+  <div class="logo-section">
+    <div class="icon">♟</div>
+    <h1>Chess Analyst</h1>
+    <p>Analysez vos parties, progressez à chaque coup</p>
+  </div>
+
+  <div class="import-zone" id="drop-zone">
+    <textarea id="pgn-input" placeholder="Collez votre PGN ici..."></textarea>
+    <div class="hint">📎 ou glissez un fichier .pgn ici</div>
+    <button class="btn-primary" id="btn-analyze">Analyser la partie</button>
+    <div id="import-error" class="import-error" hidden></div>
+  </div>
+
+  <div class="recent-section" id="recent-section" hidden>
+    <h3>Parties récentes</h3>
+    <div id="recent-list"></div>
+  </div>
+</div>
+
+<!-- ═══════ SCREEN 2: ANALYSIS ═══════ -->
+<div id="screen-analysis" class="screen analysis-screen">
+  <div class="top-bar">
+    <button class="back-btn" id="btn-back">←</button>
+    <div class="match-info">
+      <div class="players-line" id="players-line"></div>
+      <div class="elo-line" id="elo-line"></div>
+    </div>
+    <span class="result-badge" id="result-badge"></span>
+  </div>
+
+  <div class="analysis-body">
+    <div class="board-wrapper">
+      <div class="player-bar" id="top-player">
+        <span class="piece-icon">⚫</span>
+        <span class="name" id="top-name"></span>
+        <span class="elo" id="top-elo"></span>
+        <span class="captured" id="top-captured"></span>
+      </div>
+
+      <div class="board-container" id="board-container">
+        <div class="eval-bar-container">
+          <div class="eval-bar-fill" id="eval-bar"></div>
+        </div>
+        <svg class="board-svg" viewBox="0 0 360 360" id="board-svg"></svg>
+        <svg class="arrow-overlay" viewBox="0 0 360 360" id="arrow-overlay">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#e2b857" opacity="0.8"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+
+      <div class="player-bar" id="bottom-player">
+        <span class="piece-icon">⚪</span>
+        <span class="name" id="bottom-name"></span>
+        <span class="elo" id="bottom-elo"></span>
+        <span class="captured" id="bottom-captured"></span>
+      </div>
+    </div>
+
+    <div class="nav-bar">
+      <button class="nav-btn" id="btn-first" title="Premier coup">⏮</button>
+      <button class="nav-btn" id="btn-prev" title="Coup précédent">◀</button>
+      <input type="range" class="move-slider" id="move-slider" min="0" value="0">
+      <span class="move-counter" id="move-counter">Coup 0</span>
+      <button class="nav-btn" id="btn-next" title="Coup suivant">▶</button>
+      <button class="nav-btn" id="btn-last" title="Dernier coup">⏭</button>
+    </div>
+
+    <div class="tip-card" id="tip-card">
+      <div class="tip-header">
+        <span class="bulb">💡</span>
+        <span class="label">Conseil</span>
+        <span class="eval-badge" id="tip-badge"></span>
+      </div>
+      <div class="tip-text" id="tip-text"></div>
+    </div>
+
+    <div class="moves-card">
+      <h3>Liste des coups</h3>
+      <div class="moves-grid" id="moves-grid"></div>
+    </div>
+
+    <div class="summary-card" id="summary-card">
+      <h3>Résumé de la partie</h3>
+      <div id="summary-content"></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/chess.min.js?v=2"></script>
+<script src="js/board.js?v=2"></script>
+<script src="js/analysis.js?v=2"></script>
+<script src="js/app.js?v=2"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
