@@ -1,14 +1,14 @@
 const CACHE_NAME = 'chess-analyst-v1';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/board.js',
-  '/js/analysis.js',
-  '/js/app.js',
-  '/js/chess.min.js',
-  '/manifest.json',
-  '/icons/icon.svg'
+  './',
+  './index.html',
+  './css/style.css',
+  './js/board.js',
+  './js/analysis.js',
+  './js/app.js',
+  './js/chess.min.js',
+  './manifest.json',
+  './icons/icon.svg'
 ];
 
 self.addEventListener('install', (e) => {
