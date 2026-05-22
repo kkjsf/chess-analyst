@@ -73,7 +73,10 @@ const App = (() => {
     let cleaned = pgn.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     cleaned = cleaned.replace(/\\'/g, "'");
     cleaned = cleaned.replace(/\\\\/g, '\\');
-    cleaned = cleaned.replace(/\[Date\s+"[^"]*"\]/g, '[Date "2025.01.01"]');
+    cleaned = cleaned.replace(/\[Date\s+"([^"]*)"\]/g, (_, d) => {
+      const m = d.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
+      return m ? `[Date "${m[1]}.${m[2].padStart(2,'0')}.${m[3].padStart(2,'0')}"]` : `[Date "${d}"]`;
+    });
     cleaned = cleaned.replace(/(\])\n(\d)/, '$1\n\n$2');
     cleaned = cleaned.replace(/(\])\n(\[)/g, '$1\n$2');
     const lastBracket = cleaned.lastIndexOf(']');
