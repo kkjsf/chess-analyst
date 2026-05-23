@@ -656,7 +656,7 @@ const App = (() => {
         <div class="stat-pills">${pillsHtml(s.b)}</div>
       </div>`;
     if (summary.engineUsed) {
-      html += `<div class="engine-badge">Analyse Stockfish · profondeur 14</div>`;
+      html += `<div class="engine-badge">Analyse Stockfish · profondeur 12</div>`;
     }
 
     if (summary.keyMoment) {

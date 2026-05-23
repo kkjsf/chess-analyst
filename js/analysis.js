@@ -307,7 +307,7 @@ const Analyzer = (() => {
   }
 
   async function analyzeGameAsync(chess, moves, onProgress) {
-    const depth = 14;
+    const depth = 12;
     const game = new Chess();
 
     const positions = [game.fen()];

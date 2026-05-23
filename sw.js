@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v4';
+const CACHE_NAME = 'chess-analyst-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,8 @@ const ASSETS = [
   './js/app.js',
   './js/chess.min.js',
   './js/stockfish-worker.js',
+  './js/vendor/stockfish.wasm.js',
+  './js/vendor/stockfish.wasm',
   './js/vendor/stockfish.js',
   './manifest.json',
   './icons/icon.svg'
