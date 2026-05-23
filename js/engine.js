@@ -12,8 +12,9 @@ const StockfishEngine = (() => {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         failed = true;
+        if (worker) { worker.terminate(); worker = null; }
         reject(new Error('timeout'));
-      }, 20000);
+      }, 10000);
 
       try {
         worker = new Worker('js/stockfish-worker.js');
