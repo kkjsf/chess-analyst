@@ -24,10 +24,10 @@ const App = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (!$('#screen-analysis').classList.contains('active')) return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(currentIndex - 1); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); goTo(currentIndex + 1); }
-      if (e.key === 'Home') { e.preventDefault(); goTo(0); }
-      if (e.key === 'End') { e.preventDefault(); goTo(currentAnalysis.length); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(currentIndex - 1); scrollToBoard(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goTo(currentIndex + 1); scrollToBoard(); }
+      if (e.key === 'Home') { e.preventDefault(); goTo(0); scrollToBoard(); }
+      if (e.key === 'End') { e.preventDefault(); goTo(currentAnalysis.length); scrollToBoard(); }
     });
 
     const dropZone = $('#drop-zone');
@@ -55,6 +55,7 @@ const App = (() => {
       if (Math.abs(dx) > 40) {
         if (dx > 0) goTo(currentIndex - 1);
         else goTo(currentIndex + 1);
+        scrollToBoard();
       }
     }, { passive: true });
   }
@@ -301,6 +302,10 @@ const App = (() => {
         cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
+  }
+
+  function scrollToBoard() {
+    $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   function detectUser(header) {
