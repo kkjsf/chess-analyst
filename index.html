@@ -46,24 +46,29 @@
       <span class="info-icon">ℹ</span> Comment ça marche ?
     </button>
     <div class="info-content" id="info-content" hidden>
-      <p><b>Stockfish, un moteur d'échecs de classe mondiale</b><br>
-      L'analyse est réalisée par <b>Stockfish</b>, l'un des moteurs d'échecs les plus puissants au monde, directement dans votre navigateur grâce à WebAssembly. Aucune donnée n'est envoyée à un serveur — tout reste sur votre appareil.</p>
-      <p><b>Classification des coups</b><br>
-      Chaque coup est évalué en « centipièces » (cp), une unité où 100 cp ≈ l'avantage d'un pion. La perte en cp par rapport au meilleur coup détermine la classification :</p>
+      <p><b>Qu'est-ce que Stockfish ?</b><br>
+      <b>Stockfish</b> est un moteur d'échecs libre et open-source, considéré comme l'un des plus puissants au monde. Développé depuis 2008 par une communauté de bénévoles, il a régulièrement dominé le championnat TCEC (Top Chess Engine Championship). Son niveau de jeu dépasse largement celui de n'importe quel joueur humain, y compris les champions du monde.</p>
+      <p>Ici, Stockfish tourne <b>directement dans votre navigateur</b> grâce à WebAssembly (WASM), une technologie qui permet d'exécuter du code performant sans serveur. Concrètement : aucune donnée ne quitte votre appareil, et l'analyse fonctionne même sans connexion internet.</p>
+      <p><b>Comment fonctionne l'analyse ?</b><br>
+      Pour chaque position de la partie, Stockfish calcule un arbre de variantes sur 12 demi-coups de profondeur (6 coups complets). Il attribue un <b>score en centipièces</b> (cp) : une unité où 100 cp correspond environ à l'avantage d'un pion, 300 cp à une pièce mineure (cavalier ou fou), et 900 cp à une dame.</p>
+      <p>La <b>perte en centipièces</b> (cp loss) mesure l'écart entre le coup joué et le meilleur coup trouvé par le moteur. C'est cette perte qui détermine la classification :</p>
       <ul>
-        <li><span class="info-badge brillant">Brillant</span> Meilleur coup trouvé dans une position difficile (sacrifice correct ou position perdante)</li>
-        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal ou quasi-optimal (perte ≤ 10 cp)</li>
-        <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp)</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp)</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp)</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (perte &gt; 200 cp)</li>
+        <li><span class="info-badge brillant">Brillant</span> Meilleur coup trouvé dans une position difficile — sacrifice correct ou seul coup viable en position perdante</li>
+        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal ou quasi-optimal (perte ≤ 10 cp) — le moteur aurait joué la même chose</li>
+        <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp) — pas d'erreur significative</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp) — un demi-pion d'avantage perdu</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp) — l'équivalent d'un pion perdu ou plus</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (perte &gt; 200 cp) — une pièce perdue ou un avantage décisif gâché</li>
       </ul>
-      <p><b>À savoir</b></p>
+      <p><b>La barre d'évaluation</b><br>
+      La barre verticale à gauche de l'échiquier reflète le score du moteur à chaque coup. Plus elle est blanche en bas, plus les Blancs ont l'avantage ; plus elle est sombre en haut, plus les Noirs dominent. Elle utilise une courbe sigmoïde : un avantage de ±4 pions remplit la barre à ~90 %.</p>
+      <p><b>Limites et conseils</b></p>
       <ul>
         <li>Les conseils sont générés à partir de l'évaluation du moteur, pas d'une base de parties connues.</li>
-        <li>La profondeur d'analyse est de 12 demi-coups. Des tactiques très profondes peuvent parfois échapper à l'analyse.</li>
-        <li>Si le moteur ne se charge pas, une analyse heuristique simplifiée prend le relais automatiquement.</li>
-        <li>L'application fonctionne hors-ligne une fois chargée.</li>
+        <li>La profondeur de 12 demi-coups offre un bon compromis rapidité/précision, mais des combinaisons très profondes (7+ coups) peuvent parfois échapper à l'analyse.</li>
+        <li>Les scores en ouverture peuvent varier légèrement d'un coup à l'autre — c'est normal et dû à la profondeur limitée.</li>
+        <li>Si le moteur ne se charge pas (navigateur ancien ou restrictions), une analyse heuristique simplifiée prend le relais.</li>
+        <li>L'application fonctionne <b>hors-ligne</b> une fois chargée — idéal pour analyser en déplacement.</li>
       </ul>
     </div>
   </div>
