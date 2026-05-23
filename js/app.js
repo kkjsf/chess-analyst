@@ -305,7 +305,13 @@ const App = (() => {
   }
 
   function scrollToBoard() {
-    $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const board = $('#board-container');
+    const tip = $('#tip-card');
+    const top = board.getBoundingClientRect().top + window.scrollY - 8;
+    const bottom = tip.getBoundingClientRect().bottom + window.scrollY + 8;
+    const viewH = window.innerHeight;
+    const targetScroll = top - Math.max(0, (viewH - (bottom - top)) / 2);
+    window.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
   }
 
   function detectUser(header) {
