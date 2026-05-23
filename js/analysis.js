@@ -270,10 +270,10 @@ const Analyzer = (() => {
     return null;
   }
 
-  function generateSummary(results) {
+  function generateSummary(results, moves) {
     const stats = {
-      w: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0 },
-      b: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0 }
+      w: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, moveCount: 0 },
+      b: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, moveCount: 0 }
     };
     let keyMoment = null;
 
@@ -281,6 +281,8 @@ const Analyzer = (() => {
       const r = results[i];
       if (!r.move) continue;
       const side = r.move.color;
+      stats[side].moveCount++;
+      stats[side].totalCpLoss += r.cpLoss || 0;
 
       if (r.type === 'brilliant') stats[side].brilliants++;
       if (r.type === 'good') stats[side].good++;
@@ -303,7 +305,15 @@ const Analyzer = (() => {
       }
     }
 
-    return { stats, keyMoment };
+    for (const side of ['w', 'b']) {
+      const s = stats[side];
+      s.acpl = s.moveCount > 0 ? Math.round(s.totalCpLoss / s.moveCount) : 0;
+      s.accuracy = Math.max(0, Math.min(100, Math.round(103.1668 * Math.exp(-0.04354 * s.acpl) - 3.1668)));
+    }
+
+    const opening = moves ? Openings.detect(moves.map(m => m.san || m)) : null;
+
+    return { stats, keyMoment, opening };
   }
 
   async function analyzeGameAsync(chess, moves, onProgress) {
@@ -332,7 +342,10 @@ const Analyzer = (() => {
           evals.push(await StockfishEngine.evaluate(positions[i], depth));
         }
       }
-      if (onProgress) onProgress(i + 1, total);
+      if (onProgress) {
+        onProgress(i + 1, total);
+        await new Promise(r => setTimeout(r, 0));
+      }
     }
 
     const results = [];

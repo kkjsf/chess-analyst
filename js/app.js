@@ -79,6 +79,7 @@ const App = (() => {
       return m ? `[Date "${m[1]}.${m[2].padStart(2,'0')}.${m[3].padStart(2,'0')}"]` : `[Date "${d}"]`;
     });
     cleaned = cleaned.replace(/(\])\n(\d)/, '$1\n\n$2');
+    cleaned = cleaned.replace(/\]\s*\[/g, ']\n[');
     cleaned = cleaned.replace(/(\])\n(\[)/g, '$1\n$2');
     const lastBracket = cleaned.lastIndexOf(']');
     if (lastBracket > -1) {
@@ -157,7 +158,7 @@ const App = (() => {
 
     hideProgressBar();
 
-    const summary = Analyzer.generateSummary(analysis);
+    const summary = Analyzer.generateSummary(analysis, moves);
     summary.engineUsed = engineUsed;
 
     saveGame(pgnText, header, moves.length);
@@ -299,19 +300,20 @@ const App = (() => {
       const cell = $(`.move-cell[data-index="${index - 1}"]`);
       if (cell) {
         cell.classList.add('active');
-        cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const grid = $('#moves-grid');
+        const cellTop = cell.offsetTop - grid.offsetTop;
+        if (cellTop < grid.scrollTop) grid.scrollTop = cellTop;
+        else if (cellTop + cell.offsetHeight > grid.scrollTop + grid.clientHeight) grid.scrollTop = cellTop + cell.offsetHeight - grid.clientHeight;
       }
     }
   }
 
   function scrollToBoard() {
     const board = $('#board-container');
-    const tip = $('#tip-card');
-    const top = board.getBoundingClientRect().top + window.scrollY - 8;
-    const bottom = tip.getBoundingClientRect().bottom + window.scrollY + 8;
+    const boardRect = board.getBoundingClientRect();
     const viewH = window.innerHeight;
-    const targetScroll = top - Math.max(0, (viewH - (bottom - top)) / 2);
-    window.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+    if (boardRect.top >= -boardRect.height * 0.5 && boardRect.bottom <= viewH + boardRect.height * 0.5) return;
+    board.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   function detectUser(header) {
@@ -431,54 +433,220 @@ const App = (() => {
     const s = summary.stats;
     const userStats = user ? (userIsWhite ? s.w : s.b) : null;
     const oppStats = user ? (userIsWhite ? s.b : s.w) : null;
-    const totalBlunders = s.w.blunders + s.b.blunders;
-    const totalMistakes = s.w.mistakes + s.b.mistakes + (s.w.inaccuracies || 0) + (s.b.inaccuracies || 0);
-    const totalGood = s.w.good + s.b.good;
 
-    let line3 = '';
-    if (user) {
-      if (userStats.blunders === 0 && userStats.mistakes === 0) {
-        line3 = 'Aucune gaffe ni imprécision de votre part — partie solide !';
-      } else if (userStats.blunders === 0 && userStats.mistakes <= 2) {
-        line3 = 'Très peu d\'imprécisions de votre côté, c\'est du bon travail.';
-      } else if (userStats.blunders >= 2 && userWon) {
-        line3 = 'Vous avez gagné malgré quelques gaffes — votre adversaire n\'a pas su en profiter.';
-      } else if (userStats.blunders >= 2 && userLost) {
-        line3 = 'Plusieurs gaffes vous ont coûté la partie. Regardez les moments clés pour comprendre.';
-      } else if (userStats.blunders === 1 && userLost) {
-        line3 = 'Une seule gaffe, mais elle a été décisive. Voyons laquelle.';
-      } else if (userStats.good >= 5) {
-        line3 = 'Vous avez trouvé de nombreux bons coups — continuez comme ça !';
-      } else if (userLost && oppStats.blunders === 0) {
-        line3 = 'Votre adversaire a joué solidement. Voyons où vous pouviez faire mieux.';
-      } else {
-        line3 = 'Voyons les moments clés pour identifier les axes de progression.';
-      }
-    } else {
-      if (totalBlunders >= 4) {
-        line3 = 'Une partie mouvementée avec beaucoup d\'erreurs des deux côtés.';
-      } else if (totalBlunders === 0 && totalMistakes <= 2) {
-        line3 = 'Une partie propre et bien jouée, avec très peu d\'imprécisions.';
-      } else if (s.w.blunders >= 2 && s.b.blunders === 0 && result === '0-1') {
-        line3 = 'Les Blancs ont commis plusieurs gaffes, permettant aux Noirs de prendre le contrôle.';
-      } else if (s.b.blunders >= 2 && s.w.blunders === 0 && result === '1-0') {
-        line3 = 'Les Noirs ont commis plusieurs gaffes, donnant l\'avantage aux Blancs.';
-      } else if (s.w.blunders >= 2 || s.b.blunders >= 2) {
-        line3 = 'Une partie marquée par des erreurs qui ont fait basculer l\'avantage.';
-      } else if (analysis.length <= 30) {
-        line3 = 'Une partie courte, décidée rapidement.';
-      } else if (analysis.length >= 80) {
-        line3 = 'Une longue bataille qui s\'est prolongée jusqu\'en finale.';
-      } else if (totalGood >= 10) {
-        line3 = 'Les deux joueurs ont trouvé de nombreux bons coups au fil de la partie.';
-      } else {
-        line3 = 'Une partie avec quelques moments décisifs qui ont fait basculer l\'avantage.';
+    const narrative = buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower);
+
+    const dateStr = header.Date || '';
+    let dateLine = '';
+    if (dateStr) {
+      const parts = dateStr.replace(/\./g, '-').split('-');
+      if (parts.length >= 3) {
+        const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+        const y = parseInt(parts[0]), m = parseInt(parts[1]) - 1, d = parseInt(parts[2]);
+        if (m >= 0 && m < 12 && d > 0) dateLine = `${d} ${months[m]} ${y}`;
       }
     }
 
+    const opening = summary.opening;
+    let openingLine = '';
+    if (opening) openingLine = `<span class="intro-opening">${opening.name}</span> <span class="intro-eco">${opening.eco}</span>`;
+
+    let accuracyHtml = '';
+    if (summary.engineUsed) {
+      const wPct = s.w.accuracy;
+      const bPct = s.b.accuracy;
+      accuracyHtml = `
+        <div class="intro-accuracy">
+          <div class="accuracy-row"><span class="accuracy-label">⚪ Précision</span><div class="accuracy-bar-bg"><div class="accuracy-bar" style="width:${wPct}%"></div></div><span class="accuracy-val">${wPct}%</span></div>
+          <div class="accuracy-row"><span class="accuracy-label">⚫ Précision</span><div class="accuracy-bar-bg"><div class="accuracy-bar black" style="width:${bPct}%"></div></div><span class="accuracy-val">${bPct}%</span></div>
+        </div>`;
+    }
+
     const card = $('#intro-card');
-    $('#intro-text').innerHTML = `${line1} ${line2} ${line3}`;
+    let html = `<p>${line1} ${line2}</p>`;
+    if (dateLine || openingLine) {
+      html += '<div class="intro-meta">';
+      if (dateLine) html += `<span class="intro-date">📅 ${dateLine}</span>`;
+      if (openingLine) html += `<span class="intro-opening-line">📖 ${openingLine}</span>`;
+      html += '</div>';
+    }
+    html += `<p class="intro-narrative">${narrative}</p>`;
+    html += accuracyHtml;
+    $('#intro-text').innerHTML = html;
     card.hidden = false;
+  }
+
+  function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower) {
+    const byTime = termLower.includes('time');
+    const byMate = termLower.includes('checkmate') || termLower.includes('mat');
+    const byResign = termLower.includes('resign') || termLower.includes('abandon');
+    const openingEnd = Math.min(Math.floor(analysis.length * 0.25), 10);
+    const midStart = openingEnd;
+    const midEnd = Math.max(midStart, Math.floor(analysis.length * 0.7));
+
+    const phases = [
+      { name: 'opening', from: 0, to: openingEnd },
+      { name: 'middle', from: midStart, to: midEnd },
+      { name: 'end', from: midEnd, to: analysis.length }
+    ];
+
+    const phaseErrors = phases.map(p => {
+      let userBlunders = 0, userMistakes = 0, oppBlunders = 0, oppMistakes = 0;
+      for (let i = p.from; i < p.to; i++) {
+        const r = analysis[i];
+        if (!r.move) continue;
+        const isUserMove = user && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b'));
+        if (r.type === 'blunder') { if (isUserMove) userBlunders++; else oppBlunders++; }
+        if (r.type === 'mistake') { if (isUserMove) userMistakes++; else oppMistakes++; }
+      }
+      return { ...p, userBlunders, userMistakes, oppBlunders, oppMistakes };
+    });
+
+    let turningPoint = null;
+    let biggestSwing = 0;
+    for (let i = 1; i < analysis.length; i++) {
+      const r = analysis[i];
+      if (!r.move || r.type !== 'blunder') continue;
+      const prevEval = analysis[i - 1]?.eval || 0;
+      const swing = Math.abs(r.eval - prevEval);
+      if (swing > biggestSwing) {
+        biggestSwing = swing;
+        const moveNum = Math.floor(i / 2) + 1;
+        const dot = i % 2 === 0 ? '.' : '...';
+        turningPoint = { moveNum, dot, san: r.sanFr, index: i, move: r.move };
+      }
+    }
+
+    const lines = [];
+    const [op, mid, end] = phaseErrors;
+
+    if (user) {
+      if (op.userBlunders === 0 && op.userMistakes === 0 && op.oppBlunders === 0) {
+        lines.push('L\'ouverture se déroule sans accroc pour les deux camps.');
+      } else if (op.userBlunders > 0) {
+        lines.push('Vous trébuchez dès l\'ouverture, ce qui donne un avantage précoce à votre adversaire.');
+      } else if (op.oppBlunders > 0) {
+        lines.push('Votre adversaire commet une erreur dès l\'ouverture, vous prenant un avantage rapide.');
+      } else if (op.userMistakes > 0) {
+        lines.push('Quelques imprécisions dans l\'ouverture vous placent dans une position légèrement inconfortable.');
+      }
+
+      if (mid.userBlunders >= 2) {
+        lines.push('Le milieu de partie est difficile : plusieurs gaffes font basculer l\'évaluation.');
+      } else if (mid.userBlunders === 1 && turningPoint) {
+        lines.push(`Le coup ${turningPoint.moveNum}${turningPoint.dot} ${turningPoint.san} est le tournant de la partie — une gaffe qui change la donne.`);
+      } else if (mid.oppBlunders >= 2) {
+        lines.push('Votre adversaire multiplie les erreurs en milieu de partie, vous offrant des opportunités.');
+      } else if (mid.oppBlunders === 1 && turningPoint) {
+        const isOpp = user && ((user === 'w' && turningPoint.move.color === 'b') || (user === 'b' && turningPoint.move.color === 'w'));
+        if (isOpp) lines.push(`Votre adversaire gaffe au coup ${turningPoint.moveNum} — un tournant que vous exploitez bien.`);
+      } else if (mid.userMistakes === 0 && mid.oppMistakes === 0) {
+        lines.push('Le milieu de partie est tendu mais propre, sans erreur majeure des deux côtés.');
+      }
+
+      if (end.to > end.from) {
+        if (end.userBlunders > 0 && userLost) {
+          lines.push('La finale est fatale : une erreur tardive scelle l\'issue de la partie.');
+        } else if (end.oppBlunders > 0 && userWon) {
+          lines.push('En finale, votre adversaire craque et vous convertissez votre avantage.');
+        } else if (end.userMistakes === 0 && end.oppMistakes === 0 && analysis.length > 40) {
+          lines.push('La finale est bien maîtrisée, avec un jeu précis jusqu\'au bout.');
+        }
+      }
+
+      if (userWon) {
+        if (byMate) {
+          lines.push('Vous concluez par un échec et mat — la meilleure façon de finir !');
+        } else if (byTime) {
+          if (userStats.blunders >= 2) {
+            lines.push('Victoire au temps, mais la position était fragile — votre adversaire aurait pu renverser la situation avec plus de temps.');
+          } else if (oppStats.blunders >= 1) {
+            lines.push('Votre adversaire, sous pression de temps, accumule les erreurs. La pendule fait le reste.');
+          } else {
+            lines.push('Victoire au temps. Vous avez su maintenir la pression jusqu\'à ce que la pendule devienne votre alliée.');
+          }
+        } else if (byResign) {
+          if (userStats.blunders === 0 && userStats.mistakes === 0) {
+            lines.push('Votre adversaire abandonne face à un jeu irréprochable — victoire nette et méritée.');
+          } else {
+            lines.push('Votre adversaire préfère abandonner plutôt que de continuer dans une position sans espoir.');
+          }
+        } else {
+          if (userStats.blunders === 0 && userStats.mistakes === 0) {
+            lines.push('Une victoire nette et méritée — aucune erreur de votre part.');
+          } else if (userStats.blunders === 0) {
+            lines.push('Une victoire solide malgré quelques petites imprécisions.');
+          } else if (oppStats.blunders > userStats.blunders) {
+            lines.push('Vous avez su profiter des erreurs adverses pour l\'emporter.');
+          } else {
+            lines.push('La victoire est acquise, mais des gaffes auraient pu la compromettre — à retravailler.');
+          }
+        }
+      } else if (userLost) {
+        if (byMate) {
+          lines.push('L\'adversaire conclut par un mat — revoyez les derniers coups pour identifier la menace plus tôt.');
+        } else if (byTime) {
+          if (userStats.blunders === 0 && userStats.mistakes <= 1) {
+            lines.push('Vous perdez au temps dans une position tout à fait jouable — dommage ! Pensez à mieux gérer votre pendule.');
+          } else {
+            lines.push('Le temps a eu raison de vous, mais les erreurs accumulées avaient déjà rendu la tâche difficile.');
+          }
+        } else if (byResign) {
+          if (userStats.blunders === 1) {
+            lines.push('Vous abandonnez après une seule gaffe décisive. Sans elle, la partie restait ouverte.');
+          } else if (userStats.blunders >= 2) {
+            lines.push('Plusieurs gaffes ont conduit à l\'abandon. Revoyez les moments clés pour éviter ces schémas.');
+          } else {
+            lines.push('Vous choisissez d\'abandonner dans une position difficile.');
+          }
+        } else {
+          if (userStats.blunders === 1) {
+            lines.push('La défaite tient à une seule gaffe — sans elle, la partie était jouable. Un point précis à corriger.');
+          } else if (userStats.blunders >= 2) {
+            lines.push('Plusieurs gaffes ont conduit à cette défaite. Revoyez les moments clés pour éviter ces schémas.');
+          } else if (oppStats.blunders === 0 && oppStats.mistakes <= 1) {
+            lines.push('Votre adversaire a joué une partie très solide — la marge de manœuvre était faible.');
+          } else {
+            lines.push('Une défaite où quelques imprécisions ont suffi à faire basculer la partie.');
+          }
+        }
+      } else if (isDraw) {
+        if (userStats.blunders === 0 && oppStats.blunders === 0) {
+          lines.push('Partie nulle logique — les deux camps ont joué avec précision.');
+        } else {
+          lines.push('Les erreurs se sont compensées, menant à un partage des points.');
+        }
+      }
+    } else {
+      const wLabel = 'les Blancs';
+      const bLabel = 'les Noirs';
+      if (op.userBlunders === 0 && op.oppBlunders === 0) {
+        lines.push('Ouverture correcte des deux côtés.');
+      } else {
+        if (s.w.blunders > 0 && op.userBlunders > 0) lines.push('Les Blancs font une erreur précoce en ouverture.');
+        if (s.b.blunders > 0 && op.oppBlunders > 0) lines.push('Les Noirs trébuchent dès l\'ouverture.');
+      }
+
+      if (turningPoint) {
+        const side = turningPoint.move.color === 'w' ? wLabel : bLabel;
+        lines.push(`Le tournant se joue au coup ${turningPoint.moveNum} : ${side} gaffent avec ${turningPoint.san}.`);
+      }
+
+      const totalBlunders = s.w.blunders + s.b.blunders;
+      if (totalBlunders >= 4) {
+        lines.push('Une partie chaotique, riche en erreurs des deux côtés.');
+      } else if (totalBlunders === 0 && s.w.mistakes + s.b.mistakes <= 2) {
+        lines.push('Partie de bonne qualité, avec très peu d\'imprécisions.');
+      }
+
+      if (s.w.blunders >= 2 && s.b.blunders === 0) {
+        lines.push('Les Blancs ont commis trop d\'erreurs — les Noirs en ont profité.');
+      } else if (s.b.blunders >= 2 && s.w.blunders === 0) {
+        lines.push('Les Noirs ont accumulé les gaffes, laissant le contrôle aux Blancs.');
+      }
+    }
+
+    return lines.length > 0 ? lines.join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
   }
 
   function buildHighlights(header, analysis) {

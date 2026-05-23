@@ -1,10 +1,11 @@
-const CACHE_NAME = 'chess-analyst-v6';
+const CACHE_NAME = 'chess-analyst-v8';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/board.js',
   './js/engine.js',
+  './js/openings.js',
   './js/analysis.js',
   './js/app.js',
   './js/chess.min.js',

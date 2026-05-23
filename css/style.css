@@ -204,6 +204,51 @@ html, body {
 .intro-header .intro-icon { font-size: 20px; }
 .intro-header .intro-label { font-weight: 600; font-size: 14px; color: var(--accent); }
 .intro-text { font-size: 14px; line-height: 1.7; color: var(--text); }
+.intro-text p { margin: 0 0 10px; }
+.intro-narrative { color: var(--text); line-height: 1.6; }
+.intro-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.intro-opening { color: var(--accent); font-weight: 600; }
+.intro-eco { color: var(--text-dim); font-size: 12px; }
+.intro-accuracy {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.accuracy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.accuracy-label { font-size: 12px; color: var(--text-dim); min-width: 90px; }
+.accuracy-bar-bg {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.accuracy-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+.accuracy-bar.black { background: #888; }
+.accuracy-val { font-size: 13px; font-weight: 600; min-width: 36px; text-align: right; }
+.accuracy-detail {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 2px;
+}
 
 /* Highlights card */
 .highlights-card {
@@ -407,6 +452,8 @@ html, body {
   gap: 2px 0;
   font-size: 14px;
   font-family: 'Courier New', monospace;
+  max-height: 240px;
+  overflow-y: auto;
 }
 .move-num {
   color: var(--text-dim);
