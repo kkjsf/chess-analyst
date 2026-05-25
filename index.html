@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=10">
+<link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
 
@@ -47,27 +47,42 @@
     </button>
     <div class="info-content" id="info-content" hidden>
       <p><b>Qu'est-ce que Stockfish ?</b><br>
-      <b>Stockfish</b> est un moteur d'échecs libre et open-source, considéré comme l'un des plus puissants au monde. Développé depuis 2008 par une communauté de bénévoles, il a régulièrement dominé le championnat TCEC (Top Chess Engine Championship). Son niveau de jeu dépasse largement celui de n'importe quel joueur humain, y compris les champions du monde.</p>
-      <p>Ici, Stockfish tourne <b>directement dans votre navigateur</b> grâce à WebAssembly (WASM), une technologie qui permet d'exécuter du code performant sans serveur. Concrètement : aucune donnée ne quitte votre appareil, et l'analyse fonctionne même sans connexion internet.</p>
-      <p><b>Comment fonctionne l'analyse ?</b><br>
-      Pour chaque position de la partie, Stockfish calcule un arbre de variantes sur 18 demi-coups de profondeur (9 coups complets), en évaluant les 3 meilleurs coups possibles (Multi-PV). Il attribue un <b>score en centipièces</b> (cp) : une unité où 100 cp correspond environ à l'avantage d'un pion, 300 cp à une pièce mineure (cavalier ou fou), et 900 cp à une dame.</p>
-      <p>La <b>perte en centipièces</b> (cp loss) mesure l'écart entre le coup joué et le meilleur coup trouvé par le moteur. C'est cette perte qui détermine la classification :</p>
+      <b>Stockfish</b> est un moteur d'échecs libre et open-source, considéré comme l'un des plus puissants au monde. Développé depuis 2008 par une communauté de bénévoles, il domine régulièrement le championnat TCEC. Son niveau de jeu dépasse largement celui de n'importe quel joueur humain, y compris les champions du monde.</p>
+      <p>Ici, Stockfish tourne <b>directement dans votre navigateur</b> grâce à WebAssembly — aucune donnée ne quitte votre appareil, et l'analyse fonctionne même hors-ligne.</p>
+
+      <p><b>Analyse Multi-PV</b><br>
+      Pour chaque position, Stockfish évalue les <b>3 meilleurs coups possibles</b> (Multi-PV) pendant 1,5 seconde. Cela permet non seulement de trouver le meilleur coup, mais aussi de proposer des alternatives intéressantes. Le score est exprimé en <b>centipièces</b> (cp) : 100 cp ≈ un pion, 300 cp ≈ un cavalier ou fou, 900 cp ≈ une dame.</p>
+
+      <p><b>Classification des coups</b></p>
       <ul>
-        <li><span class="info-badge brillant">Brillant</span> Meilleur coup trouvé dans une position difficile — sacrifice correct ou seul coup viable en position perdante</li>
-        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal ou quasi-optimal (perte ≤ 10 cp) — le moteur aurait joué la même chose</li>
-        <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp) — pas d'erreur significative</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp) — un demi-pion d'avantage perdu</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp) — l'équivalent d'un pion perdu ou plus</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (perte &gt; 200 cp) — une pièce perdue ou un avantage décisif gâché</li>
+        <li><span class="info-badge brillant">Brillant</span> Meilleur coup dans une position difficile — sacrifice correct ou seul coup viable</li>
+        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal ou quasi-optimal (perte ≤ 10 cp)</li>
+        <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp)</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp)</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp)</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (perte &gt; 200 cp)</li>
       </ul>
-      <p><b>La barre d'évaluation</b><br>
-      La barre verticale à gauche de l'échiquier reflète le score du moteur à chaque coup. Plus elle est blanche en bas, plus les Blancs ont l'avantage ; plus elle est sombre en haut, plus les Noirs dominent. Elle utilise une courbe sigmoïde : un avantage de ±4 pions remplit la barre à ~90 %.</p>
-      <p><b>Limites et conseils</b></p>
+
+      <p><b>Score de précision (WDL)</b><br>
+      Le pourcentage de précision utilise un modèle <b>Win/Draw/Loss</b> : chaque score en centipièces est converti en probabilité de victoire. La précision mesure combien de chances de gain vous avez conservées à chaque coup par rapport au coup optimal. C'est la même approche que les grands sites d'échecs.</p>
+
+      <p><b>Flèches et alternatives</b><br>
+      Quand vous faites une erreur, le moteur affiche des <b>flèches colorées</b> sur l'échiquier : la flèche <span style="color:#56b886">verte</span> indique le meilleur coup, les flèches <span style="color:#5b8fb9">bleues</span> montrent les alternatives viables. Vous pouvez <b>cliquer sur un coup alternatif</b> dans le conseil pour voir la position résultante sur l'échiquier.</p>
+
+      <p><b>Détection des menaces</b><br>
+      Après chaque coup, l'application analyse la réponse de l'adversaire. Si une menace sérieuse existe (capture d'une pièce, échec, mat), un avertissement ⚠ apparaît dans le conseil.</p>
+
+      <p><b>Détection d'ouverture</b><br>
+      La base de données contient environ 190 ouvertures répertoriées (codes ECO), couvrant les principales variantes jouées au niveau club et au-delà.</p>
+
+      <p><b>Barre d'évaluation</b><br>
+      La barre verticale à gauche de l'échiquier reflète le score du moteur. Plus elle est blanche, plus les Blancs dominent ; plus elle est sombre, plus les Noirs ont l'avantage.</p>
+
+      <p><b>Limites</b></p>
       <ul>
+        <li>L'analyse tourne dans votre navigateur : comptez environ <b>1,5 minute pour 60 coups</b>, 2,5 minutes pour 100 coups.</li>
         <li>Les conseils sont générés à partir de l'évaluation du moteur, pas d'une base de parties connues.</li>
-        <li>La profondeur de 18 demi-coups (9 coups) offre une analyse de très bonne qualité. L'analyse est plus lente qu'avant mais nettement plus précise.</li>
-        <li>Les scores en ouverture peuvent varier légèrement d'un coup à l'autre — c'est normal et dû à la profondeur limitée.</li>
-        <li>Si le moteur ne se charge pas (navigateur ancien ou restrictions), une analyse heuristique simplifiée prend le relais.</li>
+        <li>Si le moteur ne se charge pas (navigateur ancien), une analyse heuristique simplifiée prend le relais.</li>
         <li>L'application fonctionne <b>hors-ligne</b> une fois chargée — idéal pour analyser en déplacement.</li>
       </ul>
     </div>
@@ -159,12 +174,12 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=10"></script>
-<script src="js/board.js?v=10"></script>
-<script src="js/engine.js?v=10"></script>
-<script src="js/openings.js?v=10"></script>
-<script src="js/analysis.js?v=10"></script>
-<script src="js/app.js?v=10"></script>
+<script src="js/chess.min.js?v=11"></script>
+<script src="js/board.js?v=11"></script>
+<script src="js/engine.js?v=11"></script>
+<script src="js/openings.js?v=11"></script>
+<script src="js/analysis.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
