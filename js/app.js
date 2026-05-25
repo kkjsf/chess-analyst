@@ -872,7 +872,7 @@ const App = (() => {
           : user
             ? `Votre adversaire roque ${sideRoque}.`
             : `${sideCapital} roquent ${sideRoque}, mettant le roi en sécurité.`;
-        candidates.push({ index: i, label, score: 3, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: 'bon-coup' });
+        candidates.push({ index: i, label, score: 3, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: 'bon-coup', isUserMove, user, isWhite });
       }
 
       if (i === analysis.length - 1 && (header.Result === '1-0' || header.Result === '0-1')) {
@@ -883,7 +883,7 @@ const App = (() => {
             : user
               ? 'Échec et mat par votre adversaire.'
               : `Échec et mat ! ${sideCapital} concluent la partie.`;
-          candidates.push({ index: i, label, score: 20, desc, badge: 'Moment clé', badgeClass: 'moment-cle' });
+          candidates.push({ index: i, label, score: 20, desc, badge: 'Moment clé', badgeClass: 'moment-cle', isUserMove, user, isWhite });
         }
       }
 
@@ -893,7 +893,7 @@ const App = (() => {
           : user
             ? 'Promotion adverse en dame — danger !'
             : 'Promotion du pion en dame — un moment décisif.';
-        candidates.push({ index: i, label, score: 12, desc, badge: 'Moment clé', badgeClass: 'moment-cle' });
+        candidates.push({ index: i, label, score: 12, desc, badge: 'Moment clé', badgeClass: 'moment-cle', isUserMove, user, isWhite });
       }
 
       if (r.type === 'blunder') {
@@ -902,24 +902,24 @@ const App = (() => {
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
         if (isUserMove) desc += ' À retenir pour la prochaine fois.';
         else if (user) desc += ' Une erreur adverse à exploiter !';
-        candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe' + badgeSuffix, badgeClass: 'gaffe' });
+        candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe' + badgeSuffix, badgeClass: 'gaffe', isUserMove, user, isWhite });
       }
 
       if (r.type === 'inaccuracy') {
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
-        candidates.push({ index: i, label, score: 4, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision' });
+        candidates.push({ index: i, label, score: 4, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision', isUserMove, user, isWhite });
       }
 
       if (r.type === 'mistake') {
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
         if (isUserMove) desc += ' Un point à travailler.';
-        candidates.push({ index: i, label, score: 6, desc, badge: 'Erreur' + badgeSuffix, badgeClass: 'erreur' });
+        candidates.push({ index: i, label, score: 6, desc, badge: 'Erreur' + badgeSuffix, badgeClass: 'erreur', isUserMove, user, isWhite });
       }
 
       if (r.type === 'brilliant') {
         let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
         if (isUserMove) desc += ' Impressionnant !';
-        candidates.push({ index: i, label, score: 15, desc, badge: 'Brillant !' + badgeSuffix, badgeClass: 'brillant' });
+        candidates.push({ index: i, label, score: 15, desc, badge: 'Brillant !' + badgeSuffix, badgeClass: 'brillant', isUserMove, user, isWhite });
       }
 
       if ((r.type === 'good' || r.type === 'great' || r.type === 'best') && r.move.captured) {
@@ -928,7 +928,7 @@ const App = (() => {
           let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
           if (isUserMove) desc += ' Bien vu !';
           else if (user) desc += ' Aïe, un coup douloureux pour vous.';
-          candidates.push({ index: i, label, score: 8 + capturedVal, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: isUserMove ? 'bon-coup' : 'gaffe' });
+          candidates.push({ index: i, label, score: 8 + capturedVal, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: isUserMove ? 'bon-coup' : 'gaffe', isUserMove, user, isWhite });
         }
       }
     }
@@ -958,8 +958,15 @@ const App = (() => {
     for (const p of picks) {
       const item = document.createElement('div');
       item.className = 'highlight-item';
+      const sideLabel = p.user
+        ? (p.isUserMove ? 'Vous' : 'Adversaire')
+        : (p.isWhite ? 'Blancs' : 'Noirs');
+      const sideClass = p.user
+        ? (p.isUserMove ? 'tip-side-you' : 'tip-side-opp')
+        : '';
       item.innerHTML = `
         <span class="highlight-move">${p.label}</span>
+        <span class="tip-side-tag ${sideClass}">${sideLabel}</span>
         <span class="highlight-desc">${p.desc}</span>
         <span class="highlight-badge ${p.badgeClass}">${p.badge}</span>`;
       item.addEventListener('click', () => {
