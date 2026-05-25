@@ -8,6 +8,12 @@ const Analyzer = (() => {
     return san.replace(/^([NBRQK])/, (_, p) => SAN_TO_FR[p] || p);
   }
 
+  function altSpans(alts, fen) {
+    return alts.map(a =>
+      `<span class="alt-move" data-uci="${a.uci}" data-fen="${fen}">${a.san}</span>`
+    ).join(', ');
+  }
+
   function materialCount(fen) {
     const board = fen.split(' ')[0];
     let white = 0, black = 0;
@@ -272,8 +278,8 @@ const Analyzer = (() => {
 
   function generateSummary(results, moves) {
     const stats = {
-      w: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, moveCount: 0 },
-      b: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, moveCount: 0 }
+      w: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 },
+      b: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 }
     };
     let keyMoment = null;
 
@@ -283,6 +289,7 @@ const Analyzer = (() => {
       const side = r.move.color;
       stats[side].moveCount++;
       stats[side].totalCpLoss += r.cpLoss || 0;
+      stats[side].totalWinLoss += r.winPctLoss || 0;
 
       if (r.type === 'brilliant') stats[side].brilliants++;
       if (r.type === 'good') stats[side].good++;
@@ -308,7 +315,8 @@ const Analyzer = (() => {
     for (const side of ['w', 'b']) {
       const s = stats[side];
       s.acpl = s.moveCount > 0 ? Math.round(s.totalCpLoss / s.moveCount) : 0;
-      s.accuracy = Math.max(0, Math.min(100, Math.round(103.1668 * Math.exp(-0.04354 * s.acpl) - 3.1668)));
+      const avgWinLoss = s.moveCount > 0 ? s.totalWinLoss / s.moveCount : 0;
+      s.accuracy = Math.max(0, Math.min(100, Math.round((1 - avgWinLoss * 2) * 100)));
     }
 
     const opening = moves ? Openings.detect(moves.map(m => m.san || m)) : null;
@@ -317,7 +325,7 @@ const Analyzer = (() => {
   }
 
   async function analyzeGameAsync(chess, moves, onProgress) {
-    const depth = 'movetime 2500';
+    const depth = 'movetime 1500';
     const game = new Chess();
 
     const positions = [game.fen()];
@@ -390,6 +398,10 @@ const Analyzer = (() => {
 
         evalForWhite = isWhite ? -evalAfter.score : evalAfter.score;
 
+        const winBefore = cpToWinPct(evalBefore.score);
+        const winAfterPlayed = cpToWinPct(-evalAfter.score);
+        var winPctLoss = Math.max(0, winBefore - winAfterPlayed);
+
         if (evalBefore.lines) {
           for (const line of evalBefore.lines) {
             if (!line || !line.move) continue;
@@ -430,22 +442,25 @@ const Analyzer = (() => {
       } else if (type === 'brilliant') {
         tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible. ${evalDesc}`;
       } else if (type === 'blunder') {
-        tipFr = bestMoveSanFr
-          ? `Gaffe ! Ce coup perd ${cpLoss} centipièces d'avantage. Il fallait jouer <b>${bestMoveSanFr}</b>.`
+        const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        tipFr = bestSpan
+          ? `Gaffe ! Ce coup perd ${cpLoss} centipièces d'avantage. Il fallait jouer ${bestSpan}.`
           : `Gaffe ! Ce coup coûte ${cpLoss} centipièces.`;
-        if (alternatives.length > 0) tipFr += ` Aussi possible : ${alternatives.map(a => '<b>' + a.san + '</b>').join(', ')}.`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'mistake') {
-        tipFr = bestMoveSanFr
-          ? `Erreur sérieuse (−${cpLoss} cp). Le meilleur coup était <b>${bestMoveSanFr}</b>.`
+        const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        tipFr = bestSpan
+          ? `Erreur sérieuse (−${cpLoss} cp). Le meilleur coup était ${bestSpan}.`
           : `Erreur sérieuse (−${cpLoss} cp).`;
-        if (alternatives.length > 0) tipFr += ` Aussi possible : ${alternatives.map(a => '<b>' + a.san + '</b>').join(', ')}.`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'inaccuracy') {
-        tipFr = bestMoveSanFr
-          ? `Légère imprécision (−${cpLoss} cp). <b>${bestMoveSanFr}</b> était plus précis.`
+        const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        tipFr = bestSpan
+          ? `Légère imprécision (−${cpLoss} cp). ${bestSpan} était plus précis.`
           : `Légère imprécision (−${cpLoss} cp).`;
-        if (alternatives.length > 0) tipFr += ` Aussi possible : ${alternatives.map(a => '<b>' + a.san + '</b>').join(', ')}.`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'good') {
         if (madeMove.captured) {
@@ -458,6 +473,27 @@ const Analyzer = (() => {
         }
       } else {
         tipFr = `Coup correct (−${cpLoss} cp). ${evalDesc}`;
+      }
+
+      if (evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
+        try {
+          const tg = new Chess(newFen);
+          const tu = evalAfter.lines[0].move;
+          const tm = tg.move({ from: tu.slice(0,2), to: tu.slice(2,4), promotion: tu[4] });
+          if (tm) {
+            const tFr = toFrench(tm.san);
+            const opp = isWhite ? 'les Noirs' : 'les Blancs';
+            if (tm.san.includes('#')) {
+              tipFr += ` ⚠ ${opp} menacent mat avec ${tFr} !`;
+            } else if (tm.captured && PIECE_VALUES[tm.captured] >= 3) {
+              const art = PIECE_ARTICLE_FR[tm.captured];
+              const cn = PIECE_NAMES_FR[tm.captured];
+              tipFr += ` ⚠ Attention, ${opp} menacent de prendre ${art} ${cn} (${tFr}).`;
+            } else if (tm.san.includes('+')) {
+              tipFr += ` ⚠ ${opp} menacent un échec (${tFr}).`;
+            }
+          }
+        } catch(_) {}
       }
 
       const arrows = [];
@@ -479,7 +515,7 @@ const Analyzer = (() => {
         type, san: madeMove.san, sanFr, tipFr,
         move: madeMove, fen: newFen,
         materialDiff: newMaterial.diff, arrows,
-        eval: evalForWhite, cpLoss, alternatives
+        eval: evalForWhite, cpLoss, winPctLoss: winPctLoss || 0, alternatives, fenBefore: positions[i]
       });
     }
 
@@ -493,6 +529,12 @@ const Analyzer = (() => {
       const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
       return m ? m.san : null;
     } catch (_) { return null; }
+  }
+
+  function cpToWinPct(cp) {
+    if (cp > 29000) return 1;
+    if (cp < -29000) return 0;
+    return 1 / (1 + Math.pow(10, -cp / 400));
   }
 
   function describeEval(cpWhite) {

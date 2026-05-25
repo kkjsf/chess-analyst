@@ -238,6 +238,9 @@ const App = (() => {
     if (!currentAnalysis) return;
     index = Math.max(0, Math.min(index, currentAnalysis.length));
     currentIndex = index;
+    altPreview = false;
+    const backBtn = $('#alt-back');
+    if (backBtn) backBtn.hidden = true;
 
     let fen, lastMove = null;
     if (index === 0) {
@@ -284,6 +287,7 @@ const App = (() => {
       const moveNum = Math.floor((index - 1) / 2) + 1;
       const dot = (index - 1) % 2 === 0 ? '.' : '...';
       $('#tip-text').innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b> — ${r.tipFr}`;
+      bindAltMoves();
 
       const badge = $('#tip-badge');
       badge.className = 'eval-badge';
@@ -310,6 +314,41 @@ const App = (() => {
         else if (cellTop + cell.offsetHeight > grid.scrollTop + grid.clientHeight) grid.scrollTop = cellTop + cell.offsetHeight - grid.clientHeight;
       }
     }
+  }
+
+  let altPreview = false;
+
+  function bindAltMoves() {
+    $$('.alt-move').forEach(el => {
+      el.addEventListener('click', () => {
+        const fen = el.dataset.fen;
+        const uci = el.dataset.uci;
+        if (!fen || !uci || uci.length < 4) return;
+        try {
+          const g = new Chess(fen);
+          const m = g.move({ from: uci.slice(0,2), to: uci.slice(2,4), promotion: uci[4] });
+          if (!m) return;
+          altPreview = true;
+          BoardRenderer.render($('#board-svg'), g.fen(), m);
+          BoardRenderer.clearArrows($('#arrow-overlay'));
+          $$('.alt-move').forEach(a => a.classList.remove('active'));
+          el.classList.add('active');
+          let back = $('#alt-back');
+          if (!back) {
+            back = document.createElement('button');
+            back.id = 'alt-back';
+            back.className = 'alt-back-btn';
+            back.textContent = '↩ Retour au coup joué';
+            back.addEventListener('click', () => {
+              altPreview = false;
+              goTo(currentIndex);
+            });
+            $('#tip-card').appendChild(back);
+          }
+          back.hidden = false;
+        } catch(_) {}
+      });
+    });
   }
 
   function scrollToBoard() {

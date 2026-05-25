@@ -631,6 +631,19 @@ html, body {
 .info-badge.erreur { background: #3b2a1a; color: #f0a050; }
 .info-badge.gaffe { background: #3b1a1a; color: var(--danger); }
 
+/* Alt move explorer */
+.alt-move {
+  color: #56b886; cursor: pointer; font-weight: 600;
+  border-bottom: 1px dashed #56b886; transition: color 0.15s;
+}
+.alt-move:hover, .alt-move.active { color: #7dd8a8; }
+.alt-back-btn {
+  display: block; margin: 10px auto 0; padding: 6px 16px;
+  background: #2a3a5a; color: #8899bb; border: 1px solid #3a4a6a;
+  border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+}
+.alt-back-btn:hover { background: #3a4a6a; color: #aabbdd; }
+
 /* Touch swipe hint */
 @media (max-width: 480px) {
   .board-container { max-width: 100%; }
