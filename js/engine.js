@@ -1,7 +1,7 @@
 const StockfishEngine = (() => {
   let worker = null;
   let resolver = null;
-  let currentResult = null;
+  let currentLines = [];
   let ready = false;
   let failed = false;
 
@@ -46,6 +46,7 @@ const StockfishEngine = (() => {
         if (phase === 'uci' && msg.includes('uciok')) {
           phase = 'ready';
           worker.postMessage('setoption name Skill Level value 20');
+          worker.postMessage('setoption name MultiPV value 3');
           worker.postMessage('isready');
           return;
         }
@@ -61,25 +62,40 @@ const StockfishEngine = (() => {
         if (!ready || !resolver) return;
 
         if (msg.startsWith('info') && msg.includes(' score ')) {
+          const pvIdx = msg.match(/\bmultipv (\d+)/);
+          const idx = pvIdx ? parseInt(pvIdx[1]) - 1 : 0;
+
           const cp = msg.match(/\bscore cp (-?\d+)/);
           const mate = msg.match(/\bscore mate (-?\d+)/);
           const pv = msg.match(/\bpv\s+(.+)/);
 
-          if (cp) currentResult.score = parseInt(cp[1]);
+          if (!currentLines[idx]) currentLines[idx] = { score: 0, move: null, pv: '', mate: null };
+
+          if (cp) currentLines[idx].score = parseInt(cp[1]);
           else if (mate) {
             const m = parseInt(mate[1]);
-            currentResult.score = m > 0 ? 30000 - m : -30000 - m;
-            currentResult.mate = m;
+            currentLines[idx].score = m > 0 ? 30000 - m : -30000 - m;
+            currentLines[idx].mate = m;
           }
-          if (pv) currentResult.pv = pv[1].trim();
+          if (pv) {
+            const pvStr = pv[1].trim();
+            currentLines[idx].pv = pvStr;
+            currentLines[idx].move = pvStr.split(/\s+/)[0];
+          }
         }
 
         if (msg.startsWith('bestmove')) {
-          const bm = msg.match(/bestmove\s+(\S+)/);
-          if (bm && bm[1] !== '(none)') currentResult.bestMove = bm[1];
+          const lines = currentLines.filter(l => l != null);
+          const best = lines[0] || { score: 0, move: null, pv: '', mate: null };
           const r = resolver;
           resolver = null;
-          r(currentResult);
+          r({
+            score: best.score,
+            bestMove: best.move,
+            pv: best.pv,
+            mate: best.mate,
+            lines
+          });
         }
       };
 
@@ -90,10 +106,14 @@ const StockfishEngine = (() => {
   function evaluate(fen, depth) {
     if (!ready) return Promise.reject(new Error('not_ready'));
     return new Promise((resolve) => {
-      currentResult = { score: 0, bestMove: null, pv: '', mate: null };
+      currentLines = [];
       resolver = resolve;
       worker.postMessage('position fen ' + fen);
-      worker.postMessage('go depth ' + (depth || 12));
+      if (typeof depth === 'string' && depth.startsWith('movetime')) {
+        worker.postMessage('go ' + depth);
+      } else {
+        worker.postMessage('go depth ' + (depth || 18));
+      }
     });
   }
 

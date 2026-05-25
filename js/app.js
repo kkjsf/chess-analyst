@@ -266,9 +266,13 @@ const App = (() => {
 
     const arrowSvg = $('#arrow-overlay');
     BoardRenderer.clearArrows(arrowSvg);
-    if (index > 0 && currentAnalysis[index - 1].arrow) {
-      const a = currentAnalysis[index - 1].arrow;
-      if (a.from && a.to) BoardRenderer.drawArrow(arrowSvg, a.from, a.to);
+    if (index > 0) {
+      const r = currentAnalysis[index - 1];
+      if (r.arrows && r.arrows.length > 0) {
+        BoardRenderer.drawArrows(arrowSvg, r.arrows);
+      } else if (r.arrow && r.arrow.from && r.arrow.to) {
+        BoardRenderer.drawArrow(arrowSvg, r.arrow.from, r.arrow.to);
+      }
     }
 
     if (index === 0) {
@@ -830,7 +834,7 @@ const App = (() => {
         <div class="stat-pills">${pillsHtml(s.b)}</div>
       </div>`;
     if (summary.engineUsed) {
-      html += `<div class="engine-badge">Analyse Stockfish · profondeur 12</div>`;
+      html += `<div class="engine-badge">Analyse Stockfish · profondeur 18 · 3 variantes</div>`;
     }
 
     if (summary.keyMoment) {

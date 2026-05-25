@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=8">
+<link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
 
@@ -50,7 +50,7 @@
       <b>Stockfish</b> est un moteur d'échecs libre et open-source, considéré comme l'un des plus puissants au monde. Développé depuis 2008 par une communauté de bénévoles, il a régulièrement dominé le championnat TCEC (Top Chess Engine Championship). Son niveau de jeu dépasse largement celui de n'importe quel joueur humain, y compris les champions du monde.</p>
       <p>Ici, Stockfish tourne <b>directement dans votre navigateur</b> grâce à WebAssembly (WASM), une technologie qui permet d'exécuter du code performant sans serveur. Concrètement : aucune donnée ne quitte votre appareil, et l'analyse fonctionne même sans connexion internet.</p>
       <p><b>Comment fonctionne l'analyse ?</b><br>
-      Pour chaque position de la partie, Stockfish calcule un arbre de variantes sur 12 demi-coups de profondeur (6 coups complets). Il attribue un <b>score en centipièces</b> (cp) : une unité où 100 cp correspond environ à l'avantage d'un pion, 300 cp à une pièce mineure (cavalier ou fou), et 900 cp à une dame.</p>
+      Pour chaque position de la partie, Stockfish calcule un arbre de variantes sur 18 demi-coups de profondeur (9 coups complets), en évaluant les 3 meilleurs coups possibles (Multi-PV). Il attribue un <b>score en centipièces</b> (cp) : une unité où 100 cp correspond environ à l'avantage d'un pion, 300 cp à une pièce mineure (cavalier ou fou), et 900 cp à une dame.</p>
       <p>La <b>perte en centipièces</b> (cp loss) mesure l'écart entre le coup joué et le meilleur coup trouvé par le moteur. C'est cette perte qui détermine la classification :</p>
       <ul>
         <li><span class="info-badge brillant">Brillant</span> Meilleur coup trouvé dans une position difficile — sacrifice correct ou seul coup viable en position perdante</li>
@@ -65,7 +65,7 @@
       <p><b>Limites et conseils</b></p>
       <ul>
         <li>Les conseils sont générés à partir de l'évaluation du moteur, pas d'une base de parties connues.</li>
-        <li>La profondeur de 12 demi-coups offre un bon compromis rapidité/précision, mais des combinaisons très profondes (7+ coups) peuvent parfois échapper à l'analyse.</li>
+        <li>La profondeur de 18 demi-coups (9 coups) offre une analyse de très bonne qualité. L'analyse est plus lente qu'avant mais nettement plus précise.</li>
         <li>Les scores en ouverture peuvent varier légèrement d'un coup à l'autre — c'est normal et dû à la profondeur limitée.</li>
         <li>Si le moteur ne se charge pas (navigateur ancien ou restrictions), une analyse heuristique simplifiée prend le relais.</li>
         <li>L'application fonctionne <b>hors-ligne</b> une fois chargée — idéal pour analyser en déplacement.</li>
@@ -159,12 +159,12 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=8"></script>
-<script src="js/board.js?v=8"></script>
-<script src="js/engine.js?v=8"></script>
-<script src="js/openings.js?v=8"></script>
-<script src="js/analysis.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/chess.min.js?v=9"></script>
+<script src="js/board.js?v=9"></script>
+<script src="js/engine.js?v=9"></script>
+<script src="js/openings.js?v=9"></script>
+<script src="js/analysis.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

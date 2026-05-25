@@ -317,7 +317,7 @@ const Analyzer = (() => {
   }
 
   async function analyzeGameAsync(chess, moves, onProgress) {
-    const depth = 12;
+    const depth = 'movetime 2500';
     const game = new Chess();
 
     const positions = [game.fen()];
@@ -369,6 +369,7 @@ const Analyzer = (() => {
       let bestMoveSanFr = null;
       let bestMoveUci = null;
       let evalForWhite = 0;
+      const alternatives = [];
 
       if (evalBefore && evalAfter) {
         cpLoss = Math.max(0, evalBefore.score + evalAfter.score);
@@ -388,6 +389,16 @@ const Analyzer = (() => {
         if (cpLoss > 0 && cpLoss < 15) cpLoss = 0;
 
         evalForWhite = isWhite ? -evalAfter.score : evalAfter.score;
+
+        if (evalBefore.lines) {
+          for (const line of evalBefore.lines) {
+            if (!line || !line.move) continue;
+            if (line.move === playedUci) continue;
+            if (line.move === bestMoveUci) continue;
+            const san = uciToSan(positions[i], line.move);
+            if (san) alternatives.push({ uci: line.move, san: toFrench(san), score: line.score, mate: line.mate });
+          }
+        }
       }
 
       const prevMat = materialCount(positions[i]);
@@ -420,16 +431,22 @@ const Analyzer = (() => {
         tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible. ${evalDesc}`;
       } else if (type === 'blunder') {
         tipFr = bestMoveSanFr
-          ? `Gaffe ! Ce coup perd ${cpLoss} centipièces d'avantage. Il fallait jouer <b>${bestMoveSanFr}</b>. ${evalDesc}`
-          : `Gaffe ! Ce coup coûte ${cpLoss} centipièces. ${evalDesc}`;
+          ? `Gaffe ! Ce coup perd ${cpLoss} centipièces d'avantage. Il fallait jouer <b>${bestMoveSanFr}</b>.`
+          : `Gaffe ! Ce coup coûte ${cpLoss} centipièces.`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${alternatives.map(a => '<b>' + a.san + '</b>').join(', ')}.`;
+        tipFr += ' ' + evalDesc;
       } else if (type === 'mistake') {
         tipFr = bestMoveSanFr
-          ? `Erreur sérieuse (−${cpLoss} cp). Le meilleur coup était <b>${bestMoveSanFr}</b>. ${evalDesc}`
-          : `Erreur sérieuse (−${cpLoss} cp). ${evalDesc}`;
+          ? `Erreur sérieuse (−${cpLoss} cp). Le meilleur coup était <b>${bestMoveSanFr}</b>.`
+          : `Erreur sérieuse (−${cpLoss} cp).`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${alternatives.map(a => '<b>' + a.san + '</b>').join(', ')}.`;
+        tipFr += ' ' + evalDesc;
       } else if (type === 'inaccuracy') {
         tipFr = bestMoveSanFr
-          ? `Légère imprécision (−${cpLoss} cp). <b>${bestMoveSanFr}</b> était plus précis. ${evalDesc}`
-          : `Légère imprécision (−${cpLoss} cp). ${evalDesc}`;
+          ? `Légère imprécision (−${cpLoss} cp). <b>${bestMoveSanFr}</b> était plus précis.`
+          : `Légère imprécision (−${cpLoss} cp).`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${alternatives.map(a => '<b>' + a.san + '</b>').join(', ')}.`;
+        tipFr += ' ' + evalDesc;
       } else if (type === 'good') {
         if (madeMove.captured) {
           const capName = PIECE_NAMES_FR[madeMove.captured];
@@ -443,21 +460,26 @@ const Analyzer = (() => {
         tipFr = `Coup correct (−${cpLoss} cp). ${evalDesc}`;
       }
 
-      let arrow = null;
+      const arrows = [];
       if ((type === 'blunder' || type === 'mistake' || type === 'inaccuracy') && bestMoveUci && bestMoveUci.length >= 4) {
-        arrow = { from: bestMoveUci.slice(0, 2), to: bestMoveUci.slice(2, 4) };
+        arrows.push({ from: bestMoveUci.slice(0, 2), to: bestMoveUci.slice(2, 4), color: '#56b886', opacity: 0.85, width: 6 });
+        for (const alt of alternatives) {
+          if (alt.uci && alt.uci.length >= 4) {
+            arrows.push({ from: alt.uci.slice(0, 2), to: alt.uci.slice(2, 4), color: '#5b8fb9', opacity: 0.45, width: 4 });
+          }
+        }
       } else if (madeMove.san.includes('+') || madeMove.san.includes('#')) {
         const kingSq = findKing(newFen, isWhite ? 'b' : 'w');
-        if (kingSq) arrow = { from: madeMove.to, to: kingSq };
+        if (kingSq) arrows.push({ from: madeMove.to, to: kingSq, color: '#e2b857', opacity: 0.6, width: 5 });
       } else if (madeMove.captured) {
-        arrow = { from: madeMove.from, to: madeMove.to };
+        arrows.push({ from: madeMove.from, to: madeMove.to, color: '#e2b857', opacity: 0.6, width: 5 });
       }
 
       results.push({
         type, san: madeMove.san, sanFr, tipFr,
         move: madeMove, fen: newFen,
-        materialDiff: newMaterial.diff, arrow,
-        eval: evalForWhite, cpLoss
+        materialDiff: newMaterial.diff, arrows,
+        eval: evalForWhite, cpLoss, alternatives
       });
     }
 

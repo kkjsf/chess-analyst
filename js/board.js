@@ -74,27 +74,37 @@ const BoardRenderer = (() => {
   }
 
   function drawArrow(overlaySvg, fromSq, toSq) {
-    const from = squareToCoords(fromSq);
-    const to = squareToCoords(toSq);
-    const x1 = from.col * SQ + SQ / 2;
-    const y1 = from.row * SQ + SQ / 2;
-    const x2 = to.col * SQ + SQ / 2;
-    const y2 = to.row * SQ + SQ / 2;
+    drawArrows(overlaySvg, [{ from: fromSq, to: toSq, color: '#e2b857', opacity: 0.6, width: 5 }]);
+  }
 
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = dx / len;
-    const uy = dy / len;
-    const sx = x1 + ux * 8;
-    const sy = y1 + uy * 8;
-    const ex = x2 - ux * 8;
-    const ey = y2 - uy * 8;
+  function drawArrows(overlaySvg, arrows) {
+    if (!arrows || arrows.length === 0) { clearArrows(overlaySvg); return; }
 
-    const existing = overlaySvg.querySelector('defs');
-    const defs = existing ? existing.outerHTML : '';
-    overlaySvg.innerHTML = defs +
-      `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="#e2b857" stroke-width="5" opacity="0.6" marker-end="url(#arrowhead)" stroke-linecap="round"/>`;
+    const colors = [...new Set(arrows.map(a => a.color || '#e2b857'))];
+    let defsHtml = '<defs>';
+    for (const c of colors) {
+      const id = 'ah-' + c.replace('#', '');
+      defsHtml += `<marker id="${id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="${c}" opacity="0.8"/></marker>`;
+    }
+    defsHtml += '</defs>';
+
+    let html = defsHtml;
+    for (const a of arrows) {
+      const f = squareToCoords(a.from);
+      const t = squareToCoords(a.to);
+      const x1 = f.col * SQ + SQ / 2, y1 = f.row * SQ + SQ / 2;
+      const x2 = t.col * SQ + SQ / 2, y2 = t.row * SQ + SQ / 2;
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) continue;
+      const ux = dx / len, uy = dy / len;
+      const sx = x1 + ux * 8, sy = y1 + uy * 8;
+      const ex = x2 - ux * 8, ey = y2 - uy * 8;
+      const color = a.color || '#e2b857';
+      const markerId = 'ah-' + color.replace('#', '');
+      html += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${a.width || 5}" opacity="${a.opacity || 0.6}" marker-end="url(#${markerId})" stroke-linecap="round"/>`;
+    }
+    overlaySvg.innerHTML = html;
   }
 
   function clearArrows(overlaySvg) {
@@ -122,5 +132,5 @@ const BoardRenderer = (() => {
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
 
-  return { render, drawArrow, clearArrows, getCapturedPieces };
+  return { render, drawArrow, drawArrows, clearArrows, getCapturedPieces };
 })();
