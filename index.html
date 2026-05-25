@@ -54,12 +54,13 @@
       <div class="guide-icon">🏷️</div>
       <h3>Comprendre les couleurs</h3>
       <ul class="guide-badges">
-        <li><span class="info-badge brillant">Brillant</span> Coup exceptionnel</li>
-        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal</li>
+        <li><span class="info-badge brillant">Brillant</span> Sacrifice ou seul coup viable</li>
+        <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur</li>
+        <li><span class="info-badge great">Excellent</span> Quasi-optimal (≤10 cp de perte)</li>
         <li><span class="info-badge neutre">Correct</span> Coup acceptable</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (50–100 cp)</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (100–200 cp)</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (&gt;200 cp)</li>
       </ul>
     </div>
     <div class="guide-block">
@@ -155,7 +156,8 @@
       <p><b>Classification des coups</b></p>
       <ul>
         <li><span class="info-badge brillant">Brillant</span> Meilleur coup dans une position difficile — sacrifice correct ou seul coup viable</li>
-        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal ou quasi-optimal (perte ≤ 10 cp)</li>
+        <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur (perte = 0 cp)</li>
+        <li><span class="info-badge great">Excellent</span> Coup quasi-optimal (perte ≤ 10 cp)</li>
         <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp)</li>
         <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp)</li>
         <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp)</li>
@@ -238,6 +240,11 @@
       <div class="intro-text" id="intro-text"></div>
     </div>
 
+    <div class="win-graph-card" id="win-graph-card" hidden>
+      <h3>Chances de gain</h3>
+      <div class="win-graph-container" id="win-graph-container"></div>
+    </div>
+
     <div class="highlights-card" id="highlights-card" hidden>
       <h3>Moments clés</h3>
       <div class="highlights-list" id="highlights-list"></div>
@@ -295,6 +302,16 @@
     <div class="moves-card">
       <h3>Liste des coups</h3>
       <div class="moves-grid" id="moves-grid"></div>
+    </div>
+
+    <div class="time-chart-card" id="time-chart-card" hidden>
+      <h3>Temps par coup</h3>
+      <div class="time-chart-container" id="time-chart-container"></div>
+    </div>
+
+    <div class="tablebase-card" id="tablebase-card" hidden>
+      <h3>Table de finales (Syzygy)</h3>
+      <div id="tablebase-content"></div>
     </div>
 
     <div class="summary-card" id="summary-card">

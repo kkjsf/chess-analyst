@@ -278,8 +278,8 @@ const Analyzer = (() => {
 
   function generateSummary(results, moves) {
     const stats = {
-      w: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 },
-      b: { brilliants: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 }
+      w: { brilliants: 0, best: 0, great: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 },
+      b: { brilliants: 0, best: 0, great: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 }
     };
     let keyMoment = null;
 
@@ -292,6 +292,8 @@ const Analyzer = (() => {
       stats[side].totalWinLoss += r.winPctLoss || 0;
 
       if (r.type === 'brilliant') stats[side].brilliants++;
+      if (r.type === 'best') stats[side].best++;
+      if (r.type === 'great') stats[side].great++;
       if (r.type === 'good') stats[side].good++;
       if (r.type === 'inaccuracy') stats[side].inaccuracies++;
       if (r.type === 'mistake') stats[side].mistakes++;
@@ -418,9 +420,12 @@ const Analyzer = (() => {
         ? (newMaterial.diff - prevMat.diff)
         : (prevMat.diff - newMaterial.diff);
 
+      const playedUciStr = madeMove.from + madeMove.to + (madeMove.promotion || '');
+      const isBestMove = bestMoveUci && playedUciStr === bestMoveUci;
+
       let type;
       if (madeMove.san.includes('#')) {
-        type = 'good';
+        type = 'best';
       } else if (cpLoss <= 5 && (matChange <= -2 || (evalBefore && evalBefore.score <= -150))) {
         type = 'brilliant';
       } else if (cpLoss > 200) {
@@ -429,8 +434,10 @@ const Analyzer = (() => {
         type = 'mistake';
       } else if (cpLoss > 50) {
         type = 'inaccuracy';
+      } else if (cpLoss === 0 && isBestMove) {
+        type = 'best';
       } else if (cpLoss <= 10) {
-        type = 'good';
+        type = 'great';
       } else {
         type = 'neutral';
       }
@@ -462,14 +469,16 @@ const Analyzer = (() => {
           : `Légère imprécision (−${cpLoss} cp).`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
-      } else if (type === 'good') {
+      } else if (type === 'best') {
+        tipFr = `Meilleur coup ! C'est exactement ce que recommande le moteur. ${evalDesc}`;
+      } else if (type === 'great') {
         if (madeMove.captured) {
           const capName = PIECE_NAMES_FR[madeMove.captured];
           tipFr = `Excellent ! Capture optimale${capName ? ' du ' + capName : ''}. ${evalDesc}`;
         } else if (madeMove.san === 'O-O' || madeMove.san === 'O-O-O') {
-          tipFr = `Bon roque ! Le moteur confirme que c'est le meilleur choix ici. ${evalDesc}`;
+          tipFr = `Bon roque ! Le moteur confirme que c'est un très bon choix ici. ${evalDesc}`;
         } else {
-          tipFr = `Très bon coup, conforme à la recommandation du moteur. ${evalDesc}`;
+          tipFr = `Très bon coup, quasi-optimal. ${evalDesc}`;
         }
       } else {
         tipFr = `Coup correct (−${cpLoss} cp). ${evalDesc}`;
@@ -549,5 +558,40 @@ const Analyzer = (() => {
     return 'Position équilibrée.';
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount };
+  function parseClocks(pgnText) {
+    const clocks = [];
+    const re = /\{[^}]*\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\][^}]*\}/g;
+    let m;
+    while ((m = re.exec(pgnText)) !== null) {
+      clocks.push(parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]));
+    }
+    return clocks;
+  }
+
+  function clocksToTimePerMove(clocks) {
+    if (clocks.length < 2) return [];
+    const times = [];
+    for (let i = 0; i < clocks.length; i++) {
+      const prevIdx = i - 2;
+      if (prevIdx < 0) {
+        times.push(0);
+      } else {
+        times.push(Math.max(0, clocks[prevIdx] - clocks[i]));
+      }
+    }
+    return times;
+  }
+
+  async function probeTablebase(fen) {
+    const pieces = fen.split(' ')[0].replace(/[0-9/]/g, '');
+    if (pieces.length > 7) return null;
+    try {
+      const resp = await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data;
+    } catch (_) { return null; }
+  }
+
+  return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount, cpToWinPct, parseClocks, clocksToTimePerMove, probeTablebase };
 })();

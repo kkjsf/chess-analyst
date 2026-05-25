@@ -563,13 +563,80 @@ html, body {
 
 /* Brilliant badge & move */
 .eval-badge.brilliant { background: #1a2e3b; color: #67d4e8; }
+.eval-badge.best { background: #1a3b2a; color: #4ade80; }
+.eval-badge.great { background: #1e3328; color: #7dd8a8; }
 .eval-badge.inaccuracy { background: #3b2e1a; color: var(--warning); }
 .move-cell.brilliant-move { border-bottom: 2px solid #67d4e8; }
+.move-cell.best-move { border-bottom: 2px solid #4ade80; }
+.move-cell.great-move { border-bottom: 2px solid #7dd8a8; }
 .move-cell.inaccuracy-move { border-bottom: 2px solid var(--warning); }
 .highlight-badge.brillant { background: #1a2e3b; color: #67d4e8; }
+.highlight-badge.best { background: #1a3b2a; color: #4ade80; }
+.highlight-badge.great { background: #1e3328; color: #7dd8a8; }
 .highlight-badge.erreur { background: #3b2a1a; color: #f0a050; }
 .stat-pill.brilliants { background: #1a2e3b; color: #67d4e8; }
+.stat-pill.best-moves { background: #1a3b2a; color: #4ade80; }
+.stat-pill.great-moves { background: #1e3328; color: #7dd8a8; }
 .stat-pill.inaccuracies { background: #3b2e1a; color: var(--warning); }
+
+/* Win chance graph */
+.win-graph-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.win-graph-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.win-graph-container { width: 100%; }
+.win-graph-svg { width: 100%; height: auto; display: block; }
+
+/* Time chart */
+.time-chart-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.time-chart-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.time-chart-container { width: 100%; }
+.time-chart-svg { width: 100%; height: auto; display: block; }
+
+/* Tablebase card */
+.tablebase-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.tablebase-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.tb-result {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 6px;
+}
+.tb-result:hover { background: var(--bg-elevated); }
+.tb-result:last-child { margin-bottom: 0; }
 
 /* Engine badge in summary */
 .engine-badge {
@@ -727,6 +794,8 @@ html, body {
   vertical-align: middle;
 }
 .info-badge.brillant { background: #1a2e3b; color: #67d4e8; }
+.info-badge.best { background: #1a3b2a; color: #4ade80; }
+.info-badge.great { background: #1e3328; color: #7dd8a8; }
 .info-badge.bon-coup { background: #1a3b2a; color: var(--success); }
 .info-badge.neutre { background: #2a2a3a; color: var(--text-dim); }
 .info-badge.imprecision { background: #3b2e1a; color: var(--warning); }

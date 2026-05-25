@@ -6,6 +6,7 @@ const App = (() => {
   let currentIndex = 0;
   let currentHeader = null;
   let currentUser = null;
+  let currentPgn = null;
   let gameHistory = [];
 
   const $ = (sel) => document.querySelector(sel);
@@ -220,6 +221,7 @@ const App = (() => {
     const cached = getCachedAnalysis(ck);
     if (cached) {
       saveGame(pgnText, header, moves.length);
+      currentPgn = pgnText;
       showAnalysis(header, moves, cached.analysis, cached.summary);
       return;
     }
@@ -247,6 +249,7 @@ const App = (() => {
 
     saveCachedAnalysis(ck, analysis, summary);
     saveGame(pgnText, header, moves.length);
+    currentPgn = pgnText;
     showAnalysis(header, moves, analysis, summary);
   }
 
@@ -316,9 +319,12 @@ const App = (() => {
     $('#move-slider').value = 0;
 
     buildIntro(header, analysis, summary);
+    buildWinGraph(analysis);
     buildHighlights(header, analysis);
     buildMoveList(analysis);
+    buildTimeChart(analysis);
     buildSummary(summary, analysis);
+    probeEndgameTablebase(analysis);
 
     $('#screen-import').classList.remove('active');
     $('#screen-analysis').classList.add('active');
@@ -397,6 +403,8 @@ const App = (() => {
       const badge = $('#tip-badge');
       badge.className = 'eval-badge';
       if (r.type === 'brilliant') { badge.textContent = 'Brillant !'; badge.classList.add('brilliant'); }
+      else if (r.type === 'best') { badge.textContent = 'Meilleur'; badge.classList.add('best'); }
+      else if (r.type === 'great') { badge.textContent = 'Excellent'; badge.classList.add('great'); }
       else if (r.type === 'blunder') { badge.textContent = 'Gaffe !'; badge.classList.add('blunder'); }
       else if (r.type === 'mistake') { badge.textContent = 'Erreur'; badge.classList.add('mistake'); }
       else if (r.type === 'inaccuracy') { badge.textContent = 'Imprécision'; badge.classList.add('inaccuracy'); }
@@ -407,6 +415,8 @@ const App = (() => {
     $('#move-slider').value = index;
     const total = currentAnalysis.length;
     $('#move-counter').textContent = `Coup ${index}/${total}`;
+
+    updateWinGraphCursor(index);
 
     $$('.move-cell').forEach(cell => cell.classList.remove('active'));
     if (index > 0) {
@@ -912,7 +922,7 @@ const App = (() => {
         candidates.push({ index: i, label, score: 15, desc, badge: 'Brillant !' + badgeSuffix, badgeClass: 'brillant' });
       }
 
-      if (r.type === 'good' && r.move.captured) {
+      if ((r.type === 'good' || r.type === 'great' || r.type === 'best') && r.move.captured) {
         const capturedVal = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }[r.move.captured] || 0;
         if (capturedVal >= 5) {
           let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
@@ -990,6 +1000,8 @@ const App = (() => {
     cell.dataset.index = index;
     cell.textContent = result.sanFr;
     if (result.type === 'brilliant') cell.classList.add('brilliant-move');
+    if (result.type === 'best') cell.classList.add('best-move');
+    if (result.type === 'great') cell.classList.add('great-move');
     if (result.type === 'blunder') cell.classList.add('blunder-move');
     if (result.type === 'mistake') cell.classList.add('mistake-move');
     if (result.type === 'inaccuracy') cell.classList.add('inaccuracy-move');
@@ -1003,7 +1015,9 @@ const App = (() => {
     const pillsHtml = (side) => {
       let pills = '';
       if (side.brilliants) pills += `<span class="stat-pill brilliants">${side.brilliants} brillant${side.brilliants !== 1 ? 's' : ''}</span>`;
-      pills += `<span class="stat-pill good-moves">${side.good} bon${side.good !== 1 ? 's' : ''} coup${side.good !== 1 ? 's' : ''}</span>`;
+      if (side.best) pills += `<span class="stat-pill best-moves">${side.best} meilleur${side.best !== 1 ? 's' : ''}</span>`;
+      if (side.great) pills += `<span class="stat-pill great-moves">${side.great} excellent${side.great !== 1 ? 's' : ''}</span>`;
+      if (side.good) pills += `<span class="stat-pill good-moves">${side.good} bon${side.good !== 1 ? 's' : ''}</span>`;
       if (side.inaccuracies) pills += `<span class="stat-pill inaccuracies">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
       pills += `<span class="stat-pill mistakes">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
       pills += `<span class="stat-pill blunders">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
@@ -1040,6 +1054,200 @@ const App = (() => {
     $$('.km-move[data-goto]').forEach(el => {
       el.addEventListener('click', () => goTo(+el.dataset.goto));
     });
+  }
+
+  function buildWinGraph(analysis) {
+    const card = $('#win-graph-card');
+    const container = $('#win-graph-container');
+    if (!analysis.length || analysis[0].eval === undefined) { card.hidden = true; return; }
+
+    const W = 480, H = 140, PAD_L = 0, PAD_R = 0, PAD_T = 4, PAD_B = 20;
+    const graphW = W - PAD_L - PAD_R;
+    const graphH = H - PAD_T - PAD_B;
+    const n = analysis.length;
+
+    const winPcts = analysis.map(r => {
+      const cp = r.eval || 0;
+      return Analyzer.cpToWinPct(r.move && r.move.color === 'b' ? -cp : cp);
+    });
+    const whiteWin = analysis.map(r => {
+      const cp = r.eval || 0;
+      return Analyzer.cpToWinPct(cp);
+    });
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" class="win-graph-svg">`;
+    svg += `<rect x="${PAD_L}" y="${PAD_T}" width="${graphW}" height="${graphH}" fill="var(--bg)" rx="4"/>`;
+    svg += `<line x1="${PAD_L}" y1="${PAD_T + graphH/2}" x2="${PAD_L + graphW}" y2="${PAD_T + graphH/2}" stroke="rgba(255,255,255,0.15)" stroke-dasharray="4,4"/>`;
+
+    const whitePoints = [];
+    const areaTop = [];
+    for (let i = 0; i < n; i++) {
+      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+      const y = PAD_T + (1 - whiteWin[i]) * graphH;
+      whitePoints.push(`${x},${y}`);
+      areaTop.push({ x, y });
+    }
+
+    const midY = PAD_T + graphH / 2;
+    let areaPath = `M${PAD_L},${midY}`;
+    for (const p of areaTop) areaPath += ` L${p.x},${p.y}`;
+    areaPath += ` L${PAD_L + graphW},${midY} Z`;
+    svg += `<path d="${areaPath}" fill="rgba(255,255,255,0.12)"/>`;
+
+    let areaBPath = `M${PAD_L},${midY}`;
+    for (const p of areaTop) areaBPath += ` L${p.x},${PAD_T + graphH - (p.y - PAD_T)}`;
+    areaBPath = `M${PAD_L},${midY}`;
+    for (const p of areaTop) areaBPath += ` L${p.x},${p.y}`;
+    areaBPath += ` L${PAD_L + graphW},${PAD_T + graphH} L${PAD_L},${PAD_T + graphH} Z`;
+    svg += `<path d="${areaBPath}" fill="rgba(100,100,100,0.12)"/>`;
+
+    svg += `<polyline points="${whitePoints.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+
+    for (let i = 0; i < n; i++) {
+      const r = analysis[i];
+      if (r.type === 'blunder' || r.type === 'mistake') {
+        const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+        const y = PAD_T + (1 - whiteWin[i]) * graphH;
+        const color = r.type === 'blunder' ? 'var(--danger)' : 'var(--warning)';
+        svg += `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="var(--bg)" stroke-width="1"/>`;
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+      svg += `<rect x="${x - graphW/(2*n)}" y="${PAD_T}" width="${graphW/n}" height="${graphH}" fill="transparent" class="win-graph-hit" data-move="${i + 1}" style="cursor:pointer"/>`;
+    }
+
+    const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
+    for (let i = 0; i < n; i += labelInterval) {
+      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+      const moveNum = Math.floor(i / 2) + 1;
+      svg += `<text x="${x}" y="${H - 4}" fill="var(--text-dim)" font-size="9" text-anchor="middle">${moveNum}</text>`;
+    }
+
+    svg += `<line id="win-graph-cursor" x1="0" y1="${PAD_T}" x2="0" y2="${PAD_T + graphH}" stroke="var(--accent)" stroke-width="1" opacity="0" pointer-events="none"/>`;
+    svg += '</svg>';
+
+    container.innerHTML = svg;
+    card.hidden = false;
+
+    container.querySelectorAll('.win-graph-hit').forEach(el => {
+      el.addEventListener('click', () => {
+        goTo(+el.dataset.move);
+        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
+  function updateWinGraphCursor(index) {
+    const cursor = $('#win-graph-cursor');
+    if (!cursor || !currentAnalysis) return;
+    const n = currentAnalysis.length;
+    const svg = cursor.closest('svg');
+    if (!svg) return;
+    const W = 480, PAD_L = 0, PAD_R = 0;
+    const graphW = W - PAD_L - PAD_R;
+    const x = PAD_L + ((index - 1) / Math.max(1, n - 1)) * graphW;
+    cursor.setAttribute('x1', x);
+    cursor.setAttribute('x2', x);
+    cursor.setAttribute('opacity', index > 0 ? '0.7' : '0');
+  }
+
+  function buildTimeChart(analysis) {
+    const card = $('#time-chart-card');
+    const container = $('#time-chart-container');
+    if (!currentPgn) { card.hidden = true; return; }
+
+    const clocks = Analyzer.parseClocks(currentPgn);
+    if (clocks.length < 4) { card.hidden = true; return; }
+
+    const times = Analyzer.clocksToTimePerMove(clocks);
+    if (times.length === 0) { card.hidden = true; return; }
+
+    const n = Math.min(times.length, analysis.length);
+    const maxTime = Math.max(...times.slice(0, n), 1);
+
+    const W = 480, H = 120, PAD_T = 4, PAD_B = 20;
+    const graphH = H - PAD_T - PAD_B;
+    const barW = Math.max(2, Math.min(12, (W / n) - 1));
+    const gap = (W - barW * n) / (n + 1);
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" class="time-chart-svg">`;
+
+    for (let i = 0; i < n; i++) {
+      const x = gap + i * (barW + gap);
+      const h = (times[i] / maxTime) * graphH;
+      const y = PAD_T + graphH - h;
+      const color = i % 2 === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(140,140,140,0.7)';
+      const secs = Math.round(times[i]);
+      svg += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="1">`;
+      svg += `<title>Coup ${Math.floor(i/2)+1}${i%2===0?'.':'...'}: ${secs}s</title>`;
+      svg += `</rect>`;
+    }
+
+    const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
+    for (let i = 0; i < n; i += labelInterval) {
+      const x = gap + i * (barW + gap) + barW / 2;
+      const moveNum = Math.floor(i / 2) + 1;
+      svg += `<text x="${x}" y="${H - 4}" fill="var(--text-dim)" font-size="9" text-anchor="middle">${moveNum}</text>`;
+    }
+
+    svg += '</svg>';
+    container.innerHTML = svg;
+    card.hidden = false;
+  }
+
+  async function probeEndgameTablebase(analysis) {
+    const card = $('#tablebase-card');
+    const content = $('#tablebase-content');
+    card.hidden = true;
+
+    const tbResults = [];
+    for (let i = analysis.length - 1; i >= 0 && i >= analysis.length - 20; i--) {
+      const r = analysis[i];
+      if (!r.fen) continue;
+      const pieces = r.fen.split(' ')[0].replace(/[0-9/]/g, '');
+      if (pieces.length > 7 || pieces.length < 3) continue;
+
+      const tb = await Analyzer.probeTablebase(r.fen);
+      if (!tb || tb.category === undefined) continue;
+
+      const moveNum = Math.floor(i / 2) + 1;
+      const dot = i % 2 === 0 ? '.' : '...';
+      tbResults.push({ index: i, moveNum, dot, san: r.sanFr, category: tb.category, dtm: tb.dtm, dtz: tb.dtz, bestmove: tb.moves?.[0] });
+
+      if (tbResults.length >= 3) break;
+    }
+
+    if (tbResults.length === 0) return;
+
+    const catLabels = { 'win': 'Gain forcé', 'cursed-win': 'Gain théorique', 'draw': 'Nulle théorique', 'blessed-loss': 'Perte théorique', 'loss': 'Perte forcée', 'unknown': '?' };
+
+    let html = '';
+    for (const r of tbResults.reverse()) {
+      const label = catLabels[r.category] || r.category;
+      const badgeClass = r.category === 'win' || r.category === 'cursed-win' ? 'bon-coup' : r.category === 'draw' ? 'neutre' : 'gaffe';
+      const dtzInfo = r.dtz != null ? ` (DTZ: ${Math.abs(r.dtz)})` : '';
+      html += `<div class="tb-result" data-goto="${r.index + 1}">
+        <span class="highlight-move">${r.moveNum}${r.dot} ${r.san}</span>
+        <span class="highlight-desc">${pieces7(r)} — ${label}${dtzInfo}</span>
+        <span class="highlight-badge ${badgeClass}">${label}</span>
+      </div>`;
+    }
+
+    content.innerHTML = html;
+    card.hidden = false;
+
+    content.querySelectorAll('.tb-result').forEach(el => {
+      el.addEventListener('click', () => {
+        goTo(+el.dataset.goto);
+        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
+  function pieces7(tbResult) {
+    return `${tbResult.san ? 'Position à ≤7 pièces' : ''}`;
   }
 
   function showImport() {
