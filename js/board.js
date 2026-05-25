@@ -11,6 +11,11 @@ const BoardRenderer = (() => {
   const HL_TO = '#aaa23a';
   const BORDER_COLOR = '#6b5339';
 
+  let flipped = false;
+
+  function setFlipped(val) { flipped = !!val; }
+  function isFlipped() { return flipped; }
+
   function fenToBoard(fen) {
     const rows = fen.split(' ')[0].split('/');
     const board = [];
@@ -31,6 +36,7 @@ const BoardRenderer = (() => {
   function squareToCoords(sq) {
     const col = FILES.indexOf(sq[0]);
     const row = 8 - parseInt(sq[1]);
+    if (flipped) return { row: 7 - row, col: 7 - col };
     return { row, col };
   }
 
@@ -52,7 +58,9 @@ const BoardRenderer = (() => {
 
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
-        const isLight = (row + col) % 2 === 0;
+        const boardRow = flipped ? 7 - row : row;
+        const boardCol = flipped ? 7 - col : col;
+        const isLight = (boardRow + boardCol) % 2 === 0;
         const x = col * SQ;
         const y = row * SQ;
 
@@ -68,14 +76,14 @@ const BoardRenderer = (() => {
 
         if (col === 0) {
           const clr = isLight ? DARK : LIGHT;
-          html += `<text x="${x + 3}" y="${y + 12}" fill="${clr}" font-size="10" font-weight="700" font-family="Inter,system-ui,sans-serif" opacity="0.8">${8 - row}</text>`;
+          html += `<text x="${x + 3}" y="${y + 12}" fill="${clr}" font-size="10" font-weight="700" font-family="Inter,system-ui,sans-serif" opacity="0.8">${8 - boardRow}</text>`;
         }
         if (row === 7) {
           const clr = isLight ? DARK : LIGHT;
-          html += `<text x="${x + SQ - 8}" y="${y + SQ - 3}" fill="${clr}" font-size="10" font-weight="700" font-family="Inter,system-ui,sans-serif" opacity="0.8">${FILES[col]}</text>`;
+          html += `<text x="${x + SQ - 8}" y="${y + SQ - 3}" fill="${clr}" font-size="10" font-weight="700" font-family="Inter,system-ui,sans-serif" opacity="0.8">${FILES[boardCol]}</text>`;
         }
 
-        const piece = board[row][col];
+        const piece = board[boardRow][boardCol];
         if (piece) {
           const isWhitePiece = piece === piece.toUpperCase() && piece !== piece.toLowerCase();
           const stroke = isWhitePiece ? 'rgba(0,0,0,0.3)' : 'none';
@@ -147,5 +155,5 @@ const BoardRenderer = (() => {
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
 
-  return { render, drawArrow, drawArrows, clearArrows, getCapturedPieces };
+  return { render, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped };
 })();

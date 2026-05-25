@@ -582,26 +582,128 @@ html, body {
   text-align: center;
 }
 
-/* Info section */
-.info-section {
-  width: 100%;
-  max-width: 440px;
-  margin-top: 8px;
+/* Icon bar (top-right) */
+.icon-bar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  gap: 10px;
 }
-.info-toggle {
+.icon-bar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #2a3a5c;
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.icon-bar-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--bg-elevated); }
+
+/* Slide-in panels */
+.panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 999;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.panel-overlay.visible { opacity: 1; }
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+}
+.panel.open { transform: translateX(0); }
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #2a3a5c;
+  flex-shrink: 0;
+}
+.panel-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.panel-close {
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 24px;
   cursor: pointer;
-  padding: 8px 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  padding: 4px 8px;
+  line-height: 1;
   transition: color 0.15s;
 }
-.info-toggle:hover { color: var(--accent); }
-.info-icon { font-size: 16px; }
+.panel-close:hover { color: var(--text); }
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Guide blocks */
+.guide-block {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--accent);
+}
+.guide-block:last-child { margin-bottom: 0; }
+.guide-icon { font-size: 20px; margin-bottom: 6px; }
+.guide-block h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.guide-block p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.guide-block p:last-child { margin-bottom: 0; }
+.guide-badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.guide-badges li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .info-content {
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -770,9 +872,50 @@ html, body {
 .quiz-score-icon { font-size: 36px; display: block; margin-bottom: 8px; }
 .quiz-result p { margin: 4px 0; }
 
+/* Phase accuracy */
+.phase-accuracy {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.phase-accuracy-title {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.phase-row .accuracy-label { min-width: 70px; }
+
+/* Patterns card */
+.patterns-section {
+  width: 100%;
+  max-width: 440px;
+  margin-top: 4px;
+}
+.patterns-section h3 {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.pattern-item {
+  background: var(--bg-card);
+  border-left: 3px solid var(--warning);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 /* Touch swipe hint */
 @media (max-width: 480px) {
   .board-container { max-width: 100%; }
   .player-bar { max-width: 100%; }
   .analysis-body { padding: 12px; }
+  .panel { max-width: 100%; }
+  .icon-bar { top: 12px; right: 12px; gap: 8px; }
+  .icon-bar-btn { width: 36px; height: 36px; }
 }

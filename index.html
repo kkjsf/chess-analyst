@@ -13,39 +13,85 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=13">
+<link rel="stylesheet" href="css/style.css?v=15">
 </head>
 <body>
 
-<!-- ═══════ SCREEN 1: IMPORT ═══════ -->
-<div id="screen-import" class="screen import-screen active">
-  <div class="logo-section">
-    <div class="icon">♟</div>
-    <h1>Chess Analyst</h1>
-    <p>Analysez vos parties, progressez à chaque coup</p>
-  </div>
+<!-- ═══════ ICON BAR (top-right) ═══════ -->
+<div class="icon-bar" id="icon-bar">
+  <button class="icon-bar-btn" id="btn-guide" title="Guide d'utilisation" aria-label="Guide d'utilisation">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7.5" stroke="currentColor" stroke-width="1.4"/><path d="M7 7c0-1.1.9-2 2-2s2 .9 2 2c0 1.1-.7 1.5-1.4 2-.4.3-.6.7-.6 1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="9" cy="13" r=".8" fill="currentColor"/></svg>
+  </button>
+  <button class="icon-bar-btn" id="btn-notation" title="Notation des échecs" aria-label="Notation des échecs">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 14V4h7l-2.5 5L11 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+  </button>
+  <button class="icon-bar-btn" id="btn-technical" title="Fonctionnement technique" aria-label="Fonctionnement technique">
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M14.2 3.5a3.5 3.5 0 00-4.7 4.7L3.8 14a1 1 0 001.4 1.4l5.8-5.7a3.5 3.5 0 004.7-4.7l-2.2 2.2-1.5-1.5 2.2-2.2z" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+</div>
 
-  <div class="import-zone" id="drop-zone">
-    <textarea id="pgn-input" placeholder="Collez votre PGN ici..."></textarea>
-    <div class="hint">📎 ou glissez un fichier .pgn ici</div>
-    <button class="btn-primary" id="btn-analyze">Analyser la partie</button>
-    <div id="progress-container" class="progress-container" hidden>
-      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-      <div class="progress-text" id="progress-text">Chargement...</div>
+<!-- ═══════ PANELS ═══════ -->
+<div class="panel-overlay" id="panel-overlay" hidden></div>
+
+<div class="panel" id="panel-guide" hidden>
+  <div class="panel-header">
+    <h2>Guide d'utilisation</h2>
+    <button class="panel-close" aria-label="Fermer">&times;</button>
+  </div>
+  <div class="panel-body">
+    <div class="guide-block">
+      <div class="guide-icon">📋</div>
+      <h3>Importer une partie</h3>
+      <p>Collez un <b>PGN</b> dans la zone de texte, ou glissez-y un fichier <b>.pgn</b>.</p>
+      <p>Vous pouvez aussi coller directement une <b>URL Chess.com</b> — la partie sera importée automatiquement.</p>
     </div>
-    <div id="import-error" class="import-error" hidden></div>
+    <div class="guide-block">
+      <div class="guide-icon">🔍</div>
+      <h3>Lire l'analyse</h3>
+      <p>Naviguez coup par coup avec les <b>flèches ◀ ▶</b>, le <b>curseur</b>, ou en <b>glissant sur l'échiquier</b> (mobile). Les touches <b>← →</b> fonctionnent aussi au clavier.</p>
+    </div>
+    <div class="guide-block">
+      <div class="guide-icon">🏷️</div>
+      <h3>Comprendre les couleurs</h3>
+      <ul class="guide-badges">
+        <li><span class="info-badge brillant">Brillant</span> Coup exceptionnel</li>
+        <li><span class="info-badge bon-coup">Bon coup</span> Coup optimal</li>
+        <li><span class="info-badge neutre">Correct</span> Coup acceptable</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave</li>
+      </ul>
+    </div>
+    <div class="guide-block">
+      <div class="guide-icon">📊</div>
+      <h3>Score de précision</h3>
+      <p>Le pourcentage indique combien de <b>chances de gain</b> vous avez conservées à chaque coup par rapport au meilleur coup possible. Plus c'est haut, mieux c'est.</p>
+    </div>
+    <div class="guide-block">
+      <div class="guide-icon">💡</div>
+      <h3>Coups alternatifs</h3>
+      <p>Quand un conseil apparaît, les coups en <span style="color:#56b886;font-weight:600">vert</span> sont cliquables : cliquez dessus pour visualiser la position résultante sur l'échiquier.</p>
+    </div>
+    <div class="guide-block">
+      <div class="guide-icon">🕐</div>
+      <h3>Parties récentes & cache</h3>
+      <p>Vos <b>5 dernières analyses</b> sont mises en cache localement. Relancez-les instantanément depuis la liste des parties récentes (badge <span class="cached-badge" style="font-size:11px">Analysé</span>).</p>
+    </div>
+    <div class="guide-block">
+      <div class="guide-icon">📈</div>
+      <h3>Tendances</h3>
+      <p>Après 2+ parties analysées, l'app détecte vos <b>tendances récurrentes</b> (gaffes en ouverture, pertes de matériel...) pour vous aider à cibler vos progrès.</p>
+    </div>
   </div>
+</div>
 
-  <div class="recent-section" id="recent-section" hidden>
-    <h3>Parties récentes</h3>
-    <div id="recent-list"></div>
+<div class="panel" id="panel-notation" hidden>
+  <div class="panel-header">
+    <h2>Notation des échecs</h2>
+    <button class="panel-close" aria-label="Fermer">&times;</button>
   </div>
-
-  <div class="info-section">
-    <button class="info-toggle" id="glossary-toggle">
-      <span class="info-icon">♟</span> Notation des échecs
-    </button>
-    <div class="info-content glossary-content" id="glossary-content" hidden>
+  <div class="panel-body">
+    <div class="info-content" id="glossary-content">
       <p><b>Notation algébrique</b><br>
       Chaque case est identifiée par une lettre (colonne a–h) et un chiffre (rangée 1–8). Un coup s'écrit avec la lettre de la pièce suivie de la case d'arrivée.</p>
 
@@ -90,12 +136,15 @@
       </div>
     </div>
   </div>
+</div>
 
-  <div class="info-section">
-    <button class="info-toggle" id="info-toggle" onclick="document.getElementById('info-content').hidden = !document.getElementById('info-content').hidden">
-      <span class="info-icon">ℹ</span> Comment ça marche ?
-    </button>
-    <div class="info-content" id="info-content" hidden>
+<div class="panel" id="panel-technical" hidden>
+  <div class="panel-header">
+    <h2>Comment ça marche ?</h2>
+    <button class="panel-close" aria-label="Fermer">&times;</button>
+  </div>
+  <div class="panel-body">
+    <div class="info-content" id="info-content">
       <p><b>Qu'est-ce que Stockfish ?</b><br>
       <b>Stockfish</b> est un moteur d'échecs libre et open-source, considéré comme l'un des plus puissants au monde. Développé depuis 2008 par une communauté de bénévoles, il domine régulièrement le championnat TCEC. Son niveau de jeu dépasse largement celui de n'importe quel joueur humain, y compris les champions du monde.</p>
       <p>Ici, Stockfish tourne <b>directement dans votre navigateur</b> grâce à WebAssembly — aucune donnée ne quitte votre appareil, et l'analyse fonctionne même hors-ligne.</p>
@@ -136,6 +185,36 @@
         <li>L'application fonctionne <b>hors-ligne</b> une fois chargée — idéal pour analyser en déplacement.</li>
       </ul>
     </div>
+  </div>
+</div>
+
+<!-- ═══════ SCREEN 1: IMPORT ═══════ -->
+<div id="screen-import" class="screen import-screen active">
+  <div class="logo-section">
+    <div class="icon">♟</div>
+    <h1>Chess Analyst</h1>
+    <p>Analysez vos parties, progressez à chaque coup</p>
+  </div>
+
+  <div class="import-zone" id="drop-zone">
+    <textarea id="pgn-input" placeholder="Collez votre PGN ou une URL Chess.com ici..."></textarea>
+    <div class="hint">📎 ou glissez un fichier .pgn ici</div>
+    <button class="btn-primary" id="btn-analyze">Analyser la partie</button>
+    <div id="progress-container" class="progress-container" hidden>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-text" id="progress-text">Chargement...</div>
+    </div>
+    <div id="import-error" class="import-error" hidden></div>
+  </div>
+
+  <div class="recent-section" id="recent-section" hidden>
+    <h3>Parties récentes</h3>
+    <div id="recent-list"></div>
+  </div>
+
+  <div class="patterns-section" id="patterns-section" hidden>
+    <h3>Tendances détectées</h3>
+    <div id="patterns-list"></div>
   </div>
 </div>
 
@@ -225,12 +304,12 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=13"></script>
-<script src="js/board.js?v=13"></script>
-<script src="js/engine.js?v=13"></script>
-<script src="js/openings.js?v=13"></script>
-<script src="js/analysis.js?v=13"></script>
-<script src="js/app.js?v=13"></script>
+<script src="js/chess.min.js?v=15"></script>
+<script src="js/board.js?v=15"></script>
+<script src="js/engine.js?v=15"></script>
+<script src="js/openings.js?v=15"></script>
+<script src="js/analysis.js?v=15"></script>
+<script src="js/app.js?v=15"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

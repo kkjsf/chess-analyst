@@ -16,6 +16,7 @@ const App = (() => {
     loadRecent();
     handleShareTarget();
     initGlossary();
+    initPanels();
   }
 
   function bindEvents() {
@@ -122,11 +123,55 @@ const App = (() => {
     return !!getCachedAnalysis(cacheKey(header, moveCount));
   }
 
+  async function fetchChessComPgn(url) {
+    const gameMatch = url.match(/chess\.com\/(?:game\/)?(?:live|daily)\/(\d+)/);
+    if (!gameMatch) return null;
+    const gameId = gameMatch[1];
+    showProgressBar('Récupération de la partie Chess.com...');
+    try {
+      const callbackUrl = `https://www.chess.com/callback/live/game/${gameId}`;
+      const resp = await fetch(callbackUrl);
+      if (!resp.ok) throw new Error('API error');
+      const data = await resp.json();
+      if (data.pgn) return data.pgn;
+      if (data.pgnHeaders && data.moveList) {
+        let pgn = '';
+        for (const [k, v] of Object.entries(data.pgnHeaders)) pgn += `[${k} "${v}"]\n`;
+        pgn += '\n' + data.moveList;
+        return pgn;
+      }
+      throw new Error('No PGN in response');
+    } catch (_) {
+      try {
+        const resp2 = await fetch(`https://api.chess.com/pub/game/live/${gameId}`);
+        if (resp2.ok) {
+          const data2 = await resp2.json();
+          if (data2.pgn) return data2.pgn;
+        }
+      } catch (_2) {}
+      return null;
+    }
+  }
+
   async function onAnalyze() {
-    const pgnText = $('#pgn-input').value.trim();
+    let pgnText = $('#pgn-input').value.trim();
     if (!pgnText) {
       showError('Collez un PGN pour commencer.');
       return;
+    }
+
+    const chessComMatch = pgnText.match(/^https?:\/\/(www\.)?chess\.com\//);
+    if (chessComMatch) {
+      const fetched = await fetchChessComPgn(pgnText);
+      if (fetched) {
+        pgnText = fetched;
+        $('#pgn-input').value = pgnText;
+        hideProgressBar();
+      } else {
+        hideProgressBar();
+        showError('Impossible de récupérer la partie. Collez le PGN manuellement.');
+        return;
+      }
     }
 
     const chess = new Chess();
@@ -231,6 +276,8 @@ const App = (() => {
     currentHeader = header;
     currentUser = detectUser(header);
 
+    BoardRenderer.setFlipped(currentUser === 'b');
+
     const white = header.White || 'Blancs';
     const black = header.Black || 'Noirs';
     const whiteElo = header.WhiteElo || '?';
@@ -257,10 +304,13 @@ const App = (() => {
     else if (result === '0-1') badge.classList.add('loss');
     else badge.classList.add('draw');
 
-    $('#top-name').textContent = black;
-    $('#top-elo').textContent = blackElo;
-    $('#bottom-name').textContent = white;
-    $('#bottom-elo').textContent = whiteElo;
+    const isFlipped = BoardRenderer.isFlipped();
+    $('#top-name').textContent = isFlipped ? white : black;
+    $('#top-elo').textContent = isFlipped ? whiteElo : blackElo;
+    $('#bottom-name').textContent = isFlipped ? black : white;
+    $('#bottom-elo').textContent = isFlipped ? blackElo : whiteElo;
+    $('#top-player .piece-icon').textContent = isFlipped ? '⚪' : '⚫';
+    $('#bottom-player .piece-icon').textContent = isFlipped ? '⚫' : '⚪';
 
     $('#move-slider').max = analysis.length;
     $('#move-slider').value = 0;
@@ -296,8 +346,9 @@ const App = (() => {
     BoardRenderer.render($('#board-svg'), fen, lastMove);
 
     const captured = BoardRenderer.getCapturedPieces(fen);
-    $('#top-captured').textContent = captured.white;
-    $('#bottom-captured').textContent = captured.black;
+    const isFlipped = BoardRenderer.isFlipped();
+    $('#top-captured').textContent = isFlipped ? captured.black : captured.white;
+    $('#bottom-captured').textContent = isFlipped ? captured.white : captured.black;
 
     let evalPct;
     if (index > 0 && currentAnalysis[index - 1].eval !== undefined && currentAnalysis[index - 1].eval !== 0) {
@@ -531,7 +582,7 @@ const App = (() => {
     const userStats = user ? (userIsWhite ? s.w : s.b) : null;
     const oppStats = user ? (userIsWhite ? s.b : s.w) : null;
 
-    const narrative = buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower);
+    const narrative = buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, summary.opening);
 
     const dateStr = header.Date || '';
     let dateLine = '';
@@ -557,6 +608,38 @@ const App = (() => {
           <div class="accuracy-row"><span class="accuracy-label">⚪ Précision</span><div class="accuracy-bar-bg"><div class="accuracy-bar" style="width:${wPct}%"></div></div><span class="accuracy-val">${wPct}%</span></div>
           <div class="accuracy-row"><span class="accuracy-label">⚫ Précision</span><div class="accuracy-bar-bg"><div class="accuracy-bar black" style="width:${bPct}%"></div></div><span class="accuracy-val">${bPct}%</span></div>
         </div>`;
+
+      const phaseRanges = [
+        { label: 'Ouverture', from: 0, to: Math.min(20, analysis.length) },
+        { label: 'Milieu', from: 20, to: Math.min(50, analysis.length) },
+        { label: 'Finale', from: 50, to: analysis.length }
+      ];
+      const showSide = user ? (userIsWhite ? 'w' : 'b') : null;
+      const phaseAccs = phaseRanges.filter(p => p.from < analysis.length).map(p => {
+        const sides = showSide ? [showSide] : ['w', 'b'];
+        let totalWinLoss = 0, count = 0;
+        for (let i = p.from; i < p.to; i++) {
+          const r = analysis[i];
+          if (!r.move) continue;
+          if (sides.includes(r.move.color)) {
+            totalWinLoss += r.winPctLoss || 0;
+            count++;
+          }
+        }
+        const avg = count > 0 ? totalWinLoss / count : 0;
+        const acc = Math.max(0, Math.min(100, Math.round((1 - avg * 2) * 100)));
+        return { label: p.label, acc, count };
+      }).filter(p => p.count > 0);
+
+      if (phaseAccs.length > 1) {
+        accuracyHtml += `<div class="phase-accuracy">`;
+        accuracyHtml += `<div class="phase-accuracy-title">${user ? 'Votre précision par phase' : 'Précision par phase'}</div>`;
+        for (const p of phaseAccs) {
+          const barClass = !showSide ? '' : (showSide === 'b' ? ' black' : '');
+          accuracyHtml += `<div class="accuracy-row phase-row"><span class="accuracy-label">${p.label}</span><div class="accuracy-bar-bg"><div class="accuracy-bar${barClass}" style="width:${p.acc}%"></div></div><span class="accuracy-val">${p.acc}%</span></div>`;
+        }
+        accuracyHtml += `</div>`;
+      }
     }
 
     const card = $('#intro-card');
@@ -573,177 +656,186 @@ const App = (() => {
     card.hidden = false;
   }
 
-  function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower) {
+  function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening) {
     const byTime = termLower.includes('time');
     const byMate = termLower.includes('checkmate') || termLower.includes('mat');
     const byResign = termLower.includes('resign') || termLower.includes('abandon');
-    const openingEnd = Math.min(Math.floor(analysis.length * 0.25), 10);
-    const midStart = openingEnd;
-    const midEnd = Math.max(midStart, Math.floor(analysis.length * 0.7));
 
     const phases = [
-      { name: 'opening', from: 0, to: openingEnd },
-      { name: 'middle', from: midStart, to: midEnd },
-      { name: 'end', from: midEnd, to: analysis.length }
+      { name: 'opening', from: 0, to: Math.min(20, analysis.length) },
+      { name: 'middle', from: 20, to: Math.min(50, analysis.length) },
+      { name: 'end', from: 50, to: analysis.length }
     ];
 
     const phaseErrors = phases.map(p => {
-      let userBlunders = 0, userMistakes = 0, oppBlunders = 0, oppMistakes = 0;
+      let userBlunders = 0, userMistakes = 0, userInaccuracies = 0, oppBlunders = 0, oppMistakes = 0;
       for (let i = p.from; i < p.to; i++) {
         const r = analysis[i];
         if (!r.move) continue;
         const isUserMove = user && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b'));
         if (r.type === 'blunder') { if (isUserMove) userBlunders++; else oppBlunders++; }
         if (r.type === 'mistake') { if (isUserMove) userMistakes++; else oppMistakes++; }
+        if (r.type === 'inaccuracy') { if (isUserMove) userInaccuracies++; }
       }
-      return { ...p, userBlunders, userMistakes, oppBlunders, oppMistakes };
+      return { ...p, userBlunders, userMistakes, userInaccuracies, oppBlunders, oppMistakes };
     });
 
     let turningPoint = null;
     let biggestSwing = 0;
     for (let i = 1; i < analysis.length; i++) {
       const r = analysis[i];
-      if (!r.move || r.type !== 'blunder') continue;
+      if (!r.move || (r.type !== 'blunder' && r.type !== 'mistake')) continue;
       const prevEval = analysis[i - 1]?.eval || 0;
-      const swing = Math.abs(r.eval - prevEval);
+      const swing = Math.abs((r.eval || 0) - prevEval);
       if (swing > biggestSwing) {
         biggestSwing = swing;
         const moveNum = Math.floor(i / 2) + 1;
         const dot = i % 2 === 0 ? '.' : '...';
-        turningPoint = { moveNum, dot, san: r.sanFr, index: i, move: r.move };
+        turningPoint = { moveNum, dot, san: r.sanFr, index: i, move: r.move, type: r.type };
       }
+    }
+
+    const tc = header ? (header.TimeControl || '') : '';
+    let isFastTc = false;
+    if (tc.includes('+')) {
+      const secs = parseInt(tc);
+      if (secs <= 180) isFastTc = true;
     }
 
     const lines = [];
     const [op, mid, end] = phaseErrors;
 
     if (user) {
-      if (op.userBlunders === 0 && op.userMistakes === 0 && op.oppBlunders === 0) {
-        lines.push('L\'ouverture se déroule sans accroc pour les deux camps.');
-      } else if (op.userBlunders > 0) {
-        lines.push('Vous trébuchez dès l\'ouverture, ce qui donne un avantage précoce à votre adversaire.');
-      } else if (op.oppBlunders > 0) {
-        lines.push('Votre adversaire commet une erreur dès l\'ouverture, vous prenant un avantage rapide.');
-      } else if (op.userMistakes > 0) {
-        lines.push('Quelques imprécisions dans l\'ouverture vous placent dans une position légèrement inconfortable.');
+      if (opening) {
+        if (op.userBlunders === 0 && op.userMistakes === 0) {
+          lines.push(`Vous jouez la ${opening.name} de façon solide, sans erreur dans les premiers coups.`);
+        } else if (op.userBlunders > 0) {
+          lines.push(`Dans la ${opening.name}, vous trébuchez rapidement — votre adversaire prend l'avantage dès les premiers échanges.`);
+        } else {
+          lines.push(`La ${opening.name} se passe correctement malgré quelques imprécisions de votre part.`);
+        }
+      } else {
+        if (op.userBlunders === 0 && op.userMistakes === 0 && op.oppBlunders === 0) {
+          lines.push('Les premiers coups se déroulent sans accroc des deux côtés.');
+        } else if (op.userBlunders > 0) {
+          lines.push('Vous trébuchez dès l\'ouverture, offrant un avantage précoce à votre adversaire.');
+        } else if (op.oppBlunders > 0) {
+          lines.push('Votre adversaire fait une erreur en ouverture et vous prenez un avantage rapide.');
+        } else if (op.userMistakes > 0) {
+          lines.push('Quelques imprécisions en ouverture vous placent dans une position légèrement inconfortable.');
+        }
       }
 
-      if (mid.userBlunders >= 2) {
-        lines.push('Le milieu de partie est difficile : plusieurs gaffes font basculer l\'évaluation.');
-      } else if (mid.userBlunders === 1 && turningPoint) {
-        lines.push(`Le coup ${turningPoint.moveNum}${turningPoint.dot} ${turningPoint.san} est le tournant de la partie — une gaffe qui change la donne.`);
-      } else if (mid.oppBlunders >= 2) {
-        lines.push('Votre adversaire multiplie les erreurs en milieu de partie, vous offrant des opportunités.');
-      } else if (mid.oppBlunders === 1 && turningPoint) {
-        const isOpp = user && ((user === 'w' && turningPoint.move.color === 'b') || (user === 'b' && turningPoint.move.color === 'w'));
-        if (isOpp) lines.push(`Votre adversaire gaffe au coup ${turningPoint.moveNum} — un tournant que vous exploitez bien.`);
-      } else if (mid.userMistakes === 0 && mid.oppMistakes === 0) {
-        lines.push('Le milieu de partie est tendu mais propre, sans erreur majeure des deux côtés.');
+      if (turningPoint) {
+        const isUserTP = (user === 'w' && turningPoint.move.color === 'w') || (user === 'b' && turningPoint.move.color === 'b');
+        if (isUserTP) {
+          lines.push(`Votre ${turningPoint.moveNum}${turningPoint.dot} ${turningPoint.san} est le tournant de la partie — une ${turningPoint.type === 'blunder' ? 'gaffe' : 'erreur'} qui change l'évaluation.`);
+        } else {
+          lines.push(`Au coup ${turningPoint.moveNum}, votre adversaire gaffe avec ${turningPoint.san} — un tournant que vous exploitez bien.`);
+        }
+      } else if (mid.from < analysis.length) {
+        if (mid.userMistakes === 0 && mid.userBlunders === 0 && mid.oppMistakes === 0 && mid.oppBlunders === 0) {
+          lines.push('Le milieu de partie est tendu mais propre, sans erreur des deux côtés.');
+        } else if (mid.userBlunders >= 2) {
+          lines.push('Le milieu de partie est chaotique avec plusieurs gaffes de votre part.');
+        } else if (mid.oppBlunders >= 2) {
+          lines.push('Votre adversaire multiplie les erreurs en milieu de partie.');
+        }
       }
 
-      if (end.to > end.from) {
+      if (end.to > end.from && analysis.length > 50) {
         if (end.userBlunders > 0 && userLost) {
-          lines.push('La finale est fatale : une erreur tardive scelle l\'issue de la partie.');
+          const lastBlunder = [...analysis].reverse().find(r => r.type === 'blunder' && r.move && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b')));
+          if (lastBlunder) {
+            const idx = analysis.indexOf(lastBlunder);
+            const mn = Math.floor(idx / 2) + 1;
+            lines.push(`La finale vous échappe avec ${mn}${idx % 2 === 0 ? '.' : '...'} ${lastBlunder.sanFr} qui scelle la partie.`);
+          } else {
+            lines.push('Une erreur tardive en finale scelle l\'issue.');
+          }
         } else if (end.oppBlunders > 0 && userWon) {
-          lines.push('En finale, votre adversaire craque et vous convertissez votre avantage.');
-        } else if (end.userMistakes === 0 && end.oppMistakes === 0 && analysis.length > 40) {
-          lines.push('La finale est bien maîtrisée, avec un jeu précis jusqu\'au bout.');
+          lines.push('En finale, votre adversaire craque et vous convertissez.');
+        } else if (end.userMistakes === 0 && end.oppMistakes === 0) {
+          lines.push('Finale bien maîtrisée avec un jeu précis jusqu\'au bout.');
         }
       }
 
       if (userWon) {
         if (byMate) {
-          lines.push('Vous concluez par un échec et mat — la meilleure façon de finir !');
+          lines.push('Mat conclusif — la meilleure façon de finir !');
         } else if (byTime) {
-          if (userStats.blunders >= 2) {
-            lines.push('Victoire au temps, mais la position était fragile — votre adversaire aurait pu renverser la situation avec plus de temps.');
-          } else if (oppStats.blunders >= 1) {
-            lines.push('Votre adversaire, sous pression de temps, accumule les erreurs. La pendule fait le reste.');
+          if (isFastTc && oppStats.blunders >= 1) {
+            lines.push('Sous la pression de la pendule, votre adversaire craque. Bien géré.');
+          } else if (userStats.blunders >= 2) {
+            lines.push('Victoire au temps, mais la position était fragile — à retravailler.');
           } else {
-            lines.push('Victoire au temps. Vous avez su maintenir la pression jusqu\'à ce que la pendule devienne votre alliée.');
+            lines.push('Victoire au temps grâce à une bonne gestion de la pendule.');
           }
         } else if (byResign) {
           if (userStats.blunders === 0 && userStats.mistakes === 0) {
-            lines.push('Votre adversaire abandonne face à un jeu irréprochable — victoire nette et méritée.');
+            lines.push('Abandon adverse face à un jeu irréprochable — victoire nette.');
           } else {
-            lines.push('Votre adversaire préfère abandonner plutôt que de continuer dans une position sans espoir.');
+            lines.push('Votre adversaire préfère abandonner dans une position sans espoir.');
           }
         } else {
           if (userStats.blunders === 0 && userStats.mistakes === 0) {
-            lines.push('Une victoire nette et méritée — aucune erreur de votre part.');
-          } else if (userStats.blunders === 0) {
-            lines.push('Une victoire solide malgré quelques petites imprécisions.');
+            lines.push('Partie sans faute de votre côté — victoire méritée.');
           } else if (oppStats.blunders > userStats.blunders) {
-            lines.push('Vous avez su profiter des erreurs adverses pour l\'emporter.');
+            lines.push('Vous profitez des erreurs adverses pour l\'emporter.');
           } else {
-            lines.push('La victoire est acquise, mais des gaffes auraient pu la compromettre — à retravailler.');
+            lines.push('Victoire acquise, mais des gaffes auraient pu la compromettre.');
           }
         }
       } else if (userLost) {
-        if (byMate) {
-          lines.push('L\'adversaire conclut par un mat — revoyez les derniers coups pour identifier la menace plus tôt.');
+        if (byTime && isFastTc) {
+          if (userStats.blunders === 0) {
+            lines.push('Défaite au temps dans une position jouable — la pendule fait la différence en Bullet.');
+          } else {
+            lines.push('Le temps et les erreurs s\'accumulent — difficile de s\'en sortir en cadence rapide.');
+          }
+        } else if (byMate) {
+          lines.push('Mat adverse — revoyez les derniers coups pour repérer la menace plus tôt.');
         } else if (byTime) {
-          if (userStats.blunders === 0 && userStats.mistakes <= 1) {
-            lines.push('Vous perdez au temps dans une position tout à fait jouable — dommage ! Pensez à mieux gérer votre pendule.');
-          } else {
-            lines.push('Le temps a eu raison de vous, mais les erreurs accumulées avaient déjà rendu la tâche difficile.');
-          }
-        } else if (byResign) {
-          if (userStats.blunders === 1) {
-            lines.push('Vous abandonnez après une seule gaffe décisive. Sans elle, la partie restait ouverte.');
-          } else if (userStats.blunders >= 2) {
-            lines.push('Plusieurs gaffes ont conduit à l\'abandon. Revoyez les moments clés pour éviter ces schémas.');
-          } else {
-            lines.push('Vous choisissez d\'abandonner dans une position difficile.');
-          }
+          lines.push('Défaite au temps. Pensez à jouer plus vite dans les positions simples.');
+        } else if (userStats.blunders === 1 && !turningPoint) {
+          lines.push('La défaite tient à une seule gaffe — un point précis à corriger.');
+        } else if (userStats.blunders >= 2) {
+          lines.push('Plusieurs gaffes ont conduit à cette défaite — revoyez les moments clés.');
+        } else if (oppStats.blunders === 0 && oppStats.mistakes <= 1) {
+          lines.push('Votre adversaire a joué très solidement — la marge de manœuvre était faible.');
         } else {
-          if (userStats.blunders === 1) {
-            lines.push('La défaite tient à une seule gaffe — sans elle, la partie était jouable. Un point précis à corriger.');
-          } else if (userStats.blunders >= 2) {
-            lines.push('Plusieurs gaffes ont conduit à cette défaite. Revoyez les moments clés pour éviter ces schémas.');
-          } else if (oppStats.blunders === 0 && oppStats.mistakes <= 1) {
-            lines.push('Votre adversaire a joué une partie très solide — la marge de manœuvre était faible.');
-          } else {
-            lines.push('Une défaite où quelques imprécisions ont suffi à faire basculer la partie.');
-          }
+          lines.push('Défaite serrée où quelques imprécisions ont fait la différence.');
         }
       } else if (isDraw) {
         if (userStats.blunders === 0 && oppStats.blunders === 0) {
-          lines.push('Partie nulle logique — les deux camps ont joué avec précision.');
+          lines.push('Partie nulle logique — jeu précis des deux côtés.');
         } else {
-          lines.push('Les erreurs se sont compensées, menant à un partage des points.');
+          lines.push('Les erreurs se compensent, menant au partage des points.');
         }
       }
     } else {
       const wLabel = 'les Blancs';
       const bLabel = 'les Noirs';
-      if (op.userBlunders === 0 && op.oppBlunders === 0) {
+      if (opening) {
+        lines.push(`${opening.name} — ouverture ${(op.userBlunders + op.oppBlunders === 0) ? 'correcte des deux côtés' : 'avec des erreurs précoces'}.`);
+      } else if (op.userBlunders === 0 && op.oppBlunders === 0) {
         lines.push('Ouverture correcte des deux côtés.');
-      } else {
-        if (s.w.blunders > 0 && op.userBlunders > 0) lines.push('Les Blancs font une erreur précoce en ouverture.');
-        if (s.b.blunders > 0 && op.oppBlunders > 0) lines.push('Les Noirs trébuchent dès l\'ouverture.');
       }
 
       if (turningPoint) {
         const side = turningPoint.move.color === 'w' ? wLabel : bLabel;
-        lines.push(`Le tournant se joue au coup ${turningPoint.moveNum} : ${side} gaffent avec ${turningPoint.san}.`);
+        lines.push(`Le tournant : ${turningPoint.moveNum}${turningPoint.dot} ${turningPoint.san} — ${side} gaffent.`);
       }
 
       const totalBlunders = s.w.blunders + s.b.blunders;
       if (totalBlunders >= 4) {
-        lines.push('Une partie chaotique, riche en erreurs des deux côtés.');
+        lines.push('Partie chaotique, riche en erreurs des deux côtés.');
       } else if (totalBlunders === 0 && s.w.mistakes + s.b.mistakes <= 2) {
-        lines.push('Partie de bonne qualité, avec très peu d\'imprécisions.');
-      }
-
-      if (s.w.blunders >= 2 && s.b.blunders === 0) {
-        lines.push('Les Blancs ont commis trop d\'erreurs — les Noirs en ont profité.');
-      } else if (s.b.blunders >= 2 && s.w.blunders === 0) {
-        lines.push('Les Noirs ont accumulé les gaffes, laissant le contrôle aux Blancs.');
+        lines.push('Partie de bonne qualité avec très peu d\'imprécisions.');
       }
     }
 
-    return lines.length > 0 ? lines.join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
+    return lines.length > 0 ? lines.slice(0, 5).join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
   }
 
   function buildHighlights(header, analysis) {
@@ -1032,6 +1124,60 @@ const App = (() => {
         loadRecent();
       });
     });
+
+    buildPatterns();
+  }
+
+  function buildPatterns() {
+    const section = $('#patterns-section');
+    if (!section) return;
+    try {
+      const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+      if (cache.length < 2) { section.hidden = true; return; }
+
+      const phases = ['opening', 'middle', 'endgame'];
+      const phaseLabels = { opening: 'en ouverture', middle: 'en milieu de partie', endgame: 'en finale' };
+      const counts = { opening: { blunders: 0, mistakes: 0, inaccuracies: 0, captures: 0 }, middle: { blunders: 0, mistakes: 0, inaccuracies: 0, captures: 0 }, endgame: { blunders: 0, mistakes: 0, inaccuracies: 0, captures: 0 } };
+
+      for (const entry of cache) {
+        if (!entry.analysis) continue;
+        const a = entry.analysis;
+        for (let i = 0; i < a.length; i++) {
+          const r = a[i];
+          if (!r.move) continue;
+          const isUser = (r.move.color === 'w' && (entry.summary?.stats?.w)) || (r.move.color === 'b');
+          const phase = i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame';
+          if (r.type === 'blunder') counts[phase].blunders++;
+          if (r.type === 'mistake') counts[phase].mistakes++;
+          if (r.type === 'inaccuracy') counts[phase].inaccuracies++;
+          if (r.type === 'blunder' && r.move.captured) counts[phase].captures++;
+        }
+      }
+
+      const patterns = [];
+      const totalBlunders = counts.opening.blunders + counts.middle.blunders + counts.endgame.blunders;
+      const totalInaccuracies = counts.opening.inaccuracies + counts.middle.inaccuracies + counts.endgame.inaccuracies;
+
+      for (const phase of phases) {
+        if (totalBlunders > 0 && counts[phase].blunders / totalBlunders > 0.5 && counts[phase].blunders >= 2) {
+          patterns.push(`Vous faites souvent des gaffes ${phaseLabels[phase]}.`);
+        }
+        if (totalInaccuracies > 0 && counts[phase].inaccuracies / totalInaccuracies > 0.5 && counts[phase].inaccuracies >= 3) {
+          patterns.push(`Vos imprécisions arrivent surtout ${phaseLabels[phase]}.`);
+        }
+      }
+
+      const totalCapBlunders = counts.opening.captures + counts.middle.captures + counts.endgame.captures;
+      if (totalCapBlunders >= 2 && totalBlunders > 0 && totalCapBlunders / totalBlunders > 0.4) {
+        patterns.push('Vous perdez souvent du matériel sur des échanges.');
+      }
+
+      if (patterns.length === 0) { section.hidden = true; return; }
+
+      section.hidden = false;
+      const list = $('#patterns-list');
+      list.innerHTML = patterns.slice(0, 2).map(p => `<div class="pattern-item">${p}</div>`).join('');
+    } catch (_) { section.hidden = true; }
   }
 
   function formatDate(dateStr) {
@@ -1048,14 +1194,42 @@ const App = (() => {
   }
 
   function initGlossary() {
-    const toggleBtn = $('#glossary-toggle');
-    const content = $('#glossary-content');
-    if (!toggleBtn || !content) return;
-    toggleBtn.addEventListener('click', () => {
-      content.hidden = !content.hidden;
-    });
     const quizBtn = $('#quiz-start');
     if (quizBtn) quizBtn.addEventListener('click', startQuiz);
+  }
+
+  function initPanels() {
+    const overlay = $('#panel-overlay');
+    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), technical: $('#panel-technical') };
+    const btns = { guide: $('#btn-guide'), notation: $('#btn-notation'), technical: $('#btn-technical') };
+
+    function openPanel(name) {
+      Object.values(panels).forEach(p => { p.hidden = true; p.classList.remove('open'); });
+      overlay.hidden = false;
+      requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        panels[name].hidden = false;
+        requestAnimationFrame(() => panels[name].classList.add('open'));
+      });
+    }
+
+    function closeAll() {
+      Object.values(panels).forEach(p => p.classList.remove('open'));
+      overlay.classList.remove('visible');
+      setTimeout(() => {
+        Object.values(panels).forEach(p => p.hidden = true);
+        overlay.hidden = true;
+      }, 300);
+    }
+
+    Object.entries(btns).forEach(([name, btn]) => {
+      if (btn) btn.addEventListener('click', () => openPanel(name));
+    });
+    overlay.addEventListener('click', closeAll);
+    $$('.panel-close').forEach(btn => btn.addEventListener('click', closeAll));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAll();
+    });
   }
 
   const QUIZ_QUESTIONS = [
