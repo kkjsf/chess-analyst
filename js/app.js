@@ -1,7 +1,11 @@
 const App = (() => {
   const STORAGE_KEY = 'chess-analyst-games';
+  const CACHE_KEY = 'chess-analyst-cache';
+  const MAX_CACHED = 5;
   let currentAnalysis = null;
   let currentIndex = 0;
+  let currentHeader = null;
+  let currentUser = null;
   let gameHistory = [];
 
   const $ = (sel) => document.querySelector(sel);
@@ -11,6 +15,7 @@ const App = (() => {
     bindEvents();
     loadRecent();
     handleShareTarget();
+    initGlossary();
   }
 
   function bindEvents() {
@@ -91,6 +96,32 @@ const App = (() => {
     return cleaned;
   }
 
+  function cacheKey(header, moveCount) {
+    return `${(header.White||'?')}|${(header.Black||'?')}|${(header.Date||'')}|${moveCount}`;
+  }
+
+  function getCachedAnalysis(key) {
+    try {
+      const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+      return cache.find(c => c.key === key) || null;
+    } catch (_) { return null; }
+  }
+
+  function saveCachedAnalysis(key, analysis, summary) {
+    try {
+      const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+      const existing = cache.findIndex(c => c.key === key);
+      if (existing >= 0) cache.splice(existing, 1);
+      cache.unshift({ key, analysis, summary, savedAt: Date.now() });
+      if (cache.length > MAX_CACHED) cache.length = MAX_CACHED;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    } catch (_) {}
+  }
+
+  function isGameCached(header, moveCount) {
+    return !!getCachedAnalysis(cacheKey(header, moveCount));
+  }
+
   async function onAnalyze() {
     const pgnText = $('#pgn-input').value.trim();
     if (!pgnText) {
@@ -140,6 +171,14 @@ const App = (() => {
       return;
     }
 
+    const ck = cacheKey(header, moves.length);
+    const cached = getCachedAnalysis(ck);
+    if (cached) {
+      saveGame(pgnText, header, moves.length);
+      showAnalysis(header, moves, cached.analysis, cached.summary);
+      return;
+    }
+
     let analysis;
     let engineUsed = false;
 
@@ -161,6 +200,7 @@ const App = (() => {
     const summary = Analyzer.generateSummary(analysis, moves);
     summary.engineUsed = engineUsed;
 
+    saveCachedAnalysis(ck, analysis, summary);
     saveGame(pgnText, header, moves.length);
     showAnalysis(header, moves, analysis, summary);
   }
@@ -188,6 +228,8 @@ const App = (() => {
   function showAnalysis(header, moves, analysis, summary) {
     currentAnalysis = analysis;
     currentIndex = 0;
+    currentHeader = header;
+    currentUser = detectUser(header);
 
     const white = header.White || 'Blancs';
     const black = header.Black || 'Noirs';
@@ -282,12 +324,24 @@ const App = (() => {
       $('#tip-badge').textContent = '';
       $('#tip-badge').className = 'eval-badge';
       $('#tip-text').innerHTML = 'Position de départ. Utilisez les boutons ou le curseur pour naviguer dans la partie.';
+      const sideTag = $('#tip-side');
+      if (sideTag) sideTag.hidden = true;
     } else {
       const r = currentAnalysis[index - 1];
       const moveNum = Math.floor((index - 1) / 2) + 1;
       const dot = (index - 1) % 2 === 0 ? '.' : '...';
       $('#tip-text').innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b> — ${r.tipFr}`;
       bindAltMoves();
+
+      const sideTag = $('#tip-side');
+      if (sideTag && currentUser && r.move) {
+        const isUserMove = (currentUser === 'w' && r.move.color === 'w') || (currentUser === 'b' && r.move.color === 'b');
+        sideTag.hidden = false;
+        sideTag.textContent = isUserMove ? 'Vous' : 'Adversaire';
+        sideTag.className = 'tip-side-tag ' + (isUserMove ? 'tip-side-you' : 'tip-side-opp');
+      } else if (sideTag) {
+        sideTag.hidden = true;
+      }
 
       const badge = $('#tip-badge');
       badge.className = 'eval-badge';
@@ -949,10 +1003,13 @@ const App = (() => {
       else if (g.result === '0-1') { resultClass = 'loss'; resultLabel = 'Défaite'; }
 
       const dateStr = formatDate(g.date);
+      const cached = isGameCached({ White: g.white, Black: g.black, Date: g.date }, g.moveCount);
+      const cachedBadge = cached ? '<span class="cached-badge">Analysé</span>' : '';
 
       item.innerHTML = `
         <span class="result ${resultClass}">${resultLabel}</span>
         <span class="players">${g.white} vs ${g.black}</span>
+        ${cachedBadge}
         <span class="date">${dateStr}</span>
         <button class="delete-btn" data-index="${i}" title="Supprimer">×</button>`;
 
@@ -988,6 +1045,89 @@ const App = (() => {
       }
     } catch (_) {}
     return dateStr;
+  }
+
+  function initGlossary() {
+    const toggleBtn = $('#glossary-toggle');
+    const content = $('#glossary-content');
+    if (!toggleBtn || !content) return;
+    toggleBtn.addEventListener('click', () => {
+      content.hidden = !content.hidden;
+    });
+    const quizBtn = $('#quiz-start');
+    if (quizBtn) quizBtn.addEventListener('click', startQuiz);
+  }
+
+  const QUIZ_QUESTIONS = [
+    { q: 'Comment note-t-on un cavalier en notation algébrique ?', opts: ['C', 'N', 'K', 'Cv'], answer: 1, explain: 'En anglais, le cavalier se note N (Knight). En français, on utilise C.' },
+    { q: 'Que signifie le symbole "x" dans un coup ?', opts: ['Échec', 'Capture', 'Roque', 'Promotion'], answer: 1, explain: 'Le "x" indique une capture : la pièce prend une pièce adverse.' },
+    { q: 'Que signifie "O-O" ?', opts: ['Partie nulle', 'Petit roque', 'Grand roque', 'Échec'], answer: 1, explain: 'O-O = petit roque (côté roi). O-O-O = grand roque (côté dame).' },
+    { q: 'Que signifie le symbole "#" après un coup ?', opts: ['Échec', 'Échec et mat', 'Promotion', 'Prise en passant'], answer: 1, explain: '# indique l\'échec et mat. + indique un simple échec.' },
+    { q: 'Comment note-t-on la promotion d\'un pion en dame ?', opts: ['e8D', 'e8=Q', 'e8+Q', 'Pe8'], answer: 1, explain: 'On écrit la case d\'arrivée suivie de =Q (=D en français) pour indiquer la promotion.' },
+    { q: 'Que signifie "Fxe5" en notation française ?', opts: ['Le fou capture en e5', 'La dame va en e5', 'Le roi capture en e5', 'Le cavalier va en e5'], answer: 0, explain: 'F = Fou, x = capture. Le fou prend la pièce en e5.' },
+    { q: 'En notation anglaise, quelle lettre désigne la Tour ?', opts: ['T', 'R', 'B', 'K'], answer: 1, explain: 'R = Rook (Tour en anglais). T est la notation française.' },
+    { q: 'Comment désambiguë-t-on deux cavaliers pouvant aller sur la même case ?', opts: ['On ajoute la colonne d\'origine', 'On met le coup en majuscules', 'On ajoute un point', 'On utilise une flèche'], answer: 0, explain: 'Ex: Cbd2 ou Cfd2 — on précise la colonne (ou la rangée) de départ pour distinguer les deux cavaliers.' },
+    { q: 'Que signifie "+" après un coup ?', opts: ['Bon coup', 'Échec', 'Promotion', 'Capture'], answer: 1, explain: '+ signifie que le coup met le roi adverse en échec.' },
+    { q: 'Comment note-t-on la Dame en anglais ?', opts: ['D', 'K', 'Q', 'L'], answer: 2, explain: 'Q = Queen (Dame). K = King (Roi).' },
+  ];
+
+  let quizState = { current: 0, score: 0, questions: [] };
+
+  function startQuiz() {
+    const pool = [...QUIZ_QUESTIONS];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    quizState = { current: 0, score: 0, questions: pool.slice(0, 5) };
+    renderQuizQuestion();
+  }
+
+  function renderQuizQuestion() {
+    const container = $('#quiz-area');
+    if (!container) return;
+    const qs = quizState;
+    if (qs.current >= qs.questions.length) {
+      container.innerHTML = `
+        <div class="quiz-result">
+          <span class="quiz-score-icon">${qs.score >= 4 ? '🎉' : qs.score >= 2 ? '👍' : '📖'}</span>
+          <p><b>${qs.score} / ${qs.questions.length}</b></p>
+          <p>${qs.score >= 4 ? 'Excellent ! Vous maîtrisez la notation.' : qs.score >= 2 ? 'Pas mal ! Relisez le glossaire pour les points manqués.' : 'Continuez à pratiquer, la notation deviendra naturelle !'}</p>
+          <button class="btn-quiz-retry" id="quiz-retry">Recommencer</button>
+        </div>`;
+      $('#quiz-retry').addEventListener('click', startQuiz);
+      return;
+    }
+    const q = qs.questions[qs.current];
+    container.innerHTML = `
+      <div class="quiz-progress">${qs.current + 1} / ${qs.questions.length}</div>
+      <p class="quiz-question">${q.q}</p>
+      <div class="quiz-opts">
+        ${q.opts.map((o, i) => `<button class="quiz-opt" data-idx="${i}">${o}</button>`).join('')}
+      </div>
+      <div class="quiz-feedback" id="quiz-feedback" hidden></div>`;
+    container.querySelectorAll('.quiz-opt').forEach(btn => {
+      btn.addEventListener('click', () => onQuizAnswer(+btn.dataset.idx));
+    });
+  }
+
+  function onQuizAnswer(idx) {
+    const q = quizState.questions[quizState.current];
+    const correct = idx === q.answer;
+    if (correct) quizState.score++;
+    const feedback = $('#quiz-feedback');
+    feedback.hidden = false;
+    feedback.className = 'quiz-feedback ' + (correct ? 'correct' : 'wrong');
+    feedback.innerHTML = `<b>${correct ? 'Correct !' : 'Raté !'}</b> ${q.explain}`;
+    $$('#quiz-area .quiz-opt').forEach(btn => {
+      btn.disabled = true;
+      if (+btn.dataset.idx === q.answer) btn.classList.add('correct');
+      if (+btn.dataset.idx === idx && !correct) btn.classList.add('wrong');
+    });
+    setTimeout(() => {
+      quizState.current++;
+      renderQuizQuestion();
+    }, 2200);
   }
 
   document.addEventListener('DOMContentLoaded', init);

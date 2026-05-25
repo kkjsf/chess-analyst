@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=13">
 </head>
 <body>
 
@@ -39,6 +39,56 @@
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
     <div id="recent-list"></div>
+  </div>
+
+  <div class="info-section">
+    <button class="info-toggle" id="glossary-toggle">
+      <span class="info-icon">♟</span> Notation des échecs
+    </button>
+    <div class="info-content glossary-content" id="glossary-content" hidden>
+      <p><b>Notation algébrique</b><br>
+      Chaque case est identifiée par une lettre (colonne a–h) et un chiffre (rangée 1–8). Un coup s'écrit avec la lettre de la pièce suivie de la case d'arrivée.</p>
+
+      <table class="notation-table">
+        <thead><tr><th>Pièce</th><th>Anglais</th><th>Français</th></tr></thead>
+        <tbody>
+          <tr><td>Roi</td><td>K (King)</td><td>R</td></tr>
+          <tr><td>Dame</td><td>Q (Queen)</td><td>D</td></tr>
+          <tr><td>Tour</td><td>R (Rook)</td><td>T</td></tr>
+          <tr><td>Fou</td><td>B (Bishop)</td><td>F</td></tr>
+          <tr><td>Cavalier</td><td>N (Knight)</td><td>C</td></tr>
+          <tr><td>Pion</td><td colspan="2">pas de lettre (juste la case)</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>Symboles courants</b></p>
+      <ul>
+        <li><b>x</b> — capture (ex: Cxe5 = le cavalier prend en e5)</li>
+        <li><b>+</b> — échec au roi</li>
+        <li><b>#</b> — échec et mat</li>
+        <li><b>O-O</b> — petit roque (côté roi)</li>
+        <li><b>O-O-O</b> — grand roque (côté dame)</li>
+        <li><b>=Q</b> — promotion en dame (=D en français)</li>
+      </ul>
+
+      <p><b>Désambiguïsation</b><br>
+      Si deux pièces identiques peuvent aller sur la même case, on ajoute la colonne ou la rangée d'origine. Ex : <b>Cbd2</b> (le cavalier de la colonne b va en d2), <b>T1e1</b> (la tour de la rangée 1 va en e1).</p>
+
+      <p><b>Exemples</b></p>
+      <ul>
+        <li><b>e4</b> — pion en e4</li>
+        <li><b>Cf3</b> — cavalier en f3</li>
+        <li><b>Fxc6+</b> — le fou prend en c6 avec échec</li>
+        <li><b>O-O</b> — petit roque</li>
+        <li><b>e8=D</b> — pion promu en dame sur e8</li>
+      </ul>
+
+      <div class="quiz-section">
+        <h4>Testez vos connaissances</h4>
+        <button class="btn-quiz" id="quiz-start">Lancer le quiz</button>
+        <div id="quiz-area"></div>
+      </div>
+    </div>
   </div>
 
   <div class="info-section">
@@ -157,6 +207,7 @@
       <div class="tip-header">
         <span class="bulb">💡</span>
         <span class="label">Conseil</span>
+        <span class="tip-side-tag" id="tip-side" hidden></span>
         <span class="eval-badge" id="tip-badge"></span>
       </div>
       <div class="tip-text" id="tip-text"></div>
@@ -174,12 +225,12 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=11"></script>
-<script src="js/board.js?v=11"></script>
-<script src="js/engine.js?v=11"></script>
-<script src="js/openings.js?v=11"></script>
-<script src="js/analysis.js?v=11"></script>
-<script src="js/app.js?v=11"></script>
+<script src="js/chess.min.js?v=13"></script>
+<script src="js/board.js?v=13"></script>
+<script src="js/engine.js?v=13"></script>
+<script src="js/openings.js?v=13"></script>
+<script src="js/analysis.js?v=13"></script>
+<script src="js/app.js?v=13"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

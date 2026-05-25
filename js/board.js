@@ -5,10 +5,11 @@ const BoardRenderer = (() => {
     P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔'
   };
   const FILES = 'abcdefgh';
-  const LIGHT = '#b7c0d8';
-  const DARK = '#4a6fa1';
-  const HL_FROM = 'rgba(226,184,87,0.35)';
-  const HL_TO = 'rgba(226,184,87,0.55)';
+  const LIGHT = '#ebd7b2';
+  const DARK = '#ae8a68';
+  const HL_FROM = '#cdd26a';
+  const HL_TO = '#aaa23a';
+  const BORDER_COLOR = '#6b5339';
 
   function fenToBoard(fen) {
     const rows = fen.split(' ')[0].split('/');
@@ -43,30 +44,43 @@ const BoardRenderer = (() => {
       hlTo = squareToCoords(lastMove.to);
     }
 
+    html += `<defs>
+      <filter id="piece-shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000" flood-opacity="0.45"/>
+      </filter>
+    </defs>`;
+
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const isLight = (row + col) % 2 === 0;
         const x = col * SQ;
         const y = row * SQ;
 
-        let fill = isLight ? LIGHT : DARK;
-        if (hlFrom && hlFrom.row === row && hlFrom.col === col) fill = HL_FROM;
-        if (hlTo && hlTo.row === row && hlTo.col === col) fill = HL_TO;
+        const isHlFrom = hlFrom && hlFrom.row === row && hlFrom.col === col;
+        const isHlTo = hlTo && hlTo.row === row && hlTo.col === col;
+
+        let fill;
+        if (isHlTo) fill = HL_TO;
+        else if (isHlFrom) fill = HL_FROM;
+        else fill = isLight ? LIGHT : DARK;
 
         html += `<rect x="${x}" y="${y}" width="${SQ}" height="${SQ}" fill="${fill}"/>`;
 
         if (col === 0) {
           const clr = isLight ? DARK : LIGHT;
-          html += `<text x="${x + 3}" y="${y + 13}" fill="${clr}" font-size="10" font-weight="600" font-family="Inter,sans-serif">${8 - row}</text>`;
+          html += `<text x="${x + 3}" y="${y + 12}" fill="${clr}" font-size="10" font-weight="700" font-family="Inter,system-ui,sans-serif" opacity="0.8">${8 - row}</text>`;
         }
         if (row === 7) {
           const clr = isLight ? DARK : LIGHT;
-          html += `<text x="${x + SQ - 9}" y="${y + SQ - 3}" fill="${clr}" font-size="10" font-weight="600" font-family="Inter,sans-serif">${FILES[col]}</text>`;
+          html += `<text x="${x + SQ - 8}" y="${y + SQ - 3}" fill="${clr}" font-size="10" font-weight="700" font-family="Inter,system-ui,sans-serif" opacity="0.8">${FILES[col]}</text>`;
         }
 
         const piece = board[row][col];
         if (piece) {
-          html += `<text x="${x + SQ / 2}" y="${y + SQ / 2 + 13}" text-anchor="middle" font-size="34" style="pointer-events:none">${PIECES_UNI[piece]}</text>`;
+          const isWhitePiece = piece === piece.toUpperCase() && piece !== piece.toLowerCase();
+          const stroke = isWhitePiece ? 'rgba(0,0,0,0.3)' : 'none';
+          const strokeW = isWhitePiece ? 0.5 : 0;
+          html += `<text x="${x + SQ / 2}" y="${y + SQ / 2 + 14}" text-anchor="middle" font-size="36" filter="url(#piece-shadow)" stroke="${stroke}" stroke-width="${strokeW}" style="pointer-events:none">${PIECES_UNI[piece]}</text>`;
         }
       }
     }
@@ -74,17 +88,17 @@ const BoardRenderer = (() => {
   }
 
   function drawArrow(overlaySvg, fromSq, toSq) {
-    drawArrows(overlaySvg, [{ from: fromSq, to: toSq, color: '#e2b857', opacity: 0.6, width: 5 }]);
+    drawArrows(overlaySvg, [{ from: fromSq, to: toSq, color: '#56b886', opacity: 0.85, width: 6 }]);
   }
 
   function drawArrows(overlaySvg, arrows) {
     if (!arrows || arrows.length === 0) { clearArrows(overlaySvg); return; }
 
-    const colors = [...new Set(arrows.map(a => a.color || '#e2b857'))];
+    const colors = [...new Set(arrows.map(a => a.color || '#56b886'))];
     let defsHtml = '<defs>';
     for (const c of colors) {
       const id = 'ah-' + c.replace('#', '');
-      defsHtml += `<marker id="${id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="${c}" opacity="0.8"/></marker>`;
+      defsHtml += `<marker id="${id}" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0.5,0.3 L3.5,2 L0.5,3.7 Z" fill="${c}"/></marker>`;
     }
     defsHtml += '</defs>';
 
@@ -98,18 +112,19 @@ const BoardRenderer = (() => {
       const len = Math.sqrt(dx * dx + dy * dy);
       if (len === 0) continue;
       const ux = dx / len, uy = dy / len;
-      const sx = x1 + ux * 8, sy = y1 + uy * 8;
-      const ex = x2 - ux * 8, ey = y2 - uy * 8;
-      const color = a.color || '#e2b857';
+      const sx = x1 + ux * 10, sy = y1 + uy * 10;
+      const ex = x2 - ux * 12, ey = y2 - uy * 12;
+      const color = a.color || '#56b886';
       const markerId = 'ah-' + color.replace('#', '');
-      html += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${a.width || 5}" opacity="${a.opacity || 0.6}" marker-end="url(#${markerId})" stroke-linecap="round"/>`;
+      const w = a.width || 6;
+      const op = a.opacity || 0.85;
+      html += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${w}" opacity="${op}" marker-end="url(#${markerId})" stroke-linecap="round"/>`;
     }
     overlaySvg.innerHTML = html;
   }
 
   function clearArrows(overlaySvg) {
-    const existing = overlaySvg.querySelector('defs');
-    overlaySvg.innerHTML = existing ? existing.outerHTML : '';
+    overlaySvg.innerHTML = '';
   }
 
   function getCapturedPieces(fen) {
