@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=18">
+<link rel="stylesheet" href="css/style.css?v=19">
 </head>
 <body>
 
@@ -56,11 +56,11 @@
       <ul class="guide-badges">
         <li><span class="info-badge brillant">Brillant</span> Sacrifice ou seul coup viable</li>
         <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur</li>
-        <li><span class="info-badge great">Excellent</span> Quasi-optimal (≤10 cp de perte)</li>
+        <li><span class="info-badge great">Excellent</span> Presque aussi bon que le meilleur coup</li>
         <li><span class="info-badge neutre">Correct</span> Coup acceptable</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (50–100 cp)</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (100–200 cp)</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (&gt;200 cp)</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart, avantage grignoté</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux, avantage perdu</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave, la position bascule</li>
       </ul>
     </div>
     <div class="guide-block">
@@ -156,12 +156,12 @@
       <p><b>Classification des coups</b></p>
       <ul>
         <li><span class="info-badge brillant">Brillant</span> Meilleur coup dans une position difficile — sacrifice correct ou seul coup viable</li>
-        <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur (perte = 0 cp)</li>
-        <li><span class="info-badge great">Excellent</span> Coup quasi-optimal (perte ≤ 10 cp)</li>
-        <li><span class="info-badge neutre">Correct</span> Coup acceptable (perte 10–50 cp)</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart (perte 50–100 cp)</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux (perte 100–200 cp)</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave (perte &gt; 200 cp)</li>
+        <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur</li>
+        <li><span class="info-badge great">Excellent</span> Presque aussi bon que le meilleur coup</li>
+        <li><span class="info-badge neutre">Correct</span> Coup acceptable, pas d'erreur significative</li>
+        <li><span class="info-badge imprecision">Imprécision</span> Petit écart, avantage grignoté</li>
+        <li><span class="info-badge erreur">Erreur</span> Coup coûteux, avantage perdu</li>
+        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave, la position bascule</li>
       </ul>
 
       <p><b>Score de précision (WDL)</b><br>
@@ -321,12 +321,12 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=18"></script>
-<script src="js/board.js?v=18"></script>
-<script src="js/engine.js?v=18"></script>
-<script src="js/openings.js?v=18"></script>
-<script src="js/analysis.js?v=18"></script>
-<script src="js/app.js?v=18"></script>
+<script src="js/chess.min.js?v=19"></script>
+<script src="js/board.js?v=19"></script>
+<script src="js/engine.js?v=19"></script>
+<script src="js/openings.js?v=19"></script>
+<script src="js/analysis.js?v=19"></script>
+<script src="js/app.js?v=19"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

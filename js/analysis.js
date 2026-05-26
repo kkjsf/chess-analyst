@@ -451,22 +451,22 @@ const Analyzer = (() => {
       } else if (type === 'blunder') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         tipFr = bestSpan
-          ? `Gaffe ! Ce coup perd ${cpLoss} centipièces d'avantage. Il fallait jouer ${bestSpan}.`
-          : `Gaffe ! Ce coup coûte ${cpLoss} centipièces.`;
+          ? `Gaffe ! Ce coup change complètement la position. Il fallait jouer ${bestSpan}.`
+          : `Gaffe ! Ce coup change complètement la position.`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'mistake') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         tipFr = bestSpan
-          ? `Erreur sérieuse (−${cpLoss} cp). Le meilleur coup était ${bestSpan}.`
-          : `Erreur sérieuse (−${cpLoss} cp).`;
+          ? `Erreur coûteuse. Le meilleur coup était ${bestSpan}.`
+          : `Erreur coûteuse.`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'inaccuracy') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         tipFr = bestSpan
-          ? `Légère imprécision (−${cpLoss} cp). ${bestSpan} était plus précis.`
-          : `Légère imprécision (−${cpLoss} cp).`;
+          ? `Légère imprécision. ${bestSpan} était plus précis.`
+          : `Légère imprécision.`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'best') {
@@ -481,7 +481,7 @@ const Analyzer = (() => {
           tipFr = `Très bon coup, quasi-optimal. ${evalDesc}`;
         }
       } else {
-        tipFr = `Coup correct (−${cpLoss} cp). ${evalDesc}`;
+        tipFr = `Coup correct. ${evalDesc}`;
       }
 
       if (evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
