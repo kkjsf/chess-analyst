@@ -109,12 +109,12 @@ const App = (() => {
     } catch (_) { return null; }
   }
 
-  function saveCachedAnalysis(key, analysis, summary) {
+  function saveCachedAnalysis(key, analysis, summary, header, user) {
     try {
       const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
       const existing = cache.findIndex(c => c.key === key);
       if (existing >= 0) cache.splice(existing, 1);
-      cache.unshift({ key, analysis, summary, savedAt: Date.now() });
+      cache.unshift({ key, analysis, summary, header, user, savedAt: Date.now() });
       if (cache.length > MAX_CACHED) cache.length = MAX_CACHED;
       localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
     } catch (_) {}
@@ -247,7 +247,7 @@ const App = (() => {
     const summary = Analyzer.generateSummary(analysis, moves);
     summary.engineUsed = engineUsed;
 
-    saveCachedAnalysis(ck, analysis, summary);
+    saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
     saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
     showAnalysis(header, moves, analysis, summary);
@@ -1348,50 +1348,154 @@ const App = (() => {
     if (!section) return;
     try {
       const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
-      if (cache.length < 2) { section.hidden = true; return; }
+      const validGames = cache.filter(e => e.user && e.analysis && e.summary);
+      if (validGames.length < 2) { section.hidden = true; return; }
 
-      const phases = ['opening', 'middle', 'endgame'];
-      const phaseLabels = { opening: 'en ouverture', middle: 'en milieu de partie', endgame: 'en finale' };
-      const counts = { opening: { blunders: 0, mistakes: 0, inaccuracies: 0, captures: 0 }, middle: { blunders: 0, mistakes: 0, inaccuracies: 0, captures: 0 }, endgame: { blunders: 0, mistakes: 0, inaccuracies: 0, captures: 0 } };
+      const gameStats = validGames.map(entry => {
+        const side = entry.user;
+        const s = entry.summary.stats;
+        const us = side === 'w' ? s.w : s.b;
+        const result = entry.header?.Result || '*';
+        const userWon = (side === 'w' && result === '1-0') || (side === 'b' && result === '0-1');
+        const userLost = (side === 'w' && result === '0-1') || (side === 'b' && result === '1-0');
+        const isDraw = result === '1/2-1/2';
+        const opening = entry.summary.opening?.name || null;
 
-      for (const entry of cache) {
-        if (!entry.analysis) continue;
+        let openingBlunders = 0, totalBlunders = 0, captureBlunders = 0;
+        let openingAcc = 0, openingCount = 0, endAcc = 0, endCount = 0;
         const a = entry.analysis;
         for (let i = 0; i < a.length; i++) {
           const r = a[i];
           if (!r.move) continue;
-          const isUser = (r.move.color === 'w' && (entry.summary?.stats?.w)) || (r.move.color === 'b');
-          const phase = i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame';
-          if (r.type === 'blunder') counts[phase].blunders++;
-          if (r.type === 'mistake') counts[phase].mistakes++;
-          if (r.type === 'inaccuracy') counts[phase].inaccuracies++;
-          if (r.type === 'blunder' && r.move.captured) counts[phase].captures++;
+          const isUser = r.move.color === side;
+          if (!isUser) continue;
+          if (r.type === 'blunder') {
+            totalBlunders++;
+            if (i < 20) openingBlunders++;
+            if (r.move.captured) captureBlunders++;
+          }
+          const loss = r.winPctLoss || 0;
+          const acc = Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
+          if (i < 20) { openingAcc += acc; openingCount++; }
+          else if (i >= 50) { endAcc += acc; endCount++; }
         }
+
+        return {
+          accuracy: us.accuracy,
+          blunders: us.blunders,
+          mistakes: us.mistakes,
+          inaccuracies: us.inaccuracies,
+          result: userWon ? 'win' : userLost ? 'loss' : isDraw ? 'draw' : null,
+          opening,
+          side,
+          openingBlunders,
+          totalBlunders,
+          captureBlunders,
+          openingAcc: openingCount > 0 ? Math.round(openingAcc / openingCount) : null,
+          endAcc: endCount > 0 ? Math.round(endAcc / endCount) : null
+        };
+      });
+
+      const wins = gameStats.filter(g => g.result === 'win').length;
+      const losses = gameStats.filter(g => g.result === 'loss').length;
+      const draws = gameStats.filter(g => g.result === 'draw').length;
+      const total = gameStats.length;
+      const avgAcc = Math.round(gameStats.reduce((s, g) => s + g.accuracy, 0) / total);
+
+      let html = '';
+
+      const wPct = Math.round(100 * wins / total);
+      const lPct = Math.round(100 * losses / total);
+      const dPct = 100 - wPct - lPct;
+      html += `<div class="trends-summary">`;
+      html += `<div class="trends-stat"><div class="stat-value">${total}</div><div class="stat-label">Parties</div></div>`;
+      html += `<div class="trends-stat"><div class="stat-value">${avgAcc}%</div><div class="stat-label">Précision moy.</div></div>`;
+      html += `<div class="trends-stat"><div class="stat-value">${wins}V ${draws}N ${losses}D</div><div class="stat-label">Résultats</div></div>`;
+      html += `</div>`;
+      html += `<div class="wld-bar">`;
+      if (wPct > 0) html += `<div class="wld-w" style="width:${wPct}%"></div>`;
+      if (dPct > 0) html += `<div class="wld-d" style="width:${dPct}%"></div>`;
+      if (lPct > 0) html += `<div class="wld-l" style="width:${lPct}%"></div>`;
+      html += `</div>`;
+      html += `<div class="wld-legend"><span class="leg-w">Victoires</span><span class="leg-d">Nulles</span><span class="leg-l">Défaites</span></div>`;
+
+      if (gameStats.length >= 2) {
+        const sorted = [...gameStats].reverse();
+        const n = sorted.length;
+        const svgW = 300, svgH = 40, pad = 4;
+        const gW = svgW - pad * 2, gH = svgH - pad * 2;
+        let points = '';
+        let dots = '';
+        for (let i = 0; i < n; i++) {
+          const x = pad + (n === 1 ? gW / 2 : (i / (n - 1)) * gW);
+          const y = pad + (1 - sorted[i].accuracy / 100) * gH;
+          points += (i === 0 ? '' : ' ') + `${x},${y}`;
+          const col = sorted[i].accuracy > 70 ? 'var(--success)' : sorted[i].accuracy >= 50 ? 'var(--warning)' : 'var(--danger)';
+          dots += `<circle cx="${x}" cy="${y}" r="3" fill="${col}"/>`;
+        }
+        html += `<div class="trends-sparkline"><svg viewBox="0 0 ${svgW} ${svgH}"><polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round"/>${dots}</svg></div>`;
       }
 
       const patterns = [];
-      const totalBlunders = counts.opening.blunders + counts.middle.blunders + counts.endgame.blunders;
-      const totalInaccuracies = counts.opening.inaccuracies + counts.middle.inaccuracies + counts.endgame.inaccuracies;
+      const allBlunders = gameStats.reduce((s, g) => s + g.totalBlunders, 0);
+      const allOpeningBlunders = gameStats.reduce((s, g) => s + g.openingBlunders, 0);
+      if (allBlunders > 0 && allOpeningBlunders / allBlunders > 0.5) {
+        const pct = Math.round(100 * allOpeningBlunders / allBlunders);
+        patterns.push({ text: `Vous faites ${pct}% de vos gaffes en ouverture.`, positive: false });
+      }
 
-      for (const phase of phases) {
-        if (totalBlunders > 0 && counts[phase].blunders / totalBlunders > 0.5 && counts[phase].blunders >= 2) {
-          patterns.push(`Vous faites souvent des gaffes ${phaseLabels[phase]}.`);
-        }
-        if (totalInaccuracies > 0 && counts[phase].inaccuracies / totalInaccuracies > 0.5 && counts[phase].inaccuracies >= 3) {
-          patterns.push(`Vos imprécisions arrivent surtout ${phaseLabels[phase]}.`);
+      const withEnd = gameStats.filter(g => g.endAcc !== null && g.openingAcc !== null);
+      if (withEnd.length >= 2) {
+        const avgEnd = Math.round(withEnd.reduce((s, g) => s + g.endAcc, 0) / withEnd.length);
+        const avgOp = Math.round(withEnd.reduce((s, g) => s + g.openingAcc, 0) / withEnd.length);
+        if (avgEnd > avgOp + 10) {
+          patterns.push({ text: 'Vos finales sont votre point fort.', positive: true });
         }
       }
 
-      const totalCapBlunders = counts.opening.captures + counts.middle.captures + counts.endgame.captures;
-      if (totalCapBlunders >= 2 && totalBlunders > 0 && totalCapBlunders / totalBlunders > 0.4) {
-        patterns.push('Vous perdez souvent du matériel sur des échanges.');
+      const whiteGames = gameStats.filter(g => g.side === 'w');
+      const blackGames = gameStats.filter(g => g.side === 'b');
+      if (whiteGames.length >= 1 && blackGames.length >= 1) {
+        const wAvg = Math.round(whiteGames.reduce((s, g) => s + g.accuracy, 0) / whiteGames.length);
+        const bAvg = Math.round(blackGames.reduce((s, g) => s + g.accuracy, 0) / blackGames.length);
+        if (wAvg > bAvg + 5) patterns.push({ text: 'Vous êtes meilleur(e) avec les Blancs.', positive: true });
+        else if (bAvg > wAvg + 5) patterns.push({ text: 'Vous êtes meilleur(e) avec les Noirs.', positive: true });
       }
 
-      if (patterns.length === 0) { section.hidden = true; return; }
+      const allCapBlunders = gameStats.reduce((s, g) => s + g.captureBlunders, 0);
+      if (allBlunders > 0 && allCapBlunders / allBlunders > 0.4) {
+        patterns.push({ text: 'Attention aux échanges de pièces.', positive: false });
+      }
+
+      if (patterns.length > 0) {
+        html += `<div class="trends-patterns">`;
+        for (const p of patterns.slice(0, 3)) {
+          html += `<div class="trend-pattern${p.positive ? ' positive' : ''}">${p.text}</div>`;
+        }
+        html += `</div>`;
+      }
+
+      const openingMap = {};
+      for (const g of gameStats) {
+        if (!g.opening) continue;
+        if (!openingMap[g.opening]) openingMap[g.opening] = { wins: 0, losses: 0, draws: 0, total: 0 };
+        openingMap[g.opening].total++;
+        if (g.result === 'win') openingMap[g.opening].wins++;
+        else if (g.result === 'loss') openingMap[g.opening].losses++;
+        else if (g.result === 'draw') openingMap[g.opening].draws++;
+      }
+      const openings = Object.entries(openingMap).sort((a, b) => b[1].total - a[1].total);
+      if (openings.length >= 2) {
+        html += `<div class="trends-openings">`;
+        for (const [name, o] of openings.slice(0, 3)) {
+          const wr = o.total > 0 ? Math.round(100 * o.wins / o.total) : 0;
+          html += `<div class="opening-row"><span class="opening-name">${name}</span><span class="opening-winrate">${wr}%</span><span class="opening-games">${o.total} partie${o.total > 1 ? 's' : ''}</span></div>`;
+        }
+        html += `</div>`;
+      }
 
       section.hidden = false;
-      const list = $('#patterns-list');
-      list.innerHTML = patterns.slice(0, 2).map(p => `<div class="pattern-item">${p}</div>`).join('');
+      $('#patterns-list').innerHTML = html;
     } catch (_) { section.hidden = true; }
   }
 
