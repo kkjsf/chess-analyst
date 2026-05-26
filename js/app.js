@@ -1305,9 +1305,12 @@ const App = (() => {
       const item = document.createElement('div');
       item.className = 'recent-item';
 
+      const user = detectUser({ White: g.white, Black: g.black });
+      const userWon = user ? ((user === 'w' && g.result === '1-0') || (user === 'b' && g.result === '0-1')) : g.result === '1-0';
+      const userLost = user ? ((user === 'w' && g.result === '0-1') || (user === 'b' && g.result === '1-0')) : g.result === '0-1';
       let resultClass = 'draw', resultLabel = 'Nulle';
-      if (g.result === '1-0') { resultClass = 'win'; resultLabel = 'Victoire'; }
-      else if (g.result === '0-1') { resultClass = 'loss'; resultLabel = 'Défaite'; }
+      if (userWon) { resultClass = 'win'; resultLabel = 'Victoire'; }
+      else if (userLost) { resultClass = 'loss'; resultLabel = 'Défaite'; }
 
       const dateStr = formatDate(g.date);
       const cached = isGameCached({ White: g.white, Black: g.black, Date: g.date }, g.moveCount);
