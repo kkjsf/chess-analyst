@@ -124,34 +124,69 @@ const App = (() => {
     return !!getCachedAnalysis(cacheKey(header, moveCount));
   }
 
+  function extractChessComUrl(text) {
+    const m = text.match(/https?:\/\/(www\.)?chess\.com\/[^\s]+/i);
+    return m ? m[0] : null;
+  }
+
+  function parseChessComUrl(url) {
+    const m = url.match(/chess\.com\/(?:(?:game\/)?(live|daily)|(?:(daily|live)\/game))\/(\d+)/);
+    if (!m) return null;
+    const type = m[1] || m[2] || 'live';
+    const id = m[3];
+    return { type, id };
+  }
+
   async function fetchChessComPgn(url) {
-    const gameMatch = url.match(/chess\.com\/(?:game\/)?(?:live|daily)\/(\d+)/);
-    if (!gameMatch) return null;
-    const gameId = gameMatch[1];
+    const parsed = parseChessComUrl(url);
+    if (!parsed) return null;
+    const { type, id } = parsed;
     showProgressBar('Récupération de la partie Chess.com...');
-    try {
-      const callbackUrl = `https://www.chess.com/callback/live/game/${gameId}`;
-      const resp = await fetch(callbackUrl);
-      if (!resp.ok) throw new Error('API error');
-      const data = await resp.json();
-      if (data.pgn) return data.pgn;
-      if (data.pgnHeaders && data.moveList) {
-        let pgn = '';
-        for (const [k, v] of Object.entries(data.pgnHeaders)) pgn += `[${k} "${v}"]\n`;
-        pgn += '\n' + data.moveList;
-        return pgn;
-      }
-      throw new Error('No PGN in response');
-    } catch (_) {
+
+    const endpoints = [
+      `https://www.chess.com/callback/${type}/game/${id}`,
+      `https://www.chess.com/callback/live/game/${id}`,
+    ];
+    for (const ep of endpoints) {
       try {
-        const resp2 = await fetch(`https://api.chess.com/pub/game/live/${gameId}`);
-        if (resp2.ok) {
-          const data2 = await resp2.json();
-          if (data2.pgn) return data2.pgn;
+        const resp = await fetch(ep);
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        if (data.pgn) return data.pgn;
+        if (data.pgnHeaders && data.moveList) {
+          let pgn = '';
+          for (const [k, v] of Object.entries(data.pgnHeaders)) pgn += `[${k} "${v}"]\n`;
+          pgn += '\n' + data.moveList;
+          return pgn;
         }
-      } catch (_2) {}
-      return null;
+      } catch (_) {}
     }
+
+    const pgn = await fetchFromArchive('nimokaji', id);
+    if (pgn) return pgn;
+
+    return null;
+  }
+
+  async function fetchFromArchive(username, gameId) {
+    try {
+      updateProgressBar(0, 'Recherche dans l\'historique Chess.com...');
+      const archResp = await fetch(`https://api.chess.com/pub/player/${username}/games/archives`);
+      if (!archResp.ok) return null;
+      const archData = await archResp.json();
+      const archives = archData.archives || [];
+      const recent = archives.slice(-3).reverse();
+      for (const archiveUrl of recent) {
+        try {
+          const resp = await fetch(archiveUrl);
+          if (!resp.ok) continue;
+          const data = await resp.json();
+          const match = (data.games || []).find(g => g.url && g.url.includes(gameId));
+          if (match && match.pgn) return match.pgn;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return null;
   }
 
   async function onAnalyze() {
@@ -161,9 +196,14 @@ const App = (() => {
       return;
     }
 
-    const chessComMatch = pgnText.match(/^https?:\/\/(www\.)?chess\.com\//);
-    if (chessComMatch) {
-      const fetched = await fetchChessComPgn(pgnText);
+    const chessComUrl = extractChessComUrl(pgnText);
+    if (chessComUrl) {
+      let fetched;
+      try {
+        fetched = await fetchChessComPgn(chessComUrl);
+      } catch (_) {
+        fetched = null;
+      }
       if (fetched) {
         pgnText = fetched;
         $('#pgn-input').value = pgnText;
@@ -321,6 +361,7 @@ const App = (() => {
     buildIntro(header, analysis, summary);
     buildWinGraph(analysis);
     buildHighlights(header, analysis);
+    buildMistakeProfile(header, analysis);
     buildMoveList(analysis);
     buildTimeChart(analysis);
     buildSummary(summary, analysis);
@@ -978,6 +1019,153 @@ const App = (() => {
     card.hidden = false;
   }
 
+  function classifyMistake(r, analysis, idx) {
+    if (!r.move) return null;
+    const m = r.move;
+    const tags = [];
+
+    if (m.captured) {
+      const attackerVal = PIECE_VALUES[m.piece] || 0;
+      const capturedVal = PIECE_VALUES[m.captured] || 0;
+      if (attackerVal > capturedVal + 1) tags.push('bad-exchange');
+      else tags.push('capture-error');
+    } else {
+      const fenBefore = r.fenBefore || (idx > 0 ? analysis[idx - 1]?.fen : null);
+      if (fenBefore) {
+        try {
+          const g = new Chess(fenBefore);
+          g.move(m.san, { sloppy: true });
+          const oppMoves = g.moves({ verbose: true });
+          const forks = oppMoves.filter(om => om.captured);
+          const bigCaptures = forks.filter(om => (PIECE_VALUES[om.captured] || 0) >= 3);
+          if (bigCaptures.length > 0) {
+            tags.push('hanging-piece');
+          }
+        } catch (_) {}
+      }
+      if (tags.length === 0) {
+        if (r.cpLoss && r.cpLoss > 150 && !m.captured) tags.push('positional');
+        else tags.push('tactical');
+      }
+    }
+
+    if (idx < 20) tags.push('opening');
+    else if (idx >= 50) tags.push('endgame');
+    else tags.push('middlegame');
+
+    return tags;
+  }
+
+  const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+  function buildMistakeProfile(header, analysis) {
+    const card = $('#mistakes-card');
+    const content = $('#mistakes-content');
+    const user = detectUser(header);
+    if (!user) { card.hidden = true; return; }
+
+    const errors = [];
+    for (let i = 0; i < analysis.length; i++) {
+      const r = analysis[i];
+      if (!r.move) continue;
+      const isUser = (user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b');
+      if (!isUser) continue;
+      if (r.type !== 'blunder' && r.type !== 'mistake' && r.type !== 'inaccuracy') continue;
+      const tags = classifyMistake(r, analysis, i);
+      if (!tags) continue;
+      const moveNum = Math.floor(i / 2) + 1;
+      const dot = i % 2 === 0 ? '.' : '...';
+      errors.push({ index: i, moveNum, dot, r, tags, severity: r.type });
+    }
+
+    if (errors.length === 0) { card.hidden = true; return; }
+
+    const tactical = errors.filter(e => e.tags.includes('hanging-piece') || e.tags.includes('bad-exchange') || e.tags.includes('capture-error') || e.tags.includes('tactical'));
+    const positional = errors.filter(e => e.tags.includes('positional'));
+    const byPhase = { opening: 0, middlegame: 0, endgame: 0 };
+    for (const e of errors) {
+      if (e.tags.includes('opening')) byPhase.opening++;
+      else if (e.tags.includes('endgame')) byPhase.endgame++;
+      else byPhase.middlegame++;
+    }
+
+    const hanging = errors.filter(e => e.tags.includes('hanging-piece'));
+    const badExch = errors.filter(e => e.tags.includes('bad-exchange'));
+
+    let html = '';
+
+    html += `<div class="mistake-overview">`;
+    html += `<div class="mistake-stat"><span class="mistake-val">${errors.length}</span><span class="mistake-label">erreurs totales</span></div>`;
+    html += `<div class="mistake-stat"><span class="mistake-val">${tactical.length}</span><span class="mistake-label">tactiques</span></div>`;
+    html += `<div class="mistake-stat"><span class="mistake-val">${positional.length}</span><span class="mistake-label">positionnelles</span></div>`;
+    html += `</div>`;
+
+    const total = errors.length;
+    const phases = [
+      { label: 'Ouverture', count: byPhase.opening, color: 'var(--accent)' },
+      { label: 'Milieu', count: byPhase.middlegame, color: 'var(--warning)' },
+      { label: 'Finale', count: byPhase.endgame, color: 'var(--danger)' }
+    ].filter(p => p.count > 0);
+    html += `<div class="mistake-phase-bar">`;
+    for (const p of phases) {
+      const pct = Math.round(100 * p.count / total);
+      if (pct > 0) html += `<div class="mistake-phase-seg" style="width:${pct}%;background:${p.color}" title="${p.label}: ${p.count}"></div>`;
+    }
+    html += `</div>`;
+    html += `<div class="mistake-phase-legend">`;
+    for (const p of phases) html += `<span><span class="leg-dot" style="background:${p.color}"></span>${p.label} (${p.count})</span>`;
+    html += `</div>`;
+
+    if (currentPgn) {
+      const clocks = Analyzer.parseClocks(currentPgn);
+      const times = Analyzer.clocksToTimePerMove(clocks);
+      if (times.length >= analysis.length * 0.5) {
+        const errorTimes = errors.map(e => times[e.index] || 0).filter(t => t > 0);
+        const allUserTimes = [];
+        for (let i = 0; i < Math.min(times.length, analysis.length); i++) {
+          const r = analysis[i];
+          if (r.move && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b'))) {
+            if (times[i] > 0) allUserTimes.push(times[i]);
+          }
+        }
+        if (errorTimes.length > 0 && allUserTimes.length > 0) {
+          const avgErrorTime = Math.round(errorTimes.reduce((a, b) => a + b, 0) / errorTimes.length);
+          const avgAllTime = Math.round(allUserTimes.reduce((a, b) => a + b, 0) / allUserTimes.length);
+          const lateErrors = errors.filter(e => e.index >= analysis.length * 0.7).length;
+          html += `<div class="mistake-time-insight">`;
+          if (avgErrorTime < avgAllTime * 0.6) {
+            html += `⏱ Vos erreurs surviennent sur des coups joués <b>rapidement</b> (${avgErrorTime}s vs ${avgAllTime}s en moyenne). Prenez plus de temps sur les positions critiques.`;
+          } else if (avgErrorTime > avgAllTime * 1.5) {
+            html += `⏱ Vos erreurs arrivent sur des coups où vous <b>réfléchissez longtemps</b> (${avgErrorTime}s vs ${avgAllTime}s en moyenne). Peut-être trop de calcul — fiez-vous aussi à votre intuition.`;
+          } else if (lateErrors >= errors.length * 0.6 && errors.length >= 2) {
+            html += `⏱ <b>${Math.round(100 * lateErrors / errors.length)}%</b> de vos erreurs arrivent en fin de partie. La fatigue ou la pression du temps en sont probablement la cause.`;
+          }
+          html += `</div>`;
+        }
+      }
+    }
+
+    const insights = [];
+    if (hanging.length >= 2) insights.push({ text: `Vous laissez des pièces en prise ${hanging.length} fois. Avant chaque coup, vérifiez si votre pièce est défendue.`, positive: false });
+    if (badExch.length >= 2) insights.push({ text: `${badExch.length} échanges défavorables. Comptez la valeur des pièces avant de capturer.`, positive: false });
+    if (byPhase.opening >= 3) insights.push({ text: `${byPhase.opening} erreurs en ouverture — révisez vos premières séquences de coups.`, positive: false });
+    if (byPhase.endgame >= 2 && byPhase.opening === 0) insights.push({ text: `Ouverture propre mais ${byPhase.endgame} erreurs en finale — travaillez les techniques de finales.`, positive: false });
+    if (positional.length > tactical.length && errors.length >= 3) insights.push({ text: `Vos erreurs sont surtout positionnelles : travaillez les plans et la structure de pions.`, positive: false });
+    if (tactical.length > positional.length && errors.length >= 3) insights.push({ text: `Vos erreurs sont surtout tactiques : entraînez-vous aux puzzles (fourchettes, clouages, enfilades).`, positive: false });
+    if (errors.length <= 2) insights.push({ text: `Seulement ${errors.length} erreur${errors.length > 1 ? 's' : ''} — partie bien maîtrisée !`, positive: true });
+
+    if (insights.length > 0) {
+      html += `<div class="mistake-insights">`;
+      for (const ins of insights.slice(0, 3)) {
+        html += `<div class="mistake-insight${ins.positive ? ' positive' : ''}">${ins.text}</div>`;
+      }
+      html += `</div>`;
+    }
+
+    content.innerHTML = html;
+    card.hidden = false;
+  }
+
   function buildMoveList(analysis) {
     const grid = $('#moves-grid');
     grid.innerHTML = '';
@@ -1221,7 +1409,7 @@ const App = (() => {
 
       const moveNum = Math.floor(i / 2) + 1;
       const dot = i % 2 === 0 ? '.' : '...';
-      tbResults.push({ index: i, moveNum, dot, san: r.sanFr, category: tb.category, dtm: tb.dtm, dtz: tb.dtz, bestmove: tb.moves?.[0] });
+      tbResults.push({ index: i, moveNum, dot, san: r.sanFr, fen: r.fen, category: tb.category, dtm: tb.dtm, dtz: tb.dtz, bestmove: tb.moves?.[0] });
 
       if (tbResults.length >= 3) break;
     }
@@ -1242,6 +1430,12 @@ const App = (() => {
       </div>`;
     }
 
+    const firstFen = tbResults[0]?.fen;
+    if (firstFen) {
+      const tip = endgameTip(firstFen);
+      if (tip) html += `<div class="tb-tip">📖 ${tip}</div>`;
+    }
+
     content.innerHTML = html;
     card.hidden = false;
 
@@ -1255,6 +1449,48 @@ const App = (() => {
 
   function pieces7(tbResult) {
     return `${tbResult.san ? 'Position à ≤7 pièces' : ''}`;
+  }
+
+  function endgameTip(fen) {
+    const board = fen.split(' ')[0];
+    const pieces = { K: 0, Q: 0, R: 0, B: 0, N: 0, P: 0, k: 0, q: 0, r: 0, b: 0, n: 0, p: 0 };
+    for (const ch of board) { if (pieces[ch] !== undefined) pieces[ch]++; }
+    const w = { k: pieces.K, q: pieces.Q, r: pieces.R, b: pieces.B, n: pieces.N, p: pieces.P };
+    const b = { k: pieces.k, q: pieces.q, r: pieces.r, b: pieces.b, n: pieces.n, p: pieces.p };
+    const wTotal = w.q + w.r + w.b + w.n + w.p;
+    const bTotal = b.q + b.r + b.b + b.n + b.p;
+
+    if (wTotal === 0 && bTotal === 0) return 'Roi contre Roi — nulle théorique. Aucun camp ne peut mater.';
+    if ((wTotal === 1 && w.r === 1 && bTotal === 0) || (bTotal === 1 && b.r === 1 && wTotal === 0))
+      return 'Roi + Tour vs Roi — gain forcé. Poussez le roi adverse au bord de l\'échiquier en formant une « barrière » avec la tour.';
+    if ((wTotal === 1 && w.q === 1 && bTotal === 0) || (bTotal === 1 && b.q === 1 && wTotal === 0))
+      return 'Roi + Dame vs Roi — gain forcé. Attention au pat ! Approchez votre roi et forcez le mat au bord.';
+    if ((wTotal === 1 && w.p === 1 && bTotal === 0) || (bTotal === 1 && b.p === 1 && wTotal === 0))
+      return 'Roi + Pion vs Roi — la « règle du carré » et l\'opposition sont les clés. Si le roi défenseur est dans le carré du pion, c\'est nulle.';
+    if ((wTotal === 2 && w.b === 2 && bTotal === 0) || (bTotal === 2 && b.b === 2 && wTotal === 0))
+      return 'Roi + 2 Fous vs Roi — gain forcé. Poussez le roi adverse dans un coin en coordonnant les deux fous.';
+    if ((wTotal === 2 && w.b === 1 && w.n === 1 && bTotal === 0) || (bTotal === 2 && b.b === 1 && b.n === 1 && wTotal === 0))
+      return 'Roi + Fou + Cavalier vs Roi — gain forcé mais difficile. Forcez le roi dans le coin de la couleur du fou (technique connue, demande de la pratique).';
+    if ((wTotal === 1 && w.b === 1 && bTotal === 0) || (bTotal === 1 && b.b === 1 && wTotal === 0))
+      return 'Roi + Fou vs Roi — nulle théorique. Un fou seul ne suffit pas pour mater.';
+    if ((wTotal === 1 && w.n === 1 && bTotal === 0) || (bTotal === 1 && b.n === 1 && wTotal === 0))
+      return 'Roi + Cavalier vs Roi — nulle théorique. Un cavalier seul ne suffit pas pour mater.';
+    if ((wTotal === 2 && w.n === 2 && bTotal === 0) || (bTotal === 2 && b.n === 2 && wTotal === 0))
+      return 'Roi + 2 Cavaliers vs Roi — nulle théorique (le mat ne peut être forcé, même si c\'est possible si l\'adversaire coopère).';
+    if ((wTotal === 1 && w.r === 1 && bTotal === 1 && b.r === 1) || (bTotal === 1 && b.r === 1 && wTotal === 1 && w.r === 1)) {
+      if (w.p === 0 && b.p === 0) return 'Tour contre Tour — généralement nulle. La position de Lucena (« construire un pont ») et la défense de Philidor sont les deux techniques essentielles à connaître.';
+    }
+    if ((w.r === 1 && w.p >= 1 && bTotal === 1 && b.r === 1) || (b.r === 1 && b.p >= 1 && wTotal === 1 && w.r === 1))
+      return 'Tour + Pion(s) vs Tour — finale la plus fréquente. Connaissez la position de Lucena (gain) et la défense de Philidor (nulle). Activez votre tour derrière le pion passé.';
+    if ((w.q === 1 && wTotal === 1 && b.r === 1 && bTotal === 1) || (b.q === 1 && bTotal === 1 && w.r === 1 && wTotal === 1))
+      return 'Dame vs Tour — la dame gagne en général, mais c\'est technique. Attention aux forts perpétuels de la tour et aux possibilités de pat.';
+
+    if (w.p + b.p > 0 && w.q + w.r + b.q + b.r === 0 && w.b + w.n <= 1 && b.b + b.n <= 1)
+      return 'Finale de pions avec pièces mineures — l\'activité du roi et la structure de pions sont décisives. Cherchez à créer un pion passé.';
+    if (w.q + w.r + b.q + b.r === 0 && w.b + w.n + b.b + b.n === 0)
+      return 'Finale de pions pure — le roi doit être actif ! L\'opposition (directe et à distance) est le concept clé. Cherchez à créer et pousser un pion passé.';
+
+    return null;
   }
 
   function showImport() {

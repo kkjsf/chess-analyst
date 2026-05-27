@@ -637,6 +637,105 @@ html, body {
 }
 .tb-result:hover { background: var(--bg-elevated); }
 .tb-result:last-child { margin-bottom: 0; }
+.tb-tip {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* ── MISTAKE PROFILE CARD ── */
+.mistakes-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.mistakes-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.mistake-overview {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mistake-stat {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  flex: 1;
+  text-align: center;
+}
+.mistake-val {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.mistake-stat:nth-child(3) .mistake-val { color: var(--warning); }
+.mistake-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.mistake-phase-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  background: var(--bg);
+}
+.mistake-phase-seg {
+  height: 100%;
+  transition: width 0.3s;
+}
+.mistake-phase-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.mistake-phase-legend .leg-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.mistake-time-insight {
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.mistake-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mistake-insight {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  border-left: 3px solid var(--danger);
+}
+.mistake-insight.positive { border-left-color: var(--success); }
 
 /* Engine badge in summary */
 .engine-badge {

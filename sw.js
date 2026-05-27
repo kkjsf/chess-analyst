@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v20';
+const CACHE_NAME = 'chess-analyst-v21';
 const ASSETS = [
   './',
   './index.html',
@@ -35,6 +35,17 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  if (e.request.method === 'POST' && url.pathname.endsWith('index.html')) {
+    e.respondWith((async () => {
+      const formData = await e.request.formData();
+      const text = formData.get('text') || '';
+      const redirectUrl = new URL(url.pathname, url.origin);
+      redirectUrl.searchParams.set('text', text);
+      return Response.redirect(redirectUrl.toString(), 303);
+    })());
+    return;
+  }
   e.respondWith(
     fetch(e.request)
       .then(response => {
