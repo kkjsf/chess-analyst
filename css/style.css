@@ -737,6 +737,177 @@ html, body {
 }
 .mistake-insight.positive { border-left-color: var(--success); }
 
+/* Time trouble card */
+.time-trouble-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.time-trouble-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.tt-summary {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tt-stat {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  flex: 1;
+  text-align: center;
+}
+.tt-val {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.tt-stat.neutral .tt-val { color: var(--text); }
+.tt-stat.warn .tt-val { color: var(--warning); }
+.tt-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.tt-zone-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  background: var(--bg);
+}
+.tt-zone-seg { height: 100%; transition: width 0.3s; }
+.tt-zone-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.tt-zone-legend .leg-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.tt-moves {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+.tt-move-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+.tt-move-row:hover { background: var(--bg-elevated); }
+.tt-move-label { font-weight: 600; min-width: 70px; }
+.tt-move-time { color: var(--danger); font-weight: 600; min-width: 50px; }
+.tt-move-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(248,113,113,0.15);
+  color: var(--danger);
+}
+.tt-move-badge.mistake { background: rgba(251,191,36,0.15); color: var(--warning); }
+.tt-insight {
+  padding: 10px 14px;
+  background: var(--bg);
+  border-radius: 8px;
+  border-left: 3px solid var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+/* Material graph */
+.material-graph-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.material-graph-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.material-graph-container { width: 100%; }
+.material-graph-svg { width: 100%; height: auto; display: block; }
+
+/* Plan card */
+.plan-card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.plan-card h3 {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.plan-phase {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+.plan-phase:last-child { margin-bottom: 0; }
+.plan-phase-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.plan-phase-icon { font-size: 16px; }
+.plan-phase-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.plan-phase-moves {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.plan-side {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+  align-items: flex-start;
+}
+.plan-side:last-child { margin-bottom: 0; }
+.plan-side-icon {
+  font-size: 14px;
+  min-width: 20px;
+  text-align: center;
+  line-height: 1.5;
+}
+.plan-side-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 /* Engine badge in summary */
 .engine-badge {
   margin-top: 12px;
@@ -1120,7 +1291,7 @@ html, body {
   .moves-grid { font-size: 13px; max-height: 200px; }
   .top-bar .players-line { font-size: 13px; }
   .intro-text, .highlight-desc, .tip-card .tip-text { font-size: 13px; }
-  .win-graph-card, .time-chart-card, .tablebase-card, .summary-card { padding: 12px; }
+  .win-graph-card, .time-chart-card, .tablebase-card, .summary-card, .time-trouble-card, .material-graph-card, .plan-card { padding: 12px; }
   .highlights-card { padding: 12px; }
 }
 

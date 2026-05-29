@@ -363,6 +363,9 @@ const App = (() => {
     buildHighlights(header, analysis);
     buildMistakeProfile(header, analysis);
     buildMoveList(analysis);
+    buildTimeTrouble(header, analysis);
+    buildMaterialGraph(analysis);
+    buildPlanRecognition(header, analysis);
     buildTimeChart(analysis);
     buildSummary(summary, analysis);
     probeEndgameTablebase(analysis);
@@ -1350,6 +1353,356 @@ const App = (() => {
     cursor.setAttribute('x1', x);
     cursor.setAttribute('x2', x);
     cursor.setAttribute('opacity', index > 0 ? '0.7' : '0');
+  }
+
+  function buildTimeTrouble(header, analysis) {
+    const card = $('#time-trouble-card');
+    const content = $('#time-trouble-content');
+    card.hidden = true;
+    if (!currentPgn) return;
+
+    const clocks = Analyzer.parseClocks(currentPgn);
+    if (clocks.length < 4) return;
+
+    const times = Analyzer.clocksToTimePerMove(clocks);
+    const user = detectUser(header);
+    if (!user) return;
+
+    const tc = header.TimeControl || '';
+    let initialTime = 0;
+    if (tc.includes('+')) initialTime = parseInt(tc);
+    else if (tc.includes('/')) initialTime = parseInt(tc.split('/')[1] || tc);
+
+    const troubleMoves = [];
+    let movesUnder30 = 0, movesUnder10 = 0, errorsUnder30 = 0;
+    let totalUserMoves = 0;
+
+    for (let i = 0; i < Math.min(clocks.length, analysis.length); i++) {
+      const r = analysis[i];
+      if (!r.move) continue;
+      const isUser = (user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b');
+      if (!isUser) continue;
+      totalUserMoves++;
+
+      const remaining = clocks[i];
+      const timeSpent = times[i] || 0;
+      const isError = r.type === 'blunder' || r.type === 'mistake' || r.type === 'inaccuracy';
+
+      if (remaining <= 30) {
+        movesUnder30++;
+        if (isError) errorsUnder30++;
+        if (remaining <= 10) movesUnder10++;
+
+        if (isError) {
+          const moveNum = Math.floor(i / 2) + 1;
+          const dot = i % 2 === 0 ? '.' : '...';
+          troubleMoves.push({
+            index: i,
+            label: `${moveNum}${dot} ${r.sanFr}`,
+            remaining: Math.round(remaining),
+            timeSpent: Math.round(timeSpent),
+            type: r.type
+          });
+        }
+      }
+    }
+
+    if (movesUnder30 === 0) return;
+
+    const errorRate30 = movesUnder30 > 0 ? Math.round(100 * errorsUnder30 / movesUnder30) : 0;
+
+    let html = '<div class="tt-summary">';
+    html += `<div class="tt-stat warn"><span class="tt-val">${movesUnder30}</span><span class="tt-label">coups < 30s</span></div>`;
+    html += `<div class="tt-stat"><span class="tt-val">${movesUnder10}</span><span class="tt-label">coups < 10s</span></div>`;
+    html += `<div class="tt-stat"><span class="tt-val">${errorRate30}%</span><span class="tt-label">erreurs en zeitnot</span></div>`;
+    html += '</div>';
+
+    const comfortMoves = totalUserMoves - movesUnder30;
+    const comfortErrors = (analysis.filter((r, i) => {
+      if (!r.move) return false;
+      const isUser = (user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b');
+      if (!isUser) return false;
+      if (i >= clocks.length) return false;
+      return clocks[i] > 30 && (r.type === 'blunder' || r.type === 'mistake' || r.type === 'inaccuracy');
+    })).length;
+    const comfortErrorRate = comfortMoves > 0 ? Math.round(100 * comfortErrors / comfortMoves) : 0;
+
+    const zones = [
+      { label: 'Confortable (>30s)', count: comfortMoves, color: 'var(--success)' },
+      { label: 'Zeitnot (10-30s)', count: movesUnder30 - movesUnder10, color: 'var(--warning)' },
+      { label: 'Critique (<10s)', count: movesUnder10, color: 'var(--danger)' }
+    ].filter(z => z.count > 0);
+
+    if (zones.length > 0) {
+      html += '<div class="tt-zone-bar">';
+      for (const z of zones) {
+        const pct = Math.round(100 * z.count / totalUserMoves);
+        if (pct > 0) html += `<div class="tt-zone-seg" style="width:${pct}%;background:${z.color}" title="${z.label}: ${z.count}"></div>`;
+      }
+      html += '</div>';
+      html += '<div class="tt-zone-legend">';
+      for (const z of zones) html += `<span><span class="leg-dot" style="background:${z.color}"></span>${z.label} (${z.count})</span>`;
+      html += '</div>';
+    }
+
+    if (troubleMoves.length > 0) {
+      html += '<div class="tt-moves">';
+      for (const tm of troubleMoves.slice(0, 5)) {
+        const badgeClass = tm.type === 'blunder' ? '' : 'mistake';
+        const badgeLabel = tm.type === 'blunder' ? 'Gaffe' : tm.type === 'mistake' ? 'Erreur' : 'Imprécision';
+        html += `<div class="tt-move-row" data-goto="${tm.index + 1}">`;
+        html += `<span class="tt-move-label">${tm.label}</span>`;
+        html += `<span class="tt-move-time">${tm.remaining}s restantes</span>`;
+        html += `<span class="tt-move-badge ${badgeClass}">${badgeLabel}</span>`;
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    if (errorRate30 > comfortErrorRate + 15) {
+      html += `<div class="tt-insight">Vous faites <b>${errorRate30}%</b> d'erreurs en zeitnot contre <b>${comfortErrorRate}%</b> en temps confortable. La pression du temps dégrade nettement votre jeu — essayez de garder une réserve de temps pour les moments critiques.</div>`;
+    } else if (movesUnder10 >= 3) {
+      html += `<div class="tt-insight">Vous avez joué <b>${movesUnder10} coups avec moins de 10 secondes</b>. En cadence rapide, anticipez davantage pour éviter la panique en fin de partie.</div>`;
+    } else if (movesUnder30 >= 5) {
+      html += `<div class="tt-insight">Vous passez beaucoup de temps en zeitnot (<b>${movesUnder30} coups sous 30s</b>). Travaillez la gestion du temps dès le milieu de partie.</div>`;
+    }
+
+    content.innerHTML = html;
+    card.hidden = false;
+
+    content.querySelectorAll('.tt-move-row').forEach(el => {
+      el.addEventListener('click', () => {
+        goTo(+el.dataset.goto);
+        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
+  function buildMaterialGraph(analysis) {
+    const card = $('#material-graph-card');
+    const container = $('#material-graph-container');
+    if (!analysis.length) { card.hidden = true; return; }
+
+    const n = analysis.length;
+    const diffs = analysis.map(r => r.materialDiff || 0);
+    const maxAbs = Math.max(1, ...diffs.map(d => Math.abs(d)));
+
+    const W = 480, H = 140, PAD_L = 28, PAD_R = 4, PAD_T = 8, PAD_B = 20;
+    const graphW = W - PAD_L - PAD_R;
+    const graphH = H - PAD_T - PAD_B;
+    const midY = PAD_T + graphH / 2;
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" class="material-graph-svg">`;
+    svg += `<rect x="${PAD_L}" y="${PAD_T}" width="${graphW}" height="${graphH}" fill="var(--bg)" rx="4"/>`;
+    svg += `<line x1="${PAD_L}" y1="${midY}" x2="${PAD_L + graphW}" y2="${midY}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+
+    const yScale = (graphH / 2) / Math.max(maxAbs, 5);
+    const points = [];
+    const areaAbove = [];
+    const areaBelow = [];
+
+    for (let i = 0; i < n; i++) {
+      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+      const y = midY - diffs[i] * yScale;
+      const clamped = Math.max(PAD_T, Math.min(PAD_T + graphH, y));
+      points.push({ x, y: clamped, diff: diffs[i] });
+    }
+
+    let abovePath = `M${PAD_L},${midY}`;
+    let belowPath = `M${PAD_L},${midY}`;
+    for (const p of points) {
+      abovePath += ` L${p.x},${Math.min(midY, p.y)}`;
+      belowPath += ` L${p.x},${Math.max(midY, p.y)}`;
+    }
+    abovePath += ` L${PAD_L + graphW},${midY} Z`;
+    belowPath += ` L${PAD_L + graphW},${midY} Z`;
+
+    svg += `<path d="${abovePath}" fill="rgba(255,255,255,0.15)"/>`;
+    svg += `<path d="${belowPath}" fill="rgba(140,140,140,0.15)"/>`;
+
+    svg += `<polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+
+    for (let i = 0; i < n; i++) {
+      const r = analysis[i];
+      if (r.type === 'blunder' || r.type === 'mistake') {
+        const p = points[i];
+        const color = r.type === 'blunder' ? 'var(--danger)' : 'var(--warning)';
+        svg += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" stroke="var(--bg)" stroke-width="1"/>`;
+      }
+    }
+
+    const ticks = [];
+    for (let v = -Math.floor(maxAbs); v <= Math.floor(maxAbs); v++) {
+      if (v === 0 || Math.abs(v) > maxAbs) continue;
+      if (maxAbs > 5 && Math.abs(v) % 2 !== 0) continue;
+      ticks.push(v);
+    }
+    for (const v of ticks) {
+      const y = midY - v * yScale;
+      if (y < PAD_T + 8 || y > PAD_T + graphH - 8) continue;
+      svg += `<text x="${PAD_L - 4}" y="${y + 3}" fill="var(--text-dim)" font-size="9" text-anchor="end">${v > 0 ? '+' : ''}${v}</text>`;
+    }
+    svg += `<text x="${PAD_L - 4}" y="${midY + 3}" fill="rgba(255,255,255,0.4)" font-size="9" text-anchor="end">0</text>`;
+
+    for (let i = 0; i < n; i++) {
+      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+      svg += `<rect x="${x - graphW/(2*n)}" y="${PAD_T}" width="${graphW/n}" height="${graphH}" fill="transparent" class="mat-graph-hit" data-move="${i + 1}" style="cursor:pointer"/>`;
+    }
+
+    const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
+    for (let i = 0; i < n; i += labelInterval) {
+      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
+      const moveNum = Math.floor(i / 2) + 1;
+      svg += `<text x="${x}" y="${H - 4}" fill="var(--text-dim)" font-size="9" text-anchor="middle">${moveNum}</text>`;
+    }
+
+    svg += `<text x="${PAD_L + 4}" y="${PAD_T + 10}" fill="rgba(255,255,255,0.3)" font-size="8">⚪</text>`;
+    svg += `<text x="${PAD_L + 4}" y="${PAD_T + graphH - 4}" fill="rgba(255,255,255,0.3)" font-size="8">⚫</text>`;
+
+    svg += '</svg>';
+    container.innerHTML = svg;
+    card.hidden = false;
+
+    container.querySelectorAll('.mat-graph-hit').forEach(el => {
+      el.addEventListener('click', () => {
+        goTo(+el.dataset.move);
+        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
+  function buildPlanRecognition(header, analysis) {
+    const card = $('#plan-card');
+    const content = $('#plan-content');
+    card.hidden = true;
+    if (analysis.length < 10) return;
+
+    const user = detectUser(header);
+    const phases = [
+      { name: 'Ouverture', icon: '📖', from: 0, to: Math.min(20, analysis.length) },
+      { name: 'Milieu de partie', icon: '⚔️', from: 20, to: Math.min(50, analysis.length) },
+      { name: 'Finale', icon: '🏁', from: 50, to: analysis.length }
+    ].filter(p => p.from < analysis.length);
+
+    let html = '';
+    let hasContent = false;
+
+    for (const phase of phases) {
+      const wActions = { kingsideAttack: 0, queensideAttack: 0, centralControl: 0, development: 0, kingSafety: 0, pawnPush: 0, pieceActivity: 0, exchanges: 0 };
+      const bActions = { kingsideAttack: 0, queensideAttack: 0, centralControl: 0, development: 0, kingSafety: 0, pawnPush: 0, pieceActivity: 0, exchanges: 0 };
+
+      for (let i = phase.from; i < phase.to; i++) {
+        const r = analysis[i];
+        if (!r.move) continue;
+        const m = r.move;
+        const a = m.color === 'w' ? wActions : bActions;
+        const toFile = m.to.charCodeAt(0) - 97;
+        const toRank = parseInt(m.to[1]);
+        const advancedRank = m.color === 'w' ? toRank >= 5 : toRank <= 4;
+
+        if (m.san === 'O-O' || m.san === 'O-O-O') {
+          a.kingSafety += 3;
+        }
+        if (m.captured) {
+          a.exchanges++;
+        }
+        if ((m.piece === 'n' || m.piece === 'b') && i < 20) {
+          a.development += 2;
+        }
+        if (m.piece === 'p' && (toFile >= 0 && toFile <= 2)) {
+          a.queensideAttack += (advancedRank ? 2 : 1);
+        }
+        if (m.piece === 'p' && (toFile >= 5 && toFile <= 7)) {
+          a.kingsideAttack += (advancedRank ? 2 : 1);
+        }
+        if (m.piece === 'p' && toFile >= 3 && toFile <= 4) {
+          a.centralControl += 2;
+        }
+        if ((m.piece === 'q' || m.piece === 'r' || m.piece === 'b') && toFile >= 5 && advancedRank) {
+          a.kingsideAttack += 2;
+        }
+        if ((m.piece === 'q' || m.piece === 'r' || m.piece === 'b') && toFile <= 2 && advancedRank) {
+          a.queensideAttack += 2;
+        }
+        if ((m.piece === 'n' || m.piece === 'b' || m.piece === 'q') && toFile >= 2 && toFile <= 5 && advancedRank) {
+          a.pieceActivity += 2;
+        }
+        if (m.piece === 'r') {
+          a.pieceActivity++;
+        }
+        if (m.piece === 'k' && phase.name === 'Finale') {
+          a.centralControl++;
+          a.pieceActivity++;
+        }
+        if (m.piece === 'p' && advancedRank) {
+          a.pawnPush++;
+        }
+      }
+
+      const wPlan = describePlan(wActions, phase.name, 'w', user);
+      const bPlan = describePlan(bActions, phase.name, 'b', user);
+
+      if (!wPlan && !bPlan) continue;
+      hasContent = true;
+
+      const moveRange = `coups ${Math.floor(phase.from / 2) + 1}–${Math.floor((phase.to - 1) / 2) + 1}`;
+      html += `<div class="plan-phase">`;
+      html += `<div class="plan-phase-header"><span class="plan-phase-icon">${phase.icon}</span><span class="plan-phase-title">${phase.name}</span><span class="plan-phase-moves">${moveRange}</span></div>`;
+      if (wPlan) {
+        const label = user === 'w' ? 'Vous' : (user === 'b' ? 'Adversaire' : 'Blancs');
+        html += `<div class="plan-side"><span class="plan-side-icon">⚪</span><span class="plan-side-text"><b>${label}</b> — ${wPlan}</span></div>`;
+      }
+      if (bPlan) {
+        const label = user === 'b' ? 'Vous' : (user === 'w' ? 'Adversaire' : 'Noirs');
+        html += `<div class="plan-side"><span class="plan-side-icon">⚫</span><span class="plan-side-text"><b>${label}</b> — ${bPlan}</span></div>`;
+      }
+      html += '</div>';
+    }
+
+    if (!hasContent) return;
+    content.innerHTML = html;
+    card.hidden = false;
+  }
+
+  function describePlan(actions, phaseName, color, user) {
+    const parts = [];
+    const sorted = Object.entries(actions)
+      .filter(([_, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1]);
+
+    if (sorted.length === 0) return '';
+
+    const top = sorted.slice(0, 3).map(([k]) => k);
+    const isUser = color === user;
+
+    if (phaseName === 'Ouverture') {
+      if (top.includes('development')) parts.push('développement des pièces');
+      if (top.includes('kingSafety')) parts.push('mise en sécurité du roi');
+      if (top.includes('centralControl')) parts.push('contrôle du centre');
+      if (parts.length === 0 && top.includes('kingsideAttack')) parts.push('poussée sur l\'aile roi');
+      if (parts.length === 0 && top.includes('queensideAttack')) parts.push('expansion à l\'aile dame');
+      if (parts.length === 0) parts.push('mise en place');
+    } else if (phaseName === 'Finale') {
+      if (top.includes('pawnPush')) parts.push('course à la promotion');
+      if (top.includes('centralControl') || top.includes('pieceActivity')) parts.push('activation du roi');
+      if (top.includes('exchanges')) parts.push('simplification');
+      if (parts.length === 0) parts.push('technique de finale');
+    } else {
+      if (actions.kingsideAttack >= 4 && actions.kingsideAttack > actions.queensideAttack) {
+        parts.push('attaque sur l\'aile roi');
+      } else if (actions.queensideAttack >= 4 && actions.queensideAttack > actions.kingsideAttack) {
+        parts.push('attaque sur l\'aile dame');
+      } else if (actions.kingsideAttack >= 3 && actions.queensideAttack >= 3) {
+        parts.push('jeu sur les deux ailes');
+      }
+      if (actions.centralControl >= 4) parts.push('domination du centre');
+      if (actions.pieceActivity >= 4) parts.push('activité des pièces');
+      if (actions.exchanges >= 3 && parts.length < 2) parts.push('échanges systématiques');
+      if (actions.pawnPush >= 3 && parts.length < 2) parts.push('poussée de pions');
+    }
+
+    if (parts.length === 0) return '';
+    return parts.join(', ') + '.';
   }
 
   function buildTimeChart(analysis) {
