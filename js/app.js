@@ -889,6 +889,12 @@ const App = (() => {
     return lines.length > 0 ? lines.slice(0, 5).join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
   }
 
+  function truncateText(text, max) {
+    if (text.length <= max) return text;
+    const cut = text.lastIndexOf(' ', max);
+    return text.substring(0, cut > 0 ? cut : max) + '…';
+  }
+
   function buildHighlights(header, analysis) {
     const candidates = [];
     const user = detectUser(header);
@@ -940,25 +946,25 @@ const App = (() => {
       if (r.type === 'blunder') {
         const prevDiff = i > 0 ? analysis[i - 1].materialDiff : 0;
         const swing = Math.abs(r.materialDiff - prevDiff);
-        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
         if (isUserMove) desc += ' À retenir pour la prochaine fois.';
         else if (user) desc += ' Une erreur adverse à exploiter !';
         candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe' + badgeSuffix, badgeClass: 'gaffe', isUserMove, user, isWhite });
       }
 
       if (r.type === 'inaccuracy') {
-        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
         candidates.push({ index: i, label, score: 4, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision', isUserMove, user, isWhite });
       }
 
       if (r.type === 'mistake') {
-        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
         if (isUserMove) desc += ' Un point à travailler.';
         candidates.push({ index: i, label, score: 6, desc, badge: 'Erreur' + badgeSuffix, badgeClass: 'erreur', isUserMove, user, isWhite });
       }
 
       if (r.type === 'brilliant') {
-        let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+        let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
         if (isUserMove) desc += ' Impressionnant !';
         candidates.push({ index: i, label, score: 15, desc, badge: 'Brillant !' + badgeSuffix, badgeClass: 'brillant', isUserMove, user, isWhite });
       }
@@ -966,7 +972,7 @@ const App = (() => {
       if ((r.type === 'good' || r.type === 'great' || r.type === 'best') && r.move.captured) {
         const capturedVal = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }[r.move.captured] || 0;
         if (capturedVal >= 5) {
-          let desc = r.tipFr.replace(/<[^>]*>/g, '').substring(0, 120);
+          let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
           if (isUserMove) desc += ' Bien vu !';
           else if (user) desc += ' Aïe, un coup douloureux pour vous.';
           candidates.push({ index: i, label, score: 8 + capturedVal, desc, badge: 'Bon coup' + badgeSuffix, badgeClass: isUserMove ? 'bon-coup' : 'gaffe', isUserMove, user, isWhite });

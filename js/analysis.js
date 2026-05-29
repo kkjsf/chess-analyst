@@ -72,6 +72,186 @@ const Analyzer = (() => {
     return best;
   }
 
+  function parseFenBoard(fen) {
+    const rows = fen.split(' ')[0].split('/');
+    const board = [];
+    for (const row of rows) {
+      const rank = [];
+      for (const ch of row) {
+        if (ch >= '1' && ch <= '8') for (let j = 0; j < +ch; j++) rank.push(null);
+        else rank.push({ type: ch.toLowerCase(), color: ch === ch.toUpperCase() ? 'w' : 'b' });
+      }
+      board.push(rank);
+    }
+    return board;
+  }
+
+  function sqToRC(sq) { return [8 - +sq[1], sq.charCodeAt(0) - 97]; }
+
+  function detectForkAfterMove(fenAfter, toSquare, moverColor) {
+    const board = parseFenBoard(fenAfter);
+    const [r, c] = sqToRC(toSquare);
+    const piece = board[r][c];
+    if (!piece) return null;
+    const opp = moverColor === 'w' ? 'b' : 'w';
+    const targets = [];
+
+    function scan(dirs, maxDist) {
+      for (const [dr, dc] of dirs) {
+        for (let s = 1; s <= maxDist; s++) {
+          const nr = r + dr * s, nc = c + dc * s;
+          if (nr < 0 || nr > 7 || nc < 0 || nc > 7) break;
+          const t = board[nr][nc];
+          if (t) {
+            if (t.color === opp && (PIECE_VALUES[t.type] >= 3 || t.type === 'k')) targets.push(t.type);
+            break;
+          }
+        }
+      }
+    }
+
+    if (piece.type === 'n') scan([[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]], 1);
+    if (piece.type === 'p') {
+      const dir = moverColor === 'w' ? -1 : 1;
+      scan([[dir,-1],[dir,1]], 1);
+    }
+    if (piece.type === 'b' || piece.type === 'q') scan([[-1,-1],[-1,1],[1,-1],[1,1]], 7);
+    if (piece.type === 'r' || piece.type === 'q') scan([[-1,0],[1,0],[0,-1],[0,1]], 7);
+
+    if (targets.length >= 2) return targets.map(t => t === 'k' ? 'roi' : PIECE_NAMES_FR[t]);
+    return null;
+  }
+
+  function analyzeStructure(fen) {
+    const board = parseFenBoard(fen);
+    const pawns = { w: Array(8).fill(0), b: Array(8).fill(0) };
+    const bishops = { w: 0, b: 0 };
+    const rooks = { w: [], b: [] };
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (!p) continue;
+        if (p.type === 'p') pawns[p.color][c]++;
+        if (p.type === 'b') bishops[p.color]++;
+        if (p.type === 'r') rooks[p.color].push(c);
+      }
+    }
+
+    const doubled = { w: 0, b: 0 };
+    const isolated = { w: 0, b: 0 };
+    const openFiles = [];
+    for (let c = 0; c < 8; c++) {
+      for (const color of ['w', 'b']) {
+        if (pawns[color][c] >= 2) doubled[color]++;
+        if (pawns[color][c] > 0 && (c === 0 || pawns[color][c - 1] === 0) && (c === 7 || pawns[color][c + 1] === 0)) isolated[color]++;
+      }
+      if (pawns.w[c] === 0 && pawns.b[c] === 0) openFiles.push(c);
+    }
+
+    const rookOnOpen = { w: false, b: false };
+    for (const color of ['w', 'b']) {
+      for (const rc of rooks[color]) {
+        if (openFiles.includes(rc)) rookOnOpen[color] = true;
+      }
+    }
+
+    return { doubled, isolated, bishops, rookOnOpen, openFiles };
+  }
+
+  function explainBadMove(fenAfter, madeMove, evalAfterLines) {
+    if (!evalAfterLines || !evalAfterLines[0] || !evalAfterLines[0].move) return '';
+
+    const uci = evalAfterLines[0].move;
+    try {
+      const g = new Chess(fenAfter);
+      const oppMove = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+      if (!oppMove) return '';
+
+      if (oppMove.captured) {
+        const val = PIECE_VALUES[oppMove.captured];
+        const attackerVal = PIECE_VALUES[oppMove.piece];
+        const pName = PIECE_NAMES_FR[oppMove.captured];
+        const art = PIECE_ARTICLE_FR[oppMove.captured];
+        const Art = art.charAt(0).toUpperCase() + art.slice(1);
+        if (val >= 3 && val > attackerVal) return `${Art} ${pName} est en prise !`;
+        if (val >= 3) return `${Art} ${pName} est attaqué${art === 'la' ? 'e' : ''}.`;
+      }
+
+      if (oppMove.san.includes('+')) {
+        const oppColor = madeMove.color === 'w' ? 'b' : 'w';
+        const fork = detectForkAfterMove(g.fen(), oppMove.to, oppColor);
+        if (fork) return `L'adversaire menace une fourchette avec échec sur ${fork.join(' et ')}.`;
+        return 'Ce coup expose le roi à un échec dangereux.';
+      }
+
+      const oppColor = madeMove.color === 'w' ? 'b' : 'w';
+      const fork = detectForkAfterMove(g.fen(), oppMove.to, oppColor);
+      if (fork) return `L'adversaire menace une fourchette sur ${fork.join(' et ')}.`;
+    } catch (_) {}
+
+    const struct = analyzeStructure(fenAfter);
+    if (madeMove.piece === 'p' && struct.doubled[madeMove.color] > 0) return 'Ce coup crée des pions doublés, affaiblissant la structure.';
+    if (madeMove.piece === 'p' && struct.isolated[madeMove.color] > 0) return 'Ce coup isole un pion, le rendant vulnérable.';
+
+    return '';
+  }
+
+  function enrichNeutralTip(fenBefore, fenAfter, madeMove, phase, moveIdx) {
+    const color = madeMove.color;
+    const piece = madeMove.piece;
+    const pName = PIECE_NAMES_FR[piece];
+
+    if (phase === 'opening' || moveIdx < 16) {
+      const backRank = color === 'w' ? '1' : '8';
+      if ((piece === 'n' || piece === 'b') && madeMove.from[1] === backRank && madeMove.to[1] !== backRank) {
+        return `Développement du ${pName}. Sortir ses pièces rapidement pour contrôler le centre.`;
+      }
+    }
+
+    if (piece === 'r') {
+      const struct = analyzeStructure(fenAfter);
+      if (struct.rookOnOpen[color]) return 'La tour se place sur une colonne ouverte — forte pression en perspective.';
+      const targetRank = color === 'w' ? '7' : '2';
+      if (madeMove.to[1] === targetRank) return `La tour s'infiltre en ${targetRank === '7' ? '7ème' : '2ème'} rangée — position très active qui menace les pions adverses.`;
+    }
+
+    if (piece === 'n') {
+      const central = ['c3','d3','e3','f3','c4','d4','e4','f4','c5','d5','e5','f5','c6','d6','e6','f6'];
+      if (central.includes(madeMove.to)) return `Le cavalier se centralise en ${madeMove.to} — un cavalier au centre rayonne dans toutes les directions.`;
+    }
+
+    if (piece === 'b') {
+      const fianch = color === 'w' ? ['g2', 'b2'] : ['g7', 'b7'];
+      if (fianch.includes(madeMove.to)) return 'Fianchetto du fou — il contrôle la grande diagonale depuis une position sûre.';
+      const longDiag = ['a1','b2','c3','d4','e5','f6','g7','h8','a8','b7','c6','d5','e4','f3','g2','h1'];
+      if (longDiag.includes(madeMove.to)) return 'Le fou se place sur la grande diagonale — portée maximale.';
+    }
+
+    if (phase === 'endgame' && piece === 'k') {
+      if ('cdef'.includes(madeMove.to[0])) return 'En finale, le roi marche vers le centre pour soutenir ses pions — un principe fondamental.';
+    }
+
+    if (piece === 'p') {
+      const rank = +madeMove.to[1];
+      if (phase === 'endgame' && ((color === 'w' && rank >= 5) || (color === 'b' && rank <= 4))) {
+        return 'Le pion avance vers la promotion. En finale, chaque rangée gagnée compte.';
+      }
+      if ((madeMove.to[0] === 'd' || madeMove.to[0] === 'e') && moveIdx > 10) {
+        return 'Poussée de pion central — gagne de l\'espace et ouvre des lignes.';
+      }
+    }
+
+    if (piece === 'q' && phase === 'middle') {
+      return 'La dame entre en jeu — la pièce la plus puissante se rend active.';
+    }
+
+    const struct = analyzeStructure(fenAfter);
+    if (struct.bishops[color] >= 2) return 'La paire de fous est préservée — un atout en position ouverte.';
+
+    return '';
+  }
+
   function analyzeGame(chess, moves) {
     const results = [];
     const game = new Chess();
@@ -196,7 +376,8 @@ const Analyzer = (() => {
             tipFr = `Les ${side} menacent de capturer une pièce importante au prochain coup.`;
             arrow = { from: bigThreat.from, to: bigThreat.to };
           } else {
-            tipFr = `Les ${side} jouent ${sanFr}.`;
+            const enriched = enrichNeutralTip(prevFen, newFen, madeMove, phase, i);
+            tipFr = enriched || `Les ${side} jouent ${sanFr}.`;
           }
         }
 
@@ -371,6 +552,7 @@ const Analyzer = (() => {
       const isWhite = madeMove.color === 'w';
       const sanFr = toFrench(madeMove.san);
       const side = isWhite ? 'Blancs' : 'Noirs';
+      const phase = i < 10 ? 'opening' : (i > moves.length - 6 ? 'endgame' : 'middle');
 
       const evalBefore = evals[i];
       const evalAfter = evals[i + 1];
@@ -450,27 +632,33 @@ const Analyzer = (() => {
         tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible. ${evalDesc}`;
       } else if (type === 'blunder') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
         tipFr = bestSpan
-          ? `Gaffe ! Ce coup change complètement la position. Il fallait jouer ${bestSpan}.`
-          : `Gaffe ! Ce coup change complètement la position.`;
+          ? `Gaffe ! ${whyBad ? whyBad + ' ' : ''}Il fallait jouer ${bestSpan}.`
+          : `Gaffe ! Ce coup change complètement la position.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'mistake') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
         tipFr = bestSpan
-          ? `Erreur coûteuse. Le meilleur coup était ${bestSpan}.`
-          : `Erreur coûteuse.`;
+          ? `Erreur coûteuse.${whyBad ? ' ' + whyBad : ''} Le meilleur coup était ${bestSpan}.`
+          : `Erreur coûteuse.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'inaccuracy') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
         tipFr = bestSpan
-          ? `Légère imprécision. ${bestSpan} était plus précis.`
-          : `Légère imprécision.`;
+          ? `Imprécision.${whyBad ? ' ' + whyBad : ''} ${bestSpan} était plus précis.`
+          : `Imprécision.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ' ' + evalDesc;
       } else if (type === 'best') {
-        tipFr = `Meilleur coup ! C'est exactement ce que recommande le moteur. ${evalDesc}`;
+        const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
+        tipFr = enriched
+          ? `Meilleur coup ! ${enriched} ${evalDesc}`
+          : `Meilleur coup ! C'est exactement ce que recommande le moteur. ${evalDesc}`;
       } else if (type === 'great') {
         if (madeMove.captured) {
           const capName = PIECE_NAMES_FR[madeMove.captured];
@@ -478,10 +666,17 @@ const Analyzer = (() => {
         } else if (madeMove.san === 'O-O' || madeMove.san === 'O-O-O') {
           tipFr = `Bon roque ! Le moteur confirme que c'est un très bon choix ici. ${evalDesc}`;
         } else {
-          tipFr = `Très bon coup, quasi-optimal. ${evalDesc}`;
+          const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
+          tipFr = enriched ? `Très bon coup. ${enriched} ${evalDesc}` : `Très bon coup, quasi-optimal. ${evalDesc}`;
         }
       } else {
-        tipFr = `Coup correct. ${evalDesc}`;
+        const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
+        tipFr = enriched ? `${enriched} ${evalDesc}` : `Coup correct. ${evalDesc}`;
+      }
+
+      const forkTargets = detectForkAfterMove(newFen, madeMove.to, madeMove.color);
+      if (forkTargets && type !== 'blunder' && type !== 'mistake') {
+        tipFr += ` Fourchette sur ${forkTargets.join(' et ')} !`;
       }
 
       if (evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
@@ -549,13 +744,13 @@ const Analyzer = (() => {
   function describeEval(cpWhite) {
     if (cpWhite >= 29000) return 'Mat forcé pour les Blancs.';
     if (cpWhite <= -29000) return 'Mat forcé pour les Noirs.';
-    if (cpWhite > 300) return 'Avantage décisif pour les Blancs.';
-    if (cpWhite > 100) return 'Les Blancs ont un avantage clair.';
-    if (cpWhite > 30) return 'Léger avantage pour les Blancs.';
-    if (cpWhite < -300) return 'Avantage décisif pour les Noirs.';
-    if (cpWhite < -100) return 'Les Noirs ont un avantage clair.';
-    if (cpWhite < -30) return 'Léger avantage pour les Noirs.';
-    return 'Position équilibrée.';
+    const abs = Math.abs(cpWhite);
+    if (abs <= 30) return 'Position équilibrée.';
+    const pawns = (abs / 100).toFixed(1);
+    const side = cpWhite > 0 ? 'les Blancs' : 'les Noirs';
+    if (abs > 300) return `Avantage décisif pour ${side} (+${pawns}).`;
+    if (abs > 100) return `Avantage net pour ${side} (+${pawns}).`;
+    return `Léger plus pour ${side} (+${pawns}).`;
   }
 
   function parseClocks(pgnText) {
