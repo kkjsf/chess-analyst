@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v22';
+const CACHE_NAME = 'chess-analyst-v23';
 const ASSETS = [
   './',
   './index.html',
@@ -53,6 +53,10 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         return response;
       })
-      .catch(() => caches.match(e.request))
+      .catch(() => {
+        const bareUrl = new URL(e.request.url);
+        bareUrl.search = '';
+        return caches.match(bareUrl.toString()) || caches.match(e.request);
+      })
   );
 });

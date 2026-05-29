@@ -332,7 +332,7 @@ const App = (() => {
     if (tc.includes('86400') || tc.includes('172800')) tcLabel = 'Journalier';
     else if (tc.includes('+')) {
       const secs = parseInt(tc);
-      if (secs <= 180) tcLabel = 'Bullet';
+      if (secs < 180) tcLabel = 'Bullet';
       else if (secs <= 600) tcLabel = 'Blitz';
       else tcLabel = 'Rapide';
     }
@@ -398,7 +398,7 @@ const App = (() => {
     $('#bottom-captured').textContent = isFlipped ? captured.white : captured.black;
 
     let evalPct;
-    if (index > 0 && currentAnalysis[index - 1].eval !== undefined && currentAnalysis[index - 1].eval !== 0) {
+    if (index > 0 && currentAnalysis[index - 1].eval !== undefined && currentAnalysis[index - 1].eval !== null) {
       const cp = currentAnalysis[index - 1].eval;
       evalPct = Math.max(5, Math.min(95, 50 + 50 * (2 / (1 + Math.exp(-0.004 * cp)) - 1)));
     } else {
@@ -750,7 +750,7 @@ const App = (() => {
     let isFastTc = false;
     if (tc.includes('+')) {
       const secs = parseInt(tc);
-      if (secs <= 180) isFastTc = true;
+      if (secs < 180) isFastTc = true;
     }
 
     const lines = [];
@@ -1296,8 +1296,6 @@ const App = (() => {
     svg += `<path d="${areaPath}" fill="rgba(255,255,255,0.12)"/>`;
 
     let areaBPath = `M${PAD_L},${midY}`;
-    for (const p of areaTop) areaBPath += ` L${p.x},${PAD_T + graphH - (p.y - PAD_T)}`;
-    areaBPath = `M${PAD_L},${midY}`;
     for (const p of areaTop) areaBPath += ` L${p.x},${p.y}`;
     areaBPath += ` L${PAD_L + graphW},${PAD_T + graphH} L${PAD_L},${PAD_T + graphH} Z`;
     svg += `<path d="${areaBPath}" fill="rgba(100,100,100,0.12)"/>`;
@@ -1454,7 +1452,18 @@ const App = (() => {
   }
 
   function pieces7(tbResult) {
-    return `${tbResult.san ? 'Position à ≤7 pièces' : ''}`;
+    if (!tbResult.fen) return 'Position à ≤7 pièces';
+    const board = tbResult.fen.split(' ')[0];
+    const counts = { w: '', b: '' };
+    const order = ['K','Q','R','B','N','P'];
+    for (const p of order) {
+      const wCount = (board.match(new RegExp(p, 'g')) || []).length;
+      for (let i = 0; i < wCount; i++) counts.w += p;
+      const lp = p.toLowerCase();
+      const bCount = (board.match(new RegExp(lp, 'g')) || []).length;
+      for (let i = 0; i < bCount; i++) counts.b += lp;
+    }
+    return `${counts.w} vs ${counts.b}`;
   }
 
   function endgameTip(fen) {

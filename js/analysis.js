@@ -64,7 +64,7 @@ const Analyzer = (() => {
     let best = null, bestVal = 0;
     for (const c of captures) {
       const gain = PIECE_VALUES[c.captured] - PIECE_VALUES[c.piece];
-      if (gain > bestVal || (!best && PIECE_VALUES[c.captured] >= 3)) {
+      if (gain > bestVal || (!best && gain >= 0 && PIECE_VALUES[c.captured] >= 3)) {
         best = c;
         bestVal = gain;
       }
@@ -225,7 +225,7 @@ const Analyzer = (() => {
       const fianch = color === 'w' ? ['g2', 'b2'] : ['g7', 'b7'];
       if (fianch.includes(madeMove.to)) return 'Fianchetto du fou — il contrôle la grande diagonale depuis une position sûre.';
       const longDiag = ['a1','b2','c3','d4','e5','f6','g7','h8','a8','b7','c6','d5','e4','f3','g2','h1'];
-      if (longDiag.includes(madeMove.to)) return 'Le fou se place sur la grande diagonale — portée maximale.';
+      if (longDiag.includes(madeMove.to)) return 'Le fou se place sur une grande diagonale — portée maximale.';
     }
 
     if (phase === 'endgame' && piece === 'k') {
@@ -243,11 +243,9 @@ const Analyzer = (() => {
     }
 
     if (piece === 'q' && phase === 'middle') {
-      return 'La dame entre en jeu — la pièce la plus puissante se rend active.';
+      const central = ['c3','d3','e3','f3','c4','d4','e4','f4','c5','d5','e5','f5','c6','d6','e6','f6'];
+      if (central.includes(madeMove.to)) return 'La dame se centralise — la pièce la plus puissante se rend active.';
     }
-
-    const struct = analyzeStructure(fenAfter);
-    if (struct.bishops[color] >= 2) return 'La paire de fous est préservée — un atout en position ouverte.';
 
     return '';
   }
@@ -346,7 +344,7 @@ const Analyzer = (() => {
           } else if (madeMove.piece === 'r' && i < 10 && !hasCastled(game.history({ verbose: true }), madeMove.color)) {
             type = 'mistake';
             tipFr = `La tour sort sans que le roi soit roqué. Il est souvent préférable de roquer d'abord pour connecter les tours.`;
-          } else if (madeMove.piece === 'p' && madeMove.to[0] === 'h' || madeMove.to[0] === 'a') {
+          } else if (madeMove.piece === 'p' && (madeMove.to[0] === 'h' || madeMove.to[0] === 'a')) {
             if (i < 10) {
               type = 'mistake';
               tipFr = `Pousser un pion sur le bord en ouverture ne contribue pas au développement. Privilégiez le centre et la sortie des pièces.`;
@@ -435,23 +433,6 @@ const Analyzer = (() => {
         if (ch >= '1' && ch <= '8') { col += +ch; continue; }
         if (ch === target) return 'abcdefgh'[col] + (8 - r);
         col++;
-      }
-    }
-    return null;
-  }
-
-  function detectHanging(game, color) {
-    const moves = game.moves({ verbose: true });
-    const attackerColor = color === 'w' ? 'b' : 'w';
-    const captures = moves.filter(m => m.captured && m.color !== color);
-
-    for (const cap of captures) {
-      if (PIECE_VALUES[cap.captured] > PIECE_VALUES[cap.piece] + 1) {
-        return {
-          piece: cap.captured,
-          square: cap.to,
-          arrow: { from: cap.from, to: cap.to }
-        };
       }
     }
     return null;
@@ -560,7 +541,8 @@ const Analyzer = (() => {
       let cpLoss = 0;
       let bestMoveSanFr = null;
       let bestMoveUci = null;
-      let evalForWhite = 0;
+      let evalForWhite = null;
+      let winPctLoss = 0;
       const alternatives = [];
 
       if (evalBefore && evalAfter) {
@@ -584,7 +566,7 @@ const Analyzer = (() => {
 
         const winBefore = cpToWinPct(evalBefore.score);
         const winAfterPlayed = cpToWinPct(-evalAfter.score);
-        var winPctLoss = Math.max(0, winBefore - winAfterPlayed);
+        winPctLoss = Math.max(0, winBefore - winAfterPlayed);
 
         if (evalBefore.lines) {
           for (const line of evalBefore.lines) {
@@ -608,7 +590,7 @@ const Analyzer = (() => {
       let type;
       if (madeMove.san.includes('#')) {
         type = 'best';
-      } else if (cpLoss <= 5 && (matChange <= -2 || (evalBefore && evalBefore.score <= -150))) {
+      } else if (cpLoss <= 5 && matChange <= -2) {
         type = 'brilliant';
       } else if (cpLoss > 200) {
         type = 'blunder';
@@ -625,11 +607,12 @@ const Analyzer = (() => {
       }
 
       const evalDesc = evalAfter ? describeEval(evalForWhite) : '';
+      const ed = evalDesc ? ' ' + evalDesc : '';
       let tipFr;
       if (madeMove.san.includes('#')) {
         tipFr = `Échec et mat ! Les ${side} remportent la partie.`;
       } else if (type === 'brilliant') {
-        tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible. ${evalDesc}`;
+        tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible.${ed}`;
       } else if (type === 'blunder') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
@@ -637,7 +620,7 @@ const Analyzer = (() => {
           ? `Gaffe ! ${whyBad ? whyBad + ' ' : ''}Il fallait jouer ${bestSpan}.`
           : `Gaffe ! Ce coup change complètement la position.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
-        tipFr += ' ' + evalDesc;
+        tipFr += ed;
       } else if (type === 'mistake') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
@@ -645,7 +628,7 @@ const Analyzer = (() => {
           ? `Erreur coûteuse.${whyBad ? ' ' + whyBad : ''} Le meilleur coup était ${bestSpan}.`
           : `Erreur coûteuse.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
-        tipFr += ' ' + evalDesc;
+        tipFr += ed;
       } else if (type === 'inaccuracy') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
@@ -653,25 +636,25 @@ const Analyzer = (() => {
           ? `Imprécision.${whyBad ? ' ' + whyBad : ''} ${bestSpan} était plus précis.`
           : `Imprécision.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
-        tipFr += ' ' + evalDesc;
+        tipFr += ed;
       } else if (type === 'best') {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched
-          ? `Meilleur coup ! ${enriched} ${evalDesc}`
-          : `Meilleur coup ! C'est exactement ce que recommande le moteur. ${evalDesc}`;
+          ? `Meilleur coup ! ${enriched}${ed}`
+          : `Meilleur coup ! C'est exactement ce que recommande le moteur.${ed}`;
       } else if (type === 'great') {
         if (madeMove.captured) {
           const capName = PIECE_NAMES_FR[madeMove.captured];
-          tipFr = `Excellent ! Capture optimale${capName ? ' du ' + capName : ''}. ${evalDesc}`;
+          tipFr = `Excellent ! Capture optimale${capName ? ' du ' + capName : ''}.${ed}`;
         } else if (madeMove.san === 'O-O' || madeMove.san === 'O-O-O') {
-          tipFr = `Bon roque ! Le moteur confirme que c'est un très bon choix ici. ${evalDesc}`;
+          tipFr = `Bon roque ! Le moteur confirme que c'est un très bon choix ici.${ed}`;
         } else {
           const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
-          tipFr = enriched ? `Très bon coup. ${enriched} ${evalDesc}` : `Très bon coup, quasi-optimal. ${evalDesc}`;
+          tipFr = enriched ? `Très bon coup. ${enriched}${ed}` : `Très bon coup, quasi-optimal.${ed}`;
         }
       } else {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
-        tipFr = enriched ? `${enriched} ${evalDesc}` : `Coup correct. ${evalDesc}`;
+        tipFr = enriched ? `${enriched}${ed}` : `Coup correct.${ed}`;
       }
 
       const forkTargets = detectForkAfterMove(newFen, madeMove.to, madeMove.color);
@@ -679,7 +662,7 @@ const Analyzer = (() => {
         tipFr += ` Fourchette sur ${forkTargets.join(' et ')} !`;
       }
 
-      if (evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
+      if (!forkTargets && evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
         try {
           const tg = new Chess(newFen);
           const tu = evalAfter.lines[0].move;
