@@ -40,7 +40,7 @@ const BoardRenderer = (() => {
     return { row, col };
   }
 
-  function render(svgEl, fen, lastMove) {
+  function buildBoard(fen, lastMove) {
     const board = fenToBoard(fen);
     let html = '';
     let hlFrom = null, hlTo = null;
@@ -56,6 +56,7 @@ const BoardRenderer = (() => {
       </filter>
     </defs>`;
 
+    const pieces = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const boardRow = flipped ? 7 - row : row;
@@ -85,13 +86,61 @@ const BoardRenderer = (() => {
 
         const piece = board[boardRow][boardCol];
         if (piece) {
-          const isWhitePiece = piece === piece.toUpperCase() && piece !== piece.toLowerCase();
-          const stroke = isWhitePiece ? 'rgba(0,0,0,0.3)' : 'none';
-          const strokeW = isWhitePiece ? 0.5 : 0;
-          html += `<text x="${x + SQ / 2}" y="${y + SQ / 2 + 14}" text-anchor="middle" font-size="36" filter="url(#piece-shadow)" stroke="${stroke}" stroke-width="${strokeW}" style="pointer-events:none">${PIECES_UNI[piece]}</text>`;
+          pieces.push({ piece, x: x + SQ / 2, y: y + SQ / 2 + 14, sq: FILES[boardCol] + (8 - boardRow) });
         }
       }
     }
+    return { boardHtml: html, pieces };
+  }
+
+  function renderPieceHtml(p) {
+    const isWhitePiece = p.piece === p.piece.toUpperCase() && p.piece !== p.piece.toLowerCase();
+    const stroke = isWhitePiece ? 'rgba(0,0,0,0.3)' : 'none';
+    const strokeW = isWhitePiece ? 0.5 : 0;
+    return `<text x="${p.x}" y="${p.y}" text-anchor="middle" font-size="36" filter="url(#piece-shadow)" stroke="${stroke}" stroke-width="${strokeW}" style="pointer-events:none">${PIECES_UNI[p.piece]}</text>`;
+  }
+
+  function render(svgEl, fen, lastMove) {
+    const { boardHtml, pieces } = buildBoard(fen, lastMove);
+    let html = boardHtml;
+    for (const p of pieces) html += renderPieceHtml(p);
+    svgEl.innerHTML = html;
+  }
+
+  function renderAnimated(svgEl, prevFen, fen, lastMove, duration) {
+    if (!prevFen || !lastMove || duration <= 0) { render(svgEl, fen, lastMove); return; }
+
+    const { boardHtml, pieces: newPieces } = buildBoard(fen, lastMove);
+    const prevBoard = fenToBoard(prevFen);
+
+    const fromCoords = squareToCoords(lastMove.from);
+    const toCoords = squareToCoords(lastMove.to);
+    const fromX = fromCoords.col * SQ + SQ / 2;
+    const fromY = fromCoords.row * SQ + SQ / 2 + 14;
+    const toX = toCoords.col * SQ + SQ / 2;
+    const toY = toCoords.row * SQ + SQ / 2 + 14;
+
+    let movingPiece = null;
+    for (const p of newPieces) {
+      if (p.sq === lastMove.to) { movingPiece = p; break; }
+    }
+    if (!movingPiece) { render(svgEl, fen, lastMove); return; }
+
+    let html = boardHtml;
+    for (const p of newPieces) {
+      if (p === movingPiece) continue;
+      html += renderPieceHtml(p);
+    }
+
+    const isWhite = movingPiece.piece === movingPiece.piece.toUpperCase() && movingPiece.piece !== movingPiece.piece.toLowerCase();
+    const stroke = isWhite ? 'rgba(0,0,0,0.3)' : 'none';
+    const strokeW = isWhite ? 0.5 : 0;
+    const ms = duration;
+    html += `<text x="${fromX}" y="${fromY}" text-anchor="middle" font-size="36" filter="url(#piece-shadow)" stroke="${stroke}" stroke-width="${strokeW}" style="pointer-events:none">
+      <animate attributeName="x" from="${fromX}" to="${toX}" dur="${ms}ms" fill="freeze"/>
+      <animate attributeName="y" from="${fromY}" to="${toY}" dur="${ms}ms" fill="freeze"/>
+      ${PIECES_UNI[movingPiece.piece]}</text>`;
+
     svgEl.innerHTML = html;
   }
 
@@ -155,5 +204,5 @@ const BoardRenderer = (() => {
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
 
-  return { render, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped };
+  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped };
 })();

@@ -786,81 +786,37 @@ html, body {
   letter-spacing: 1px;
   margin-bottom: 12px;
 }
-.mistake-overview {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.mistake-stat {
-  background: var(--bg);
-  border-radius: 8px;
-  padding: 10px 12px;
-  flex: 1;
-  text-align: center;
-}
-.mistake-val {
-  display: block;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--danger);
-}
-.mistake-stat:nth-child(3) .mistake-val { color: var(--warning); }
-.mistake-label {
-  display: block;
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
-.mistake-phase-bar {
-  display: flex;
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 6px;
-  background: var(--bg);
-}
-.mistake-phase-seg {
-  height: 100%;
-  transition: width 0.3s;
-}
-.mistake-phase-legend {
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-bottom: 10px;
-}
-.mistake-phase-legend .leg-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 4px;
-  vertical-align: middle;
-}
-.mistake-time-insight {
-  padding: 10px 14px;
-  background: var(--bg);
-  border-radius: 8px;
-  border-left: 3px solid var(--accent);
-  font-size: 13px;
-  line-height: 1.5;
-  margin-bottom: 10px;
-}
-.mistake-insights {
+.mistake-diagnosis {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
-.mistake-insight {
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 8px 12px;
+.diagnosis-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
   background: var(--bg);
-  border-radius: 6px;
-  border-left: 3px solid var(--danger);
+  border-radius: 8px;
+  border-left: 3px solid var(--text-dim);
+  align-items: flex-start;
 }
-.mistake-insight.positive { border-left-color: var(--success); }
+.diagnosis-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.diagnosis-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.diagnosis-text b { color: var(--text); }
+.diagnosis-card.positive { border-left-color: var(--success); }
+.diagnosis-card.weakness { border-left-color: var(--warning); }
+.diagnosis-card.pattern { border-left-color: var(--danger); }
+.diagnosis-card.blunder { border-left-color: #e74c3c; }
+.diagnosis-card.training { border-left-color: var(--accent); }
+.diagnosis-card.tempo { border-left-color: #9b59b6; }
 
 /* Time trouble card */
 .time-trouble-card {

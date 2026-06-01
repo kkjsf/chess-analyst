@@ -7,6 +7,7 @@ const App = (() => {
   let currentHeader = null;
   let currentUser = null;
   let currentPgn = null;
+  let currentClocks = [];
   let gameHistory = [];
 
   const $ = (sel) => document.querySelector(sel);
@@ -77,6 +78,16 @@ const App = (() => {
     }
   }
 
+  function extractClocks(pgn) {
+    const clocks = [];
+    const re = /\{[^}]*\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\][^}]*\}/g;
+    let m;
+    while ((m = re.exec(pgn)) !== null) {
+      clocks.push(parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]));
+    }
+    return clocks;
+  }
+
   function sanitizePgn(pgn) {
     let cleaned = pgn.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     cleaned = cleaned.replace(/\\'/g, "'");
@@ -85,6 +96,7 @@ const App = (() => {
       const m = d.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/);
       return m ? `[Date "${m[1]}.${m[2].padStart(2,'0')}.${m[3].padStart(2,'0')}"]` : `[Date "${d}"]`;
     });
+    cleaned = cleaned.replace(/\{[^}]*\[%[^\]]*\][^}]*\}/g, '');
     cleaned = cleaned.replace(/(\])\n(\d)/, '$1\n\n$2');
     cleaned = cleaned.replace(/\]\s*\[/g, ']\n[');
     cleaned = cleaned.replace(/(\])\n(\[)/g, '$1\n$2');
@@ -196,7 +208,8 @@ const App = (() => {
       return;
     }
 
-    const chessComUrl = extractChessComUrl(pgnText);
+    const looksLikePgn = /^\s*\[/.test(pgnText) || /\d+\.\s*[A-Za-z]/.test(pgnText);
+    const chessComUrl = !looksLikePgn ? extractChessComUrl(pgnText) : null;
     if (chessComUrl) {
       let fetched;
       try {
@@ -214,6 +227,8 @@ const App = (() => {
         return;
       }
     }
+
+    currentClocks = extractClocks(pgnText);
 
     const chess = new Chess();
     const cleaned = sanitizePgn(pgnText);
@@ -461,6 +476,7 @@ const App = (() => {
     $('#move-counter').textContent = `Coup ${index}/${total}`;
 
     updateWinGraphCursor(index);
+    updateMatGraphCursor(index);
 
     $$('.move-cell').forEach(cell => cell.classList.remove('active'));
     if (index > 0) {
@@ -803,10 +819,16 @@ const App = (() => {
     footerEl.textContent = footerText;
 
     let idx = 0;
+    const ANIM_MS = 250;
 
-    function renderStep() {
+    function renderStep(animate) {
       const pos = positions[idx];
-      BoardRenderer.render(svg, pos.fen, pos.move);
+      const prevFen = idx > 0 ? positions[idx - 1].fen : null;
+      if (animate && prevFen && pos.move) {
+        BoardRenderer.renderAnimated(svg, prevFen, pos.fen, pos.move, ANIM_MS);
+      } else {
+        BoardRenderer.render(svg, pos.fen, pos.move);
+      }
       prevBtn.disabled = idx === 0;
       nextBtn.disabled = idx === positions.length - 1;
 
@@ -828,19 +850,19 @@ const App = (() => {
 
     function onKey(e) {
       if (e.key === 'Escape') cleanup();
-      if (e.key === 'ArrowLeft' && idx > 0) { idx--; renderStep(); }
-      if (e.key === 'ArrowRight' && idx < positions.length - 1) { idx++; renderStep(); }
+      if (e.key === 'ArrowLeft' && idx > 0) { idx--; renderStep(false); }
+      if (e.key === 'ArrowRight' && idx < positions.length - 1) { idx++; renderStep(true); }
     }
 
-    prevBtn.onclick = () => { if (idx > 0) { idx--; renderStep(); } };
-    nextBtn.onclick = () => { if (idx < positions.length - 1) { idx++; renderStep(); } };
+    prevBtn.onclick = () => { if (idx > 0) { idx--; renderStep(false); } };
+    nextBtn.onclick = () => { if (idx < positions.length - 1) { idx++; renderStep(true); } };
     $('#opening-modal-close').onclick = cleanup;
     modal.onclick = e => { if (e.target === modal) cleanup(); };
     document.addEventListener('keydown', onKey);
 
     idx = 0;
     modal.classList.add('visible');
-    renderStep();
+    renderStep(false);
   }
 
   function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening) {
@@ -1236,30 +1258,45 @@ const App = (() => {
 
     let html = '';
 
-    html += `<div class="mistake-overview">`;
-    html += `<div class="mistake-stat"><span class="mistake-val">${errors.length}</span><span class="mistake-label">erreurs totales</span></div>`;
-    html += `<div class="mistake-stat"><span class="mistake-val">${tactical.length}</span><span class="mistake-label">tactiques</span></div>`;
-    html += `<div class="mistake-stat"><span class="mistake-val">${positional.length}</span><span class="mistake-label">positionnelles</span></div>`;
-    html += `</div>`;
+    const weakestPhase = byPhase.opening >= byPhase.middlegame && byPhase.opening >= byPhase.endgame ? 'opening'
+      : byPhase.endgame >= byPhase.middlegame ? 'endgame' : 'middlegame';
+    const phaseNames = { opening: 'l\'ouverture', middlegame: 'le milieu de partie', endgame: 'la finale' };
+    const blunders = errors.filter(e => e.severity === 'blunder');
 
-    const total = errors.length;
-    const phases = [
-      { label: 'Ouverture', count: byPhase.opening, color: 'var(--accent)' },
-      { label: 'Milieu', count: byPhase.middlegame, color: 'var(--warning)' },
-      { label: 'Finale', count: byPhase.endgame, color: 'var(--danger)' }
-    ].filter(p => p.count > 0);
-    html += `<div class="mistake-phase-bar">`;
-    for (const p of phases) {
-      const pct = Math.round(100 * p.count / total);
-      if (pct > 0) html += `<div class="mistake-phase-seg" style="width:${pct}%;background:${p.color}" title="${p.label}: ${p.count}"></div>`;
+    html += `<div class="mistake-diagnosis">`;
+
+    if (errors.length <= 2) {
+      html += `<div class="diagnosis-card positive"><div class="diagnosis-icon">✓</div><div class="diagnosis-text"><b>Partie solide</b> — seulement ${errors.length} imprécision${errors.length > 1 ? 's' : ''}. Continuez comme ça !</div></div>`;
+    } else {
+      const phasePct = Math.round(100 * Math.max(byPhase.opening, byPhase.middlegame, byPhase.endgame) / errors.length);
+      html += `<div class="diagnosis-card weakness"><div class="diagnosis-icon">📍</div><div class="diagnosis-text"><b>Phase la plus fragile : ${phaseNames[weakestPhase]}</b> — ${phasePct}% de vos erreurs y sont concentrées (${Math.max(byPhase.opening, byPhase.middlegame, byPhase.endgame)}/${errors.length}).</div></div>`;
     }
-    html += `</div>`;
-    html += `<div class="mistake-phase-legend">`;
-    for (const p of phases) html += `<span><span class="leg-dot" style="background:${p.color}"></span>${p.label} (${p.count})</span>`;
-    html += `</div>`;
+
+    if (hanging.length >= 2) {
+      html += `<div class="diagnosis-card pattern"><div class="diagnosis-icon">👁</div><div class="diagnosis-text"><b>Pièces laissées en prise</b> (${hanging.length}×) — Avant chaque coup, demandez-vous : « est-ce que ma pièce est défendue ? Mon adversaire peut-il la capturer ? » Entraînez-vous avec des exercices de visualisation.</div></div>`;
+    } else if (badExch.length >= 2) {
+      html += `<div class="diagnosis-card pattern"><div class="diagnosis-icon">⚖️</div><div class="diagnosis-text"><b>Échanges défavorables</b> (${badExch.length}×) — Vous donnez plus de valeur que vous n'en recevez. Avant de capturer, comptez : Cavalier/Fou = 3, Tour = 5, Dame = 9.</div></div>`;
+    }
+
+    if (tactical.length > positional.length && errors.length >= 3) {
+      html += `<div class="diagnosis-card training"><div class="diagnosis-icon">🎯</div><div class="diagnosis-text"><b>Profil tactique</b> — La majorité de vos erreurs sont des ratés tactiques (fourchettes, clouages, enfilades). Conseil : faites 10-15 puzzles tactiques par jour sur Lichess ou Chess.com.</div></div>`;
+    } else if (positional.length > tactical.length && errors.length >= 3) {
+      html += `<div class="diagnosis-card training"><div class="diagnosis-icon">🧭</div><div class="diagnosis-text"><b>Profil positionnel</b> — Vos erreurs viennent surtout de mauvais plans ou d'une structure de pions affaiblie. Conseil : étudiez les parties de joueurs positionnels (Karpov, Carlsen) et les principes de structure.</div></div>`;
+    }
+
+    if (blunders.length >= 2) {
+      const blunderMoves = blunders.slice(0, 3).map(e => `${e.moveNum}${e.dot} ${e.r.move.san}`);
+      html += `<div class="diagnosis-card blunder"><div class="diagnosis-icon">⚡</div><div class="diagnosis-text"><b>${blunders.length} gaffe${blunders.length > 1 ? 's' : ''}</b> (${blunderMoves.join(', ')}) — Ce sont des erreurs graves. Adoptez un « check mental » avant chaque coup : menaces adverses, pièces non défendues, échecs possibles.</div></div>`;
+    }
+
+    if (weakestPhase === 'opening' && byPhase.opening >= 3) {
+      html += `<div class="diagnosis-card training"><div class="diagnosis-icon">📖</div><div class="diagnosis-text"><b>À travailler : les ouvertures</b> — ${byPhase.opening} erreurs dans les 10 premiers coups. Apprenez 1-2 ouvertures en profondeur plutôt que beaucoup en surface. Jouez-les en bullet pour les mémoriser.</div></div>`;
+    } else if (weakestPhase === 'endgame' && byPhase.endgame >= 2) {
+      html += `<div class="diagnosis-card training"><div class="diagnosis-icon">📖</div><div class="diagnosis-text"><b>À travailler : les finales</b> — ${byPhase.endgame} erreurs en fin de partie. Commencez par les finales de base : Roi+Tour vs Roi, Roi+Pion vs Roi, puis les finales de Tours.</div></div>`;
+    }
 
     if (currentPgn) {
-      const clocks = Analyzer.parseClocks(currentPgn);
+      const clocks = currentClocks;
       const times = Analyzer.clocksToTimePerMove(clocks);
       if (times.length >= analysis.length * 0.5) {
         const errorTimes = errors.map(e => times[e.index] || 0).filter(t => t > 0);
@@ -1274,35 +1311,18 @@ const App = (() => {
           const avgErrorTime = Math.round(errorTimes.reduce((a, b) => a + b, 0) / errorTimes.length);
           const avgAllTime = Math.round(allUserTimes.reduce((a, b) => a + b, 0) / allUserTimes.length);
           const lateErrors = errors.filter(e => e.index >= analysis.length * 0.7).length;
-          html += `<div class="mistake-time-insight">`;
           if (avgErrorTime < avgAllTime * 0.6) {
-            html += `⏱ Vos erreurs surviennent sur des coups joués <b>rapidement</b> (${avgErrorTime}s vs ${avgAllTime}s en moyenne). Prenez plus de temps sur les positions critiques.`;
+            html += `<div class="diagnosis-card tempo"><div class="diagnosis-icon">⏱</div><div class="diagnosis-text"><b>Erreurs de vitesse</b> — Vos gaffes arrivent sur des coups joués vite (${avgErrorTime}s vs ${avgAllTime}s en moyenne). Quand la position se complique, forcez-vous à ralentir.</div></div>`;
           } else if (avgErrorTime > avgAllTime * 1.5) {
-            html += `⏱ Vos erreurs arrivent sur des coups où vous <b>réfléchissez longtemps</b> (${avgErrorTime}s vs ${avgAllTime}s en moyenne). Peut-être trop de calcul — fiez-vous aussi à votre intuition.`;
+            html += `<div class="diagnosis-card tempo"><div class="diagnosis-icon">⏱</div><div class="diagnosis-text"><b>Paralysie d'analyse</b> — Vos erreurs arrivent quand vous réfléchissez longtemps (${avgErrorTime}s vs ${avgAllTime}s). Trop de calcul nuit — faites confiance à vos premiers instincts plus souvent.</div></div>`;
           } else if (lateErrors >= errors.length * 0.6 && errors.length >= 2) {
-            html += `⏱ <b>${Math.round(100 * lateErrors / errors.length)}%</b> de vos erreurs arrivent en fin de partie. La fatigue ou la pression du temps en sont probablement la cause.`;
+            html += `<div class="diagnosis-card tempo"><div class="diagnosis-icon">⏱</div><div class="diagnosis-text"><b>Fatigue de fin de partie</b> — ${Math.round(100 * lateErrors / errors.length)}% de vos erreurs arrivent dans le dernier tiers. Gérez mieux votre temps et restez concentré en finale.</div></div>`;
           }
-          html += `</div>`;
         }
       }
     }
 
-    const insights = [];
-    if (hanging.length >= 2) insights.push({ text: `Vous laissez des pièces en prise ${hanging.length} fois. Avant chaque coup, vérifiez si votre pièce est défendue.`, positive: false });
-    if (badExch.length >= 2) insights.push({ text: `${badExch.length} échanges défavorables. Comptez la valeur des pièces avant de capturer.`, positive: false });
-    if (byPhase.opening >= 3) insights.push({ text: `${byPhase.opening} erreurs en ouverture — révisez vos premières séquences de coups.`, positive: false });
-    if (byPhase.endgame >= 2 && byPhase.opening === 0) insights.push({ text: `Ouverture propre mais ${byPhase.endgame} erreurs en finale — travaillez les techniques de finales.`, positive: false });
-    if (positional.length > tactical.length && errors.length >= 3) insights.push({ text: `Vos erreurs sont surtout positionnelles : travaillez les plans et la structure de pions.`, positive: false });
-    if (tactical.length > positional.length && errors.length >= 3) insights.push({ text: `Vos erreurs sont surtout tactiques : entraînez-vous aux puzzles (fourchettes, clouages, enfilades).`, positive: false });
-    if (errors.length <= 2) insights.push({ text: `Seulement ${errors.length} erreur${errors.length > 1 ? 's' : ''} — partie bien maîtrisée !`, positive: true });
-
-    if (insights.length > 0) {
-      html += `<div class="mistake-insights">`;
-      for (const ins of insights.slice(0, 3)) {
-        html += `<div class="mistake-insight${ins.positive ? ' positive' : ''}">${ins.text}</div>`;
-      }
-      html += `</div>`;
-    }
+    html += `</div>`;
 
     content.innerHTML = html;
     card.hidden = false;
@@ -1492,10 +1512,9 @@ const App = (() => {
     const card = $('#time-trouble-card');
     const content = $('#time-trouble-content');
     card.hidden = true;
-    if (!currentPgn) return;
+    if (currentClocks.length < 4) return;
 
-    const clocks = Analyzer.parseClocks(currentPgn);
-    if (clocks.length < 4) return;
+    const clocks = currentClocks;
 
     const times = Analyzer.clocksToTimePerMove(clocks);
     const user = detectUser(header);
@@ -1611,6 +1630,8 @@ const App = (() => {
     });
   }
 
+  const PIECE_SYMBOLS = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕' };
+
   function buildMaterialGraph(analysis) {
     const card = $('#material-graph-card');
     const container = $('#material-graph-container');
@@ -1631,8 +1652,6 @@ const App = (() => {
 
     const yScale = (graphH / 2) / Math.max(maxAbs, 5);
     const points = [];
-    const areaAbove = [];
-    const areaBelow = [];
 
     for (let i = 0; i < n; i++) {
       const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
@@ -1664,6 +1683,20 @@ const App = (() => {
       }
     }
 
+    for (let i = 0; i < n; i++) {
+      const r = analysis[i];
+      if (!r.move || !r.move.captured) continue;
+      const prevDiff = i > 0 ? (analysis[i - 1].materialDiff || 0) : 0;
+      if (diffs[i] === prevDiff) continue;
+      const p = points[i];
+      const capturedKey = r.move.color === 'w' ? r.move.captured : r.move.captured.toUpperCase();
+      const sym = PIECE_SYMBOLS[capturedKey] || '';
+      if (sym) {
+        const ty = p.y < midY ? p.y + 7 : p.y - 3;
+        svg += `<text x="${p.x}" y="${ty}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.6)" style="pointer-events:none">${sym}</text>`;
+      }
+    }
+
     const ticks = [];
     for (let v = -Math.floor(maxAbs); v <= Math.floor(maxAbs); v++) {
       if (v === 0 || Math.abs(v) > maxAbs) continue;
@@ -1677,9 +1710,15 @@ const App = (() => {
     }
     svg += `<text x="${PAD_L - 4}" y="${midY + 3}" fill="rgba(255,255,255,0.4)" font-size="9" text-anchor="end">0</text>`;
 
+    svg += `<line id="mat-graph-cursor" x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${PAD_T + graphH}" stroke="var(--accent)" stroke-width="1.5" opacity="0" stroke-dasharray="3,2"/>`;
+
     for (let i = 0; i < n; i++) {
       const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      svg += `<rect x="${x - graphW/(2*n)}" y="${PAD_T}" width="${graphW/n}" height="${graphH}" fill="transparent" class="mat-graph-hit" data-move="${i + 1}" style="cursor:pointer"/>`;
+      const wMat = analysis[i].fen ? materialFromFen(analysis[i].fen) : null;
+      const tooltip = wMat ? `⚪ ${wMat.white} · ⚫ ${wMat.black} · Δ${diffs[i] >= 0 ? '+' : ''}${diffs[i]}` : '';
+      svg += `<rect x="${x - graphW/(2*n)}" y="${PAD_T}" width="${graphW/n}" height="${graphH}" fill="transparent" class="mat-graph-hit" data-move="${i + 1}" style="cursor:pointer">`;
+      if (tooltip) svg += `<title>${tooltip}</title>`;
+      svg += `</rect>`;
     }
 
     const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
@@ -1704,31 +1743,75 @@ const App = (() => {
     });
   }
 
+  function materialFromFen(fen) {
+    const board = fen.split(' ')[0];
+    const vals = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+    let white = 0, black = 0;
+    for (const ch of board) {
+      const lower = ch.toLowerCase();
+      if (vals[lower] !== undefined) {
+        if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) white += vals[lower];
+        else if (ch === ch.toLowerCase() && ch !== ch.toUpperCase()) black += vals[lower];
+      }
+    }
+    return { white, black };
+  }
+
+  function updateMatGraphCursor(index) {
+    const cursor = $('#mat-graph-cursor');
+    if (!cursor || !currentAnalysis) return;
+    const n = currentAnalysis.length;
+    const svg = cursor.closest('svg');
+    if (!svg) return;
+    const W = 480, PAD_L = 28, PAD_R = 4;
+    const graphW = W - PAD_L - PAD_R;
+    const x = PAD_L + ((index - 1) / Math.max(1, n - 1)) * graphW;
+    cursor.setAttribute('x1', x);
+    cursor.setAttribute('x2', x);
+    cursor.setAttribute('opacity', index > 0 ? '0.7' : '0');
+  }
+
   function buildPlanRecognition(header, analysis) {
     const card = $('#plan-card');
     const content = $('#plan-content');
     card.hidden = true;
-    if (analysis.length < 10) return;
+    if (analysis.length < 6) return;
 
     const user = detectUser(header);
-    const phases = [
+    const rawPhases = [
       { name: 'Ouverture', icon: '📖', from: 0, to: Math.min(20, analysis.length) },
       { name: 'Milieu de partie', icon: '⚔️', from: 20, to: Math.min(50, analysis.length) },
       { name: 'Finale', icon: '🏁', from: 50, to: analysis.length }
     ].filter(p => p.from < analysis.length);
 
+    const phases = [];
+    for (const p of rawPhases) {
+      let userMoves = 0;
+      for (let i = p.from; i < p.to; i++) {
+        const r = analysis[i];
+        if (r.move && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b') || !user)) userMoves++;
+      }
+      if (userMoves < 3 && phases.length > 0) {
+        phases[phases.length - 1].to = p.to;
+      } else {
+        phases.push({ ...p });
+      }
+    }
+
     let html = '';
     let hasContent = false;
 
     for (const phase of phases) {
-      const wActions = { kingsideAttack: 0, queensideAttack: 0, centralControl: 0, development: 0, kingSafety: 0, pawnPush: 0, pieceActivity: 0, exchanges: 0 };
-      const bActions = { kingsideAttack: 0, queensideAttack: 0, centralControl: 0, development: 0, kingSafety: 0, pawnPush: 0, pieceActivity: 0, exchanges: 0 };
+      const wActions = { kingsideAttack: 0, queensideAttack: 0, centralControl: 0, development: 0, kingSafety: 0, pawnPush: 0, pieceActivity: 0, exchanges: 0, pawnBreaks: [], doubledRooks: 0, bishopPair: 0, kingSafetyErosion: 0, spaceAdvantage: 0 };
+      const bActions = { kingsideAttack: 0, queensideAttack: 0, centralControl: 0, development: 0, kingSafety: 0, pawnPush: 0, pieceActivity: 0, exchanges: 0, pawnBreaks: [], doubledRooks: 0, bishopPair: 0, kingSafetyErosion: 0, spaceAdvantage: 0 };
+      let wMoveCount = 0, bMoveCount = 0;
 
       for (let i = phase.from; i < phase.to; i++) {
         const r = analysis[i];
         if (!r.move) continue;
         const m = r.move;
         const a = m.color === 'w' ? wActions : bActions;
+        if (m.color === 'w') wMoveCount++; else bMoveCount++;
         const toFile = m.to.charCodeAt(0) - 97;
         const toRank = parseInt(m.to[1]);
         const advancedRank = m.color === 'w' ? toRank >= 5 : toRank <= 4;
@@ -1770,10 +1853,71 @@ const App = (() => {
         if (m.piece === 'p' && advancedRank) {
           a.pawnPush++;
         }
+
+        if (m.piece === 'p' && m.captured && advancedRank) {
+          const breakFile = String.fromCharCode(97 + toFile);
+          if (toFile >= 3 && toFile <= 4) {
+            a.pawnBreaks.push({ file: breakFile, type: 'central', label: `rupture centrale ${breakFile}${toRank}` });
+          } else if (toFile <= 2) {
+            a.pawnBreaks.push({ file: breakFile, type: 'queenside', label: `attaque de minorité ${breakFile}${toRank}` });
+          } else {
+            a.pawnBreaks.push({ file: breakFile, type: 'kingside', label: `percée ${breakFile}${toRank}` });
+          }
+        }
+
+        if (r.fen) {
+          const fenBoard = r.fen.split(' ')[0];
+          const rookFiles = { w: [], b: [] };
+          const rows = fenBoard.split('/');
+          for (let rank = 0; rank < 8; rank++) {
+            let file = 0;
+            for (const ch of rows[rank]) {
+              if (ch >= '1' && ch <= '8') { file += +ch; continue; }
+              if (ch === 'R') rookFiles.w.push(file);
+              if (ch === 'r') rookFiles.b.push(file);
+              file++;
+            }
+          }
+          const side = m.color === 'w' ? rookFiles.w : rookFiles.b;
+          if (side.length === 2 && side[0] === side[1]) a.doubledRooks++;
+
+          if (m.color === 'w') {
+            let space = 0;
+            for (let rank = 0; rank < 4; rank++) {
+              let file = 0;
+              for (const ch of rows[rank]) {
+                if (ch >= '1' && ch <= '8') { file += +ch; continue; }
+                if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) space++;
+                file++;
+              }
+            }
+            a.spaceAdvantage = Math.max(a.spaceAdvantage, space);
+          } else {
+            let space = 0;
+            for (let rank = 4; rank < 8; rank++) {
+              let file = 0;
+              for (const ch of rows[rank]) {
+                if (ch >= '1' && ch <= '8') { file += +ch; continue; }
+                if (ch === ch.toLowerCase() && ch !== ch.toUpperCase()) space++;
+                file++;
+              }
+            }
+            a.spaceAdvantage = Math.max(a.spaceAdvantage, space);
+          }
+
+          if (m.piece === 'p') {
+            const isKingsidePawn = toFile >= 5;
+            const isShieldPush = m.color === 'w' ? (toRank >= 3 && toRank <= 4 && isKingsidePawn) : (toRank <= 6 && toRank >= 5 && isKingsidePawn);
+            if (isShieldPush) {
+              const opp = m.color === 'w' ? bActions : wActions;
+              opp.kingSafetyErosion++;
+            }
+          }
+        }
       }
 
-      const wPlan = describePlan(wActions, phase.name, 'w', user);
-      const bPlan = describePlan(bActions, phase.name, 'b', user);
+      const wPlan = describePlan(wActions, wMoveCount, phase.name, 'w', user);
+      const bPlan = describePlan(bActions, bMoveCount, phase.name, 'b', user);
 
       if (!wPlan && !bPlan) continue;
       hasContent = true;
@@ -1797,13 +1941,14 @@ const App = (() => {
     card.hidden = false;
   }
 
-  function describePlan(actions, phaseName, color, user) {
+  function describePlan(actions, moveCount, phaseName, color, user) {
     const parts = [];
+    const density = (key) => moveCount > 0 ? actions[key] / moveCount : 0;
     const sorted = Object.entries(actions)
-      .filter(([_, v]) => v > 0)
+      .filter(([k, v]) => typeof v === 'number' && v > 0)
       .sort((a, b) => b[1] - a[1]);
 
-    if (sorted.length === 0) return '';
+    if (sorted.length === 0 && actions.pawnBreaks.length === 0) return '';
 
     const top = sorted.slice(0, 3).map(([k]) => k);
     const isUser = color === user;
@@ -1816,22 +1961,39 @@ const App = (() => {
       if (parts.length === 0 && top.includes('queensideAttack')) parts.push('expansion à l\'aile dame');
       if (parts.length === 0) parts.push('mise en place');
     } else if (phaseName === 'Finale') {
-      if (top.includes('pawnPush')) parts.push('course à la promotion');
+      if (density('pawnPush') > 0.2) parts.push('course à la promotion');
       if (top.includes('centralControl') || top.includes('pieceActivity')) parts.push('activation du roi');
-      if (top.includes('exchanges')) parts.push('simplification');
+      if (density('exchanges') > 0.25) parts.push('simplification');
       if (parts.length === 0) parts.push('technique de finale');
     } else {
-      if (actions.kingsideAttack >= 4 && actions.kingsideAttack > actions.queensideAttack) {
+      if (density('kingsideAttack') > 0.3 && actions.kingsideAttack > actions.queensideAttack) {
         parts.push('attaque sur l\'aile roi');
-      } else if (actions.queensideAttack >= 4 && actions.queensideAttack > actions.kingsideAttack) {
+      } else if (density('queensideAttack') > 0.3 && actions.queensideAttack > actions.kingsideAttack) {
         parts.push('attaque sur l\'aile dame');
-      } else if (actions.kingsideAttack >= 3 && actions.queensideAttack >= 3) {
+      } else if (density('kingsideAttack') > 0.2 && density('queensideAttack') > 0.2) {
         parts.push('jeu sur les deux ailes');
       }
-      if (actions.centralControl >= 4) parts.push('domination du centre');
-      if (actions.pieceActivity >= 4) parts.push('activité des pièces');
-      if (actions.exchanges >= 3 && parts.length < 2) parts.push('échanges systématiques');
-      if (actions.pawnPush >= 3 && parts.length < 2) parts.push('poussée de pions');
+      if (density('centralControl') > 0.3) parts.push('domination du centre');
+      if (density('pieceActivity') > 0.3) parts.push('activité des pièces');
+      if (density('exchanges') > 0.25 && parts.length < 2) parts.push('échanges systématiques');
+      if (density('pawnPush') > 0.2 && parts.length < 2) parts.push('poussée de pions');
+    }
+
+    if (actions.pawnBreaks.length > 0 && parts.length < 3) {
+      const uniqueBreaks = [...new Map(actions.pawnBreaks.map(b => [b.label, b])).values()];
+      parts.push(uniqueBreaks.slice(0, 2).map(b => b.label).join(', '));
+    }
+
+    if (actions.doubledRooks >= 2 && parts.length < 3) {
+      parts.push('tours doublées sur colonne ouverte');
+    }
+
+    if (actions.kingSafetyErosion >= 2 && parts.length < 3) {
+      parts.push('affaiblissement du roque adverse');
+    }
+
+    if (actions.spaceAdvantage >= 8 && parts.length < 3) {
+      parts.push('avantage d\'espace');
     }
 
     if (parts.length === 0) return '';
@@ -1841,10 +2003,9 @@ const App = (() => {
   function buildTimeChart(analysis) {
     const card = $('#time-chart-card');
     const container = $('#time-chart-container');
-    if (!currentPgn) { card.hidden = true; return; }
+    if (currentClocks.length < 4) { card.hidden = true; return; }
 
-    const clocks = Analyzer.parseClocks(currentPgn);
-    if (clocks.length < 4) { card.hidden = true; return; }
+    const clocks = currentClocks;
 
     const times = Analyzer.clocksToTimePerMove(clocks);
     if (times.length === 0) { card.hidden = true; return; }
