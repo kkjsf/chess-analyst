@@ -651,7 +651,9 @@ const App = (() => {
 
     const opening = summary.opening;
     let openingLine = '';
-    if (opening) openingLine = `<span class="intro-opening">${opening.name}</span> <span class="intro-eco">${opening.eco}</span>`;
+    if (opening) {
+      openingLine = `<span class="intro-opening opening-toggle" tabindex="0" role="button" title="Cliquez pour explorer l'ouverture">${opening.name}</span> <span class="intro-eco">${opening.eco}</span>`;
+    }
 
     let accuracyHtml = '';
     if (summary.engineUsed) {
@@ -707,7 +709,138 @@ const App = (() => {
     html += `<p class="intro-narrative">${narrative}</p>`;
     html += accuracyHtml;
     $('#intro-text').innerHTML = html;
+    const toggle = $('#intro-text .opening-toggle');
+    if (toggle) {
+      const openModal = () => openOpeningExplorer(opening, analysis);
+      toggle.addEventListener('click', openModal);
+      toggle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(); } });
+    }
     card.hidden = false;
+  }
+
+  function explainMove(san, color, moveNum, fen) {
+    const side = color === 'w' ? 'Les Blancs' : 'Les Noirs';
+    const piece = san[0];
+    if (san === 'O-O') return `${side} roquent côté roi — mettre le roi en sécurité et activer la tour.`;
+    if (san === 'O-O-O') return `${side} roquent côté dame — roi en sécurité, tour centralisée.`;
+    if (piece === 'N') {
+      if (san.includes('f3') || san.includes('c3') || san.includes('f6') || san.includes('c6'))
+        return `${side} développent un cavalier vers une case naturelle — contrôle du centre.`;
+      return `${side} développent le cavalier.`;
+    }
+    if (piece === 'B') {
+      if (san.includes('b5')) return `${side} placent le fou en b5 — pression sur le cavalier et le centre adverse.`;
+      if (san.includes('c4') || san.includes('c5')) return `${side} développent le fou vers une diagonale active — visant f7/f2.`;
+      if (san.includes('e7') || san.includes('e2')) return `${side} développent le fou prudemment — préparant le roque.`;
+      if (san.includes('g7') || san.includes('g2')) return `${side} fianchettent le fou — contrôle de la grande diagonale.`;
+      if (san.includes('b4')) return `${side} clouent le cavalier adverse — pression positionnelle.`;
+      if (san.includes('a4')) return `${side} retirent le fou pour le garder actif tout en maintenant la pression.`;
+      if (san.includes('b3') || san.includes('b6')) return `${side} retirent le fou sur la diagonale — visant le centre de loin.`;
+      if (san.includes('g5') || san.includes('g4')) return `${side} développent le fou en épingle — menaçant de clouer une pièce adverse.`;
+      if (san.includes('f4') || san.includes('f5')) return `${side} placent le fou activement — soutien du centre et contrôle de cases.`;
+      return `${side} développent le fou.`;
+    }
+    if (piece === 'R') return `${side} activent la tour.`;
+    if (piece === 'Q') return `${side} développent la dame — attention, tôt en partie cela peut être risqué.`;
+    if (piece === 'K') return `${side} déplacent le roi.`;
+    // Pawn moves
+    const dest = san.replace(/[+#x=].*/, '').slice(-2);
+    if (dest === 'e4' || dest === 'd4' || dest === 'e5' || dest === 'd5')
+      return `${side} poussent un pion central — lutte pour le contrôle du centre.`;
+    if (dest === 'c4' || dest === 'c5')
+      return `${side} jouent c4/c5 — cherchant à contester le centre ou ouvrir le jeu.`;
+    if (dest === 'a6') return `${side} jouent a6 — prévenir Fb5 ou préparer b5 pour gagner de l'espace.`;
+    if (dest === 'a3') return `${side} jouent a3 — prévenir Fb4 ou préparer une expansion à l'aile dame.`;
+    if (dest === 'h3' || dest === 'h6') return `${side} créent une case de fuite pour le roi et empêchent les pièces adverses d'utiliser g4/g5.`;
+    if (dest === 'b5' || dest === 'b4') return `${side} gagnent de l'espace à l'aile dame.`;
+    if (dest === 'c3') return `${side} jouent c3 — soutenir le centre avec d4 ou empêcher l'utilisation de cette case.`;
+    if (dest === 'c6') return `${side} jouent c6 — renforcer le centre et préparer d5.`;
+    if (dest === 'd6' || dest === 'd3') return `${side} poussent le pion d — soutien flexible du centre.`;
+    if (dest === 'e6' || dest === 'e3') return `${side} jouent e6/e3 — solidifier le centre, libérer le fou.`;
+    if (dest === 'f4' || dest === 'f5') return `${side} poussent le pion f — jeu agressif visant le centre ou une attaque.`;
+    if (dest === 'g3' || dest === 'g6') return `${side} préparent un fianchetto — le fou ira en g2/g7.`;
+    if (san.includes('x')) return `${side} capturent — échange de pièces ou de pions.`;
+    return `${side} avancent un pion.`;
+  }
+
+  function openOpeningExplorer(opening, analysis) {
+    if (!opening || !opening.line) return;
+
+    const modal = $('#opening-modal');
+    const svg = $('#opening-modal-svg');
+    const titleEl = $('#opening-modal-title');
+    const ecoEl = $('#opening-modal-eco');
+    const labelEl = $('#opening-modal-move-label');
+    const explEl = $('#opening-modal-explanation');
+    const footerEl = $('#opening-modal-footer');
+    const prevBtn = $('#opening-modal-prev');
+    const nextBtn = $('#opening-modal-next');
+
+    const tokens = opening.line.split(' ');
+    const game = new Chess();
+    const positions = [{ fen: game.fen(), move: null, san: null, color: null, num: 0 }];
+    for (let i = 0; i < tokens.length; i++) {
+      const made = game.move(tokens[i], { sloppy: true });
+      if (!made) break;
+      positions.push({ fen: game.fen(), move: made, san: tokens[i], color: made.color, num: i + 1 });
+    }
+
+    const halfMoves = opening.moves || 0;
+    let deviationSan = '';
+    if (halfMoves < analysis.length && analysis[halfMoves] && analysis[halfMoves].move) {
+      deviationSan = analysis[halfMoves].move.san;
+    }
+
+    titleEl.textContent = opening.name;
+    ecoEl.textContent = opening.eco;
+
+    let footerText = `Vous avez suivi cette ouverture jusqu'au coup ${Math.ceil(halfMoves / 2)}`;
+    if (deviationSan) {
+      const devNum = Math.floor(halfMoves / 2) + 1;
+      const devPrefix = halfMoves % 2 === 0 ? `${devNum}.` : `${devNum}...`;
+      footerText += ` · Premier écart : ${devPrefix} ${deviationSan}`;
+    }
+    footerEl.textContent = footerText;
+
+    let idx = 0;
+
+    function renderStep() {
+      const pos = positions[idx];
+      BoardRenderer.render(svg, pos.fen, pos.move);
+      prevBtn.disabled = idx === 0;
+      nextBtn.disabled = idx === positions.length - 1;
+
+      if (idx === 0) {
+        labelEl.textContent = 'Position initiale';
+        explEl.textContent = 'Utilisez les flèches pour parcourir les coups de l\'ouverture.';
+      } else {
+        const moveNum = Math.ceil(idx / 2);
+        const prefix = idx % 2 === 1 ? `${moveNum}.` : `${moveNum}...`;
+        labelEl.textContent = `${prefix} ${pos.san}`;
+        explEl.textContent = explainMove(pos.san, pos.color, moveNum, pos.fen);
+      }
+    }
+
+    function cleanup() {
+      modal.classList.remove('visible');
+      document.removeEventListener('keydown', onKey);
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') cleanup();
+      if (e.key === 'ArrowLeft' && idx > 0) { idx--; renderStep(); }
+      if (e.key === 'ArrowRight' && idx < positions.length - 1) { idx++; renderStep(); }
+    }
+
+    prevBtn.onclick = () => { if (idx > 0) { idx--; renderStep(); } };
+    nextBtn.onclick = () => { if (idx < positions.length - 1) { idx++; renderStep(); } };
+    $('#opening-modal-close').onclick = cleanup;
+    modal.onclick = e => { if (e.target === modal) cleanup(); };
+    document.addEventListener('keydown', onKey);
+
+    idx = 0;
+    modal.classList.add('visible');
+    renderStep();
   }
 
   function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening) {

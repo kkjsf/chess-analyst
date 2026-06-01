@@ -250,7 +250,7 @@ const Openings = (() => {
       for (let i = 0; i < tokens.length; i++) {
         if (sans[i] !== tokens[i]) { match = false; break; }
       }
-      if (match) return { eco, name, moves: tokens.length };
+      if (match) return { eco, name, moves: tokens.length, line };
     }
     if (sans.length > 0) {
       if (sans[0] === 'e4') return { eco: 'B00', name: 'Ouverture Pion Roi', moves: 1 };
