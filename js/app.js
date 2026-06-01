@@ -1,7 +1,8 @@
 const App = (() => {
   const STORAGE_KEY = 'chess-analyst-games';
   const CACHE_KEY = 'chess-analyst-cache';
-  const MAX_CACHED = 5;
+  const MAX_CACHED = 15;
+  const STATS_KEY = 'chess-analyst-stats';
   let currentAnalysis = null;
   let currentIndex = 0;
   let currentHeader = null;
@@ -134,6 +135,78 @@ const App = (() => {
 
   function isGameCached(header, moveCount) {
     return !!getCachedAnalysis(cacheKey(header, moveCount));
+  }
+
+  function saveGameStats(key, analysis, summary, header, user) {
+    try {
+      const stats = JSON.parse(localStorage.getItem(STATS_KEY) || '[]');
+      const existing = stats.findIndex(s => s.key === key);
+      if (existing >= 0) stats.splice(existing, 1);
+      const side = user || 'w';
+      const s = summary.stats;
+      const us = side === 'w' ? s.w : s.b;
+      const result = header.Result || '*';
+      const tc = header.TimeControl || '';
+
+      let phaseErrors = { opening: 0, middle: 0, endgame: 0 };
+      let phaseAccuracy = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
+      for (let i = 0; i < analysis.length; i++) {
+        const r = analysis[i];
+        if (!r.move || r.move.color !== side) continue;
+        const phase = i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame';
+        if (r.type === 'blunder' || r.type === 'mistake') phaseErrors[phase]++;
+        const loss = r.winPctLoss || 0;
+        phaseAccuracy[phase].total += Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
+        phaseAccuracy[phase].count++;
+      }
+
+      stats.unshift({
+        key,
+        opening: summary.opening?.name || null,
+        eco: summary.opening?.eco || null,
+        accuracy: us.accuracy,
+        blunders: us.blunders,
+        mistakes: us.mistakes,
+        inaccuracies: us.inaccuracies,
+        result,
+        side,
+        timeControl: tc,
+        phaseErrors,
+        phaseAccuracy,
+        white: header.White || '?',
+        black: header.Black || '?',
+        date: header.Date || '',
+        savedAt: Date.now()
+      });
+      if (stats.length > 30) stats.length = 30;
+      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    } catch (_) {}
+  }
+
+  function classifyTimeControl(tc) {
+    if (!tc) return null;
+    if (tc.includes('86400') || tc.includes('172800')) return 'daily';
+    if (tc.includes('+') || tc.includes('/')) {
+      const secs = parseInt(tc);
+      if (isNaN(secs)) return null;
+      if (secs < 180) return 'bullet';
+      if (secs <= 600) return 'blitz';
+      if (secs <= 1800) return 'rapid';
+      return 'classical';
+    }
+    const secs = parseInt(tc);
+    if (!isNaN(secs)) {
+      if (secs < 180) return 'bullet';
+      if (secs <= 600) return 'blitz';
+      if (secs <= 1800) return 'rapid';
+      return 'classical';
+    }
+    return null;
+  }
+
+  function getTimeControlLabel(tc) {
+    const labels = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', classical: 'Classique', daily: 'Journalier' };
+    return labels[tc] || tc;
   }
 
   function extractChessComUrl(text) {
@@ -303,6 +376,7 @@ const App = (() => {
     summary.engineUsed = engineUsed;
 
     saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
+    saveGameStats(ck, analysis, summary, header, detectUser(header));
     saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
     showAnalysis(header, moves, analysis, summary);
@@ -1916,22 +1990,27 @@ const App = (() => {
         }
       }
 
-      const wPlan = describePlan(wActions, wMoveCount, phase.name, 'w', user);
-      const bPlan = describePlan(bActions, bMoveCount, phase.name, 'b', user);
+      const phaseFen = phase.to > 0 && analysis[phase.from] ? analysis[phase.from].fen : null;
+      const wPlan = describePlan(wActions, wMoveCount, phase.name, 'w', user, phaseFen);
+      const bPlan = describePlan(bActions, bMoveCount, phase.name, 'b', user, phaseFen);
 
-      if (!wPlan && !bPlan) continue;
+      if (!wPlan.text && !bPlan.text) continue;
       hasContent = true;
 
       const moveRange = `coups ${Math.floor(phase.from / 2) + 1}–${Math.floor((phase.to - 1) / 2) + 1}`;
       html += `<div class="plan-phase">`;
       html += `<div class="plan-phase-header"><span class="plan-phase-icon">${phase.icon}</span><span class="plan-phase-title">${phase.name}</span><span class="plan-phase-moves">${moveRange}</span></div>`;
-      if (wPlan) {
+      if (wPlan.text) {
         const label = user === 'w' ? 'Vous' : (user === 'b' ? 'Adversaire' : 'Blancs');
-        html += `<div class="plan-side"><span class="plan-side-icon">⚪</span><span class="plan-side-text"><b>${label}</b> — ${wPlan}</span></div>`;
+        html += `<div class="plan-side"><span class="plan-side-icon">⚪</span><span class="plan-side-text"><b>${label}</b> — ${wPlan.text}`;
+        if (wPlan.coaching) html += `<br><span class="plan-coaching">💡 ${wPlan.coaching}</span>`;
+        html += `</span></div>`;
       }
-      if (bPlan) {
+      if (bPlan.text) {
         const label = user === 'b' ? 'Vous' : (user === 'w' ? 'Adversaire' : 'Noirs');
-        html += `<div class="plan-side"><span class="plan-side-icon">⚫</span><span class="plan-side-text"><b>${label}</b> — ${bPlan}</span></div>`;
+        html += `<div class="plan-side"><span class="plan-side-icon">⚫</span><span class="plan-side-text"><b>${label}</b> — ${bPlan.text}`;
+        if (bPlan.coaching) html += `<br><span class="plan-coaching">💡 ${bPlan.coaching}</span>`;
+        html += `</span></div>`;
       }
       html += '</div>';
     }
@@ -1941,17 +2020,106 @@ const App = (() => {
     card.hidden = false;
   }
 
-  function describePlan(actions, moveCount, phaseName, color, user) {
+  function analyzeStructure(fen) {
+    if (!fen) return {};
+    const board = fen.split(' ')[0];
+    const rows = board.split('/');
+    const pawns = { w: [], b: [] };
+    const pieces = { w: { n: 0, b: 0, r: 0, q: 0 }, b: { n: 0, b: 0, r: 0, q: 0 } };
+    let wKingFile = -1, bKingFile = -1, wKingRank = -1, bKingRank = -1;
+
+    for (let rank = 0; rank < 8; rank++) {
+      let file = 0;
+      for (const ch of rows[rank]) {
+        if (ch >= '1' && ch <= '8') { file += +ch; continue; }
+        const actualRank = 8 - rank;
+        if (ch === 'P') pawns.w.push({ file, rank: actualRank });
+        else if (ch === 'p') pawns.b.push({ file, rank: actualRank });
+        else if (ch === 'K') { wKingFile = file; wKingRank = actualRank; }
+        else if (ch === 'k') { bKingFile = file; bKingRank = actualRank; }
+        else if (ch === ch.toUpperCase() && 'NBRQ'.includes(ch)) pieces.w[ch.toLowerCase()]++;
+        else if (ch === ch.toLowerCase() && 'nbrq'.includes(ch)) pieces.b[ch]++;
+        file++;
+      }
+    }
+
+    const result = {};
+    for (const side of ['w', 'b']) {
+      const sp = pawns[side];
+      const fileCounts = {};
+      for (const p of sp) { fileCounts[p.file] = (fileCounts[p.file] || 0) + 1; }
+
+      const doubled = Object.values(fileCounts).filter(c => c > 1).length;
+      const files = sp.map(p => p.file);
+      let isolated = 0;
+      for (const f of Object.keys(fileCounts).map(Number)) {
+        if (!files.includes(f - 1) && !files.includes(f + 1)) isolated++;
+      }
+      const passed = sp.filter(p => {
+        const opp = pawns[side === 'w' ? 'b' : 'w'];
+        return !opp.some(op => Math.abs(op.file - p.file) <= 1 && (side === 'w' ? op.rank > p.rank : op.rank < p.rank));
+      }).length;
+
+      const hasBishopPair = pieces[side].b >= 2;
+      const kf = side === 'w' ? wKingFile : bKingFile;
+      const kr = side === 'w' ? wKingRank : bKingRank;
+      const castled = side === 'w' ? (kf >= 5 && kr === 1) || (kf <= 2 && kr === 1) : (kf >= 5 && kr === 8) || (kf <= 2 && kr === 8);
+      const kingCentral = kf >= 2 && kf <= 5 && (side === 'w' ? kr >= 3 : kr <= 6);
+
+      result[side] = { doubled, isolated, passed, hasBishopPair, castled, kingCentral, pieces: pieces[side] };
+    }
+
+    const centerPawns = { w: pawns.w.filter(p => p.file >= 3 && p.file <= 4).length, b: pawns.b.filter(p => p.file >= 3 && p.file <= 4).length };
+    const lockedCenter = pawns.w.some(p => p.file >= 3 && p.file <= 4 && pawns.b.some(bp => bp.file === p.file && Math.abs(bp.rank - p.rank) === 1));
+    result.centerType = lockedCenter ? 'closed' : (centerPawns.w + centerPawns.b <= 1) ? 'open' : 'semi-open';
+
+    return result;
+  }
+
+  function getStructureCoaching(structure, color, phaseName) {
+    const s = structure[color];
+    const opp = structure[color === 'w' ? 'b' : 'w'];
+    if (!s) return null;
+    const tips = [];
+
+    if (structure.centerType === 'closed' && phaseName !== 'Ouverture') {
+      tips.push('Centre fermé → manœuvrez sur les ailes, les cavaliers sont rois');
+    }
+    if (structure.centerType === 'open' && phaseName !== 'Ouverture') {
+      tips.push('Centre ouvert → les fous et les tours dominent, contrôlez les colonnes');
+    }
+    if (s.isolated > 0 && phaseName !== 'Ouverture') {
+      tips.push(`Pion${s.isolated > 1 ? 's' : ''} isolé${s.isolated > 1 ? 's' : ''} → compensez par l'activité des pièces`);
+    }
+    if (s.doubled > 0 && phaseName !== 'Ouverture') {
+      tips.push('Pions doublés → évitez les finales de pions pures');
+    }
+    if (s.passed > 0 && phaseName === 'Finale') {
+      tips.push(`Pion passé → poussez-le ! Soutenez avec le roi`);
+    }
+    if (s.hasBishopPair && phaseName !== 'Ouverture') {
+      tips.push('Paire de fous → ouvrez la position pour maximiser leur portée');
+    }
+    if (s.kingCentral && phaseName === 'Finale') {
+      tips.push('Roi actif au centre — excellent en finale');
+    }
+    if (!opp.castled && phaseName === 'Milieu de partie') {
+      tips.push('Roi adverse non roqué → ouvrez le centre pour l\'attaquer');
+    }
+
+    return tips.length > 0 ? tips[0] : null;
+  }
+
+  function describePlan(actions, moveCount, phaseName, color, user, phaseFen) {
     const parts = [];
     const density = (key) => moveCount > 0 ? actions[key] / moveCount : 0;
     const sorted = Object.entries(actions)
       .filter(([k, v]) => typeof v === 'number' && v > 0)
       .sort((a, b) => b[1] - a[1]);
 
-    if (sorted.length === 0 && actions.pawnBreaks.length === 0) return '';
+    if (sorted.length === 0 && actions.pawnBreaks.length === 0) return { text: '', coaching: null };
 
     const top = sorted.slice(0, 3).map(([k]) => k);
-    const isUser = color === user;
 
     if (phaseName === 'Ouverture') {
       if (top.includes('development')) parts.push('développement des pièces');
@@ -1996,8 +2164,12 @@ const App = (() => {
       parts.push('avantage d\'espace');
     }
 
-    if (parts.length === 0) return '';
-    return parts.join(', ') + '.';
+    if (parts.length === 0) return { text: '', coaching: null };
+
+    const structure = phaseFen ? analyzeStructure(phaseFen) : null;
+    const coaching = structure ? getStructureCoaching(structure, color, phaseName) : null;
+
+    return { text: parts.join(', ') + '.', coaching };
   }
 
   function buildTimeChart(analysis) {
@@ -2242,6 +2414,9 @@ const App = (() => {
     });
 
     buildPatterns();
+    buildRepertoireStats();
+    buildWeaknessTracker();
+    buildTimeControlComparison();
   }
 
   function buildPatterns() {
@@ -2398,6 +2573,181 @@ const App = (() => {
       section.hidden = false;
       $('#patterns-list').innerHTML = html;
     } catch (_) { section.hidden = true; }
+  }
+
+  function buildRepertoireStats() {
+    const card = $('#repertoire-card');
+    if (!card) return;
+    try {
+      const stats = JSON.parse(localStorage.getItem(STATS_KEY) || '[]');
+      if (stats.length < 2) { card.hidden = true; return; }
+
+      const openingMap = {};
+      for (const g of stats) {
+        const name = g.opening || 'Inconnu';
+        if (!openingMap[name]) openingMap[name] = { eco: g.eco, games: 0, wins: 0, draws: 0, losses: 0, totalAcc: 0 };
+        openingMap[name].games++;
+        openingMap[name].totalAcc += g.accuracy || 0;
+        const r = g.result;
+        const side = g.side;
+        const won = (side === 'w' && r === '1-0') || (side === 'b' && r === '0-1');
+        const lost = (side === 'w' && r === '0-1') || (side === 'b' && r === '1-0');
+        if (won) openingMap[name].wins++;
+        else if (lost) openingMap[name].losses++;
+        else if (r === '1/2-1/2') openingMap[name].draws++;
+      }
+
+      const openings = Object.entries(openingMap).sort((a, b) => b[1].games - a[1].games);
+      if (openings.length === 0) { card.hidden = true; return; }
+
+      let weakest = null, worstScore = Infinity;
+      for (const [name, o] of openings) {
+        if (o.games < 2) continue;
+        const score = o.wins / o.games;
+        if (score < worstScore) { worstScore = score; weakest = name; }
+      }
+
+      let html = '<div class="repertoire-grid">';
+      for (const [name, o] of openings.slice(0, 5)) {
+        const avgAcc = Math.round(o.totalAcc / o.games);
+        const wr = Math.round(100 * o.wins / o.games);
+        const isWeak = name === weakest;
+        html += `<div class="repertoire-row${isWeak ? ' weak' : ''}">`;
+        html += `<span class="repertoire-name">${name}${o.eco ? ` <span class="repertoire-eco">${o.eco}</span>` : ''}</span>`;
+        html += `<span class="repertoire-games">${o.games} partie${o.games > 1 ? 's' : ''}</span>`;
+        html += `<span class="repertoire-record">${o.wins}V ${o.draws}N ${o.losses}D</span>`;
+        html += `<span class="repertoire-acc">${avgAcc}%</span>`;
+        html += `<div class="repertoire-bar"><div class="repertoire-bar-fill" style="width:${wr}%"></div></div>`;
+        html += `</div>`;
+      }
+      html += '</div>';
+
+      if (weakest && openingMap[weakest].games >= 2) {
+        const w = openingMap[weakest];
+        const wr = Math.round(100 * w.wins / w.games);
+        html += `<div class="repertoire-advice">⚠️ <b>${weakest}</b> — ${wr}% de victoires sur ${w.games} parties. Travaillez cette ouverture ou changez de répertoire.</div>`;
+      }
+
+      card.querySelector('.repertoire-content').innerHTML = html;
+      card.hidden = false;
+    } catch (_) { card.hidden = true; }
+  }
+
+  function buildWeaknessTracker() {
+    const card = $('#weakness-card');
+    if (!card) return;
+    try {
+      const stats = JSON.parse(localStorage.getItem(STATS_KEY) || '[]');
+      if (stats.length < 3) { card.hidden = true; return; }
+
+      const weaknesses = [];
+
+      const phaseVuln = { opening: 0, middle: 0, endgame: 0 };
+      const phaseTotals = { opening: 0, middle: 0, endgame: 0 };
+      for (const g of stats) {
+        for (const phase of ['opening', 'middle', 'endgame']) {
+          const errors = g.phaseErrors?.[phase] || 0;
+          phaseVuln[phase] += errors;
+          const pa = g.phaseAccuracy?.[phase];
+          if (pa && pa.count > 0) phaseTotals[phase]++;
+        }
+      }
+
+      const maxPhaseLabel = { opening: 'en ouverture', middle: 'en milieu de partie', endgame: 'en finale' };
+      const totalErrors = phaseVuln.opening + phaseVuln.middle + phaseVuln.endgame;
+      if (totalErrors > 0) {
+        for (const phase of ['opening', 'middle', 'endgame']) {
+          const pct = phaseVuln[phase] / totalErrors;
+          if (pct >= 0.5 && phaseTotals[phase] >= 3) {
+            const advice = phase === 'opening' ? 'Révisez vos ouvertures : apprenez les 10 premiers coups de votre répertoire.'
+              : phase === 'middle' ? 'Travaillez la tactique : puzzles quotidiens pour repérer les motifs.'
+              : 'Étudiez les finales de base : roi+pion, tours, opposition.';
+            weaknesses.push({ text: `${Math.round(pct * 100)}% de vos erreurs sont ${maxPhaseLabel[phase]}`, advice, severity: pct });
+          }
+        }
+      }
+
+      const avgBlunders = stats.reduce((s, g) => s + (g.blunders || 0), 0) / stats.length;
+      if (avgBlunders >= 2) {
+        weaknesses.push({ text: `Moyenne de ${avgBlunders.toFixed(1)} gaffes par partie`, advice: 'Prenez plus de temps avant de jouer — vérifiez les menaces adverses.', severity: avgBlunders / 5 });
+      }
+
+      const accs = stats.map(g => g.accuracy).filter(a => a != null);
+      if (accs.length >= 3) {
+        const recent3 = accs.slice(0, 3);
+        const older = accs.slice(3);
+        if (older.length >= 2) {
+          const recentAvg = recent3.reduce((a, b) => a + b, 0) / recent3.length;
+          const olderAvg = older.reduce((a, b) => a + b, 0) / older.length;
+          if (recentAvg < olderAvg - 5) {
+            weaknesses.push({ text: `Précision en baisse : ${Math.round(recentAvg)}% récemment vs ${Math.round(olderAvg)}% avant`, advice: 'Fatigue ou tilt ? Faites des pauses entre les parties.', severity: 0.5 });
+          }
+        }
+      }
+
+      if (weaknesses.length === 0) { card.hidden = true; return; }
+
+      weaknesses.sort((a, b) => b.severity - a.severity);
+      let html = '';
+      for (const w of weaknesses.slice(0, 3)) {
+        html += `<div class="weakness-item"><div class="weakness-text">${w.text}</div><div class="weakness-advice">💡 ${w.advice}</div></div>`;
+      }
+      card.querySelector('.weakness-content').innerHTML = html;
+      card.hidden = false;
+    } catch (_) { card.hidden = true; }
+  }
+
+  function buildTimeControlComparison() {
+    const card = $('#tc-comparison-card');
+    if (!card) return;
+    try {
+      const stats = JSON.parse(localStorage.getItem(STATS_KEY) || '[]');
+      const tcMap = {};
+      for (const g of stats) {
+        const tc = classifyTimeControl(g.timeControl);
+        if (!tc) continue;
+        if (!tcMap[tc]) tcMap[tc] = { games: 0, totalAcc: 0, totalBlunders: 0, totalMistakes: 0 };
+        tcMap[tc].games++;
+        tcMap[tc].totalAcc += g.accuracy || 0;
+        tcMap[tc].totalBlunders += g.blunders || 0;
+        tcMap[tc].totalMistakes += g.mistakes || 0;
+      }
+
+      const tcs = Object.entries(tcMap).filter(([_, v]) => v.games >= 1).sort((a, b) => b[1].games - a[1].games);
+      if (tcs.length < 2) { card.hidden = true; return; }
+
+      const maxAcc = Math.max(...tcs.map(([_, v]) => Math.round(v.totalAcc / v.games)));
+
+      let html = '<div class="tc-grid">';
+      for (const [tc, v] of tcs) {
+        const avg = Math.round(v.totalAcc / v.games);
+        const avgBlunders = (v.totalBlunders / v.games).toFixed(1);
+        const barPct = maxAcc > 0 ? Math.round(100 * avg / maxAcc) : 0;
+        html += `<div class="tc-row">`;
+        html += `<span class="tc-label">${getTimeControlLabel(tc)}</span>`;
+        html += `<div class="tc-bar-bg"><div class="tc-bar-fill" style="width:${barPct}%"></div></div>`;
+        html += `<span class="tc-acc">${avg}%</span>`;
+        html += `<span class="tc-detail">${v.games} partie${v.games > 1 ? 's' : ''} · ${avgBlunders} gaffes/p</span>`;
+        html += `</div>`;
+      }
+      html += '</div>';
+
+      if (tcs.length >= 2) {
+        const best = tcs.reduce((a, b) => (a[1].totalAcc / a[1].games) > (b[1].totalAcc / b[1].games) ? a : b);
+        const worst = tcs.reduce((a, b) => (a[1].totalAcc / a[1].games) < (b[1].totalAcc / b[1].games) ? a : b);
+        if (best[0] !== worst[0]) {
+          const bestAcc = Math.round(best[1].totalAcc / best[1].games);
+          const worstAcc = Math.round(worst[1].totalAcc / worst[1].games);
+          const blunderRatio = worst[1].games > 0 ? (worst[1].totalBlunders / worst[1].games) : 0;
+          const bestBlunderRatio = best[1].games > 0 ? (best[1].totalBlunders / best[1].games) : 0;
+          const multiplier = bestBlunderRatio > 0 ? (blunderRatio / bestBlunderRatio).toFixed(1) : '?';
+          html += `<div class="tc-insight">${getTimeControlLabel(best[0])} ${bestAcc}% vs ${getTimeControlLabel(worst[0])} ${worstAcc}% — ${multiplier}× plus de gaffes en vitesse</div>`;
+        }
+      }
+
+      card.querySelector('.tc-content').innerHTML = html;
+      card.hidden = false;
+    } catch (_) { card.hidden = true; }
   }
 
   function formatDate(dateStr) {
