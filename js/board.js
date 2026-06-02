@@ -1,15 +1,11 @@
 const BoardRenderer = (() => {
   const SQ = 45;
-  const PIECES_UNI = {
-    p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚',
-    P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔'
-  };
+  const PIECE_CHAR = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
   const FILES = 'abcdefgh';
-  const LIGHT = '#ebd7b2';
-  const DARK = '#ae8a68';
-  const HL_FROM = '#cdd26a';
-  const HL_TO = '#aaa23a';
-  const BORDER_COLOR = '#6b5339';
+  const LIGHT = '#eeeed2';
+  const DARK = '#769656';
+  const HL_FROM = '#f6f669';
+  const HL_TO = '#baca2b';
 
   let flipped = false;
 
@@ -50,12 +46,6 @@ const BoardRenderer = (() => {
       hlTo = squareToCoords(lastMove.to);
     }
 
-    html += `<defs>
-      <filter id="piece-shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000" flood-opacity="0.45"/>
-      </filter>
-    </defs>`;
-
     const pieces = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
@@ -86,7 +76,7 @@ const BoardRenderer = (() => {
 
         const piece = board[boardRow][boardCol];
         if (piece) {
-          pieces.push({ piece, x: x + SQ / 2, y: y + SQ / 2 + 14, sq: FILES[boardCol] + (8 - boardRow) });
+          pieces.push({ piece, x: x + SQ / 2, y: y + SQ / 2 + 13, sq: FILES[boardCol] + (8 - boardRow) });
         }
       }
     }
@@ -94,10 +84,11 @@ const BoardRenderer = (() => {
   }
 
   function renderPieceHtml(p) {
-    const isWhitePiece = p.piece === p.piece.toUpperCase() && p.piece !== p.piece.toLowerCase();
-    const stroke = isWhitePiece ? 'rgba(0,0,0,0.3)' : 'none';
-    const strokeW = isWhitePiece ? 0.5 : 0;
-    return `<text x="${p.x}" y="${p.y}" text-anchor="middle" font-size="36" filter="url(#piece-shadow)" stroke="${stroke}" stroke-width="${strokeW}" style="pointer-events:none">${PIECES_UNI[p.piece]}</text>`;
+    const isWhite = p.piece === p.piece.toUpperCase() && p.piece !== p.piece.toLowerCase();
+    const ch = PIECE_CHAR[p.piece.toLowerCase()];
+    const fill = isWhite ? '#fff' : '#000';
+    const extra = isWhite ? ' stroke="#000" stroke-width="0.8" paint-order="stroke"' : '';
+    return `<text x="${p.x}" y="${p.y}" text-anchor="middle" font-size="40" fill="${fill}"${extra} style="pointer-events:none">${ch}</text>`;
   }
 
   function render(svgEl, fen, lastMove) {
@@ -111,14 +102,13 @@ const BoardRenderer = (() => {
     if (!prevFen || !lastMove || duration <= 0) { render(svgEl, fen, lastMove); return; }
 
     const { boardHtml, pieces: newPieces } = buildBoard(fen, lastMove);
-    const prevBoard = fenToBoard(prevFen);
 
     const fromCoords = squareToCoords(lastMove.from);
     const toCoords = squareToCoords(lastMove.to);
     const fromX = fromCoords.col * SQ + SQ / 2;
-    const fromY = fromCoords.row * SQ + SQ / 2 + 14;
+    const fromY = fromCoords.row * SQ + SQ / 2 + 13;
     const toX = toCoords.col * SQ + SQ / 2;
-    const toY = toCoords.row * SQ + SQ / 2 + 14;
+    const toY = toCoords.row * SQ + SQ / 2 + 13;
 
     let movingPiece = null;
     for (const p of newPieces) {
@@ -133,13 +123,14 @@ const BoardRenderer = (() => {
     }
 
     const isWhite = movingPiece.piece === movingPiece.piece.toUpperCase() && movingPiece.piece !== movingPiece.piece.toLowerCase();
-    const stroke = isWhite ? 'rgba(0,0,0,0.3)' : 'none';
-    const strokeW = isWhite ? 0.5 : 0;
+    const ch = PIECE_CHAR[movingPiece.piece.toLowerCase()];
+    const fill = isWhite ? '#fff' : '#000';
+    const extra = isWhite ? ' stroke="#000" stroke-width="0.8" paint-order="stroke"' : '';
     const ms = duration;
-    html += `<text x="${fromX}" y="${fromY}" text-anchor="middle" font-size="36" filter="url(#piece-shadow)" stroke="${stroke}" stroke-width="${strokeW}" style="pointer-events:none">
+    html += `<text x="${fromX}" y="${fromY}" text-anchor="middle" font-size="40" fill="${fill}"${extra} style="pointer-events:none">
       <animate attributeName="x" from="${fromX}" to="${toX}" dur="${ms}ms" fill="freeze"/>
       <animate attributeName="y" from="${fromY}" to="${toY}" dur="${ms}ms" fill="freeze"/>
-      ${PIECES_UNI[movingPiece.piece]}</text>`;
+      ${ch}</text>`;
 
     svgEl.innerHTML = html;
   }
@@ -189,17 +180,17 @@ const BoardRenderer = (() => {
     const boardPart = fen.split(' ')[0];
     const current = {};
     for (const ch of boardPart) {
-      if (PIECES_UNI[ch]) current[ch] = (current[ch] || 0) + 1;
+      if ('pnbrqkPNBRQK'.includes(ch)) current[ch] = (current[ch] || 0) + 1;
     }
     const whiteCaptures = [];
     const blackCaptures = [];
     for (const p of ['q', 'r', 'b', 'n', 'p']) {
       const missing = (initial[p] || 0) - (current[p] || 0);
-      for (let i = 0; i < missing; i++) whiteCaptures.push(PIECES_UNI[p]);
+      for (let i = 0; i < missing; i++) whiteCaptures.push(PIECE_CHAR[p]);
     }
     for (const p of ['Q', 'R', 'B', 'N', 'P']) {
       const missing = (initial[p] || 0) - (current[p] || 0);
-      for (let i = 0; i < missing; i++) blackCaptures.push(PIECES_UNI[p]);
+      for (let i = 0; i < missing; i++) blackCaptures.push(PIECE_CHAR[p.toLowerCase()]);
     }
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
