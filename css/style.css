@@ -1223,6 +1223,12 @@ html, body {
   color: var(--text-dim);
 }
 .concept sup { font-size: 9px; }
+.opening-level {
+  margin: 0 0 6px !important;
+  font-size: 11.5px !important;
+  font-weight: 600;
+  color: var(--accent) !important;
+}
 
 .concept-modal-overlay {
   position: fixed;
