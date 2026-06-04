@@ -1228,7 +1228,19 @@ html, body {
   font-size: 11.5px !important;
   font-weight: 600;
   color: var(--accent) !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.opening-side {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.3px;
+}
+.opening-side-w { background: #e8e8ea; color: #1a1a2e; }
+.opening-side-b { background: #2a2a3e; color: #e8e8ea; border: 1px solid #4a4a60; }
 
 .concept-modal-overlay {
   position: fixed;

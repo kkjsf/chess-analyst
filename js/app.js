@@ -2938,84 +2938,84 @@ const App = (() => {
 
   const OPENINGS = [
     // ── Open games: 1.e4 e5 ── the most instructive starting point for beginners
-    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Italienne', eco: 'C50', level: '👍 Idéale pour débuter',
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Italienne', en: 'Italian Game', eco: 'C50', side: 'w', level: '👍 Idéale pour débuter',
       line: 'e4 e5 Nf3 Nc6 Bc4',
       desc: `Le fou file en <b>c4</b> et vise tout de suite le point faible <b>f7</b>. Développement naturel, roque rapide, idées tactiques claires : c'est l'ouverture parfaite pour apprendre les principes (centre, développement, sécurité du roi).` },
-    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Giuoco Pianissimo', eco: 'C50', level: '👍 Calme et solide',
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Giuoco Pianissimo', en: 'Giuoco Pianissimo', eco: 'C50', side: 'w', level: '👍 Calme et solide',
       line: 'e4 e5 Nf3 Nc6 Bc4 Bc5 d3',
       desc: `La version tranquille de l'Italienne : on soutient le centre avec <b>d3</b> au lieu de l'ouvrir. Jeu de manœuvre lent où l'on construit patiemment son attaque. Très populaire aujourd'hui, même au plus haut niveau.` },
-    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Espagnole (Ruy Lopez)', eco: 'C60', level: '⭐ La référence',
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Espagnole (Ruy Lopez)', en: 'Ruy Lopez', eco: 'C60', side: 'w', level: '⭐ La référence',
       line: 'e4 e5 Nf3 Nc6 Bb5',
       desc: `Le fou cloue le cavalier <b>c6</b> qui défend le pion e5. L'une des ouvertures les plus étudiées de l'histoire : pression durable et plans stratégiques riches. Exigeante mais formatrice une fois les bases acquises.` },
-    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Écossaise', eco: 'C45', level: '👍 Directe',
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Écossaise', en: 'Scotch Game', eco: 'C45', side: 'w', level: '👍 Directe',
       line: 'e4 e5 Nf3 Nc6 d4 exd4 Nxd4',
       desc: `On ouvre le centre immédiatement avec <b>d4</b>. Le jeu devient clair et tactique, sans longue théorie à mémoriser — un excellent choix pour jouer activement dès le début.` },
-    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Gambit du Roi', eco: 'C30', level: '⚔️ Agressif',
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Gambit du Roi', en: "King's Gambit", eco: 'C30', side: 'w', level: '⚔️ Agressif',
       line: 'e4 e5 f4',
       desc: `Les Blancs <b>sacrifient un pion</b> (f4) pour ouvrir des lignes et lancer une attaque fulgurante. Romantique et tranchant, mais risqué : à essayer pour le plaisir de l'attaque, pas pour la sécurité.` },
-    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Défense Petrov (Russe)', eco: 'C42', level: '🛡️ Solide pour les Noirs',
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Défense Petrov (Russe)', en: "Petrov's Defence", eco: 'C42', side: 'b', level: '🛡️ Solide pour les Noirs',
       line: 'e4 e5 Nf3 Nf6',
       desc: `Au lieu de défendre e5, les Noirs <b>contre-attaquent</b> aussitôt e4. Réputation de solidité et de symétrie : une défense fiable, parfois aride, qui vise l'égalité tranquille.` },
 
     // ── Semi-open games: 1.e4 and Black replies asymmetrically ──
-    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Sicilienne', eco: 'B20', level: '⚔️ La plus combative',
+    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Sicilienne', en: 'Sicilian Defence', eco: 'B20', side: 'b', level: '⚔️ La plus combative',
       line: 'e4 c5',
       desc: `La réponse la plus populaire à 1.e4. Les Noirs refusent la symétrie et jouent <b>c5</b> pour un jeu déséquilibré et plein d'ambition. Théorie immense : passionnante, mais elle demande du travail.` },
-    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Française', eco: 'C00', level: '👍 Solide et structurée',
+    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Française', en: 'French Defence', eco: 'C00', side: 'b', level: '👍 Solide et structurée',
       line: 'e4 e6 d4 d5',
       desc: `Les Noirs préparent <b>d5</b> pour défier le centre blanc. Positions fermées avec un plan clair (attaque à l'aile dame). Seul bémol : le fou de cases blanches reste souvent enfermé.` },
-    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Caro-Kann', eco: 'B10', level: '👍 Sûre et saine',
+    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Caro-Kann', en: 'Caro-Kann Defence', eco: 'B10', side: 'b', level: '👍 Sûre et saine',
       line: 'e4 c6 d4 d5',
       desc: `Comme la Française, on attaque le centre par <b>d5</b> — mais en gardant le fou de cases blanches actif (c6 au lieu de e6). Réputée très solide : un excellent choix pour qui aime les positions sans risque.` },
-    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Scandinave', eco: 'B01', level: '👍 Facile à apprendre',
+    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Scandinave', en: 'Scandinavian Defence', eco: 'B01', side: 'b', level: '👍 Facile à apprendre',
       line: 'e4 d5 exd5 Qxd5',
       desc: `Les Noirs prennent <b>d5</b> dès le 1<sup>er</sup> coup. Très peu de théorie, un plan simple et répétable : idéale pour débuter avec les Noirs sans rien mémoriser.` },
-    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Pirc / Moderne', eco: 'B07', level: '🛡️ Hypermoderne',
+    { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Pirc / Moderne', en: 'Pirc / Modern Defence', eco: 'B07', side: 'b', level: '🛡️ Hypermoderne',
       line: 'e4 d6 d4 Nf6 Nc3 g6',
       desc: `Les Noirs <b>cèdent le centre</b> volontairement, fianchettent leur fou en g7 et attaqueront ce centre plus tard. Souple et combative, mais demande de bien comprendre les plans.` },
 
     // ── Closed games: 1.d4 d5 ──
-    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Gambit Dame refusé', eco: 'D30', level: '⭐ Classique et fiable',
+    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Gambit Dame refusé', en: "Queen's Gambit Declined", eco: 'D30', side: 'w', level: '⭐ Classique et fiable',
       line: 'd4 d5 c4 e6',
       desc: `Les Blancs proposent le pion c4 ; les Noirs le déclinent en soutenant leur centre par <b>e6</b>. L'une des ouvertures les plus solides du répertoire classique, base de la stratégie positionnelle.` },
-    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Gambit Dame accepté', eco: 'D20', level: '👍 Actif',
+    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Gambit Dame accepté', en: "Queen's Gambit Accepted", eco: 'D20', side: 'w', level: '👍 Actif',
       line: 'd4 d5 c4 dxc4',
       desc: `Les Noirs <b>prennent</b> le pion c4 — sans chercher à le garder, mais pour libérer leur jeu et viser une contre-attaque au centre. Le pion sera généralement récupéré par les Blancs.` },
-    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Défense Slave', eco: 'D10', level: '👍 Très solide',
+    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Défense Slave', en: 'Slav Defence', eco: 'D10', side: 'b', level: '👍 Très solide',
       line: 'd4 d5 c4 c6',
       desc: `On soutient d5 par <b>c6</b> (plutôt qu'e6), ce qui garde le fou de cases blanches libre. Robuste et populaire à tous les niveaux : une valeur sûre face à 1.d4.` },
-    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Système de Londres', eco: 'D00', level: '👍 Facile à jouer',
+    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Système de Londres', en: 'London System', eco: 'D00', side: 'w', level: '👍 Facile à jouer',
       line: 'd4 d5 Bf4',
       desc: `Une configuration <b>passe-partout</b> : le fou sort en f4 et les Blancs jouent presque toujours les mêmes coups, quelle que soit la réponse noire. Peu de théorie, idéal pour gagner du temps et jouer sur plan.` },
 
     // ── Indian defenses: 1.d4 Nf6 ──
-    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Est-Indienne', eco: 'E60', level: '⚔️ Contre-attaque',
+    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Est-Indienne', en: "King's Indian Defence", eco: 'E60', side: 'b', level: '⚔️ Contre-attaque',
       line: 'd4 Nf6 c4 g6 Nc3 Bg7',
       desc: `Les Noirs laissent les Blancs occuper le centre, fianchettent en <b>g7</b>, puis frappent par e5 ou c5 avec une attaque sur le roi. Dynamique et tranchante — un grand favori des joueurs d'attaque.` },
-    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Nimzo-Indienne', eco: 'E20', level: '⭐ Stratégique',
+    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Nimzo-Indienne', en: 'Nimzo-Indian Defence', eco: 'E20', side: 'b', level: '⭐ Stratégique',
       line: 'd4 Nf6 c4 e6 Nc3 Bb4',
       desc: `Le fou cloue le cavalier <b>c3</b> pour gêner e4 et infliger des pions doublés. Mélange rare de solidité et d'idées subtiles : l'une des défenses les plus respectées contre 1.d4.` },
-    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Grünfeld', eco: 'D80', level: '⚔️ Hypermoderne',
+    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Grünfeld', en: 'Grünfeld Defence', eco: 'D80', side: 'b', level: '⚔️ Hypermoderne',
       line: 'd4 Nf6 c4 g6 Nc3 d5',
       desc: `Les Noirs laissent les Blancs bâtir un grand centre… pour le <b>démolir</b> ensuite à coups de pièces. Très combative et théorique : spectaculaire mais exigeante.` },
-    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Catalane', eco: 'E01', level: '⭐ Élégante',
+    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Catalane', en: 'Catalan Opening', eco: 'E01', side: 'w', level: '⭐ Élégante',
       line: 'd4 Nf6 c4 e6 g3',
       desc: `Les Blancs combinent le gambit Dame et un <b>fianchetto en g2</b>. Le fou exerce une longue pression sur l'aile dame ; jeu positionnel précis, apprécié des joueurs de fond.` },
-    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Benoni', eco: 'A60', level: '⚔️ Déséquilibrée',
+    { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Benoni', en: 'Benoni Defence', eco: 'A60', side: 'b', level: '⚔️ Déséquilibrée',
       line: 'd4 Nf6 c4 c5 d5 e6',
       desc: `Les Noirs cèdent de l'espace mais obtiennent une <b>majorité de pions à l'aile dame</b> et des colonnes ouvertes pour contre-attaquer. Jeu vif et risqué, à l'opposé des défenses prudentes.` },
 
     // ── Flank openings ──
-    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Anglaise', eco: 'A10', level: '👍 Flexible',
+    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Anglaise', en: 'English Opening', eco: 'A10', side: 'w', level: '👍 Flexible',
       line: 'c4',
       desc: `Les Blancs contrôlent le centre <b>depuis le flanc</b> avec c4, sans s'engager tout de suite. Très souple : la partie peut se transposer dans de nombreuses autres ouvertures.` },
-    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Réti', eco: 'A09', level: '⭐ Positionnelle',
+    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Réti', en: 'Réti Opening', eco: 'A09', side: 'w', level: '⭐ Positionnelle',
       line: 'Nf3 d5 c4',
       desc: `On développe d'abord le cavalier en <b>f3</b>, puis on attaque le centre noir avec c4, souvent combiné à un fianchetto. Approche hypermoderne : contrôler le centre à distance avant de l'occuper.` },
-    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Bird', eco: 'A02', level: '⚔️ Originale',
+    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Bird', en: "Bird's Opening", eco: 'A02', side: 'w', level: '⚔️ Originale',
       line: 'f4',
       desc: `Le pendant « inversé » de la Hollandaise : <b>f4</b> contrôle e5 et prépare un jeu à l'aile roi. Peu jouée, donc déstabilisante, mais elle affaiblit légèrement le roi blanc.` },
-    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Larsen', eco: 'A01', level: '⚔️ Originale',
+    { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Larsen', en: 'Nimzo-Larsen Attack', eco: 'A01', side: 'w', level: '⚔️ Originale',
       line: 'b3',
       desc: `Les Blancs fianchettent immédiatement en <b>b2</b> pour viser la grande diagonale et la case e5. Système simple et dépaysant, qui sort vite l'adversaire de sa théorie.` },
   ];
@@ -3027,9 +3027,12 @@ const App = (() => {
     let lastCat = null, html = '';
     for (const o of OPENINGS) {
       if (o.cat !== lastCat) { html += `<h4 class="concept-cat">${o.cat}</h4>`; lastCat = o.cat; }
+      const en = o.en ? ` <span class="concept-en">${o.en}</span>` : '';
       const eco = o.eco ? ` <span class="concept-en">${o.eco}</span>` : '';
-      const level = o.level ? `<p class="opening-level">${o.level}</p>` : '';
-      html += `<div class="concept"><div class="concept-diagram"><svg class="cd-board" viewBox="0 0 360 360"></svg></div><div class="concept-body"><span class="concept-name">${o.name}${eco}</span>${level}<p>${o.desc}</p></div></div>`;
+      const sideLabel = o.side === 'b' ? 'Noirs' : 'Blancs';
+      const sideTag = `<span class="opening-side opening-side-${o.side}">${sideLabel}</span>`;
+      const level = o.level ? `<p class="opening-level">${sideTag}${o.level}</p>` : '';
+      html += `<div class="concept"><div class="concept-diagram"><svg class="cd-board" viewBox="0 0 360 360"></svg></div><div class="concept-body"><span class="concept-name">${o.name}${en}${eco}</span>${level}<p>${o.desc}</p></div></div>`;
     }
     host.innerHTML = html;
 
@@ -3041,8 +3044,9 @@ const App = (() => {
       o.line.split(' ').forEach(t => game.move(t, { sloppy: true }));
       BoardRenderer.render(cards[i].querySelector('.cd-board'), game.fen());
       const moves = o.line.split(' ').length;
+      const title = o.en && o.en !== o.name ? `${o.name} · ${o.en}` : o.name;
       cards[i].addEventListener('click', () =>
-        openOpeningExplorer({ name: o.name, eco: o.eco, line: o.line, moves }, [], o.level || ''));
+        openOpeningExplorer({ name: title, eco: o.eco, line: o.line, moves }, [], o.level || ''));
     });
     BoardRenderer.setFlipped(prevFlip);
   }
