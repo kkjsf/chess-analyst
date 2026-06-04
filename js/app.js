@@ -855,8 +855,11 @@ const App = (() => {
     return `${side} avancent un pion.`;
   }
 
-  function openOpeningExplorer(opening, analysis, footerOverride) {
+  function openOpeningExplorer(opening, analysis, footerOverride, flip) {
     if (!opening || !opening.line) return;
+
+    const prevFlip = BoardRenderer.isFlipped();
+    if (flip !== undefined) BoardRenderer.setFlipped(flip);
 
     const modal = $('#opening-modal');
     const svg = $('#opening-modal-svg');
@@ -927,6 +930,7 @@ const App = (() => {
     function cleanup() {
       modal.classList.remove('visible');
       document.removeEventListener('keydown', onKey);
+      if (flip !== undefined) BoardRenderer.setFlipped(prevFlip);
     }
 
     function onKey(e) {
@@ -3037,16 +3041,17 @@ const App = (() => {
     host.innerHTML = html;
 
     const prevFlip = BoardRenderer.isFlipped();
-    BoardRenderer.setFlipped(false);
     const cards = host.querySelectorAll('.concept');
     OPENINGS.forEach((o, i) => {
+      const flip = o.side === 'b';
       const game = new Chess();
       o.line.split(' ').forEach(t => game.move(t, { sloppy: true }));
+      BoardRenderer.setFlipped(flip);
       BoardRenderer.render(cards[i].querySelector('.cd-board'), game.fen());
       const moves = o.line.split(' ').length;
       const title = o.en && o.en !== o.name ? `${o.name} · ${o.en}` : o.name;
       cards[i].addEventListener('click', () =>
-        openOpeningExplorer({ name: title, eco: o.eco, line: o.line, moves }, [], o.level || ''));
+        openOpeningExplorer({ name: title, eco: o.eco, line: o.line, moves }, [], o.level || '', flip));
     });
     BoardRenderer.setFlipped(prevFlip);
   }
