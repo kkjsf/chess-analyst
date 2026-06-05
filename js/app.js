@@ -22,10 +22,13 @@ const App = (() => {
     initPanels();
     initConcepts();
     initOpenings();
+    refreshHome();
   }
 
   function bindEvents() {
     $('#btn-analyze').addEventListener('click', onAnalyze);
+    const trainBtn = $('#btn-open-training');
+    if (trainBtn) trainBtn.addEventListener('click', () => Training.show());
     $('#btn-back').addEventListener('click', showImport);
     $('#btn-first').addEventListener('click', () => goTo(0));
     $('#btn-prev').addEventListener('click', () => goTo(currentIndex - 1));
@@ -379,6 +382,7 @@ const App = (() => {
 
     saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
     saveGameStats(ck, analysis, summary, header, detectUser(header));
+    if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, detectUser(header));
     saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
     showAnalysis(header, moves, analysis, summary);
@@ -2428,6 +2432,15 @@ const App = (() => {
     buildRepertoireStats();
     buildWeaknessTracker();
     buildTimeControlComparison();
+    refreshHome();
+  }
+
+  function refreshHome() {
+    const badge = $('#training-due');
+    if (!badge || typeof Training === 'undefined') return;
+    const due = Training.dueCount();
+    badge.textContent = due > 0 ? `${due} à réviser` : 'À jour';
+    badge.classList.toggle('has-due', due > 0);
   }
 
   function buildPatterns() {
@@ -3129,5 +3142,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo };
+  return { goTo, refreshHome };
 })();

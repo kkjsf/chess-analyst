@@ -195,5 +195,25 @@ const BoardRenderer = (() => {
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
 
-  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped };
+  function coordToSquare(svgEl, clientX, clientY) {
+    const rect = svgEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    let col = Math.floor(((clientX - rect.left) / rect.width) * 8);
+    let row = Math.floor(((clientY - rect.top) / rect.height) * 8);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+    const boardRow = flipped ? 7 - row : row;
+    const boardCol = flipped ? 7 - col : col;
+    return FILES[boardCol] + (8 - boardRow);
+  }
+
+  function highlightSquares(overlaySvg, squares, color) {
+    let html = '';
+    for (const sq of squares) {
+      const { row, col } = squareToCoords(sq);
+      html += `<rect x="${col * SQ}" y="${row * SQ}" width="${SQ}" height="${SQ}" fill="none" stroke="${color || '#e2b857'}" stroke-width="4" rx="3"/>`;
+    }
+    overlaySvg.innerHTML = html;
+  }
+
+  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares };
 })();

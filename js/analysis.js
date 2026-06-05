@@ -702,7 +702,8 @@ const Analyzer = (() => {
         type, san: madeMove.san, sanFr, tipFr,
         move: madeMove, fen: newFen,
         materialDiff: newMaterial.diff, arrows,
-        eval: evalForWhite, cpLoss, winPctLoss: winPctLoss || 0, alternatives, fenBefore: positions[i]
+        eval: evalForWhite, cpLoss, winPctLoss: winPctLoss || 0, alternatives, fenBefore: positions[i],
+        bestUci: bestMoveUci, bestSan: bestMoveSanFr
       });
     }
 

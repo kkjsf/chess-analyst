@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=35">
+<link rel="stylesheet" href="css/style.css?v=36">
 </head>
 <body>
 
@@ -273,6 +273,15 @@
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
+  <button class="training-card" id="btn-open-training">
+    <span class="training-icon">🎯</span>
+    <span class="training-text">
+      <span class="training-title">Mode entraînement</span>
+      <span class="training-sub">Rejoue tes erreurs, repère les tactiques</span>
+    </span>
+    <span class="training-due" id="training-due">À jour</span>
+  </button>
+
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
     <div id="recent-list"></div>
@@ -420,12 +429,34 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=35"></script>
-<script src="js/board.js?v=35"></script>
-<script src="js/engine.js?v=35"></script>
-<script src="js/openings.js?v=35"></script>
-<script src="js/analysis.js?v=35"></script>
-<script src="js/app.js?v=35"></script>
+<!-- ═══════ SCREEN 3: TRAINING ═══════ -->
+<div id="screen-training" class="screen training-screen">
+  <div class="top-bar">
+    <button class="back-btn" id="btn-train-back">←</button>
+    <div class="match-info">
+      <div class="players-line">🎯 Entraînement</div>
+      <div class="elo-line">Tes erreurs, transformées en exercices</div>
+    </div>
+  </div>
+  <div class="train-tabs">
+    <button class="train-tab active" data-tab="puzzles">🧩 Puzzles</button>
+    <button class="train-tab" data-tab="threats">👁️ Menaces</button>
+    <button class="train-tab" data-tab="motifs">📊 Motifs</button>
+  </div>
+  <div class="train-body">
+    <div class="train-panel active" id="train-puzzles"></div>
+    <div class="train-panel" id="train-threats"></div>
+    <div class="train-panel" id="train-motifs"></div>
+  </div>
+</div>
+
+<script src="js/chess.min.js?v=36"></script>
+<script src="js/board.js?v=36"></script>
+<script src="js/engine.js?v=36"></script>
+<script src="js/openings.js?v=36"></script>
+<script src="js/analysis.js?v=36"></script>
+<script src="js/training.js?v=36"></script>
+<script src="js/app.js?v=36"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
