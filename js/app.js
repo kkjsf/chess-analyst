@@ -220,11 +220,14 @@ const App = (() => {
   }
 
   function parseChessComUrl(url) {
-    const m = url.match(/chess\.com\/(?:(?:game\/)?(live|daily)|(?:(daily|live)\/game))\/(\d+)/);
+    const m = url.match(/chess\.com\/(?:game\/)?(live|daily|computer|coach|bot)(?:\/game)?\/(\d+)/i);
     if (!m) return null;
-    const type = m[1] || m[2] || 'live';
-    const id = m[3];
-    return { type, id };
+    const type = m[1].toLowerCase();
+    const id = m[2];
+    // Only live & daily games expose a public game record; coach/computer/bot
+    // games are tied to a private account and can't be fetched without login.
+    const supported = type === 'live' || type === 'daily';
+    return { type, id, supported };
   }
 
   async function fetchChessComPgn(url) {
@@ -289,6 +292,11 @@ const App = (() => {
     const looksLikePgn = /^\s*\[/.test(pgnText) || /\d+\.\s*[A-Za-z]/.test(pgnText);
     const chessComUrl = !looksLikePgn ? extractChessComUrl(pgnText) : null;
     if (chessComUrl) {
+      const parsed = parseChessComUrl(chessComUrl);
+      if (parsed && !parsed.supported) {
+        showError('Ce type de partie Chess.com (« ' + parsed.type + ' », ex. contre un bot/coach) est privé et ne peut pas être importé via son lien : il faut être connecté à votre compte. Ouvrez la partie sur Chess.com, copiez son PGN (menu Partager ⤴ → onglet PGN) et collez-le directement ici.');
+        return;
+      }
       let fetched;
       try {
         fetched = await fetchChessComPgn(chessComUrl);
