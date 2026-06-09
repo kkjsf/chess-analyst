@@ -294,7 +294,7 @@ const App = (() => {
     if (chessComUrl) {
       const parsed = parseChessComUrl(chessComUrl);
       if (parsed && !parsed.supported) {
-        showError('Ce type de partie Chess.com (« ' + parsed.type + ' », ex. contre un bot/coach) est privé et ne peut pas être importé via son lien : il faut être connecté à votre compte. Ouvrez la partie sur Chess.com, copiez son PGN (menu Partager ⤴ → onglet PGN) et collez-le directement ici.');
+        showError('Ce type de partie Chess.com (« ' + parsed.type + ' », ex. contre un bot/coach) est privé et ne peut pas être importé via son lien. Sur la page de la partie (connecté à votre compte), sélectionnez la liste des coups telle qu\'affichée (ex. « 1. e4 e5 2. Nf3 … ») et collez-la directement ici — son PGN, s\'il est proposé, fonctionne aussi.');
         return;
       }
       let fetched;
