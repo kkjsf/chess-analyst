@@ -772,5 +772,5 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount, cpToWinPct, parseClocks, clocksToTimePerMove, probeTablebase };
+  return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
 })();

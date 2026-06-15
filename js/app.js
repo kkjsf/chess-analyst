@@ -879,6 +879,8 @@ const App = (() => {
     const ecoEl = $('#opening-modal-eco');
     const labelEl = $('#opening-modal-move-label');
     const explEl = $('#opening-modal-explanation');
+    const evalEl = $('#opening-modal-eval');
+    const detailsEl = $('#opening-modal-details');
     const footerEl = $('#opening-modal-footer');
     const prevBtn = $('#opening-modal-prev');
     const nextBtn = $('#opening-modal-next');
@@ -914,6 +916,95 @@ const App = (() => {
     }
     footerEl.textContent = footerText;
 
+    // ── Rich detail panel (catalog openings only) ──
+    const rich = !!opening.idea;
+    if (rich) {
+      const section = (t, b) => `<div class="od-section"><h5>${t}</h5><p>${b}</p></div>`;
+      let dh = '';
+      dh += section('💡 Idée maîtresse', opening.idea);
+      if (opening.plans) {
+        dh += `<div class="od-section"><h5>🎯 Plans typiques</h5><p><b>Blancs :</b> ${opening.plans.w}</p><p><b>Noirs :</b> ${opening.plans.b}</p></div>`;
+      }
+      if (opening.structure) dh += section('🧱 Structure de pions', opening.structure);
+      if (opening.mistakes) dh += section('⚠️ Erreur fréquente', opening.mistakes);
+      if (opening.deviations && opening.deviations.length) {
+        dh += `<div class="od-section"><h5>🔀 Si l'adversaire ne suit pas la ligne</h5>` +
+          opening.deviations.map(d => `<p><b>${d.label} :</b> ${d.note}</p>`).join('') + `</div>`;
+      }
+      detailsEl.innerHTML = dh;
+      detailsEl.hidden = false;
+    } else {
+      detailsEl.innerHTML = '';
+      detailsEl.hidden = true;
+    }
+
+    // ── Live engine verdict (catalog openings only) ──
+    let engineOk = false;
+    let evalSeq = 0;
+    let evalBusy = false;
+    let pendingFen = null;
+
+    function uciToFr(fen, uci) {
+      if (!uci) return null;
+      try {
+        const g = new Chess(fen);
+        const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+        return m ? Analyzer.toFrench(m.san) : null;
+      } catch (_) { return null; }
+    }
+
+    function showEval(fen, res) {
+      if (!modal.classList.contains('visible')) return;
+      const whiteToMove = fen.split(' ')[1] === 'w';
+      const whiteScore = whiteToMove ? res.score : -res.score;
+      let valTxt, cls;
+      if (Math.abs(whiteScore) >= 29000) {
+        valTxt = whiteScore > 0 ? '#' : '-#';
+        cls = whiteScore > 0 ? 'white-adv' : 'black-adv';
+      } else {
+        const pawns = (whiteScore / 100).toFixed(1);
+        valTxt = whiteScore > 0 ? `+${pawns}` : pawns;
+        cls = Math.abs(whiteScore) <= 30 ? 'equal' : (whiteScore > 0 ? 'white-adv' : 'black-adv');
+      }
+      const suggs = (res.lines || []).slice(0, 3).map(l => uciToFr(fen, l.move)).filter(Boolean);
+      const suggTxt = suggs.length ? ` <span class="oe-sugg">· Le moteur joue : ${suggs.join(', ')}</span>` : '';
+      evalEl.innerHTML = `<span class="oe-val ${cls}">${valTxt}</span> <span class="oe-text">${Analyzer.describeEval(whiteScore)}</span>${suggTxt}`;
+    }
+
+    async function pumpEval() {
+      if (evalBusy) return;
+      evalBusy = true;
+      while (pendingFen) {
+        const fen = pendingFen; pendingFen = null;
+        const seq = evalSeq;
+        try {
+          const res = await StockfishEngine.evaluate(fen, 12);
+          if (seq === evalSeq && fen === positions[idx].fen) showEval(fen, res);
+        } catch (_) {
+          evalEl.hidden = true;
+          break;
+        }
+      }
+      evalBusy = false;
+    }
+
+    function requestEval() {
+      if (!engineOk) return;
+      evalSeq++;
+      pendingFen = positions[idx].fen;
+      pumpEval();
+    }
+
+    if (rich && typeof StockfishEngine !== 'undefined') {
+      evalEl.hidden = false;
+      evalEl.innerHTML = `<span class="oe-text">⏳ Le moteur analyse la position…</span>`;
+      (StockfishEngine.isReady() ? Promise.resolve() : StockfishEngine.init())
+        .then(() => { engineOk = true; requestEval(); })
+        .catch(() => { evalEl.hidden = true; });
+    } else {
+      evalEl.hidden = true;
+    }
+
     let idx = 0;
     const ANIM_MS = 250;
 
@@ -937,6 +1028,7 @@ const App = (() => {
         labelEl.textContent = `${prefix} ${pos.san}`;
         explEl.textContent = explainMove(pos.san, pos.color, moveNum, pos.fen);
       }
+      requestEval();
     }
 
     function cleanup() {
@@ -2965,84 +3057,257 @@ const App = (() => {
     // ── Open games: 1.e4 e5 ── the most instructive starting point for beginners
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Italienne', en: 'Italian Game', eco: 'C50', side: 'w', level: '👍 Idéale pour débuter',
       line: 'e4 e5 Nf3 Nc6 Bc4',
-      desc: `Le fou file en <b>c4</b> et vise tout de suite le point faible <b>f7</b>. Développement naturel, roque rapide, idées tactiques claires : c'est l'ouverture parfaite pour apprendre les principes (centre, développement, sécurité du roi).` },
+      desc: `Le fou file en <b>c4</b> et vise tout de suite le point faible <b>f7</b>. Développement naturel, roque rapide, idées tactiques claires : c'est l'ouverture parfaite pour apprendre les principes (centre, développement, sécurité du roi).`,
+      idea: `Sortir vite le cavalier en f3 et le fou en c4 pour viser f7 (la case la plus faible avant le roque), roquer, puis seulement après pousser au centre. C'est l'ouverture qui enseigne le mieux les trois principes de base.`,
+      plans: { w: `Roque rapide, puis c3 + d4 pour bâtir un centre de pions ; ou le plan lent d3, Cbd2-f1-g3 (Pianissimo) avant d'attaquer.`, b: `Imiter le développement (Cf6, Fc5 ou Fe7), tenir le centre e5 et roquer à temps ; viser la rupture …d5 pour s'égaliser.` },
+      structure: `Centre symétrique e4/e5, ouvert et fluide : c'est un jeu de pièces, avec peu de pions bloqués. Les erreurs se paient vite par des coups tactiques.`,
+      mistakes: `Sortir la dame trop tôt, oublier de défendre f7, ou pousser les pions de l'aile roi avant d'avoir roqué.`,
+      deviations: [
+        { label: `2…Cf6 (au lieu de 2…Cc6)`, note: `Les Noirs jouent le Petrov et contre-attaquent e4 au lieu de défendre e5 : ce n'est plus une Italienne, mais un jeu plus symétrique.` },
+        { label: `3…Fe7 (au lieu de 3…Fc5)`, note: `Fe7 (défense hongroise) est plus passif que Fc5 mais parfaitement jouable : les Noirs renoncent à la pression sur f2 contre un peu plus de solidité.` }
+      ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Giuoco Pianissimo', en: 'Giuoco Pianissimo', eco: 'C50', side: 'w', level: '👍 Calme et solide',
       line: 'e4 e5 Nf3 Nc6 Bc4 Bc5 d3',
-      desc: `La version tranquille de l'Italienne : on soutient le centre avec <b>d3</b> au lieu de l'ouvrir. Jeu de manœuvre lent où l'on construit patiemment son attaque. Très populaire aujourd'hui, même au plus haut niveau.` },
+      desc: `La version tranquille de l'Italienne : on soutient le centre avec <b>d3</b> au lieu de l'ouvrir. Jeu de manœuvre lent où l'on construit patiemment son attaque. Très populaire aujourd'hui, même au plus haut niveau.`,
+      idea: `« Le jeu très tranquille » : d3 soutient e4 sans ouvrir le centre. On ne cherche pas un avantage immédiat mais une position saine où la meilleure compréhension finit par payer.`,
+      plans: { w: `Réarranger les pièces (c3, Cbd2-f1-g3, Fb3, Te1, h3) avant de pousser d4 ou de lancer un jeu à l'aile roi.`, b: `Plan symétrique : …d6, …a6, …Fa7, …Cf6, regrouper et préparer la rupture libératrice …d5.` },
+      structure: `Centre semi-fermé e4-d3 contre e5-d6 : longue préparation avant le premier contact. C'est une partie de manœuvre, pas de tactique immédiate.`,
+      mistakes: `Vouloir tout casser trop tôt : la position récompense la patience et le bon placement des pièces, pas la précipitation.`,
+      deviations: [
+        { label: `…d5 prématuré`, note: `Si un camp force …d5 sans l'avoir préparé, l'ouverture du centre profite presque toujours au camp le mieux développé.` }
+      ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Espagnole (Ruy Lopez)', en: 'Ruy Lopez', eco: 'C60', side: 'w', level: '⭐ La référence',
       line: 'e4 e5 Nf3 Nc6 Bb5',
-      desc: `Le fou cloue le cavalier <b>c6</b> qui défend le pion e5. L'une des ouvertures les plus étudiées de l'histoire : pression durable et plans stratégiques riches. Exigeante mais formatrice une fois les bases acquises.` },
+      desc: `Le fou cloue le cavalier <b>c6</b> qui défend le pion e5. L'une des ouvertures les plus étudiées de l'histoire : pression durable et plans stratégiques riches. Exigeante mais formatrice une fois les bases acquises.`,
+      idea: `Fb5 attaque le cavalier c6, défenseur naturel de e5 : on crée une pression durable sur le centre noir, sans rien forcer. C'est la grande ouverture stratégique de référence.`,
+      plans: { w: `c3 + d4 pour bâtir le centre, manœuvre Cb1-d2-f1-g3, et pression à long terme sur e5 et l'aile roi.`, b: `…a6/…b5 pour gagner de l'espace et chasser le fou, …d6, puis la rupture …d5 ou un contre-jeu sur la colonne c.` },
+      structure: `Centre tendu e4 contre e5, qui reste longtemps en place : riche en plans des deux côtés, c'est l'ouverture la plus profonde théoriquement.`,
+      mistakes: `Croire que 4.Fxc6 « gagne » le pion e5 : après …dxc6 5.Cxe5 Dd4 ! les Noirs récupèrent le pion et gardent la paire de fous.`,
+      deviations: [
+        { label: `3…Cf6 (défense berlinoise)`, note: `Mène à une finale réputée très solide pour les Noirs : un test sérieux du Ruy Lopez, popularisé par Kramnik contre Kasparov.` },
+        { label: `3…a6 4.Fxc6 (variante d'échange)`, note: `Si les Blancs échangent en c6, ils acceptent de donner la paire de fous en échange d'une structure de pions noire affaiblie côté dame.` }
+      ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Écossaise', en: 'Scotch Game', eco: 'C45', side: 'w', level: '👍 Directe',
       line: 'e4 e5 Nf3 Nc6 d4 exd4 Nxd4',
-      desc: `On ouvre le centre immédiatement avec <b>d4</b>. Le jeu devient clair et tactique, sans longue théorie à mémoriser — un excellent choix pour jouer activement dès le début.` },
+      desc: `On ouvre le centre immédiatement avec <b>d4</b>. Le jeu devient clair et tactique, sans longue théorie à mémoriser — un excellent choix pour jouer activement dès le début.`,
+      idea: `Ouvrir le centre dès le 3ᵉ coup par d4 : on échange un pion central et on obtient un jeu clair et actif, sans la théorie tentaculaire du Ruy Lopez.`,
+      plans: { w: `Centraliser, développer activement (Fe3/Fc4, Cc3, roque) et exploiter un léger avantage d'espace.`, b: `…Fc5 pour attaquer le cavalier d4, ou …Cf6 pour frapper e4 : un développement actif égalise sans mal.` },
+      structure: `Centre ouvert dès le coup 3 : pièces actives, lignes ouvertes, parties souvent tactiques et nettes.`,
+      mistakes: `Laisser le cavalier d4 se faire chasser par …Cf6/…Fc5 sans plan, ou reprendre en d4 avec la dame et l'exposer.`,
+      deviations: [
+        { label: `4…Fc5 contre 4…Cf6`, note: `Fc5 attaque directement le cavalier d4 ; Cf6 frappe e4. Deux égalisations correctes mais avec des plans très différents — sachez quelle position vous visez.` }
+      ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Gambit du Roi', en: "King's Gambit", eco: 'C30', side: 'w', level: '⚔️ Agressif',
       line: 'e4 e5 f4',
-      desc: `Les Blancs <b>sacrifient un pion</b> (f4) pour ouvrir des lignes et lancer une attaque fulgurante. Romantique et tranchant, mais risqué : à essayer pour le plaisir de l'attaque, pas pour la sécurité.` },
+      desc: `Les Blancs <b>sacrifient un pion</b> (f4) pour ouvrir des lignes et lancer une attaque fulgurante. Romantique et tranchant, mais risqué : à essayer pour le plaisir de l'attaque, pas pour la sécurité.`,
+      idea: `Sacrifier le pion f pour ouvrir la colonne f et déloger le pion e5 : on échange du matériel contre une initiative immédiate et une attaque sur f7. L'ouverture romantique par excellence.`,
+      plans: { w: `Reprendre l'initiative : Cf3, Fc4, roque, et exploiter la colonne f ouverte contre f7.`, b: `Garder le pion gagné ou le rendre au bon moment pour neutraliser l'attaque, puis exploiter le roi blanc resté exposé.` },
+      structure: `Aile roi blanche ouverte et durablement affaiblie : jeu très dynamique et déséquilibré, où chaque tempo compte.`,
+      mistakes: `Côté noir, s'accrocher au pion à tout prix ; côté blanc, attaquer avant d'avoir développé ses pièces — l'attaque s'effondre alors faute de troupes.`,
+      deviations: [
+        { label: `2…Fc5 (gambit refusé)`, note: `Les Noirs déclinent : 2…Fc5 vise f2 (qui ne peut plus roquer facilement) et garde la structure intacte, en évitant toutes les complications.` }
+      ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Défense Petrov (Russe)', en: "Petrov's Defence", eco: 'C42', side: 'b', level: '🛡️ Solide pour les Noirs',
       line: 'e4 e5 Nf3 Nf6',
-      desc: `Au lieu de défendre e5, les Noirs <b>contre-attaquent</b> aussitôt e4. Réputation de solidité et de symétrie : une défense fiable, parfois aride, qui vise l'égalité tranquille.` },
+      desc: `Au lieu de défendre e5, les Noirs <b>contre-attaquent</b> aussitôt e4. Réputation de solidité et de symétrie : une défense fiable, parfois aride, qui vise l'égalité tranquille.`,
+      idea: `Plutôt que de défendre e5, frapper aussitôt e4 par …Cf6 : la symétrie neutralise l'initiative blanche. Une défense de sang-froid qui vise une égalité propre.`,
+      plans: { w: `Chercher un petit avantage durable par un développement précis (d4, Fd3, c4, roque).`, b: `Égaliser proprement, ne pas se précipiter à reprendre e4, et viser les échanges qui simplifient.` },
+      structure: `Souvent symétrique : réputation de solidité, parfois au prix d'un jeu un peu aride.`,
+      mistakes: `Le piège classique 3.Cxe5 Cxe4?? : il faut d'abord chasser le cavalier par …d6, sinon 4.De2 gagne du matériel.`,
+      deviations: [
+        { label: `3.Cxe5 d6 (et non 3…Cxe4)`, note: `Si les Blancs prennent e5, ne reprenez pas tout de suite : jouez d'abord …d6 pour chasser le cavalier, puis …Cxe4 en toute sécurité.` }
+      ] },
 
     // ── Semi-open games: 1.e4 and Black replies asymmetrically ──
     { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Sicilienne', en: 'Sicilian Defence', eco: 'B20', side: 'b', level: '⚔️ La plus combative',
       line: 'e4 c5',
-      desc: `La réponse la plus populaire à 1.e4. Les Noirs refusent la symétrie et jouent <b>c5</b> pour un jeu déséquilibré et plein d'ambition. Théorie immense : passionnante, mais elle demande du travail.` },
+      desc: `La réponse la plus populaire à 1.e4. Les Noirs refusent la symétrie et jouent <b>c5</b> pour un jeu déséquilibré et plein d'ambition. Théorie immense : passionnante, mais elle demande du travail.`,
+      idea: `Répondre 1…c5 attaque d4 sans rendre la pareille au centre : les Noirs refusent la symétrie et jouent pour gagner, pas pour annuler. La réponse n°1 à 1.e4 au plus haut niveau.`,
+      plans: { w: `Ouvrir par d4, développer agressivement, souvent roque long et ruée de pions à l'aile roi (h4-g4).`, b: `Pression sur la colonne c semi-ouverte, structure …a6/…e6 ou …g6, et contre-attaque à l'aile dame.` },
+      structure: `Asymétrique : le pion c noir s'échange contre le pion d blanc. Cela mène souvent à des attaques sur des ailes opposées — des courses de vitesse.`,
+      mistakes: `Jouer les coups d'une variante à la mode (Najdorf, Dragon) sans en comprendre les idées : la Sicilienne punit sévèrement le jeu approximatif.`,
+      deviations: [
+        { label: `2.Cc3 (fermée) ou 2.c3 (Alapin)`, note: `Si les Blancs évitent 2.Cf3 + d4, le jeu devient plus fermé (Sicilienne fermée) ou très centralisé (Alapin) : moins théorique, mais sans avantage particulier pour eux.` },
+        { label: `2.Cf3 puis 3.Fb5 (Rossolimo/Moscou)`, note: `Les Blancs évitent les grandes lignes théoriques en échangeant un fou contre un cavalier : un choix sain et pratique, très en vogue.` }
+      ] },
     { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Française', en: 'French Defence', eco: 'C00', side: 'b', level: '👍 Solide et structurée',
       line: 'e4 e6 d4 d5',
-      desc: `Les Noirs préparent <b>d5</b> pour défier le centre blanc. Positions fermées avec un plan clair (attaque à l'aile dame). Seul bémol : le fou de cases blanches reste souvent enfermé.` },
+      desc: `Les Noirs préparent <b>d5</b> pour défier le centre blanc. Positions fermées avec un plan clair (attaque à l'aile dame). Seul bémol : le fou de cases blanches reste souvent enfermé.`,
+      idea: `…e6 prépare …d5 pour défier d'emblée le centre blanc. On accepte des positions fermées avec un plan clair, au prix d'un fou de cases blanches souvent enfermé derrière ses pions.`,
+      plans: { w: `Selon la variante : e5 pour gagner de l'espace et attaquer à l'aile roi, ou soutenir e4 par Cc3/Cd2.`, b: `Contre-attaquer la base de la chaîne par …c5, faire pression sur d4, et trouver une vie au « mauvais » fou de cases blanches.` },
+      structure: `Chaîne de pions e6-d5 contre e4(-e5) : chaque camp attaque la base de la chaîne adverse — les Noirs à l'aile dame, les Blancs à l'aile roi.`,
+      mistakes: `Laisser le fou de cases blanches enfermé sans plan pour l'activer (…b6/…Fa6) ou l'échanger : c'est la pièce-problème de toute la Française.`,
+      deviations: [
+        { label: `3.e5 / 3.Cc3 / 3.Cd2`, note: `L'avance (3.e5) ferme le centre ; 3.Cc3 invite la Winawer (…Fb4) ; 3.Cd2 (Tarrasch) évite le clouage. Trois écoles très différentes — la réponse blanche oriente toute la partie.` },
+        { label: `3.exd5 exd5 (variante d'échange)`, note: `Si les Blancs échangent en d5, la position devient symétrique et terne : c'est souvent un aveu de jeu sans ambition, et les Noirs égalisent sans peine.` }
+      ] },
     { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Caro-Kann', en: 'Caro-Kann Defence', eco: 'B10', side: 'b', level: '👍 Sûre et saine',
       line: 'e4 c6 d4 d5',
-      desc: `Comme la Française, on attaque le centre par <b>d5</b> — mais en gardant le fou de cases blanches actif (c6 au lieu de e6). Réputée très solide : un excellent choix pour qui aime les positions sans risque.` },
+      desc: `Comme la Française, on attaque le centre par <b>d5</b> — mais en gardant le fou de cases blanches actif (c6 au lieu de e6). Réputée très solide : un excellent choix pour qui aime les positions sans risque.`,
+      idea: `Comme la Française, on conteste le centre par …d5 — mais en préparant par …c6 au lieu de …e6, ce qui laisse le fou de cases blanches sortir librement. Le meilleur des deux mondes : solidité sans fou enfermé.`,
+      plans: { w: `Gagner de l'espace par e5 (variante d'avance) ou jouer sur les pièces après l'échange en e4 ; viser un léger avantage durable.`, b: `Sortir le fou en f5 ou g4 AVANT de jouer …e6, obtenir une structure saine et viser des finales confortables.` },
+      structure: `Très solide et peu compromise : la pièce-problème de la Française est ici développée activement, ce qui fait la réputation de sûreté du Caro-Kann.`,
+      mistakes: `Jouer …e6 trop tôt et enfermer le fou de cases blanches — exactement le défaut qu'on cherchait à éviter en choisissant le Caro plutôt que la Française.`,
+      deviations: [
+        { label: `2.d4 d5 3.e5 (variante d'avance)`, note: `Sortez impérativement le fou en f5 AVANT de jouer …e6 : c'est tout l'intérêt du Caro-Kann par rapport à la Française.` },
+        { label: `3.exd5 cxd5 (variante d'échange)`, note: `Échange tranquille menant à une position saine et symétrique : peu de risque pour les deux camps, partie de manœuvre.` }
+      ] },
     { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Scandinave', en: 'Scandinavian Defence', eco: 'B01', side: 'b', level: '👍 Facile à apprendre',
       line: 'e4 d5 exd5 Qxd5',
-      desc: `Les Noirs prennent <b>d5</b> dès le 1<sup>er</sup> coup. Très peu de théorie, un plan simple et répétable : idéale pour débuter avec les Noirs sans rien mémoriser.` },
+      desc: `Les Noirs prennent <b>d5</b> dès le 1<sup>er</sup> coup. Très peu de théorie, un plan simple et répétable : idéale pour débuter avec les Noirs sans rien mémoriser.`,
+      idea: `Frapper e4 dès le 1ᵉʳ coup par …d5 : on clarifie tout de suite le centre. Peu de théorie et un plan répétable, au prix d'un petit retard de développement (la dame doit bouger plusieurs fois).`,
+      plans: { w: `Gagner des tempi en attaquant la dame noire (Cc3), développer vite et occuper le centre par d4.`, b: `Replacer la dame en sécurité (…Da5, …Dd6 ou …Dd8), puis …c6, …Ff5, …e6 : un développement solide et sans surprise.` },
+      structure: `Centre clarifié très tôt : les Noirs acceptent un léger retard de développement en échange d'une grande simplicité de plan.`,
+      mistakes: `Laisser la dame se faire chasser plusieurs fois en perdant des tempi, ou la placer sur une case exposée (gare aux fourchettes et aux Cb5/Cd5).`,
+      deviations: [
+        { label: `2…Cf6 (variante moderne)`, note: `Au lieu de reprendre tout de suite en d5, les Noirs jouent …Cf6 pour récupérer le pion sans exposer la dame : un style plus dynamique.` }
+      ] },
     { cat: '♟ Défenses semi-ouvertes (1.e4 …)', name: 'Défense Pirc / Moderne', en: 'Pirc / Modern Defence', eco: 'B07', side: 'b', level: '🛡️ Hypermoderne',
       line: 'e4 d6 d4 Nf6 Nc3 g6',
-      desc: `Les Noirs <b>cèdent le centre</b> volontairement, fianchettent leur fou en g7 et attaqueront ce centre plus tard. Souple et combative, mais demande de bien comprendre les plans.` },
+      desc: `Les Noirs <b>cèdent le centre</b> volontairement, fianchettent leur fou en g7 et attaqueront ce centre plus tard. Souple et combative, mais demande de bien comprendre les plans.`,
+      idea: `Laisser les Blancs occuper le centre, fianchetto en g7, puis le frapper plus tard par …e5 ou …c5 : l'idée hypermoderne de provoquer un grand centre pour mieux l'attaquer.`,
+      plans: { w: `Construire un grand centre (e4-d4, parfois f4) et attaquer à l'aile roi (variante autrichienne).`, b: `Frapper le centre par …e5 ou …c5 au bon moment ; le fou g7 prend vie le long de la grande diagonale.` },
+      structure: `Centre blanc avancé contre fianchetto noir : tendu et flexible, mais exige de bien comprendre les plans plutôt que de mémoriser des coups.`,
+      mistakes: `Rester passif et laisser les Blancs étouffer la position : sans contre-attaque rapide du centre, les Noirs se font écraser par l'espace.`,
+      deviations: [
+        { label: `4.f4 (attaque autrichienne)`, note: `Si les Blancs ajoutent f4, ils visent une attaque directe sur le roi : les Noirs doivent réagir vite au centre par …c5 ou …e5 sous peine d'être submergés.` }
+      ] },
 
     // ── Closed games: 1.d4 d5 ──
     { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Gambit Dame refusé', en: "Queen's Gambit Declined", eco: 'D30', side: 'w', level: '⭐ Classique et fiable',
       line: 'd4 d5 c4 e6',
-      desc: `Les Blancs proposent le pion c4 ; les Noirs le déclinent en soutenant leur centre par <b>e6</b>. L'une des ouvertures les plus solides du répertoire classique, base de la stratégie positionnelle.` },
+      desc: `Les Blancs proposent le pion c4 ; les Noirs le déclinent en soutenant leur centre par <b>e6</b>. L'une des ouvertures les plus solides du répertoire classique, base de la stratégie positionnelle.`,
+      idea: `Les Blancs offrent c4 pour dévier le pion d5 ; les Noirs déclinent et soutiennent leur centre par …e6. C'est le socle de la stratégie positionnelle classique.`,
+      plans: { w: `Pression sur d5, développement harmonieux (Cc3, Fg5, e3, Fd3), et l'« attaque de minorité » b4-b5 à l'aile dame.`, b: `Tenir le centre, échanger pour respirer, puis se libérer par …c5 ou …e5 au bon moment.` },
+      structure: `Centre solide d5/e6 contre d4/c4 : positionnel et durable, c'est l'archétype du jeu de plans à long terme.`,
+      mistakes: `Développer le fou de cases blanches après …e6 sans plan : comme à la Française, il reste enfermé derrière ses propres pions.`,
+      deviations: [
+        { label: `3…c6 (vers la Slave)`, note: `Si les Noirs soutiennent d5 par …c6 plutôt que …e6, on glisse vers la Défense Slave, qui garde le fou de cases blanches libre.` }
+      ] },
     { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Gambit Dame accepté', en: "Queen's Gambit Accepted", eco: 'D20', side: 'w', level: '👍 Actif',
       line: 'd4 d5 c4 dxc4',
-      desc: `Les Noirs <b>prennent</b> le pion c4 — sans chercher à le garder, mais pour libérer leur jeu et viser une contre-attaque au centre. Le pion sera généralement récupéré par les Blancs.` },
+      desc: `Les Noirs <b>prennent</b> le pion c4 — sans chercher à le garder, mais pour libérer leur jeu et viser une contre-attaque au centre. Le pion sera généralement récupéré par les Blancs.`,
+      idea: `Les Noirs prennent …dxc4 non pour garder le pion, mais pour abandonner le centre et le contester ensuite avec des pièces actives. Les Blancs récupèrent presque toujours le pion.`,
+      plans: { w: `Jouer e3 puis Fxc4 pour reprendre le pion, occuper le centre (e4 possible) et exploiter un léger avantage d'espace.`, b: `Rendre le pion proprement, jouer …c5 et …e6, contester d4 et viser une égalité active.` },
+      structure: `Centre semi-ouvert : les Blancs ont un peu plus d'espace, les Noirs un développement fluide et des pièces libres.`,
+      mistakes: `Tenter de garder le pion c4 par …b5 : après a4, l'aile dame noire s'effondre — le pion ne se conserve pas.`,
+      deviations: [
+        { label: `…b5 pour garder le pion`, note: `Erreur classique : a4 ! ouvre l'aile dame et gagne du matériel ou une position écrasante. Le pion c4 n'est jamais à garder durablement.` }
+      ] },
     { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Défense Slave', en: 'Slav Defence', eco: 'D10', side: 'b', level: '👍 Très solide',
       line: 'd4 d5 c4 c6',
-      desc: `On soutient d5 par <b>c6</b> (plutôt qu'e6), ce qui garde le fou de cases blanches libre. Robuste et populaire à tous les niveaux : une valeur sûre face à 1.d4.` },
+      desc: `On soutient d5 par <b>c6</b> (plutôt qu'e6), ce qui garde le fou de cases blanches libre. Robuste et populaire à tous les niveaux : une valeur sûre face à 1.d4.`,
+      idea: `Soutenir d5 par …c6 plutôt que …e6 : la structure reste très solide ET le fou de cases blanches peut sortir avant d'être enfermé. La réponse de référence pour qui veut de la robustesse.`,
+      plans: { w: `Pression sur d5 (Cc3, Cf3, e3), récupérer c4 si les Noirs le prennent, et jouer sur un léger avantage d'espace.`, b: `Sortir le fou en f5 ou g4 avant …e6, puis tenir solidement ; ou …dxc4 suivi de …b5 (Slave élargie).` },
+      structure: `Triangle de pions c6-d5(-e6) extrêmement robuste : difficile à percer, idéal pour qui aime les positions sûres.`,
+      mistakes: `Sortir le fou de cases blanches APRÈS …e6 et l'enfermer : on perd alors tout l'intérêt de la Slave par rapport au Gambit Dame refusé.`,
+      deviations: [
+        { label: `…dxc4 (Slave acceptée)`, note: `Les Noirs peuvent prendre en c4 et tenter de le tenir par …b5 (soutenu par …a6), au prix de complications tactiques — une ligne plus ambitieuse.` }
+      ] },
     { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Système de Londres', en: 'London System', eco: 'D00', side: 'w', level: '👍 Facile à jouer',
       line: 'd4 d5 Bf4',
-      desc: `Une configuration <b>passe-partout</b> : le fou sort en f4 et les Blancs jouent presque toujours les mêmes coups, quelle que soit la réponse noire. Peu de théorie, idéal pour gagner du temps et jouer sur plan.` },
+      desc: `Une configuration <b>passe-partout</b> : le fou sort en f4 et les Blancs jouent presque toujours les mêmes coups, quelle que soit la réponse noire. Peu de théorie, idéal pour gagner du temps et jouer sur plan.`,
+      idea: `Un système « passe-partout » : on sort le fou en f4 (avant de jouer e3, pour ne pas l'enfermer) et on répète presque les mêmes coups quelle que soit la réponse noire. Peu de théorie, beaucoup de temps gagné.`,
+      plans: { w: `Pyramide Ff4, e3, Fd3, c3, Cbd2, roque ; puis Ce5 et un assaut à l'aile roi si l'occasion se présente.`, b: `…c5 et …Db6 pour harceler b2 et d4, ou …Ff5 pour neutraliser le fou f4 par un échange ou …Cf6-h5.` },
+      structure: `Structure fixe et symétrique d4-e3-c3 : sûre, mais peu ambitieuse si on la joue passivement, sur pilote automatique.`,
+      mistakes: `Jouer en pilote automatique sans réagir quand les Noirs frappent par …c5 et …Db6 : b2 et d4 deviennent alors des cibles concrètes.`,
+      deviations: [
+        { label: `…c5 + …Db6`, note: `La meilleure réponse noire : elle attaque b2 et d4 à la fois. Les Blancs doivent défendre précisément (Db3 ou Cc3), sinon ils perdent l'initiative dès l'ouverture.` }
+      ] },
 
     // ── Indian defenses: 1.d4 Nf6 ──
     { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Est-Indienne', en: "King's Indian Defence", eco: 'E60', side: 'b', level: '⚔️ Contre-attaque',
       line: 'd4 Nf6 c4 g6 Nc3 Bg7',
-      desc: `Les Noirs laissent les Blancs occuper le centre, fianchettent en <b>g7</b>, puis frappent par e5 ou c5 avec une attaque sur le roi. Dynamique et tranchante — un grand favori des joueurs d'attaque.` },
+      desc: `Les Noirs laissent les Blancs occuper le centre, fianchettent en <b>g7</b>, puis frappent par e5 ou c5 avec une attaque sur le roi. Dynamique et tranchante — un grand favori des joueurs d'attaque.`,
+      idea: `Laisser les Blancs bâtir un grand centre, fianchetto en g7, puis frapper par …e5 — et, une fois le centre fermé, lancer une ruée de pions (…f5-f4-g5) contre le roi blanc.`,
+      plans: { w: `Avancer au centre et à l'aile dame (c4-d5, puis b4-c5) pour percer là où les Noirs sont moins présents.`, b: `Fermer le centre par …e5/d5, puis …f5-f4-g5-g4 : une attaque directe sur le roque blanc.` },
+      structure: `Centre bloqué (pion d5 blanc contre e5 noir) : chaque camp attaque sur son aile — course d'attaque très tranchante où la vitesse décide.`,
+      mistakes: `Côté blanc, traîner à l'aile dame et se faire mater ; côté noir, oublier la ruée de pions et rester passif après avoir cédé le centre.`,
+      deviations: [
+        { label: `Système Sämisch (f3)`, note: `Si les Blancs jouent f3 pour bétonner e4, ils préparent leur propre attaque à l'aile roi (Fe3, Dd2, roque long) : la course d'attaque peut alors changer de camp.` }
+      ] },
     { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Nimzo-Indienne', en: 'Nimzo-Indian Defence', eco: 'E20', side: 'b', level: '⭐ Stratégique',
       line: 'd4 Nf6 c4 e6 Nc3 Bb4',
-      desc: `Le fou cloue le cavalier <b>c3</b> pour gêner e4 et infliger des pions doublés. Mélange rare de solidité et d'idées subtiles : l'une des défenses les plus respectées contre 1.d4.` },
+      desc: `Le fou cloue le cavalier <b>c3</b> pour gêner e4 et infliger des pions doublés. Mélange rare de solidité et d'idées subtiles : l'une des défenses les plus respectées contre 1.d4.`,
+      idea: `…Fb4 cloue le cavalier c3 pour empêcher e4 et menacer d'infliger des pions doublés en c3. Un rare mélange de solidité et de finesse stratégique.`,
+      plans: { w: `Récupérer la paire de fous, jouer e4 et exploiter le centre ; parfois accepter des pions doublés contre une initiative dynamique.`, b: `Échanger en c3 au bon moment, bloquer le jeu et faire des pions doublés c3-c4 une faiblesse durable.` },
+      structure: `Souvent des pions doublés c3-c4 chez les Blancs : statique et exploitable, mais compensé par la paire de fous et un centre potentiel.`,
+      mistakes: `Échanger Fxc3 sans raison et offrir la paire de fous trop tôt, sans contrepartie structurelle concrète.`,
+      deviations: [
+        { label: `4.Dc2 (classique) contre 4.e3 (Rubinstein)`, note: `Dc2 reprend de la dame en c3 pour éviter les pions doublés ; 4.e3 les accepte en misant sur un développement rapide. Deux philosophies opposées — la vôtre doit suivre celle du 4ᵉ coup blanc.` }
+      ] },
     { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Grünfeld', en: 'Grünfeld Defence', eco: 'D80', side: 'b', level: '⚔️ Hypermoderne',
       line: 'd4 Nf6 c4 g6 Nc3 d5',
-      desc: `Les Noirs laissent les Blancs bâtir un grand centre… pour le <b>démolir</b> ensuite à coups de pièces. Très combative et théorique : spectaculaire mais exigeante.` },
+      desc: `Les Noirs laissent les Blancs bâtir un grand centre… pour le <b>démolir</b> ensuite à coups de pièces. Très combative et théorique : spectaculaire mais exigeante.`,
+      idea: `…d5 invite l'échange en d5 puis laisse les Blancs construire un grand centre de pions — pour le prendre pour cible à coups de pièces (…c5, …Cc6, fou g7). Provoquer pour mieux détruire.`,
+      plans: { w: `Bâtir et soutenir le centre e4-d4, viser une attaque si le centre tient et roule en avant.`, b: `Pression maximale sur d4 par …c5, …Cc6, le fou g7 et la dame : transformer le « beau » centre blanc en faiblesse.` },
+      structure: `Grand centre blanc mobile contre pression de pièces noire : très dynamique et théorique, l'équilibre tient à un fil.`,
+      mistakes: `Côté blanc, croire le centre invincible et le laisser devenir une cible ; côté noir, tarder à frapper par …c5 et laisser le centre se consolider.`,
+      deviations: [
+        { label: `7.Fc4 contre 7.Cf3 (variante d'échange)`, note: `Le coup blanc choisi pour soutenir le centre fixe le timing de …c5 et la cible de la pression noire : adaptez votre contre-jeu à la façon dont les Blancs défendent d4.` }
+      ] },
     { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Catalane', en: 'Catalan Opening', eco: 'E01', side: 'w', level: '⭐ Élégante',
       line: 'd4 Nf6 c4 e6 g3',
-      desc: `Les Blancs combinent le gambit Dame et un <b>fianchetto en g2</b>. Le fou exerce une longue pression sur l'aile dame ; jeu positionnel précis, apprécié des joueurs de fond.` },
+      desc: `Les Blancs combinent le gambit Dame et un <b>fianchetto en g2</b>. Le fou exerce une longue pression sur l'aile dame ; jeu positionnel précis, apprécié des joueurs de fond.`,
+      idea: `Combiner le gambit Dame et un fianchetto en g2 : le fou exerce une pression à distance, sur toute la diagonale, contre d5 et l'aile dame noire. Élégant et patient.`,
+      plans: { w: `Pression le long de la diagonale a8-h1 (d5/c6), récupérer le pion c4 s'il est pris, et manœuvrer positionnellement.`, b: `Tenir un moment le pion c4 (…dxc4, …a6, …b5) ou le rendre proprement et se libérer par …c5 ou …e5.` },
+      structure: `Pression à distance plus que centre fixe : très positionnel, c'est l'ouverture de prédilection des joueurs de fond patients.`,
+      mistakes: `Sous-estimer le fou g2 : les Noirs doivent résoudre activement leur développement à l'aile dame, sinon la pression devient étouffante.`,
+      deviations: [
+        { label: `Catalane ouverte (…dxc4) contre fermée (…Fe7)`, note: `Si les Noirs prennent et gardent c4, les Blancs misent sur l'initiative et la diagonale ; si les Noirs jouent …Fe7 (fermée), la partie est plus tranquille et manœuvrière.` }
+      ] },
     { cat: '♞ Défenses indiennes (1.d4 Cf6)', name: 'Défense Benoni', en: 'Benoni Defence', eco: 'A60', side: 'b', level: '⚔️ Déséquilibrée',
       line: 'd4 Nf6 c4 c5 d5 e6',
-      desc: `Les Noirs cèdent de l'espace mais obtiennent une <b>majorité de pions à l'aile dame</b> et des colonnes ouvertes pour contre-attaquer. Jeu vif et risqué, à l'opposé des défenses prudentes.` },
+      desc: `Les Noirs cèdent de l'espace mais obtiennent une <b>majorité de pions à l'aile dame</b> et des colonnes ouvertes pour contre-attaquer. Jeu vif et risqué, à l'opposé des défenses prudentes.`,
+      idea: `Provoquer d4-d5 par …c5, puis …e6/exd5 : on cède de l'espace au centre en échange d'une majorité de pions à l'aile dame, d'un fou g7 actif et de colonnes pour contre-attaquer.`,
+      plans: { w: `Exploiter l'avantage d'espace (poussée e4-e5 éventuelle), attaquer à l'aile roi et garder le coin d5 sous contrôle.`, b: `Poussée …b5 à l'aile dame, fou g7 sur la grande diagonale, et contre-jeu sur les colonnes c et e semi-ouvertes.` },
+      structure: `Coin de pions blancs d5-e4 avancé contre majorité noire à l'aile dame : déséquilibré, vif et risqué — l'opposé des défenses prudentes.`,
+      mistakes: `Rester passif : sans la poussée …b5 et le contre-jeu actif, les Noirs sont simplement étouffés par l'espace blanc.`,
+      deviations: [
+        { label: `Avec f4 (attaque des quatre pions)`, note: `Si les Blancs ajoutent f4, ils visent une énorme attaque centrale (e4-d5-c4-f4) : les Noirs doivent réagir immédiatement par …e6 et …b5, sinon le centre les balaie.` }
+      ] },
 
     // ── Flank openings ──
     { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Anglaise', en: 'English Opening', eco: 'A10', side: 'w', level: '👍 Flexible',
       line: 'c4',
-      desc: `Les Blancs contrôlent le centre <b>depuis le flanc</b> avec c4, sans s'engager tout de suite. Très souple : la partie peut se transposer dans de nombreuses autres ouvertures.` },
+      desc: `Les Blancs contrôlent le centre <b>depuis le flanc</b> avec c4, sans s'engager tout de suite. Très souple : la partie peut se transposer dans de nombreuses autres ouvertures.`,
+      idea: `Contrôler le centre depuis le flanc par c4, sans engager ses pions centraux tout de suite. Extrêmement souple : l'Anglaise peut transposer dans presque toutes les ouvertures fermées.`,
+      plans: { w: `Fianchetto en g2, pression sur d5 et le centre, jeu positionnel ; transposer dans la structure qui vous arrange.`, b: `Choisir sa structure : symétrie par …c5, « Sicilienne inversée » par …e5, ou setup indien (…Cf6, …g6).` },
+      structure: `Très flexible : souvent des fianchettos et un jeu de pièces plutôt qu'un centre de pions fixe. La forme finale dépend des deux camps.`,
+      mistakes: `Jouer sans plan en espérant que « ça transpose » : l'Anglaise récompense une idée claire, pas l'attentisme.`,
+      deviations: [
+        { label: `1…e5 (Sicilienne inversée)`, note: `Les Noirs prennent l'espace au centre ; les Blancs jouent alors une Sicilienne avec un tempo de plus — un avantage subtil mais réel.` }
+      ] },
     { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Réti', en: 'Réti Opening', eco: 'A09', side: 'w', level: '⭐ Positionnelle',
       line: 'Nf3 d5 c4',
-      desc: `On développe d'abord le cavalier en <b>f3</b>, puis on attaque le centre noir avec c4, souvent combiné à un fianchetto. Approche hypermoderne : contrôler le centre à distance avant de l'occuper.` },
+      desc: `On développe d'abord le cavalier en <b>f3</b>, puis on attaque le centre noir avec c4, souvent combiné à un fianchetto. Approche hypermoderne : contrôler le centre à distance avant de l'occuper.`,
+      idea: `Développer d'abord Cf3, puis attaquer le centre noir par c4 et un fianchetto en g2 : contrôler le centre à distance avant — éventuellement — de l'occuper. Hypermoderne et souple.`,
+      plans: { w: `Fianchetto g2, pression à distance sur d5, expansion à l'aile dame (b3-b4) et jeu positionnel patient.`, b: `Soutenir d5 (…c6, …e6) ou rendre le centre et développer activement ses pièces.` },
+      structure: `Peu de pions au centre au début : jeu de pièces et de diagonales, avec des transpositions fréquentes vers l'Anglaise ou la Catalane.`,
+      mistakes: `Vouloir « réfuter » le système par des poussées centrales hâtives : il se neutralise par un développement sain, pas par l'agressivité.`,
+      deviations: [
+        { label: `…d4 (avance)`, note: `Si les Noirs avancent …d4 pour gagner de l'espace, les Blancs jouent autour du pion avancé (e3, b4) pour le saper plutôt que de l'attaquer de front.` }
+      ] },
     { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Bird', en: "Bird's Opening", eco: 'A02', side: 'w', level: '⚔️ Originale',
       line: 'f4',
-      desc: `Le pendant « inversé » de la Hollandaise : <b>f4</b> contrôle e5 et prépare un jeu à l'aile roi. Peu jouée, donc déstabilisante, mais elle affaiblit légèrement le roi blanc.` },
+      desc: `Le pendant « inversé » de la Hollandaise : <b>f4</b> contrôle e5 et prépare un jeu à l'aile roi. Peu jouée, donc déstabilisante, mais elle affaiblit légèrement le roi blanc.`,
+      idea: `1.f4 contrôle e5 et prépare un jeu à l'aile roi : c'est la Défense Hollandaise jouée avec un tempo de plus. Peu courante, donc déstabilisante.`,
+      plans: { w: `Setup Leningrad ou Stonewall inversé, fianchetto ou Fd3, et attaque à l'aile roi.`, b: `Exploiter l'affaiblissement du roi blanc : …d5/…g6 pour un jeu sain, ou le gambit From (1…e5) pour ouvrir vite.` },
+      structure: `Aile roi blanche légèrement affaiblie par f4 (diagonale e1-h4 ouverte) : original, mais à manier avec un minimum de prudence côté roi.`,
+      mistakes: `Négliger la sécurité du roi : après une faute, …Dh4+ peut être très désagréable du fait du coup f4.`,
+      deviations: [
+        { label: `1…e5 (gambit From)`, note: `Les Noirs sacrifient e5 pour une attaque rapide. Attention au piège 2.fxe5 d6 3.exd6 Fxd6 visant …Dh4+ : il faut connaître la parade (4.Cf3).` }
+      ] },
     { cat: '🌐 Ouvertures de flanc', name: 'Ouverture Larsen', en: 'Nimzo-Larsen Attack', eco: 'A01', side: 'w', level: '⚔️ Originale',
       line: 'b3',
-      desc: `Les Blancs fianchettent immédiatement en <b>b2</b> pour viser la grande diagonale et la case e5. Système simple et dépaysant, qui sort vite l'adversaire de sa théorie.` },
+      desc: `Les Blancs fianchettent immédiatement en <b>b2</b> pour viser la grande diagonale et la case e5. Système simple et dépaysant, qui sort vite l'adversaire de sa théorie.`,
+      idea: `Fianchetto immédiat en b2 (1.b3) pour viser la grande diagonale a1-h8 et la case e5 : un système simple et dépaysant qui sort vite l'adversaire de sa théorie.`,
+      plans: { w: `Fb2, e3, Fd3 ou Fe2, pression sur e5 et le centre depuis les flancs ; jouer sur la compréhension plutôt que la mémoire.`, b: `Occuper le centre classiquement (…e5, …d5, …Cf6, …Cc6) et neutraliser le fou b2 par …d6 ou …Cbd7.` },
+      structure: `Jeu de fous fianchettés et de diagonales : peu théorique, il repose entièrement sur la compréhension des plans.`,
+      mistakes: `Jouer le système mécaniquement : sans pression réelle sur e5, le fou b2 reste un simple figurant et les Blancs n'ont rien.`,
+      deviations: [
+        { label: `…e5 solide`, note: `Si les Noirs plantent un gros centre par …e5/…d5, les Blancs doivent le contester activement (c4, e3, parfois f4) au lieu de rester passifs derrière leur fianchetto.` }
+      ] },
   ];
 
   function initOpenings() {
@@ -3072,7 +3337,11 @@ const App = (() => {
       const moves = o.line.split(' ').length;
       const title = o.en && o.en !== o.name ? `${o.name} · ${o.en}` : o.name;
       cards[i].addEventListener('click', () =>
-        openOpeningExplorer({ name: title, eco: o.eco, line: o.line, moves }, [], o.level || '', flip));
+        openOpeningExplorer({
+          name: title, eco: o.eco, line: o.line, moves,
+          idea: o.idea, plans: o.plans, structure: o.structure,
+          mistakes: o.mistakes, deviations: o.deviations
+        }, [], o.level || '', flip));
     });
     BoardRenderer.setFlipped(prevFlip);
   }

@@ -359,6 +359,58 @@ html, body {
   padding-top: 6px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
+.opening-modal-eval {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+}
+.opening-modal-eval .oe-val {
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.opening-modal-eval .oe-val.white-adv { background: #e8e8ea; color: #1a1a2e; }
+.opening-modal-eval .oe-val.black-adv { background: #2a2a3e; color: #e8e8ea; border: 1px solid #4a4a60; }
+.opening-modal-eval .oe-val.equal { background: rgba(255,255,255,0.12); color: var(--text); }
+.opening-modal-eval .oe-text { color: var(--text); }
+.opening-modal-eval .oe-sugg { color: var(--text-dim); }
+.opening-modal-details {
+  width: 100%;
+  max-width: 760px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+.opening-modal-details .od-section {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+}
+.opening-modal-details h5 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.opening-modal-details p {
+  margin: 2px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.opening-modal-details b { color: var(--text); }
 .intro-accuracy {
   margin-top: 4px;
   padding-top: 10px;
