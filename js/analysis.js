@@ -488,6 +488,34 @@ const Analyzer = (() => {
     return { stats, keyMoment, opening };
   }
 
+  // Robust PGN → verbose-moves parser. chess.js 0.12.1 load_pgn fails on
+  // Chess.com PGNs whose comments contain [%clk ...] (the ] breaks header
+  // detection) and misreads b-file pawn captures (bxa4) as bishop moves in
+  // sloppy mode. So: strip comments first, extract SAN tokens, replay each
+  // move strict-first then sloppy.
+  function parsePgnMoves(pgn) {
+    const txt = (pgn || '')
+      .replace(/\{[^}]*\}/g, ' ')
+      .replace(/\[[^\]]*\]/g, ' ')
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/\$\d+/g, ' ')
+      .replace(/\b\d+\.(\.\.)?/g, ' ')
+      .replace(/\b(1-0|0-1|1\/2-1\/2)\b/g, ' ')
+      .replace(/\*/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    const tokens = txt.split(' ').filter(Boolean);
+    const game = new Chess();
+    const moves = [];
+    for (const t of tokens) {
+      let m = null;
+      try { m = game.move(t); } catch (e) {}
+      if (!m) { try { m = game.move(t, { sloppy: true }); } catch (e) {} }
+      if (!m) break;
+      moves.push(m);
+    }
+    return moves;
+  }
+
   async function analyzeGameAsync(chess, moves, onProgress, movetime) {
     const depth = movetime || 'movetime 1500';
     const game = new Chess();
@@ -772,7 +800,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
+  return { analyzeGame, analyzeGameAsync, generateSummary, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

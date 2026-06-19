@@ -165,22 +165,10 @@ const Coach = (() => {
   }
 
   // ─────────────── Bulk analysis ───────────────
-  function stripComments(pgn) {
-    let p = pgn.replace(/\r\n/g, '\n').replace(/\{[^}]*\}/g, ' ');
-    p = p.replace(/\$\d+/g, '').replace(/\d+\.\.\./g, ' ');
-    return p;
-  }
-
   async function analyzeOne(g, onMove) {
-    const chess = new Chess();
-    let ok = false;
-    try { ok = chess.load_pgn(g.pgn, { sloppy: true }); } catch (_) { ok = false; }
-    if (!ok) { try { ok = chess.load_pgn(stripComments(g.pgn), { sloppy: true }); } catch (_) { ok = false; } }
-    if (!ok) return { error: 'pgn' };
-    const moves = chess.history({ verbose: true });
-    if (!moves.length) return { error: 'empty' };
-
-    const results = await Analyzer.analyzeGameAsync(chess, moves, onMove, BULK_MOVETIME);
+    const moves = Analyzer.parsePgnMoves(g.pgn);
+    if (!moves.length) return { error: 'pgn' };
+    const results = await Analyzer.analyzeGameAsync(new Chess(), moves, onMove, BULK_MOVETIME);
     const summary = Analyzer.generateSummary(results, moves);
     return deriveStats(results, summary, g);
   }

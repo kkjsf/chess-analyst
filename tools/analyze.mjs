@@ -177,19 +177,10 @@ function deriveStats(results, summary, side) {
   return { analyzedAt: Date.now(), accuracy: us.accuracy, acpl: us.acpl, blunders: us.blunders, mistakes: us.mistakes, inaccuracies: us.inaccuracies, moveCount: us.moveCount, phaseErrors, phaseAccuracy: phaseAcc, blunderList: blunders };
 }
 
-function stripComments(pgn) {
-  return pgn.replace(/\r\n/g, '\n').replace(/\{[^}]*\}/g, ' ').replace(/\$\d+/g, '').replace(/\d+\.\.\./g, ' ');
-}
-
 async function analyzeGame(rec) {
-  const chess = new Chess();
-  let ok = false;
-  try { ok = chess.load_pgn(rec.pgn, { sloppy: true }); } catch (_) {}
-  if (!ok) { try { ok = chess.load_pgn(stripComments(rec.pgn), { sloppy: true }); } catch (_) {} }
-  if (!ok) return { error: 'pgn' };
-  const moves = chess.history({ verbose: true });
-  if (!moves.length) return { error: 'empty' };
-  const results = await Analyzer.analyzeGameAsync(chess, moves, null, 'depth ' + DEPTH);
+  const moves = Analyzer.parsePgnMoves(rec.pgn);
+  if (!moves.length) return { error: 'pgn' };
+  const results = await Analyzer.analyzeGameAsync(new Chess(), moves, null, 'depth ' + DEPTH);
   const summary = Analyzer.generateSummary(results, moves);
   return deriveStats(results, summary, rec.userColor);
 }
