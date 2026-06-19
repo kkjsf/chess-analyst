@@ -488,8 +488,8 @@ const Analyzer = (() => {
     return { stats, keyMoment, opening };
   }
 
-  async function analyzeGameAsync(chess, moves, onProgress) {
-    const depth = 'movetime 1500';
+  async function analyzeGameAsync(chess, moves, onProgress, movetime) {
+    const depth = movetime || 'movetime 1500';
     const game = new Chess();
 
     const positions = [game.fen()];
@@ -774,3 +774,5 @@ const Analyzer = (() => {
 
   return { analyzeGame, analyzeGameAsync, generateSummary, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

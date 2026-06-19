@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=40">
+<link rel="stylesheet" href="css/style.css?v=45">
 </head>
 <body>
 
@@ -89,6 +89,14 @@
       <div class="guide-icon">📈</div>
       <h3>Tendances</h3>
       <p>Après 2+ parties analysées, l'app détecte vos <b>tendances récurrentes</b> (gaffes en ouverture, pertes de matériel...) pour vous aider à cibler vos progrès.</p>
+    </div>
+    <div class="guide-block">
+      <div class="guide-icon">📊</div>
+      <h3>Coach — toutes vos parties</h3>
+      <p>Le <b>Coach</b> analyse l'<b>ensemble</b> de vos parties Chess.com et en tire un bilan : taux de victoire, répertoire d'ouvertures, points faibles par phase, et un entraînement bâti sur <b>vos propres erreurs</b>.</p>
+      <p><b>L'analyse tourne sur un serveur</b> (GitHub Actions), pas sur votre téléphone : rien à laisser tourner pendant une heure. Le bilan se met à jour <b>automatiquement chaque semaine</b> ; l'app télécharge simplement un petit fichier de résultats (~1 Mo).</p>
+      <p>Pour mettre à jour : ouvrez le Coach et touchez <b>⟳ Actualiser</b>. Si vous venez de jouer quelques parties et êtes pressé, <b>« Analyser ici »</b> les traite directement dans le navigateur (rapide pour quelques parties). Pour relancer l'analyse complète côté serveur, utilisez le lien <b>⚙ Relancer l'analyse (serveur)</b>.</p>
+      <p>Le bilan est conservé <b>hors-ligne</b> sur l'appareil. Comme l'analyse est faite côté serveur, le même bilan s'affiche sur tous vos appareils après actualisation.</p>
     </div>
   </div>
 </div>
@@ -285,6 +293,15 @@
     <span class="training-due" id="training-due">À jour</span>
   </button>
 
+  <button class="training-card coach-entry" id="btn-open-coach">
+    <span class="training-icon">📊</span>
+    <span class="training-text">
+      <span class="training-title">Coach — toutes mes parties</span>
+      <span class="training-sub">Analyse en masse de Chess.com, bilan & progression</span>
+    </span>
+    <span class="training-due">→</span>
+  </button>
+
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
     <div id="recent-list"></div>
@@ -453,13 +470,30 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=40"></script>
-<script src="js/board.js?v=40"></script>
-<script src="js/engine.js?v=40"></script>
-<script src="js/openings.js?v=40"></script>
-<script src="js/analysis.js?v=40"></script>
-<script src="js/training.js?v=40"></script>
-<script src="js/app.js?v=40"></script>
+<!-- ═══════ SCREEN 4: COACH ═══════ -->
+<div id="screen-coach" class="screen coach-screen">
+  <div class="top-bar">
+    <button class="back-btn" id="btn-coach-back">←</button>
+    <div class="match-info">
+      <div class="players-line">📊 Coach</div>
+      <div class="elo-line">Toutes vos parties, un seul bilan</div>
+    </div>
+  </div>
+  <div class="coach-body">
+    <div class="coach-sync-bar" id="coach-sync-bar"></div>
+    <div class="coach-flash" id="coach-flash"></div>
+    <div id="coach-dashboard"></div>
+  </div>
+</div>
+
+<script src="js/chess.min.js?v=45"></script>
+<script src="js/board.js?v=45"></script>
+<script src="js/engine.js?v=45"></script>
+<script src="js/openings.js?v=45"></script>
+<script src="js/analysis.js?v=45"></script>
+<script src="js/training.js?v=45"></script>
+<script src="js/coach.js?v=45"></script>
+<script src="js/app.js?v=45"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v42';
+const CACHE_NAME = 'chess-analyst-v45';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './js/openings.js',
   './js/analysis.js',
   './js/training.js',
+  './js/coach.js',
   './js/app.js',
   './js/chess.min.js',
   './js/stockfish-worker.js',

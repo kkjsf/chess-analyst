@@ -29,6 +29,10 @@ const App = (() => {
     $('#btn-analyze').addEventListener('click', onAnalyze);
     const trainBtn = $('#btn-open-training');
     if (trainBtn) trainBtn.addEventListener('click', () => Training.show());
+    const coachBtn = $('#btn-open-coach');
+    if (coachBtn) coachBtn.addEventListener('click', () => Coach.show());
+    const coachBack = $('#btn-coach-back');
+    if (coachBack) coachBack.addEventListener('click', () => Coach.hide());
     $('#btn-back').addEventListener('click', showImport);
     $('#btn-first').addEventListener('click', () => goTo(0));
     $('#btn-prev').addEventListener('click', () => goTo(currentIndex - 1));

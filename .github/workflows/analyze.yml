@@ -1,0 +1,68 @@
+name: Coach analysis
+
+# Pulls the latest Chess.com games, analyzes new ones with Stockfish on
+# GitHub's servers, and commits coach-data.json (read by the PWA).
+# Runs weekly, or on demand from the Actions tab.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # every Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      user:
+        description: 'Chess.com username'
+        required: false
+        default: 'nimokaji'
+      depth:
+        description: 'Stockfish search depth per position'
+        required: false
+        default: '12'
+  push:
+    branches: [main]
+    # Run when the analyzer changes — NOT when coach-data.json is committed
+    # (the results commit only touches that file), so there is no loop.
+    paths:
+      - 'tools/**'
+      - '.github/workflows/analyze.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coach-analysis
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Stockfish
+        run: sudo apt-get update && sudo apt-get install -y stockfish
+
+      - name: Install deps
+        working-directory: tools
+        run: npm ci
+
+      - name: Analyze games
+        working-directory: tools
+        env:
+          STOCKFISH_PATH: /usr/games/stockfish
+        run: node analyze.mjs --user "${{ github.event.inputs.user || 'nimokaji' }}" --depth "${{ github.event.inputs.depth || '12' }}"
+
+      - name: Commit results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- coach-data.json; then
+            echo "No changes to coach-data.json"
+          else
+            git add coach-data.json
+            git commit -m "chore: update coach analysis data [skip ci]"
+            git push
+          fi
