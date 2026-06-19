@@ -59,10 +59,10 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- coach-data.json; then
+          git add coach-data.json
+          if git diff --cached --quiet; then
             echo "No changes to coach-data.json"
           else
-            git add coach-data.json
             git commit -m "chore: update coach analysis data [skip ci]"
             git push
           fi
