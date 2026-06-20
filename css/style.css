@@ -1901,6 +1901,12 @@ html, body {
 .coach-recs { margin: 4px 0 0; padding-left: 18px; }
 .coach-recs li { font-size: 13px; margin: 8px 0; line-height: 1.45; }
 
+.coach-narrative p { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0; }
+.coach-narrative b { color: var(--accent); font-weight: 600; }
+.coach-puz-intro { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 12px; }
+.coach-puz-cat { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.coach-puz-done { font-size: 11px; font-weight: 600; color: var(--success); background: rgba(74,222,128,0.12); padding: 1px 7px; border-radius: 8px; margin-left: 6px; }
+.coach-puz-played { font-size: 12px; color: var(--text-dim); font-weight: 400; }
 .coach-count { background: var(--accent); color: #1a1a2e; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
 .coach-puz-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .coach-puz-filter { background: var(--bg); border: 1px solid #2a3a5c; color: var(--text-dim); border-radius: 14px; padding: 5px 11px; font-size: 12px; cursor: pointer; }

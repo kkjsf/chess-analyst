@@ -16,8 +16,16 @@ const Coach = (() => {
   let stopFlag = false;
   let puzzles = [];
   let puzIdx = 0;
-  let puzFilter = 'all';
+  let puzFilter = 'reco';
   let puzRevealed = false;
+  const RECO_SIZE = 12;
+  const SOLVED_KEY = 'chess-coach-solved';
+  const PUZ_CATS = {
+    mate: { icon: '🏁', label: 'Mat', instr: 'Il y a un mat à donner. Trouvez le coup qui force l\'échec et mat.' },
+    material: { icon: '💰', label: 'Gain de matériel', instr: 'Un coup permettait de gagner du matériel. Lequel ?' },
+    defense: { icon: '🛡️', label: 'Défense', instr: 'Votre coup a coûté cher. Quel coup limitait les dégâts ?' },
+    tactic: { icon: '⚡', label: 'Coup juste', instr: 'Le moteur voyait nettement mieux. Trouvez le meilleur coup.' }
+  };
   let hostedInfo = null;
 
   const $ = (s) => document.querySelector(s);
@@ -256,6 +264,7 @@ const Coach = (() => {
       return;
     }
     body.innerHTML =
+      renderNarrative(an) +
       renderTrends(an) +
       renderRepertoire(an) +
       renderWeakness(an) +
@@ -300,6 +309,44 @@ const Coach = (() => {
     if (!total) return '';
     return `<div class="coach-bar">` + parts.map(p =>
       p.v ? `<span style="width:${pct(p.v, total)}%;background:${p.color}"></span>` : '').join('') + `</div>`;
+  }
+
+  function renderNarrative(an) {
+    const total = an.length;
+    const wins = an.filter(g => g.result === 'win').length;
+    const winPct = pct(wins, total);
+    const acc = Math.round(avg(an.map(g => g.analysis.accuracy)));
+    const w = an.filter(g => g.userColor === 'w'), b = an.filter(g => g.userColor === 'b');
+    const wP = pct(w.filter(g => g.result === 'win').length, w.length);
+    const bP = pct(b.filter(g => g.result === 'win').length, b.length);
+    const pa = { opening: { t: 0, c: 0 }, middle: { t: 0, c: 0 }, endgame: { t: 0, c: 0 } };
+    let bl = 0, mv = 0;
+    an.forEach(g => {
+      ['opening', 'middle', 'endgame'].forEach(p => { if (g.analysis.phaseAccuracy[p]) { pa[p].t += g.analysis.phaseAccuracy[p].total; pa[p].c += g.analysis.phaseAccuracy[p].count; } });
+      bl += g.analysis.blunders || 0; mv += g.analysis.moveCount || 0;
+    });
+    const pAcc = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : 0;
+    const phases = [{ k: 'opening', l: "l'ouverture" }, { k: 'middle', l: 'le milieu de jeu' }, { k: 'endgame', l: 'la finale' }].map(p => ({ ...p, a: pAcc(p.k) }));
+    const best = phases.slice().sort((x, y) => y.a - x.a)[0];
+    const worst = phases.slice().sort((x, y) => x.a - y.a)[0];
+    const blRate = mv ? bl / mv * 100 : 0;
+    const sorted = an.slice().sort((x, y) => x.endTime - y.endTime);
+    const recent = sorted.slice(-10), prior = sorted.slice(-20, -10);
+    const recentWin = pct(recent.filter(g => g.result === 'win').length, recent.length);
+    const priorWin = prior.length ? pct(prior.filter(g => g.result === 'win').length, prior.length) : null;
+
+    const s = [];
+    s.push(`Sur vos <b>${total} parties</b> analysées, vous l'emportez dans <b>${winPct}%</b> des cas, avec une précision moyenne de <b>${acc}%</b>.`);
+    if (w.length && b.length && Math.abs(wP - bP) >= 12)
+      s.push(`Vous êtes nettement plus à l'aise avec les <b>${wP > bP ? 'Blancs' : 'Noirs'}</b> (${Math.max(wP, bP)}% de victoires, contre ${Math.min(wP, bP)}% de l'autre côté) — un répertoire à consolider du côté faible.`);
+    s.push(`Votre point fort est <b>${best.l}</b> (${best.a}% de précision) ; à l'inverse, <b>${worst.l}</b> est votre maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
+    if (blRate > 0)
+      s.push(`Vous lâchez une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
+    if (priorWin !== null && Math.abs(recentWin - priorWin) >= 10)
+      s.push(`Tendance récente : vous <b>${recentWin > priorWin ? 'progressez' : 'marquez le pas'}</b> (${recentWin}% sur vos 10 dernières parties contre ${priorWin}% auparavant).`);
+    s.push(`Concrètement : faites la <b>série d'entraînement</b> ci-dessous (vos propres erreurs) et relisez vos parties perdues dans <b>${worst.l}</b>.`);
+
+    return `<div class="home-card coach-card coach-narrative"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
   }
 
   function renderTrends(an) {
@@ -483,32 +530,67 @@ const Coach = (() => {
   }
 
   // ─────────────── Puzzle trainer (your own mistakes) ───────────────
+  function getSolved() { try { return new Set(JSON.parse(localStorage.getItem(SOLVED_KEY) || '[]')); } catch (_) { return new Set(); } }
+  function saveSolved(set) { try { localStorage.setItem(SOLVED_KEY, JSON.stringify([...set])); } catch (_) {} }
+
+  // Classify a mistake by what the best move achieves — computed from the
+  // stored position, so categories are reliable without re-analysis.
+  function categorize(p) {
+    try {
+      const c = new Chess(p.fenBefore);
+      const m = c.move({ from: p.bestUci.slice(0, 2), to: p.bestUci.slice(2, 4), promotion: p.bestUci[4] });
+      if (m) {
+        if (m.san.includes('#')) return 'mate';
+        if (m.captured) { const v = { p: 1, n: 3, b: 3, r: 5, q: 9 }[m.captured] || 0; if (v >= 3 || p.cpLoss >= 200) return 'material'; }
+      }
+    } catch (_) {}
+    return p.cpLoss >= 250 ? 'defense' : 'tactic';
+  }
+
   function collectPuzzles() {
     const list = [];
     analyzed().forEach(g => {
       (g.analysis.blunderList || []).forEach(b => {
-        list.push({ ...b, oppName: g.oppName, endTime: g.endTime, url: g.url, userColor: g.userColor });
+        if (!b.bestUci || !b.fenBefore) return;
+        const p = { ...b, oppName: g.oppName, endTime: g.endTime, url: g.url, userColor: g.userColor, id: g.uuid + ':' + b.ply, gameId: g.uuid };
+        p.cat = categorize(p);
+        list.push(p);
       });
     });
-    list.sort((a, b) => b.cpLoss - a.cpLoss);
     return list;
+  }
+
+  // A short, varied, highest-impact set drawn from unseen mistakes.
+  function recommendedSet(all) {
+    const solved = getSolved();
+    const order = { mate: 0, material: 1, defense: 2, tactic: 3 };
+    const pool = all.filter(p => !solved.has(p.id)).sort((a, b) => (order[a.cat] - order[b.cat]) || (b.cpLoss - a.cpLoss));
+    const seenGames = new Set();
+    const out = [];
+    for (const p of pool) { if (seenGames.has(p.gameId)) continue; seenGames.add(p.gameId); out.push(p); if (out.length >= RECO_SIZE) break; }
+    for (const p of pool) { if (out.length >= RECO_SIZE) break; if (!out.includes(p)) out.push(p); }
+    return out;
   }
 
   function renderPuzzleCard(an) {
     const all = collectPuzzles();
-    const counts = {
-      all: all.length,
-      opening: all.filter(p => p.phase === 'opening').length,
-      middle: all.filter(p => p.phase === 'middle').length,
-      endgame: all.filter(p => p.phase === 'endgame').length
-    };
+    const solved = getSolved();
+    const cats = ['mate', 'material', 'defense', 'tactic'];
+    const counts = {}; cats.forEach(c => counts[c] = all.filter(p => p.cat === c).length);
+    const reco = recommendedSet(all);
+    const seen = all.filter(p => solved.has(p.id)).length;
+    puzFilter = 'reco'; puzIdx = 0;
     return `<div class="home-card coach-card" id="coach-puzzle-card">
-      <h3>🧩 Vos erreurs en exercices <span class="coach-count">${all.length}</span></h3>
+      <h3>🧩 Entraînement ciblé</h3>
+      <p class="coach-puz-intro">Inutile de tout faire : voici une <b>série courte</b> tirée de vos vraies erreurs, des plus instructives aux plus subtiles. ${all.length} au total, ${seen} déjà vues.</p>
       ${all.length ? `
       <div class="coach-puz-filters">
-        ${['all', 'opening', 'middle', 'endgame'].map(f => `<button class="coach-puz-filter ${f === 'all' ? 'active' : ''}" data-f="${f}">${{ all: 'Toutes', opening: 'Ouverture', middle: 'Milieu', endgame: 'Finale' }[f]} (${counts[f]})</button>`).join('')}
+        <button class="coach-puz-filter active" data-f="reco">⭐ Série (${reco.length})</button>
+        ${cats.filter(c => counts[c]).map(c => `<button class="coach-puz-filter" data-f="${c}">${PUZ_CATS[c].icon} ${PUZ_CATS[c].label} (${counts[c]})</button>`).join('')}
       </div>
-      <div id="coach-puz-stage"></div>` : `<div class="coach-empty-mini">Aucune erreur détectée — bravo !</div>`}
+      <div id="coach-puz-stage"></div>
+      <a class="coach-server-link" id="coach-puz-reset">↺ Réinitialiser la progression</a>
+      ` : `<div class="coach-empty-mini">Aucune erreur détectée — bravo !</div>`}
     </div>`;
   }
 
@@ -525,31 +607,36 @@ const Coach = (() => {
         showPuzzle();
       });
     });
+    const reset = $('#coach-puz-reset');
+    if (reset) reset.addEventListener('click', () => { saveSolved(new Set()); render(); });
     loadPuzzles();
     showPuzzle();
   }
 
   function loadPuzzles() {
     const all = collectPuzzles();
-    puzzles = puzFilter === 'all' ? all : all.filter(p => p.phase === puzFilter);
+    puzzles = puzFilter === 'reco' ? recommendedSet(all) : all.filter(p => p.cat === puzFilter).sort((a, b) => b.cpLoss - a.cpLoss);
   }
 
   function showPuzzle() {
     const stage = $('#coach-puz-stage');
     if (!stage) return;
-    if (!puzzles.length) { stage.innerHTML = `<div class="coach-empty-mini">Aucune erreur dans cette phase.</div>`; return; }
+    if (!puzzles.length) { stage.innerHTML = `<div class="coach-empty-mini">Série terminée ! Touchez « Réinitialiser » pour rejouer, ou choisissez une catégorie.</div>`; return; }
     if (puzIdx >= puzzles.length) puzIdx = 0;
     if (puzIdx < 0) puzIdx = puzzles.length - 1;
     const p = puzzles[puzIdx];
     puzRevealed = false;
+    const cat = PUZ_CATS[p.cat] || PUZ_CATS.tactic;
     const toMove = p.userColor === 'w' ? 'Blancs' : 'Noirs';
+    const done = getSolved().has(p.id);
     stage.innerHTML = `
-      <div class="coach-puz-meta">vs ${esc(p.oppName)} · ${fmtDate(p.endTime)} · ${p.type === 'blunder' ? 'Gaffe' : 'Erreur'} (−${(p.cpLoss / 100).toFixed(1)})</div>
+      <div class="coach-puz-cat">${cat.icon} ${cat.label}${done ? ' <span class="coach-puz-done">✓ vu</span>' : ''}</div>
+      <div class="coach-puz-meta">vs ${esc(p.oppName)} · ${fmtDate(p.endTime)} · trait aux ${toMove}</div>
       <div class="coach-puz-board">
         <svg viewBox="0 0 360 360" id="coach-puz-svg"></svg>
         <svg viewBox="0 0 360 360" id="coach-puz-arrows" class="arrow-overlay"></svg>
       </div>
-      <div class="coach-puz-prompt">Trait aux <b>${toMove}</b>. Vous aviez joué <b>${esc(p.playedSan)}</b>. Trouvez mieux.</div>
+      <div class="coach-puz-prompt">${cat.instr}</div>
       <div class="coach-puz-answer" id="coach-puz-answer" hidden></div>
       <div class="coach-puz-nav">
         <button class="nav-btn" id="coach-puz-prev">◀</button>
@@ -569,14 +656,15 @@ const Coach = (() => {
     if (puzRevealed) { puzIdx++; showPuzzle(); return; }
     puzRevealed = true;
     const p = puzzles[puzIdx];
+    const solved = getSolved(); solved.add(p.id); saveSolved(solved);
     if (p.bestUci && p.bestUci.length >= 4) {
       BoardRenderer.drawArrows($('#coach-puz-arrows'), [{ from: p.bestUci.slice(0, 2), to: p.bestUci.slice(2, 4), color: '#56b886', opacity: 0.9, width: 6 }]);
     }
     const ans = $('#coach-puz-answer');
     ans.hidden = false;
-    ans.innerHTML = `<b>Meilleur coup : ${esc(p.bestSan || '—')}</b>${p.tip ? `<div class="coach-puz-tip">${p.tip}</div>` : ''}`;
+    ans.innerHTML = `<div><b>✔ Meilleur coup : ${esc(p.bestSan || '—')}</b> <span class="coach-puz-played">— vous aviez joué ${esc(p.playedSan)} (−${(p.cpLoss / 100).toFixed(1)})</span></div>${p.tip ? `<div class="coach-puz-tip">${p.tip}</div>` : ''}`;
     const btn = $('#coach-puz-reveal');
-    if (btn) btn.textContent = 'Suivant ▶';
+    if (btn) btn.textContent = puzIdx < puzzles.length - 1 ? 'Suivant ▶' : 'Terminer ✓';
   }
 
   // ─────────────── UI actions ───────────────
