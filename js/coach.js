@@ -18,7 +18,8 @@ const Coach = (() => {
   let puzIdx = 0;
   let puzFilter = 'reco';
   let puzRevealed = false;
-  const RECO_SIZE = 12;
+  const RECO_SIZE = 10;
+  const CAT_SIZE = 8;
   const SOLVED_KEY = 'chess-coach-solved';
   const PUZ_CATS = {
     mate: { icon: '🏁', label: 'Mat', instr: 'Il y a un mat à donner. Trouvez le coup qui force l\'échec et mat.' },
@@ -574,22 +575,19 @@ const Coach = (() => {
 
   function renderPuzzleCard(an) {
     const all = collectPuzzles();
-    const solved = getSolved();
     const cats = ['mate', 'material', 'defense', 'tactic'];
-    const counts = {}; cats.forEach(c => counts[c] = all.filter(p => p.cat === c).length);
     const reco = recommendedSet(all);
-    const seen = all.filter(p => solved.has(p.id)).length;
     puzFilter = 'reco'; puzIdx = 0;
     return `<div class="home-card coach-card" id="coach-puzzle-card">
       <h3>🧩 Entraînement ciblé</h3>
-      <p class="coach-puz-intro">Inutile de tout faire : voici une <b>série courte</b> tirée de vos vraies erreurs, des plus instructives aux plus subtiles. ${all.length} au total, ${seen} déjà vues.</p>
+      <p class="coach-puz-intro">Une <b>courte série</b> tirée de vos erreurs réelles. Faites-en autant que vous voulez — une nouvelle série apparaît au fur et à mesure.</p>
       ${all.length ? `
       <div class="coach-puz-filters">
         <button class="coach-puz-filter active" data-f="reco">⭐ Série (${reco.length})</button>
-        ${cats.filter(c => counts[c]).map(c => `<button class="coach-puz-filter" data-f="${c}">${PUZ_CATS[c].icon} ${PUZ_CATS[c].label} (${counts[c]})</button>`).join('')}
+        ${cats.filter(c => all.some(p => p.cat === c)).map(c => `<button class="coach-puz-filter" data-f="${c}">${PUZ_CATS[c].icon} ${PUZ_CATS[c].label}</button>`).join('')}
       </div>
       <div id="coach-puz-stage"></div>
-      <a class="coach-server-link" id="coach-puz-reset">↺ Réinitialiser la progression</a>
+      <a class="coach-server-link" id="coach-puz-reset">↺ Recommencer depuis le début</a>
       ` : `<div class="coach-empty-mini">Aucune erreur détectée — bravo !</div>`}
     </div>`;
   }
@@ -615,7 +613,11 @@ const Coach = (() => {
 
   function loadPuzzles() {
     const all = collectPuzzles();
-    puzzles = puzFilter === 'reco' ? recommendedSet(all) : all.filter(p => p.cat === puzFilter).sort((a, b) => b.cpLoss - a.cpLoss);
+    if (puzFilter === 'reco') { puzzles = recommendedSet(all); return; }
+    const solved = getSolved();
+    puzzles = all.filter(p => p.cat === puzFilter)
+      .sort((a, b) => (solved.has(a.id) - solved.has(b.id)) || (b.cpLoss - a.cpLoss))
+      .slice(0, CAT_SIZE);
   }
 
   function showPuzzle() {
