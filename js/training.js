@@ -1,6 +1,7 @@
 const Training = (() => {
   const KEY = 'chess-analyst-training';
-  const MAX_ITEMS = 150;
+  const MAX_ITEMS = 500;
+  const NEW_PER_SESSION = 15;
   const DAY = 86400000;
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => document.querySelectorAll(s);
@@ -64,47 +65,100 @@ const Training = (() => {
   }
 
   // ───────────────────────── capture from a game ─────────────────────────
+  // Build SRS-ready items from one analyzed game's blunders, then merge them
+  // into the deck. Used when you open a single game in the analyzer.
   function capture(gameKey, analysis, header, user) {
     if (!analysis || !user) return;
-    const items = load();
-    const byId = new Map(items.map(it => [it.id, it]));
     const white = header.White || '?';
     const black = header.Black || '?';
     const date = header.Date || '';
-
+    const base = [];
     for (let i = 0; i < analysis.length; i++) {
       const r = analysis[i];
       if (!r || !r.move || r.move.color !== user) continue;
       if (r.type !== 'blunder' && r.type !== 'mistake') continue;
       if (!r.bestUci || r.bestUci.length < 4 || !r.fenBefore) continue;
-
-      const id = gameKey + '#' + i;
-      const existing = byId.get(id);
-      const motif = detectMotif(r.fenBefore, r.bestUci, user);
-      const base = {
-        id, fen: r.fenBefore, side: user,
+      base.push({
+        id: gameKey + '#' + i, fen: r.fenBefore, side: user,
         bestUci: r.bestUci, bestSan: r.bestSan || '',
         playedSan: r.sanFr || r.san, type: r.type, cpLoss: r.cpLoss || 0,
-        motif, moveNo: Math.floor(i / 2) + 1,
-        white, black, date,
-      };
-      if (existing) {
-        Object.assign(existing, base); // refresh content, keep SRS fields
+        motif: detectMotif(r.fenBefore, r.bestUci, user),
+        moveNo: Math.floor(i / 2) + 1, white, black, date,
+      });
+    }
+    mergeItems(base);
+  }
+
+  // Ingest blunders coming from Coach mode (whole-archive analysis), so EVERY
+  // analyzed game feeds the deck — not just games opened one-by-one.
+  // blunders: [{ply, fenBefore, bestUci, bestSan, playedSan, type, cpLoss}]
+  // meta: {side, white, black, date}
+  function ingestGame(gameKey, blunders, meta) {
+    if (!blunders || !blunders.length || !meta || !meta.side) return 0;
+    const base = [];
+    for (const b of blunders) {
+      if (!b.bestUci || b.bestUci.length < 4 || !b.fenBefore) continue;
+      if (b.type !== 'blunder' && b.type !== 'mistake') continue;
+      base.push({
+        id: gameKey + '#' + b.ply, fen: b.fenBefore, side: meta.side,
+        bestUci: b.bestUci, bestSan: b.bestSan || '',
+        playedSan: b.playedSan || '', type: b.type, cpLoss: b.cpLoss || 0,
+        motif: detectMotif(b.fenBefore, b.bestUci, meta.side),
+        moveNo: Math.floor(b.ply / 2) + 1,
+        white: meta.white || '?', black: meta.black || '?', date: meta.date || '',
+      });
+    }
+    return mergeItems(base);
+  }
+
+  // Merge freshly-built items into the deck, preserving SRS progress. Dedups
+  // by id and by position signature (so the same mistake seen via the single
+  // analyzer and via Coach doesn't become two cards), and never evicts cards
+  // already in review when capping.
+  const MUTABLE = ['bestSan', 'playedSan', 'type', 'cpLoss', 'motif', 'moveNo', 'white', 'black', 'date'];
+  function mergeItems(base) {
+    if (!base.length) return 0;
+    const items = load();
+    const byId = new Map(items.map(it => [it.id, it]));
+    const bySig = new Map(items.map(it => [it.fen + '|' + it.bestUci, it]));
+    let added = 0;
+    for (const nb of base) {
+      const sig = nb.fen + '|' + nb.bestUci;
+      const hit = byId.get(nb.id) || bySig.get(sig);
+      if (hit) {
+        MUTABLE.forEach(k => { if (nb[k] !== undefined && nb[k] !== '') hit[k] = nb[k]; });
       } else {
-        byId.set(id, Object.assign(base, { reps: 0, interval: 0, ease: 2.4, due: 0, savedAt: Date.now() }));
+        const item = Object.assign(nb, { reps: 0, interval: 0, ease: 2.4, due: 0, savedAt: Date.now() });
+        byId.set(item.id, item); bySig.set(sig, item); added++;
       }
     }
-
     let merged = [...byId.values()];
-    // Keep most relevant: due/new first, then biggest blunders, cap the list.
-    merged.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+    // Protect cards already being learned; otherwise keep the biggest mistakes.
+    merged.sort((a, b) => {
+      const ap = ((a.reps || 0) > 0 || (a.due || 0) > 0) ? 1 : 0;
+      const bp = ((b.reps || 0) > 0 || (b.due || 0) > 0) ? 1 : 0;
+      return (bp - ap) || ((b.cpLoss || 0) - (a.cpLoss || 0));
+    });
     if (merged.length > MAX_ITEMS) merged = merged.slice(0, MAX_ITEMS);
     save(merged);
+    return added;
+  }
+
+  // A session = all due reviews + a capped batch of new cards (biggest
+  // mistakes first), so a freshly-fed deck never dumps hundreds at once.
+  function buildSession() {
+    const now = Date.now();
+    const all = load();
+    const reviews = all.filter(it => (it.reps || 0) > 0 && (it.due || 0) <= now)
+      .sort((a, b) => (a.due || 0) - (b.due || 0));
+    const fresh = all.filter(it => (it.reps || 0) === 0 && (it.due || 0) <= now)
+      .sort((a, b) => (b.cpLoss || 0) - (a.cpLoss || 0))
+      .slice(0, NEW_PER_SESSION);
+    return reviews.concat(fresh);
   }
 
   function dueCount() {
-    const now = Date.now();
-    return load().filter(it => (it.due || 0) <= now).length;
+    return buildSession().length;
   }
 
   // ───────────────────────── SRS scheduling ─────────────────────────
@@ -156,10 +210,7 @@ const Training = (() => {
   let queue = [], qi = 0, current = null, solved = false;
 
   function startPuzzles() {
-    const now = Date.now();
-    const all = load();
-    queue = all.filter(it => (it.due || 0) <= now);
-    queue.sort((a, b) => (b.cpLoss || 0) - (a.cpLoss || 0));
+    queue = buildSession();
     qi = 0;
     renderPuzzle();
   }
@@ -349,8 +400,7 @@ const Training = (() => {
     const sorted = MOTIF_ORDER.filter(m => counts[m] > 0).sort((a, b) => counts[b] - counts[a]);
     const worst = sorted[0];
 
-    const now = Date.now();
-    const due = items.filter(it => (it.due || 0) <= now).length;
+    const due = buildSession().length;
     const learned = items.filter(it => (it.reps || 0) >= 2).length;
 
     let rows = '';
@@ -405,5 +455,5 @@ const Training = (() => {
     else renderMotifs();
   }
 
-  return { capture, dueCount, show };
+  return { capture, ingestGame, dueCount, show };
 })();

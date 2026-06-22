@@ -251,6 +251,25 @@ const Coach = (() => {
   function fmtIso(iso) { try { return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return iso; } }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // Feed every analyzed game's mistakes into the spaced-repetition trainer
+  // (Mode entraînement), so the SRS deck draws on your whole archive — not
+  // only games opened one-by-one in the analyzer.
+  function syncToTraining() {
+    if (typeof Training === 'undefined' || !Training.ingestGame) return 0;
+    const user = getUser();
+    let added = 0;
+    analyzed().forEach(g => {
+      const bl = (g.analysis && g.analysis.blunderList) || [];
+      if (!bl.length) return;
+      const white = g.userColor === 'w' ? user : g.oppName;
+      const black = g.userColor === 'w' ? g.oppName : user;
+      const date = g.endTime ? new Date(g.endTime * 1000).toLocaleDateString('fr-FR') : '';
+      added += Training.ingestGame(g.uuid, bl, { side: g.userColor, white, black, date }) || 0;
+    });
+    if (added && typeof App !== 'undefined' && App.refreshHome) App.refreshHome();
+    return added;
+  }
+
   // ─────────────── Dashboard rendering ───────────────
   function render() {
     renderSyncBar();
@@ -689,6 +708,7 @@ const Coach = (() => {
     games = await getAll();
     setProgress(false);
     render();
+    syncToTraining();
     const pending = games.filter(g => !g.analysis).length;
     flash(info
       ? `À jour — ${info.analyzedCount}/${info.count} analysées (serveur)${pending ? `, ${pending} nouvelle(s) en attente` : ''}.`
@@ -726,6 +746,7 @@ const Coach = (() => {
     sBtn.hidden = true;
     if (r && r.engineFailed) { flash('Moteur Stockfish indisponible sur ce navigateur.', true); aBtn.disabled = false; return; }
     render();
+    syncToTraining();
     flash(r && r.stopped ? `Analyse interrompue (${r.done} faites).` : `Analyse terminée (${r ? r.done : 0} parties).`);
   }
 
@@ -754,6 +775,7 @@ const Coach = (() => {
       const last = await getMeta('lastSync');
       if (!last) onSync(); // no hosted data yet → local-engine fallback
     }
+    syncToTraining();
   }
 
   function hide() {
