@@ -1753,6 +1753,48 @@ html, body {
   font-weight: 600; cursor: pointer; padding: 0; white-space: nowrap;
 }
 .train-link:active { opacity: 0.7; }
+
+/* ── Guess the move ── */
+.guess-launch {
+  display: block; width: 100%; margin: 14px 0; padding: 14px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  background: var(--accent); color: #1a1a2e; border: none; border-radius: 12px;
+  transition: filter 0.15s, transform 0.1s;
+}
+.guess-launch:hover { filter: brightness(1.06); }
+.guess-launch:active { transform: scale(0.99); }
+
+.guess-overlay {
+  position: fixed; inset: 0; z-index: 1000; background: var(--bg);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+body.guess-open { overflow: hidden; }
+.guess-panel { max-width: 460px; margin: 0 auto; padding: 0 14px 40px; }
+.guess-head {
+  display: flex; align-items: center; gap: 10px; padding: 14px 0;
+  position: sticky; top: 0; background: var(--bg); z-index: 2;
+}
+.guess-title { font-size: 16px; font-weight: 700; flex: 1; }
+.guess-score { font-size: 15px; font-weight: 700; color: var(--accent); }
+.guess-prompt { font-size: 15px; margin: 6px 0 12px; }
+.guess-board-wrap {
+  position: relative; width: 100%; max-width: 360px; aspect-ratio: 1; margin: 0 auto;
+}
+.guess-board-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px; }
+#guess-board { cursor: pointer; }
+#guess-arrows { pointer-events: none; }
+.guess-feedback {
+  min-height: 24px; margin: 14px 0; font-size: 14px; line-height: 1.5;
+  color: var(--text-dim); text-align: center;
+}
+.guess-feedback.right { color: var(--success); }
+.guess-feedback.wrong { color: var(--danger); }
+.guess-feedback.shown { color: var(--accent); }
+.guess-nav { display: flex; justify-content: center; margin: 8px 0; }
+.guess-empty { text-align: center; padding: 40px 16px; font-size: 16px; line-height: 1.7; }
+.guess-empty span { font-size: 13px; color: var(--text-dim); }
+.guess-final { font-size: 28px; color: var(--accent); display: inline-block; margin: 6px 0; }
+.guess-actions { margin-top: 18px; }
 .home-card h3 {
   font-size: 14px;
   color: var(--text-dim);

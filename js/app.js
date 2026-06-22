@@ -29,6 +29,10 @@ const App = (() => {
     $('#btn-analyze').addEventListener('click', onAnalyze);
     const trainBtn = $('#btn-open-training');
     if (trainBtn) trainBtn.addEventListener('click', () => Training.show());
+    const guessBtn = $('#btn-guess');
+    if (guessBtn) guessBtn.addEventListener('click', () => {
+      if (currentAnalysis && typeof GuessMove !== 'undefined') GuessMove.start(currentAnalysis, currentHeader, currentUser);
+    });
     const coachBtn = $('#btn-open-coach');
     if (coachBtn) coachBtn.addEventListener('click', () => Coach.show());
     const coachBack = $('#btn-coach-back');

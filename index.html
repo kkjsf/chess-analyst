@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=50">
+<link rel="stylesheet" href="css/style.css?v=51">
 </head>
 <body>
 
@@ -412,6 +412,8 @@
       <div class="tip-text" id="tip-text"></div>
     </div>
 
+    <button class="guess-launch" id="btn-guess">🎯 Devine le coup — rejoue cette partie</button>
+
     <div class="moves-card">
       <h3>Liste des coups</h3>
       <div class="moves-grid" id="moves-grid"></div>
@@ -486,14 +488,15 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=50"></script>
-<script src="js/board.js?v=50"></script>
-<script src="js/engine.js?v=50"></script>
-<script src="js/openings.js?v=50"></script>
-<script src="js/analysis.js?v=50"></script>
-<script src="js/training.js?v=50"></script>
-<script src="js/coach.js?v=50"></script>
-<script src="js/app.js?v=50"></script>
+<script src="js/chess.min.js?v=51"></script>
+<script src="js/board.js?v=51"></script>
+<script src="js/engine.js?v=51"></script>
+<script src="js/openings.js?v=51"></script>
+<script src="js/analysis.js?v=51"></script>
+<script src="js/training.js?v=51"></script>
+<script src="js/guess.js?v=51"></script>
+<script src="js/coach.js?v=51"></script>
+<script src="js/app.js?v=51"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
