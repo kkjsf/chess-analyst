@@ -1813,6 +1813,36 @@ body.guess-open { overflow: hidden; }
   font-size: 13px; line-height: 1.55; background: var(--bg-card);
   border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
 }
+
+/* ── Analysis "Plus d'analyse" accordion ── */
+.analysis-more { margin-top: 4px; }
+.analysis-more > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  background: var(--bg-card); border-radius: var(--radius, 10px); padding: 12px 14px;
+  font-size: 14px; font-weight: 600; color: var(--text-dim); text-align: center;
+}
+.analysis-more > summary::-webkit-details-marker { display: none; }
+.analysis-more > summary::after { content: ' ▾'; }
+.analysis-more[open] > summary::after { content: ' ▴'; }
+.analysis-more[open] > summary { margin-bottom: 10px; color: var(--text); }
+.analysis-more > summary:hover { background: var(--bg-elevated); }
+
+/* ── Home section heading ── */
+.home-section-title {
+  font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-dim); margin: 20px 4px 8px; font-weight: 700;
+}
+
+/* ── Move-list legend + stronger error tints ── */
+.moves-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.moves-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.moves-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.move-cell.blunder-move { background: rgba(248,113,113,0.16); }
+.move-cell.mistake-move { background: rgba(245,191,87,0.13); }
+.move-cell.inaccuracy-move { background: rgba(245,191,87,0.07); }
+.move-cell.active.blunder-move, .move-cell.active.mistake-move, .move-cell.active.inaccuracy-move {
+  background: var(--accent); color: #1a1a2e;
+}
 .home-card h3 {
   font-size: 14px;
   color: var(--text-dim);

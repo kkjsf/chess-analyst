@@ -119,11 +119,12 @@ const Endgame = (() => {
   }
 
   async function userMove(from, to) {
+    const prevFen = chess.fen();
     let m = null;
     try { m = chess.move({ from, to, promotion: 'q' }); } catch (_) {}
     if (!m) { setStatus('⚠️ Coup illégal — clique ta pièce puis sa case d\'arrivée.', 'wrong'); return; }
     plies++;
-    BoardRenderer.render($('#eg-board'), chess.fen(), m);
+    BoardRenderer.renderAnimated($('#eg-board'), prevFen, chess.fen(), m, 200);
     if (finish(false)) return;
     busy = true;
     setStatus('L\'adversaire réfléchit…');
@@ -139,6 +140,7 @@ const Endgame = (() => {
       const r = await StockfishEngine.evaluate(chess.fen(), 'movetime 300');
       uci = r && r.bestMove;
     } catch (_) {}
+    const prevFen = chess.fen();
     let m = null;
     if (uci && uci.length >= 4) {
       try { m = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' }); } catch (_) {}
@@ -147,7 +149,7 @@ const Endgame = (() => {
       const ms = chess.moves({ verbose: true });
       if (ms.length) m = chess.move(ms[Math.floor(Math.random() * ms.length)]);
     }
-    if (m && $('#eg-board')) BoardRenderer.render($('#eg-board'), chess.fen(), m);
+    if (m && $('#eg-board')) BoardRenderer.renderAnimated($('#eg-board'), prevFen, chess.fen(), m, 200);
   }
 
   // Returns true if the game has ended.

@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=52">
+<link rel="stylesheet" href="css/style.css?v=53">
 </head>
 <body>
 
@@ -284,6 +284,8 @@
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
+  <h2 class="home-section-title">🎓 S'entraîner</h2>
+
   <button class="training-card" id="btn-open-training">
     <span class="training-icon">🎯</span>
     <span class="training-text">
@@ -357,21 +359,6 @@
       <div class="intro-text" id="intro-text"></div>
     </div>
 
-    <div class="win-graph-card" id="win-graph-card" hidden>
-      <h3>Chances de gain</h3>
-      <div class="win-graph-container" id="win-graph-container"></div>
-    </div>
-
-    <div class="highlights-card" id="highlights-card" hidden>
-      <h3>Moments clés</h3>
-      <div class="highlights-list" id="highlights-list"></div>
-    </div>
-
-    <div class="mistakes-card" id="mistakes-card" hidden>
-      <h3>Profil d'erreurs</h3>
-      <div id="mistakes-content"></div>
-    </div>
-
     <div class="board-wrapper">
       <div class="player-bar" id="top-player">
         <span class="piece-icon">⚫</span>
@@ -423,10 +410,33 @@
 
     <button class="guess-launch" id="btn-guess">🎯 Devine le coup — rejoue cette partie</button>
 
+    <div class="highlights-card" id="highlights-card" hidden>
+      <h3>Moments clés</h3>
+      <div class="highlights-list" id="highlights-list"></div>
+    </div>
+
     <div class="moves-card">
       <h3>Liste des coups</h3>
+      <div class="moves-legend">
+        <span><i style="background:var(--danger)"></i>Gaffe</span>
+        <span><i style="background:var(--warning)"></i>Erreur</span>
+        <span><i style="background:var(--success)"></i>Bon coup</span>
+      </div>
       <div class="moves-grid" id="moves-grid"></div>
     </div>
+
+    <details class="analysis-more">
+      <summary>Plus d'analyse ▾</summary>
+
+      <div class="win-graph-card" id="win-graph-card" hidden>
+        <h3>Chances de gain</h3>
+        <div class="win-graph-container" id="win-graph-container"></div>
+      </div>
+
+      <div class="mistakes-card" id="mistakes-card" hidden>
+        <h3>Profil d'erreurs</h3>
+        <div id="mistakes-content"></div>
+      </div>
 
     <div class="time-trouble-card" id="time-trouble-card" hidden>
       <h3>Pression du temps</h3>
@@ -457,6 +467,7 @@
       <h3>Résumé de la partie</h3>
       <div id="summary-content"></div>
     </div>
+    </details>
   </div>
 </div>
 
@@ -497,16 +508,16 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=52"></script>
-<script src="js/board.js?v=52"></script>
-<script src="js/engine.js?v=52"></script>
-<script src="js/openings.js?v=52"></script>
-<script src="js/analysis.js?v=52"></script>
-<script src="js/training.js?v=52"></script>
-<script src="js/guess.js?v=52"></script>
-<script src="js/endgame.js?v=52"></script>
-<script src="js/coach.js?v=52"></script>
-<script src="js/app.js?v=52"></script>
+<script src="js/chess.min.js?v=53"></script>
+<script src="js/board.js?v=53"></script>
+<script src="js/engine.js?v=53"></script>
+<script src="js/openings.js?v=53"></script>
+<script src="js/analysis.js?v=53"></script>
+<script src="js/training.js?v=53"></script>
+<script src="js/guess.js?v=53"></script>
+<script src="js/endgame.js?v=53"></script>
+<script src="js/coach.js?v=53"></script>
+<script src="js/app.js?v=53"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
