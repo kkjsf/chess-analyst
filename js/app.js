@@ -35,6 +35,8 @@ const App = (() => {
     });
     const coachBtn = $('#btn-open-coach');
     if (coachBtn) coachBtn.addEventListener('click', () => Coach.show());
+    const endgameBtn = $('#btn-open-endgame');
+    if (endgameBtn) endgameBtn.addEventListener('click', () => { if (typeof Endgame !== 'undefined') Endgame.show(); });
     const coachBack = $('#btn-coach-back');
     if (coachBack) coachBack.addEventListener('click', () => Coach.hide());
     $('#btn-back').addEventListener('click', showImport);

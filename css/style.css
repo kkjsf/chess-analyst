@@ -1795,6 +1795,24 @@ body.guess-open { overflow: hidden; }
 .guess-empty span { font-size: 13px; color: var(--text-dim); }
 .guess-final { font-size: 28px; color: var(--accent); display: inline-block; margin: 6px 0; }
 .guess-actions { margin-top: 18px; }
+
+/* ── Endgame trainer (reuses .guess-overlay/.guess-panel/.guess-head shell) ── */
+.eg-intro { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 6px 0 16px; }
+.eg-menu { display: flex; flex-direction: column; gap: 10px; }
+.eg-card {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 16px; cursor: pointer; color: var(--text);
+  font: inherit; transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.eg-card:hover { background: var(--bg-elevated); border-color: var(--accent-dim); }
+.eg-card:active { transform: scale(0.99); }
+.eg-card-icon { font-size: 28px; flex-shrink: 0; }
+.eg-card-name { font-size: 15px; font-weight: 600; }
+.eg-tip {
+  font-size: 13px; line-height: 1.55; background: var(--bg-card);
+  border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+}
 .home-card h3 {
   font-size: 14px;
   color: var(--text-dim);

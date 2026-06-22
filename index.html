@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=51">
+<link rel="stylesheet" href="css/style.css?v=52">
 </head>
 <body>
 
@@ -302,6 +302,15 @@
     <span class="training-due">→</span>
   </button>
 
+  <button class="training-card" id="btn-open-endgame">
+    <span class="training-icon">🏰</span>
+    <span class="training-text">
+      <span class="training-title">Finales — apprends à mater</span>
+      <span class="training-sub">Mate avec dame, tour, deux tours, ou un pion</span>
+    </span>
+    <span class="training-due">→</span>
+  </button>
+
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
     <div id="recent-list"></div>
@@ -488,15 +497,16 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=51"></script>
-<script src="js/board.js?v=51"></script>
-<script src="js/engine.js?v=51"></script>
-<script src="js/openings.js?v=51"></script>
-<script src="js/analysis.js?v=51"></script>
-<script src="js/training.js?v=51"></script>
-<script src="js/guess.js?v=51"></script>
-<script src="js/coach.js?v=51"></script>
-<script src="js/app.js?v=51"></script>
+<script src="js/chess.min.js?v=52"></script>
+<script src="js/board.js?v=52"></script>
+<script src="js/engine.js?v=52"></script>
+<script src="js/openings.js?v=52"></script>
+<script src="js/analysis.js?v=52"></script>
+<script src="js/training.js?v=52"></script>
+<script src="js/guess.js?v=52"></script>
+<script src="js/endgame.js?v=52"></script>
+<script src="js/coach.js?v=52"></script>
+<script src="js/app.js?v=52"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
