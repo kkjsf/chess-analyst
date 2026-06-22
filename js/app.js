@@ -2538,10 +2538,6 @@ const App = (() => {
       });
     });
 
-    buildPatterns();
-    buildRepertoireStats();
-    buildWeaknessTracker();
-    buildTimeControlComparison();
     refreshHome();
   }
 
