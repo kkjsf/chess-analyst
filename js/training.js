@@ -9,12 +9,15 @@ const Training = (() => {
   const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
   const MOTIF_LABELS = {
     mat: 'Mat / mat forcé',
-    fourchette: 'Fourchette',
+    prise: 'Pièce en prise',
+    fourchette: 'Fourchette / double attaque',
     gain: 'Gain de matériel',
     attaque: 'Attaque / échec',
-    manoeuvre: 'Coup positionnel',
+    positionnel: 'Jeu positionnel',
+    manoeuvre: 'Jeu positionnel', // legacy alias for decks built before v50
   };
-  const MOTIF_ORDER = ['mat', 'fourchette', 'gain', 'attaque', 'manoeuvre'];
+  const MOTIF_ORDER = ['mat', 'prise', 'fourchette', 'gain', 'attaque', 'positionnel'];
+  const TACTICAL = ['mat', 'prise', 'fourchette', 'gain', 'attaque'];
 
   // ───────────────────────── storage ─────────────────────────
   function load() {
@@ -36,32 +39,67 @@ const Training = (() => {
     } catch (_) { return []; }
   }
 
-  function detectMotif(fenBefore, bestUci, side) {
-    if (!bestUci || bestUci.length < 4) return 'manoeuvre';
+  // Parse a SAN that may be French (C/F/T/D/R) or English. Try as-is first
+  // (works for English and for pieceless pawn moves), then a French→English
+  // remap. Returns the chess.js move object, or null.
+  function playMove(g, san) {
+    if (!san) return null;
+    let m = null;
+    try { m = g.move(san, { sloppy: true }); } catch (_) {}
+    if (m) return m;
+    const en = san.replace(/[CFTDR]/g, c => ({ C: 'N', F: 'B', T: 'R', D: 'Q', R: 'K' }[c]));
+    if (en !== san) { try { m = g.move(en, { sloppy: true }); } catch (_) {} }
+    return m;
+  }
+
+  // Did your actual move drop material? Look at the opponent's best reply: if
+  // they can win ~a minor piece or more net (after any immediate recapture),
+  // you hung something. A 1-ply static-exchange approximation — good enough to
+  // label, not to evaluate.
+  function hangsMaterial(fen, playedSan, side) {
+    try {
+      const g = new Chess(fen);
+      if (!playMove(g, playedSan)) return false;
+      const caps = g.moves({ verbose: true }).filter(m => m.captured);
+      if (!caps.length) return false;
+      caps.sort((a, b) => (PIECE_VALUES[b.captured] || 0) - (PIECE_VALUES[a.captured] || 0));
+      const cap = caps[0];
+      const gain = PIECE_VALUES[cap.captured] || 0;
+      if (gain < 3) return false; // only flag hanging a minor piece or more
+      const g2 = new Chess(g.fen());
+      const c2 = g2.move(cap.san, { sloppy: true });
+      if (!c2) return false;
+      const recap = g2.moves({ verbose: true }).some(m => m.to === cap.to);
+      const recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
+      return (gain - recapVal) >= 2;
+    } catch (_) { return false; }
+  }
+
+  // Classify a mistake by what's most instructive: missed mate, then YOUR
+  // hung piece (the #1 beginner error), then the tactic the best move lands.
+  function detectMotif(fenBefore, bestUci, side, playedSan) {
+    if (!bestUci || bestUci.length < 4) return 'positionnel';
     let move, after;
     try {
       const g = new Chess(fenBefore);
       move = g.move({ from: bestUci.slice(0, 2), to: bestUci.slice(2, 4), promotion: bestUci[4] || 'q' });
-      if (!move) return 'manoeuvre';
+      if (!move) return 'positionnel';
       after = g.fen();
-    } catch (_) { return 'manoeuvre'; }
+    } catch (_) { return 'positionnel'; }
 
     if (move.san.includes('#')) return 'mat';
+    if (playedSan && hangsMaterial(fenBefore, playedSan, side)) return 'prise';
 
-    // Fork: the moved piece now attacks 2+ valuable targets (or a target + the king).
-    const opp = side === 'w' ? 'b' : 'w';
+    // Fork: the moved piece now attacks 2+ valuable targets (or a target + check).
     const targets = movesFrom(after, bestUci.slice(2, 4), side)
       .filter(m => m.captured && PIECE_VALUES[m.captured] >= 3);
     const givesCheck = move.san.includes('+');
-    if (targets.length >= 2) return 'fourchette';
-    if (targets.length >= 1 && givesCheck) return 'fourchette';
+    if (targets.length >= 2 || (targets.length >= 1 && givesCheck)) return 'fourchette';
 
-    // Material gain: capturing a piece worth a knight or more.
     if (move.captured && PIECE_VALUES[move.captured] >= 3) return 'gain';
-
     if (givesCheck) return 'attaque';
     if (move.captured) return 'gain';
-    return 'manoeuvre';
+    return 'positionnel';
   }
 
   // ───────────────────────── capture from a game ─────────────────────────
@@ -82,7 +120,7 @@ const Training = (() => {
         id: gameKey + '#' + i, fen: r.fenBefore, side: user,
         bestUci: r.bestUci, bestSan: r.bestSan || '',
         playedSan: r.sanFr || r.san, type: r.type, cpLoss: r.cpLoss || 0,
-        motif: detectMotif(r.fenBefore, r.bestUci, user),
+        motif: detectMotif(r.fenBefore, r.bestUci, user, r.sanFr || r.san),
         moveNo: Math.floor(i / 2) + 1, white, black, date,
       });
     }
@@ -103,7 +141,7 @@ const Training = (() => {
         id: gameKey + '#' + b.ply, fen: b.fenBefore, side: meta.side,
         bestUci: b.bestUci, bestSan: b.bestSan || '',
         playedSan: b.playedSan || '', type: b.type, cpLoss: b.cpLoss || 0,
-        motif: detectMotif(b.fenBefore, b.bestUci, meta.side),
+        motif: detectMotif(b.fenBefore, b.bestUci, meta.side, b.playedSan),
         moveNo: Math.floor(b.ply / 2) + 1,
         white: meta.white || '?', black: meta.black || '?', date: meta.date || '',
       });
@@ -207,31 +245,61 @@ const Training = (() => {
   }
 
   // ───────────────────────── PUZZLES tab ─────────────────────────
-  let queue = [], qi = 0, current = null, solved = false;
+  let queue = [], qi = 0, current = null, solved = false, motifFilter = null;
 
   function startPuzzles() {
-    queue = buildSession();
+    queue = motifFilter ? motifQueue(motifFilter) : buildSession();
     qi = 0;
     renderPuzzle();
+  }
+
+  // Drill one motif: due cards of that motif first, then biggest mistakes.
+  function motifQueue(m) {
+    const now = Date.now();
+    return load().filter(it => it.motif === m)
+      .sort((a, b) => (((a.due || 0) <= now ? 0 : 1) - ((b.due || 0) <= now ? 0 : 1))
+        || ((b.cpLoss || 0) - (a.cpLoss || 0)))
+      .slice(0, 20);
+  }
+
+  function drillMotif(m) {
+    if (!m) return;
+    motifFilter = m;
+    switchTab('puzzles');
+  }
+
+  function bannerHtml() {
+    return motifFilter
+      ? `<div class="train-motif-banner">Motif : <b>${MOTIF_LABELS[motifFilter] || motifFilter}</b><button class="train-link" id="puz-all">← toutes les révisions</button></div>`
+      : '';
+  }
+  function bindBanner() {
+    const pa = $('#puz-all');
+    if (pa) pa.onclick = () => { motifFilter = null; startPuzzles(); };
   }
 
   function renderPuzzle() {
     const host = $('#train-puzzles');
     if (!queue.length) {
       const total = load().length;
-      host.innerHTML = total
-        ? `<div class="train-empty">🎉 Rien à réviser pour l'instant !<br><span>Reviens plus tard — tes prochaines révisions sont programmées.</span></div>`
-        : `<div class="train-empty">Aucun puzzle pour le moment.<br><span>Analyse quelques parties : tes erreurs deviendront automatiquement des puzzles à rejouer.</span></div>`;
+      const msg = motifFilter
+        ? `<div class="train-empty">Aucun puzzle pour ce motif.<br><span>Choisis-en un autre dans l'onglet Motifs.</span></div>`
+        : total
+          ? `<div class="train-empty">🎉 Rien à réviser pour l'instant !<br><span>Reviens plus tard — tes prochaines révisions sont programmées.</span></div>`
+          : `<div class="train-empty">Aucun puzzle pour le moment.<br><span>Analyse quelques parties : tes erreurs deviendront automatiquement des puzzles à rejouer.</span></div>`;
+      host.innerHTML = bannerHtml() + msg;
+      bindBanner();
       return;
     }
     if (qi >= queue.length) {
-      host.innerHTML = `<div class="train-empty">✅ Session terminée — ${queue.length} puzzle${queue.length > 1 ? 's' : ''} révisé${queue.length > 1 ? 's' : ''} !<br><span>Reviens demain pour la prochaine fournée.</span></div>`;
+      host.innerHTML = bannerHtml() + `<div class="train-empty">✅ Session terminée — ${queue.length} puzzle${queue.length > 1 ? 's' : ''} révisé${queue.length > 1 ? 's' : ''} !<br><span>${motifFilter ? 'Passe à un autre motif dans l\'onglet Motifs.' : 'Reviens demain pour la prochaine fournée.'}</span></div>`;
+      bindBanner();
       return;
     }
     current = queue[qi];
     solved = false;
     const flip = current.side === 'b';
-    host.innerHTML = `
+    host.innerHTML = bannerHtml() + `
       <div class="train-progress">Puzzle ${qi + 1} / ${queue.length}</div>
       <div class="train-prompt">Trait aux <b>${current.side === 'w' ? 'Blancs' : 'Noirs'}</b> — trouve le meilleur coup.</div>
       <div class="train-board-wrap">
@@ -255,6 +323,7 @@ const Training = (() => {
       BoardRenderer.highlightSquares(arrows, [current.bestUci.slice(0, 2)], '#5b8fb9');
     };
     $('#puz-reveal').onclick = () => revealSolution(false);
+    bindBanner();
   }
 
   function attemptMove(from, to) {
@@ -398,7 +467,7 @@ const Training = (() => {
     const total = items.length;
     const max = Math.max(...Object.values(counts), 1);
     const sorted = MOTIF_ORDER.filter(m => counts[m] > 0).sort((a, b) => counts[b] - counts[a]);
-    const worst = sorted[0];
+    const target = sorted.filter(m => TACTICAL.includes(m))[0] || sorted[0];
 
     const due = buildSession().length;
     const learned = items.filter(it => (it.reps || 0) >= 2).length;
@@ -407,11 +476,11 @@ const Training = (() => {
     for (const m of sorted) {
       const pct = Math.round((counts[m] / max) * 100);
       rows += `
-        <div class="motif-row">
+        <button class="motif-row" data-motif="${m}">
           <span class="motif-name">${MOTIF_LABELS[m]}</span>
           <div class="motif-bar"><div class="motif-bar-fill" style="width:${pct}%"></div></div>
           <span class="motif-count">${counts[m]}</span>
-        </div>`;
+        </button>`;
     }
 
     host.innerHTML = `
@@ -420,9 +489,13 @@ const Training = (() => {
         <div class="train-stat"><b>${due}</b><span>à réviser</span></div>
         <div class="train-stat"><b>${learned}</b><span>maîtrisées</span></div>
       </div>
-      <p class="train-advice">⚠️ Ton motif le plus fréquent : <b>${MOTIF_LABELS[worst]}</b>. Concentre tes révisions dessus.</p>
+      <p class="train-advice">⚠️ ${TACTICAL.includes(target) ? 'Ton point faible tactique' : 'Ton motif le plus fréquent'} : <b>${MOTIF_LABELS[target]}</b>.
+        <button class="train-btn good" id="motif-drill">S'entraîner sur ce motif ▶</button></p>
       <div class="motif-list">${rows}</div>
-      <p class="train-note">Chaque barre = nombre de fois où tu as raté ce type de coup. Les puzzles te les font rejouer en répétition espacée.</p>`;
+      <p class="train-note">Touche un motif pour t'entraîner uniquement dessus. Les puzzles te font rejouer tes erreurs en répétition espacée.</p>`;
+    const db = $('#motif-drill');
+    if (db) db.onclick = () => drillMotif(target);
+    $$('#train-motifs .motif-row').forEach(b => { b.onclick = () => drillMotif(b.dataset.motif); });
   }
 
   // ───────────────────────── screen + tabs ─────────────────────────
@@ -433,7 +506,7 @@ const Training = (() => {
     $('#screen-training').classList.add('active');
     if (!bound) {
       $('#btn-train-back').onclick = hide;
-      $$('.train-tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+      $$('.train-tab').forEach(t => t.onclick = () => { motifFilter = null; switchTab(t.dataset.tab); });
       bound = true;
     }
     switchTab('puzzles');
