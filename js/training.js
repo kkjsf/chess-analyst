@@ -501,9 +501,9 @@ const Training = (() => {
   // ───────────────────────── screen + tabs ─────────────────────────
   let bound = false;
   function show() {
-    $('#screen-import').classList.remove('active');
-    $('#screen-analysis').classList.remove('active');
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     $('#screen-training').classList.add('active');
+    window.scrollTo(0, 0);
     if (!bound) {
       $('#btn-train-back').onclick = hide;
       $$('.train-tab').forEach(t => t.onclick = () => { motifFilter = null; switchTab(t.dataset.tab); });

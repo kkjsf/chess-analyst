@@ -14,19 +14,6 @@ const Coach = (() => {
   let games = [];
   let busy = false;
   let stopFlag = false;
-  let puzzles = [];
-  let puzIdx = 0;
-  let puzFilter = 'reco';
-  let puzRevealed = false;
-  const RECO_SIZE = 10;
-  const CAT_SIZE = 8;
-  const SOLVED_KEY = 'chess-coach-solved';
-  const PUZ_CATS = {
-    mate: { icon: '🏁', label: 'Mat', instr: 'Il y a un mat à donner. Trouvez le coup qui force l\'échec et mat.' },
-    material: { icon: '💰', label: 'Gain de matériel', instr: 'Un coup permettait de gagner du matériel. Lequel ?' },
-    defense: { icon: '🛡️', label: 'Défense', instr: 'Votre coup a coûté cher. Quel coup limitait les dégâts ?' },
-    tactic: { icon: '⚡', label: 'Coup juste', instr: 'Le moteur voyait nettement mieux. Trouvez le meilleur coup.' }
-  };
   let hostedInfo = null;
 
   const $ = (s) => document.querySelector(s);
@@ -288,8 +275,8 @@ const Coach = (() => {
       renderTrends(an) +
       renderRepertoire(an) +
       renderWeakness(an) +
-      renderPuzzleCard(an);
-    bindPuzzleCard();
+      renderTrainingCta();
+    bindTrainingCta();
   }
 
   function renderSyncBar() {
@@ -364,7 +351,7 @@ const Coach = (() => {
       s.push(`Vous lâchez une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
     if (priorWin !== null && Math.abs(recentWin - priorWin) >= 10)
       s.push(`Tendance récente : vous <b>${recentWin > priorWin ? 'progressez' : 'marquez le pas'}</b> (${recentWin}% sur vos 10 dernières parties contre ${priorWin}% auparavant).`);
-    s.push(`Concrètement : faites la <b>série d'entraînement</b> ci-dessous (vos propres erreurs) et relisez vos parties perdues dans <b>${worst.l}</b>.`);
+    s.push(`Concrètement : ouvrez le <b>Mode entraînement</b> ci-dessous (vos erreurs y deviennent des exercices) et relisez vos parties perdues dans <b>${worst.l}</b>.`);
 
     return `<div class="home-card coach-card coach-narrative"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
   }
@@ -549,143 +536,26 @@ const Coach = (() => {
     }[k] || '';
   }
 
-  // ─────────────── Puzzle trainer (your own mistakes) ───────────────
-  function getSolved() { try { return new Set(JSON.parse(localStorage.getItem(SOLVED_KEY) || '[]')); } catch (_) { return new Set(); } }
-  function saveSolved(set) { try { localStorage.setItem(SOLVED_KEY, JSON.stringify([...set])); } catch (_) {} }
-
-  // Classify a mistake by what the best move achieves — computed from the
-  // stored position, so categories are reliable without re-analysis.
-  function categorize(p) {
-    try {
-      const c = new Chess(p.fenBefore);
-      const m = c.move({ from: p.bestUci.slice(0, 2), to: p.bestUci.slice(2, 4), promotion: p.bestUci[4] });
-      if (m) {
-        if (m.san.includes('#')) return 'mate';
-        if (m.captured) { const v = { p: 1, n: 3, b: 3, r: 5, q: 9 }[m.captured] || 0; if (v >= 3 || p.cpLoss >= 200) return 'material'; }
-      }
-    } catch (_) {}
-    return p.cpLoss >= 250 ? 'defense' : 'tactic';
-  }
-
-  function collectPuzzles() {
-    const list = [];
-    analyzed().forEach(g => {
-      (g.analysis.blunderList || []).forEach(b => {
-        if (!b.bestUci || !b.fenBefore) return;
-        const p = { ...b, oppName: g.oppName, endTime: g.endTime, url: g.url, userColor: g.userColor, id: g.uuid + ':' + b.ply, gameId: g.uuid };
-        p.cat = categorize(p);
-        list.push(p);
-      });
-    });
-    return list;
-  }
-
-  // A short, varied, highest-impact set drawn from unseen mistakes.
-  function recommendedSet(all) {
-    const solved = getSolved();
-    const order = { mate: 0, material: 1, defense: 2, tactic: 3 };
-    const pool = all.filter(p => !solved.has(p.id)).sort((a, b) => (order[a.cat] - order[b.cat]) || (b.cpLoss - a.cpLoss));
-    const seenGames = new Set();
-    const out = [];
-    for (const p of pool) { if (seenGames.has(p.gameId)) continue; seenGames.add(p.gameId); out.push(p); if (out.length >= RECO_SIZE) break; }
-    for (const p of pool) { if (out.length >= RECO_SIZE) break; if (!out.includes(p)) out.push(p); }
-    return out;
-  }
-
-  function renderPuzzleCard(an) {
-    const all = collectPuzzles();
-    const cats = ['mate', 'material', 'defense', 'tactic'];
-    const reco = recommendedSet(all);
-    puzFilter = 'reco'; puzIdx = 0;
-    return `<div class="home-card coach-card" id="coach-puzzle-card">
-      <h3>🧩 Entraînement ciblé</h3>
-      <p class="coach-puz-intro">Une <b>courte série</b> tirée de vos erreurs réelles. Faites-en autant que vous voulez — une nouvelle série apparaît au fur et à mesure.</p>
-      ${all.length ? `
-      <div class="coach-puz-filters">
-        <button class="coach-puz-filter active" data-f="reco">⭐ Série (${reco.length})</button>
-        ${cats.filter(c => all.some(p => p.cat === c)).map(c => `<button class="coach-puz-filter" data-f="${c}">${PUZ_CATS[c].icon} ${PUZ_CATS[c].label}</button>`).join('')}
-      </div>
-      <div id="coach-puz-stage"></div>
-      <a class="coach-server-link" id="coach-puz-reset">↺ Recommencer depuis le début</a>
-      ` : `<div class="coach-empty-mini">Aucune erreur détectée — bravo !</div>`}
+  // ─────────────── Training entry (unified SRS trainer) ───────────────
+  // Coach feeds every analysed game into the single Mode entraînement deck
+  // (see syncToTraining). Rather than duplicate a puzzle player here, just
+  // surface the deck and link to it.
+  function renderTrainingCta() {
+    let due = 0;
+    try { if (typeof Training !== 'undefined' && Training.dueCount) due = Training.dueCount(); } catch (_) {}
+    const line = due
+      ? `<b>${due} exercice${due > 1 ? 's' : ''}</b> à réviser.`
+      : 'Rien à réviser pour l\'instant — beau travail !';
+    return `<div class="home-card coach-card" id="coach-training-cta">
+      <h3>🧩 Entraînement</h3>
+      <p class="coach-puz-intro">Toutes vos erreurs alimentent un seul entraînement, en répétition espacée. ${line}</p>
+      <button class="btn-primary" id="coach-open-training">🎯 Ouvrir le Mode entraînement</button>
     </div>`;
   }
 
-  function bindPuzzleCard() {
-    const card = $('#coach-puzzle-card');
-    if (!card) return;
-    card.querySelectorAll('.coach-puz-filter').forEach(b => {
-      b.addEventListener('click', () => {
-        card.querySelectorAll('.coach-puz-filter').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
-        puzFilter = b.dataset.f;
-        puzIdx = 0;
-        loadPuzzles();
-        showPuzzle();
-      });
-    });
-    const reset = $('#coach-puz-reset');
-    if (reset) reset.addEventListener('click', () => { saveSolved(new Set()); render(); });
-    loadPuzzles();
-    showPuzzle();
-  }
-
-  function loadPuzzles() {
-    const all = collectPuzzles();
-    if (puzFilter === 'reco') { puzzles = recommendedSet(all); return; }
-    const solved = getSolved();
-    puzzles = all.filter(p => p.cat === puzFilter)
-      .sort((a, b) => (solved.has(a.id) - solved.has(b.id)) || (b.cpLoss - a.cpLoss))
-      .slice(0, CAT_SIZE);
-  }
-
-  function showPuzzle() {
-    const stage = $('#coach-puz-stage');
-    if (!stage) return;
-    if (!puzzles.length) { stage.innerHTML = `<div class="coach-empty-mini">Série terminée ! Touchez « Réinitialiser » pour rejouer, ou choisissez une catégorie.</div>`; return; }
-    if (puzIdx >= puzzles.length) puzIdx = 0;
-    if (puzIdx < 0) puzIdx = puzzles.length - 1;
-    const p = puzzles[puzIdx];
-    puzRevealed = false;
-    const cat = PUZ_CATS[p.cat] || PUZ_CATS.tactic;
-    const toMove = p.userColor === 'w' ? 'Blancs' : 'Noirs';
-    const done = getSolved().has(p.id);
-    stage.innerHTML = `
-      <div class="coach-puz-cat">${cat.icon} ${cat.label}${done ? ' <span class="coach-puz-done">✓ vu</span>' : ''}</div>
-      <div class="coach-puz-meta">vs ${esc(p.oppName)} · ${fmtDate(p.endTime)} · trait aux ${toMove}</div>
-      <div class="coach-puz-board">
-        <svg viewBox="0 0 360 360" id="coach-puz-svg"></svg>
-        <svg viewBox="0 0 360 360" id="coach-puz-arrows" class="arrow-overlay"></svg>
-      </div>
-      <div class="coach-puz-prompt">${cat.instr}</div>
-      <div class="coach-puz-answer" id="coach-puz-answer" hidden></div>
-      <div class="coach-puz-nav">
-        <button class="nav-btn" id="coach-puz-prev">◀</button>
-        <span class="coach-puz-counter">${puzIdx + 1} / ${puzzles.length}</span>
-        <button class="btn-primary coach-puz-reveal" id="coach-puz-reveal">Voir la solution</button>
-        <button class="nav-btn" id="coach-puz-next">▶</button>
-      </div>`;
-    BoardRenderer.setFlipped(p.userColor === 'b');
-    BoardRenderer.render($('#coach-puz-svg'), p.fenBefore, null);
-    BoardRenderer.clearArrows($('#coach-puz-arrows'));
-    $('#coach-puz-prev').addEventListener('click', () => { puzIdx--; showPuzzle(); });
-    $('#coach-puz-next').addEventListener('click', () => { puzIdx++; showPuzzle(); });
-    $('#coach-puz-reveal').addEventListener('click', revealPuzzle);
-  }
-
-  function revealPuzzle() {
-    if (puzRevealed) { puzIdx++; showPuzzle(); return; }
-    puzRevealed = true;
-    const p = puzzles[puzIdx];
-    const solved = getSolved(); solved.add(p.id); saveSolved(solved);
-    if (p.bestUci && p.bestUci.length >= 4) {
-      BoardRenderer.drawArrows($('#coach-puz-arrows'), [{ from: p.bestUci.slice(0, 2), to: p.bestUci.slice(2, 4), color: '#56b886', opacity: 0.9, width: 6 }]);
-    }
-    const ans = $('#coach-puz-answer');
-    ans.hidden = false;
-    ans.innerHTML = `<div><b>✔ Meilleur coup : ${esc(p.bestSan || '—')}</b> <span class="coach-puz-played">— vous aviez joué ${esc(p.playedSan)} (−${(p.cpLoss / 100).toFixed(1)})</span></div>${p.tip ? `<div class="coach-puz-tip">${p.tip}</div>` : ''}`;
-    const btn = $('#coach-puz-reveal');
-    if (btn) btn.textContent = puzIdx < puzzles.length - 1 ? 'Suivant ▶' : 'Terminer ✓';
+  function bindTrainingCta() {
+    const b = $('#coach-open-training');
+    if (b) b.addEventListener('click', () => { if (typeof Training !== 'undefined') Training.show(); });
   }
 
   // ─────────────── UI actions ───────────────
