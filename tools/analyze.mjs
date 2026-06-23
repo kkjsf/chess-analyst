@@ -41,6 +41,14 @@ globalThis.Openings = require('../js/openings.js');
 const Analyzer = require('../js/analysis.js');
 
 const DRAW_RESULTS = new Set(['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient']);
+// Practice games vs the Chess.com coach bot — not real games, excluded from stats.
+const EXCLUDED_OPPONENTS = new Set(['coach-david']);
+const excludedOpp = (name) => !!name && EXCLUDED_OPPONENTS.has(String(name).toLowerCase());
+function isExcludedGame(g, user) {
+  const u = (user || '').toLowerCase();
+  const opp = (g.white.username || '').toLowerCase() === u ? (g.black.username || '') : (g.white.username || '');
+  return excludedOpp(opp);
+}
 
 // ─────────────── Engine: native Stockfish over UCI/stdio ───────────────
 function createEngine() {
@@ -175,7 +183,7 @@ async function main() {
   if (existsSync(OUT)) {
     try {
       const prev = JSON.parse(readFileSync(OUT, 'utf8'));
-      for (const g of (prev.games || [])) if (g.analysis && !g.analysis.error) existing[g.uuid] = g;
+      for (const g of (prev.games || [])) if (g.analysis && !g.analysis.error && !excludedOpp(g.oppName)) existing[g.uuid] = g;
       console.log(`[coach] ${Object.keys(existing).length} games already analyzed (kept)`);
     } catch (e) { console.warn('[coach] could not read existing output:', e.message); }
   }
@@ -191,6 +199,7 @@ async function main() {
       for (const g of (data.games || [])) {
         if (g.rules && g.rules !== 'chess') continue;
         if (!g.uuid || !g.pgn) continue;
+        if (isExcludedGame(g, USER)) continue;
         all.push(g);
       }
     } catch (e) { console.warn(`[coach] skip ${url}: ${e.message}`); }

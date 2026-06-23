@@ -9,6 +9,14 @@ const Coach = (() => {
   const ACTIONS_URL = 'https://github.com/kkjsf/chess-analyst/actions/workflows/analyze.yml';
   const BULK_MOVETIME = 'movetime 600';
   const DRAW_RESULTS = new Set(['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient']);
+  // Practice games vs the Chess.com coach bot — not real games, excluded from stats.
+  const EXCLUDED_OPPONENTS = new Set(['coach-david']);
+  const excludedOpp = (name) => !!name && EXCLUDED_OPPONENTS.has(String(name).toLowerCase());
+  function isExcludedGame(g, user) {
+    const u = (user || '').toLowerCase();
+    const opp = (g.white.username || '').toLowerCase() === u ? (g.black.username || '') : (g.white.username || '');
+    return excludedOpp(opp);
+  }
 
   let db = null;
   let games = [];
@@ -124,6 +132,7 @@ const Coach = (() => {
       for (const g of (data.games || [])) {
         if (g.rules && g.rules !== 'chess') continue;
         if (!g.uuid || !g.pgn) continue;
+        if (isExcludedGame(g, user)) continue;
         const existing = await getOne(g.uuid);
         if (existing) continue; // keep existing analysis
         await put(normalize(g, user));
@@ -201,7 +210,7 @@ const Coach = (() => {
   function stop() { stopFlag = true; }
 
   // ─────────────── Aggregation helpers ───────────────
-  function analyzed() { return games.filter(g => g.analysis && !g.analysis.error); }
+  function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && !excludedOpp(g.oppName)); }
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
   function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
   function fmtDate(ts) { const d = new Date(ts * 1000); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }); }
