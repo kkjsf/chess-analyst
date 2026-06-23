@@ -16,7 +16,7 @@ on:
       depth:
         description: 'Stockfish search depth per position'
         required: false
-        default: '12'
+        default: '20'
   push:
     branches: [main]
     # Run when the analyzer changes — NOT when coach-data.json is committed
@@ -53,7 +53,7 @@ jobs:
         working-directory: tools
         env:
           STOCKFISH_PATH: /usr/games/stockfish
-        run: node analyze.mjs --user "${{ github.event.inputs.user || 'nimokaji' }}" --depth "${{ github.event.inputs.depth || '12' }}"
+        run: node analyze.mjs --user "${{ github.event.inputs.user || 'nimokaji' }}" --depth "${{ github.event.inputs.depth || '20' }}"
 
       - name: Commit results
         run: |

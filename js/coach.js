@@ -169,42 +169,12 @@ const Coach = (() => {
     return deriveStats(results, summary, g);
   }
 
+  // Delegates to the shared Analyzer.computeGameStats (js/analysis.js) so the
+  // in-browser analyzer and the server analyzer (tools/analyze.mjs) stay in sync.
   function deriveStats(results, summary, g) {
-    const side = g.userColor;
-    const us = side === 'w' ? summary.stats.w : summary.stats.b;
-    const phaseErrors = { opening: 0, middle: 0, endgame: 0 };
-    const phaseAcc = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
-    const blunders = [];
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i];
-      if (!r.move || r.move.color !== side) continue;
-      const phase = i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame';
-      if (r.type === 'blunder' || r.type === 'mistake') {
-        phaseErrors[phase]++;
-        if (r.fenBefore && r.bestUci) {
-          blunders.push({
-            ply: i, phase, type: r.type,
-            fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan || null,
-            playedSan: r.sanFr || r.san, cpLoss: r.cpLoss || 0, tip: r.tipFr || ''
-          });
-        }
-      }
-      const loss = r.winPctLoss || 0;
-      phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
-      phaseAcc[phase].count++;
-    }
-    return {
-      analyzedAt: Date.now(),
-      accuracy: us.accuracy,
-      acpl: us.acpl,
-      blunders: us.blunders,
-      mistakes: us.mistakes,
-      inaccuracies: us.inaccuracies,
-      moveCount: us.moveCount,
-      phaseErrors,
-      phaseAccuracy: phaseAcc,
-      blunderList: blunders
-    };
+    return Analyzer.computeGameStats(results, summary, {
+      side: g.userColor, pgn: g.pgn, timeClass: g.timeClass, timeControl: g.timeControl
+    });
   }
 
   async function analyzePending(onProg) {
@@ -273,6 +243,10 @@ const Coach = (() => {
     body.innerHTML =
       renderNarrative(an) +
       renderTrends(an) +
+      renderProgress(an) +
+      renderMoveQuality(an) +
+      renderConversion(an) +
+      renderTime(an) +
       renderRepertoire(an) +
       renderWeakness(an) +
       renderGamesDrill(an) +
@@ -484,22 +458,25 @@ const Coach = (() => {
   function renderWeakness(an) {
     const pe = { opening: 0, middle: 0, endgame: 0 };
     const pa = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
+    const pc = { opening: [], middle: [], endgame: [] };
     let totalBlunders = 0, totalMistakes = 0, totalMoves = 0;
     an.forEach(g => {
       const a = g.analysis;
       ['opening', 'middle', 'endgame'].forEach(p => {
         pe[p] += a.phaseErrors[p] || 0;
         if (a.phaseAccuracy[p]) { pa[p].total += a.phaseAccuracy[p].total; pa[p].count += a.phaseAccuracy[p].count; }
+        if (a.phaseAcpl && typeof a.phaseAcpl[p] === 'number') pc[p].push(a.phaseAcpl[p]);
       });
       totalBlunders += a.blunders || 0;
       totalMistakes += a.mistakes || 0;
       totalMoves += a.moveCount || 0;
     });
     const phaseAcc = (p) => pa[p].count ? Math.round(pa[p].total / pa[p].count) : 0;
+    const phaseAcplAvg = (p) => pc[p].length ? Math.round(avg(pc[p])) : null;
     const blunderRate = totalMoves ? (totalBlunders / totalMoves * 100) : 0;
     const phases = [
       { k: 'opening', label: 'Ouverture' }, { k: 'middle', label: 'Milieu de jeu' }, { k: 'endgame', label: 'Finale' }
-    ].map(p => ({ ...p, errors: pe[p.k], acc: phaseAcc(p.k) }));
+    ].map(p => ({ ...p, errors: pe[p.k], acc: phaseAcc(p.k), acpl: phaseAcplAvg(p.k) }));
     const worstPhase = phases.slice().sort((a, b) => a.acc - b.acc)[0];
 
     // prioritized recommendations
@@ -513,7 +490,7 @@ const Coach = (() => {
       <div class="coach-row">
         <span class="coach-row-label">${p.label}</span>
         <div class="coach-bar"><span style="width:${p.acc}%;background:${p.acc >= 85 ? '#56b886' : p.acc >= 75 ? '#e2b857' : '#d36b6b'}"></span></div>
-        <span class="coach-row-val">${p.acc}% · ${p.errors} err.</span>
+        <span class="coach-row-val" style="width:130px">${p.acc}%${p.acpl != null ? ` · ${p.acpl} ACPL` : ''} · ${p.errors} err.</span>
       </div>`).join('');
 
     return `<div class="home-card coach-card">
@@ -536,6 +513,177 @@ const Coach = (() => {
       middle: 'Travaillez la tactique (puzzles quotidiens) et cherchez un plan à chaque coup.',
       endgame: 'Apprenez les finales de base : roi+pion, tours, et l\'activité du roi.'
     }[k] || '';
+  }
+
+  // Small inline trend line over a chronological series of values.
+  function sparkline(vals, color) {
+    const v = vals.filter(x => typeof x === 'number');
+    if (v.length < 3) return '';
+    const W = 320, H = 56, pad = 4;
+    const min = Math.min(...v), max = Math.max(...v), range = Math.max(1, max - min);
+    const x = (i) => pad + (i / (v.length - 1)) * (W - 2 * pad);
+    const y = (val) => H - pad - ((val - min) / range) * (H - 2 * pad);
+    const path = v.map((val, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(val).toFixed(1)}`).join(' ');
+    return `<svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg" preserveAspectRatio="none">
+      <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
+      <circle cx="${x(v.length - 1).toFixed(1)}" cy="${y(v[v.length - 1]).toFixed(1)}" r="3" fill="${color}"/>
+    </svg>`;
+  }
+
+  function endReasonLabel(r) {
+    return {
+      checkmated: 'Échec et mat', resigned: 'Abandon', timeout: 'Au temps',
+      abandoned: 'Déconnexion', stalemate: 'Pat', repetition: 'Répétition',
+      agreed: 'Nulle convenue', insufficient: 'Matériel insuffisant',
+      '50move': 'Règle des 50 coups', timevsinsufficient: 'Temps vs matériel', win: 'Gain'
+    }[r] || r || 'Autre';
+  }
+
+  // ── Qualité des coups (répartition meilleur → gaffe) ──
+  function renderMoveQuality(an) {
+    const q = { brilliant: 0, best: 0, great: 0, good: 0, ok: 0, inaccuracy: 0, mistake: 0, blunder: 0, moveCount: 0 };
+    an.forEach(g => { const m = g.analysis.moveQuality; if (!m) return; for (const k in q) q[k] += m[k] || 0; });
+    if (!q.moveCount) return '';
+    const order = [
+      { k: 'brilliant', l: 'Brillant', c: '#46c6b0' },
+      { k: 'best', l: 'Meilleur', c: '#56b886' },
+      { k: 'great', l: 'Excellent', c: '#7bbf8c' },
+      { k: 'good', l: 'Bon', c: '#9ab87f' },
+      { k: 'ok', l: 'Correct', c: '#8a8aa0' },
+      { k: 'inaccuracy', l: 'Imprécision', c: '#e2b857' },
+      { k: 'mistake', l: 'Erreur', c: '#e08a4b' },
+      { k: 'blunder', l: 'Gaffe', c: '#d36b6b' }
+    ];
+    const total = q.moveCount;
+    const bar = `<div class="coach-bar coach-bar-tall">` + order.map(o =>
+      q[o.k] ? `<span style="width:${pct(q[o.k], total)}%;background:${o.c}" title="${o.l} : ${q[o.k]}"></span>` : '').join('') + `</div>`;
+    const legend = order.filter(o => q[o.k]).map(o =>
+      `<span class="coach-legend-item"><i style="background:${o.c}"></i>${o.l} <b>${q[o.k]}</b> · ${pct(q[o.k], total)}%</span>`).join('');
+    const goodPct = pct(q.brilliant + q.best + q.great + q.good, total);
+    return `<div class="home-card coach-card">
+      <h3>♟ Qualité de tes coups</h3>
+      <p class="coach-sub2">${total} coups sur ${an.length} parties · <b>${goodPct}%</b> de très bons coups</p>
+      ${bar}
+      <div class="coach-legend">${legend}</div>
+    </div>`;
+  }
+
+  // ── Conversion des avantages & moments charnières ──
+  function renderConversion(an) {
+    const WIN = 200, LOSS = -200;
+    const winnable = an.filter(g => typeof g.analysis.maxUserEval === 'number' && g.analysis.maxUserEval >= WIN);
+    const losing = an.filter(g => typeof g.analysis.minUserEval === 'number' && g.analysis.minUserEval <= LOSS);
+    if (!winnable.length && !losing.length) return '';
+    const converted = winnable.filter(g => g.result === 'win').length;
+    const saved = losing.filter(g => g.result !== 'loss').length;
+    const tps = an.map(g => ({ g, tp: g.analysis.turningPoint }))
+      .filter(x => x.tp && x.tp.winPctLoss >= 0.25)
+      .sort((a, b) => b.tp.winPctLoss - a.tp.winPctLoss)
+      .slice(0, 5);
+    const tpRows = tps.map(({ g, tp }) => `
+      <div class="coach-row">
+        <span class="coach-row-label">${fmtDate(g.endTime)} · ${esc(g.oppName)}</span>
+        <span class="coach-tp-move">${esc(tp.playedSan || '?')}${tp.bestSan ? ` <span class="coach-tp-best">→ ${esc(tp.bestSan)}</span>` : ''}</span>
+        <span class="coach-row-val">−${Math.round(tp.winPctLoss * 100)}%</span>
+      </div>`).join('');
+    return `<div class="home-card coach-card">
+      <h3>🔁 Conversion & moments charnières</h3>
+      <p class="coach-sub2"><b>${winnable.length}</b> parties avec un avantage gagnant (+2) · <b>${losing.length}</b> où tu étais en danger (−2).</p>
+      <div class="coach-metric-row">
+        <div class="coach-metric"><b>${winnable.length ? pct(converted, winnable.length) : '—'}%</b><span>positions gagnantes converties</span></div>
+        <div class="coach-metric"><b>${losing.length ? pct(saved, losing.length) : '—'}%</b><span>positions perdantes sauvées</span></div>
+      </div>
+      ${tps.length ? `<div class="coach-sub">Tes plus gros tournants (chances de gain perdues)</div>${tpRows}` : ''}
+    </div>`;
+  }
+
+  // ── Gestion du temps (parties en cadence réelle uniquement) ──
+  function renderTime(an) {
+    const t = an.filter(g => g.analysis.time && g.analysis.time.timed);
+    if (t.length < 3) return '';
+    const avgMove = avg(t.map(g => g.analysis.time.avgMoveSec));
+    const ph = { opening: [], middle: [], endgame: [] };
+    let ttMoves = 0, ttErrors = 0, totalErrors = 0;
+    t.forEach(g => {
+      const tm = g.analysis.time;
+      ['opening', 'middle', 'endgame'].forEach(p => { if (tm.phaseSec && typeof tm.phaseSec[p] === 'number') ph[p].push(tm.phaseSec[p]); });
+      ttMoves += tm.timeTroubleMoves || 0;
+      ttErrors += tm.timeTroubleErrors || 0;
+      totalErrors += (g.analysis.blunders || 0) + (g.analysis.mistakes || 0);
+    });
+    const phAvg = (p) => ph[p].length ? Math.round(avg(ph[p])) : 0;
+    const maxPh = Math.max(phAvg('opening'), phAvg('middle'), phAvg('endgame'), 1);
+    const phaseRows = [['opening', 'Ouverture'], ['middle', 'Milieu'], ['endgame', 'Finale']].map(([k, l]) => `
+      <div class="coach-row">
+        <span class="coach-row-label">${l}</span>
+        <div class="coach-bar"><span style="width:${pct(phAvg(k), maxPh)}%;background:#5b8fb9"></span></div>
+        <span class="coach-row-val">${phAvg(k)}s/coup</span>
+      </div>`).join('');
+    const ttErrPct = totalErrors ? pct(ttErrors, totalErrors) : 0;
+    return `<div class="home-card coach-card">
+      <h3>⏱ Gestion du temps</h3>
+      <p class="coach-sub2">${t.length} parties en cadence réelle (les parties en différé sont exclues).</p>
+      <div class="coach-metric-row">
+        <div class="coach-metric"><b>${avgMove.toFixed(1)}s</b><span>temps moyen / coup</span></div>
+        <div class="coach-metric"><b>${ttMoves}</b><span>coups en zeitnot</span></div>
+        <div class="coach-metric"><b>${ttErrPct}%</b><span>erreurs en zeitnot</span></div>
+      </div>
+      <div class="coach-sub">Temps moyen par phase</div>
+      ${phaseRows}
+    </div>`;
+  }
+
+  // ── Progression & activité ──
+  function renderProgress(an) {
+    const byTime = an.filter(g => g.endTime).slice().sort((a, b) => a.endTime - b.endTime);
+    if (byTime.length < 3) return '';
+    const accSpark = sparkline(byTime.map(g => g.analysis.accuracy), '#56b886');
+    const acplSpark = sparkline(byTime.map(g => g.analysis.acpl), '#d36b6b');
+
+    const rated = an.filter(g => g.oppRating);
+    let perf = null;
+    if (rated.length) {
+      const avgOpp = avg(rated.map(g => g.oppRating));
+      const w = rated.filter(g => g.result === 'win').length;
+      const l = rated.filter(g => g.result === 'loss').length;
+      perf = Math.round(avgOpp + 400 * (w - l) / rated.length);
+    }
+
+    const losses = an.filter(g => g.result === 'loss');
+    const lossReason = {};
+    losses.forEach(g => { const k = endReasonLabel(g.endReason); lossReason[k] = (lossReason[k] || 0) + 1; });
+    const lossRows = Object.keys(lossReason).sort((a, b) => lossReason[b] - lossReason[a]).map(k => `
+      <div class="coach-row"><span class="coach-row-label">${k}</span>
+        <div class="coach-bar"><span style="width:${pct(lossReason[k], losses.length)}%;background:#d36b6b"></span></div>
+        <span class="coach-row-val">${lossReason[k]} · ${pct(lossReason[k], losses.length)}%</span></div>`).join('');
+
+    const seq = byTime.map(g => g.result);
+    let lw = 0, tw = 0;
+    seq.forEach(r => { if (r === 'win') { tw++; } else { tw = 0; } lw = Math.max(lw, tw); });
+    let cur = 0; const ct = seq[seq.length - 1];
+    for (let i = seq.length - 1; i >= 0 && seq[i] === ct; i--) cur++;
+    const ctL = ct === 'win' ? 'V' : ct === 'loss' ? 'D' : 'N';
+
+    const days = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+    const dayCount = Array(7).fill(0);
+    an.forEach(g => { if (g.endTime) dayCount[new Date(g.endTime * 1000).getDay()]++; });
+    const maxDay = Math.max(...dayCount, 1);
+    const dayBars = `<div class="coach-days">` + dayCount.map((c, i) =>
+      `<div class="coach-day"><div class="coach-day-bar" style="height:${Math.round(c / maxDay * 100)}%" title="${c}"></div><span>${days[i]}</span></div>`).join('') + `</div>`;
+
+    return `<div class="home-card coach-card">
+      <h3>📊 Progression & activité</h3>
+      <div class="coach-metric-row">
+        ${perf ? `<div class="coach-metric"><b>${perf}</b><span>perf. estimée</span></div>` : ''}
+        <div class="coach-metric"><b>${cur} ${ctL}</b><span>série actuelle</span></div>
+        <div class="coach-metric"><b>${lw}</b><span>+ longue série V</span></div>
+      </div>
+      ${accSpark ? `<div class="coach-sub">Précision (chronologique)</div>${accSpark}` : ''}
+      ${acplSpark ? `<div class="coach-sub">Perte moyenne ACPL (plus bas = mieux)</div>${acplSpark}` : ''}
+      ${lossRows ? `<div class="coach-sub">Comment tu perds (${losses.length} défaites)</div>${lossRows}` : ''}
+      <div class="coach-sub">Quand tu joues</div>
+      ${dayBars}
+    </div>`;
   }
 
   // ─────────────── Training entry (unified SRS trainer) ───────────────

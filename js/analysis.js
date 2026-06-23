@@ -488,6 +488,130 @@ const Analyzer = (() => {
     return { stats, keyMoment, opening };
   }
 
+  function phaseOfPly(i) { return i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame'; }
+
+  function parseBaseSeconds(tc) {
+    if (!tc) return 0;
+    const s = String(tc);
+    if (s.includes('/')) return 0; // daily / correspondence
+    const base = parseInt(s.split('+')[0], 10);
+    return isNaN(base) ? 0 : base;
+  }
+
+  // Per-game time usage from the PGN's [%clk] tags. Returns { timed:false } for
+  // daily/correspondence games (where per-move time is meaningless) or when the
+  // PGN has no usable clock data. blunderPlies = ply indices of the user's
+  // blunders/mistakes, to count how many happened in time trouble.
+  function computeTimeStats(results, info, side, blunderPlies) {
+    const isDaily = info.timeClass === 'daily' || (info.timeControl && String(info.timeControl).includes('/'));
+    if (isDaily || !info.pgn) return { timed: false };
+    const clocks = parseClocks(info.pgn);
+    if (clocks.length < results.length * 0.5) return { timed: false };
+    const spent = clocksToTimePerMove(clocks);
+    const baseSec = parseBaseSeconds(info.timeControl);
+    const ttThreshold = Math.max(10, baseSec ? baseSec * 0.1 : 15);
+
+    const phaseSec = { opening: { t: 0, c: 0 }, middle: { t: 0, c: 0 }, endgame: { t: 0, c: 0 } };
+    let sum = 0, cnt = 0, ttMoves = 0;
+    const ttPly = {};
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (!r.move || r.move.color !== side) continue;
+      const ph = phaseOfPly(i);
+      if (i >= 2 && typeof spent[i] === 'number') { sum += spent[i]; cnt++; phaseSec[ph].t += spent[i]; phaseSec[ph].c++; }
+      if (typeof clocks[i] === 'number' && clocks[i] < ttThreshold) { ttMoves++; ttPly[i] = true; }
+    }
+    let ttErrors = 0;
+    for (const p of blunderPlies) if (ttPly[p]) ttErrors++;
+    const ph = (k) => phaseSec[k].c ? Math.round(phaseSec[k].t / phaseSec[k].c) : 0;
+    return {
+      timed: true,
+      avgMoveSec: cnt ? Math.round((sum / cnt) * 10) / 10 : 0,
+      baseSec,
+      phaseSec: { opening: ph('opening'), middle: ph('middle'), endgame: ph('endgame') },
+      timeTroubleMoves: ttMoves,
+      timeTroubleErrors: ttErrors
+    };
+  }
+
+  // Single source of truth for the per-game coach record, stored in
+  // coach-data.json by the server analyzer (tools/analyze.mjs) AND in IndexedDB
+  // by the in-browser bulk analyzer (js/coach.js). Both callers delegate here so
+  // server and client can never diverge. info = { side, pgn, timeClass, timeControl }.
+  function computeGameStats(results, summary, info) {
+    const side = info.side;
+    const us = side === 'w' ? summary.stats.w : summary.stats.b;
+    const phaseErrors = { opening: 0, middle: 0, endgame: 0 };
+    const phaseAcc = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
+    const phaseCp = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
+    const blunders = [];
+    let maxUserEval = null, minUserEval = null, turningPoint = null;
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (!r.move || r.move.color !== side) continue;
+      const phase = phaseOfPly(i);
+
+      if (typeof r.eval === 'number') {
+        const ue = Math.max(-1000, Math.min(1000, side === 'w' ? r.eval : -r.eval));
+        if (maxUserEval === null || ue > maxUserEval) maxUserEval = ue;
+        if (minUserEval === null || ue < minUserEval) minUserEval = ue;
+      }
+
+      if (r.type === 'blunder' || r.type === 'mistake') {
+        phaseErrors[phase]++;
+        if (r.fenBefore && r.bestUci) {
+          blunders.push({
+            ply: i, phase, type: r.type,
+            fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan || null,
+            playedSan: r.sanFr || r.san, cpLoss: r.cpLoss || 0, tip: r.tipFr || ''
+          });
+        }
+      }
+
+      const loss = r.winPctLoss || 0;
+      phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
+      phaseAcc[phase].count++;
+      phaseCp[phase].total += r.cpLoss || 0;
+      phaseCp[phase].count++;
+
+      if (loss > 0 && (!turningPoint || loss > turningPoint.winPctLoss)) {
+        turningPoint = {
+          ply: i, type: r.type, winPctLoss: loss, cpLoss: r.cpLoss || 0,
+          fenBefore: r.fenBefore || null, playedSan: r.sanFr || r.san,
+          bestUci: r.bestUci || null, bestSan: r.bestSan || null
+        };
+      }
+    }
+
+    const acplOf = (k) => phaseCp[k].count ? Math.round(phaseCp[k].total / phaseCp[k].count) : 0;
+    const mq = {
+      brilliant: us.brilliants || 0, best: us.best || 0, great: us.great || 0, good: us.good || 0,
+      inaccuracy: us.inaccuracies || 0, mistake: us.mistakes || 0, blunder: us.blunders || 0,
+      moveCount: us.moveCount || 0
+    };
+    mq.ok = Math.max(0, mq.moveCount - (mq.brilliant + mq.best + mq.great + mq.good + mq.inaccuracy + mq.mistake + mq.blunder));
+
+    const time = computeTimeStats(results, info, side, blunders.map(b => b.ply));
+
+    return {
+      analyzedAt: Date.now(),
+      accuracy: us.accuracy,
+      acpl: us.acpl,
+      blunders: us.blunders,
+      mistakes: us.mistakes,
+      inaccuracies: us.inaccuracies,
+      moveCount: us.moveCount,
+      phaseErrors,
+      phaseAccuracy: phaseAcc,
+      phaseAcpl: { opening: acplOf('opening'), middle: acplOf('middle'), endgame: acplOf('endgame') },
+      moveQuality: mq,
+      maxUserEval, minUserEval, turningPoint,
+      time,
+      blunderList: blunders
+    };
+  }
+
   // Robust PGN → verbose-moves parser. chess.js 0.12.1 load_pgn fails on
   // Chess.com PGNs whose comments contain [%clk ...] (the ] breaks header
   // detection) and misreads b-file pawn captures (bxa4) as bishop moves in
@@ -800,7 +924,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
+  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

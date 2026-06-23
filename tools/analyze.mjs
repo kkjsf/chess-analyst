@@ -6,7 +6,7 @@
 // js/openings.js) so server and client never diverge.
 //
 // Usage:
-//   node tools/analyze.mjs --user nimokaji [--depth 12] [--max N] [--mock] [--out ../coach-data.json]
+//   node tools/analyze.mjs --user nimokaji [--depth 20] [--max N] [--mock] [--out ../coach-data.json]
 // Env:
 //   STOCKFISH_PATH  path to stockfish binary (default: "stockfish")
 
@@ -26,7 +26,7 @@ const getArg = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : (args.includes('--' + name) ? true : def);
 };
 const USER = getArg('user', process.env.CHESSCOM_USER || 'nimokaji');
-const DEPTH = parseInt(getArg('depth', '12'), 10);
+const DEPTH = parseInt(getArg('depth', '20'), 10);
 const MAX = getArg('max', null) ? parseInt(getArg('max'), 10) : null;
 const MOCK = !!getArg('mock', false);
 const OUT = resolve(__dirname, getArg('out', '../coach-data.json'));
@@ -154,35 +154,16 @@ function normalize(g, user) {
   };
 }
 
-// Mirrors Coach.deriveStats() in js/coach.js — keep in sync.
-function deriveStats(results, summary, side) {
-  const us = side === 'w' ? summary.stats.w : summary.stats.b;
-  const phaseErrors = { opening: 0, middle: 0, endgame: 0 };
-  const phaseAcc = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
-  const blunders = [];
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    if (!r.move || r.move.color !== side) continue;
-    const phase = i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame';
-    if (r.type === 'blunder' || r.type === 'mistake') {
-      phaseErrors[phase]++;
-      if (r.fenBefore && r.bestUci) {
-        blunders.push({ ply: i, phase, type: r.type, fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan || null, playedSan: r.sanFr || r.san, cpLoss: r.cpLoss || 0, tip: r.tipFr || '' });
-      }
-    }
-    const loss = r.winPctLoss || 0;
-    phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
-    phaseAcc[phase].count++;
-  }
-  return { analyzedAt: Date.now(), accuracy: us.accuracy, acpl: us.acpl, blunders: us.blunders, mistakes: us.mistakes, inaccuracies: us.inaccuracies, moveCount: us.moveCount, phaseErrors, phaseAccuracy: phaseAcc, blunderList: blunders };
-}
-
+// Per-game stats come from the shared Analyzer.computeGameStats (js/analysis.js),
+// the single source of truth used by both server and browser analyzers.
 async function analyzeGame(rec) {
   const moves = Analyzer.parsePgnMoves(rec.pgn);
   if (!moves.length) return { error: 'pgn' };
   const results = await Analyzer.analyzeGameAsync(new Chess(), moves, null, 'depth ' + DEPTH);
   const summary = Analyzer.generateSummary(results, moves);
-  return deriveStats(results, summary, rec.userColor);
+  return Analyzer.computeGameStats(results, summary, {
+    side: rec.userColor, pgn: rec.pgn, timeClass: rec.timeClass, timeControl: rec.timeControl
+  });
 }
 
 // ─────────────── main ───────────────

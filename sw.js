@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v60';
+const CACHE_NAME = 'chess-analyst-v61';
 const ASSETS = [
   './',
   './index.html',
