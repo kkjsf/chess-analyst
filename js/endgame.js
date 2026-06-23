@@ -18,6 +18,18 @@ const Endgame = (() => {
 
   let chess = null, sc = null, busy = false, selected = null, plies = 0;
 
+  const PKEY = 'chess-analyst-endgame';
+  function loadProgress() { try { return JSON.parse(localStorage.getItem(PKEY) || '{}'); } catch (_) { return {}; } }
+  function saveProgress(p) { try { localStorage.setItem(PKEY, JSON.stringify(p)); } catch (_) {} }
+  function recordWin(id, n) {
+    const p = loadProgress();
+    const prev = p[id] || {};
+    const isRecord = !prev.best || n < prev.best;
+    p[id] = { done: true, best: isRecord ? n : prev.best };
+    saveProgress(p);
+    return { isRecord, best: p[id].best };
+  }
+
   function show() {
     ensureDom();
     $('#eg-overlay').hidden = false;
@@ -48,14 +60,24 @@ const Endgame = (() => {
 
   function renderMenu() {
     sc = null;
-    $('#eg-head-extra').textContent = '';
+    const prog = loadProgress();
+    const doneCount = SCENARIOS.filter(s => prog[s.id] && prog[s.id].done).length;
+    $('#eg-head-extra').textContent = `${doneCount}/${SCENARIOS.length} maîtrisées`;
     $('#eg-stage').innerHTML = `
       <p class="eg-intro">Transforme un avantage gagnant en victoire. Tu joues les Blancs ; l'ordinateur défend avec son roi. Objectif : mater (sans faire pat !).</p>
-      <div class="eg-menu">${SCENARIOS.map(s => `
-        <button class="eg-card" data-id="${s.id}">
+      <div class="eg-menu">${SCENARIOS.map(s => {
+        const pr = prog[s.id];
+        const done = pr && pr.done;
+        const badge = done
+          ? `<span class="eg-card-badge done">✓ record ${pr.best} coups</span>`
+          : `<span class="eg-card-badge">À faire</span>`;
+        return `
+        <button class="eg-card${done ? ' eg-card-done' : ''}" data-id="${s.id}">
           <span class="eg-card-icon">${s.icon}</span>
           <span class="eg-card-name">${s.name}</span>
-        </button>`).join('')}</div>`;
+          ${badge}
+        </button>`;
+      }).join('')}</div>`;
     document.querySelectorAll('#eg-stage .eg-card').forEach(b =>
       b.onclick = () => start(SCENARIOS.find(x => x.id === b.dataset.id)));
   }
@@ -106,7 +128,8 @@ const Endgame = (() => {
         const pc = chess.get(sq);
         if (!pc || pc.color !== 'w') return; // pick your own piece first
         selected = sq;
-        BoardRenderer.highlightSquares(arrows, [sq], '#e2b857');
+        const targets = chess.moves({ square: sq, verbose: true }).map(m => ({ to: m.to, capture: !!m.captured }));
+        BoardRenderer.showMoveHints(arrows, sq, targets);
       } else if (sq === selected) {
         selected = null;
         BoardRenderer.clearArrows(arrows);
@@ -155,8 +178,13 @@ const Endgame = (() => {
   // Returns true if the game has ended.
   function finish(afterDefender) {
     if (chess.in_checkmate()) {
-      if (chess.turn() === 'w') setStatus('Échec et mat contre toi… recommence !', 'wrong');
-      else setStatus(`🎉 Échec et mat en ${plies} coups ! Bravo, finale gagnée.`, 'right');
+      if (chess.turn() === 'w') {
+        setStatus('Échec et mat contre toi… recommence !', 'wrong');
+      } else {
+        const rec = recordWin(sc.id, plies);
+        const recLine = rec.isRecord ? ' 🏅 Nouveau record !' : ` (ton record : ${rec.best} coups)`;
+        setStatus(`🎉 Échec et mat en ${plies} coups ! Bravo, finale gagnée.${recLine}`, 'right');
+      }
       lockBoard(); return true;
     }
     if (chess.in_stalemate()) {

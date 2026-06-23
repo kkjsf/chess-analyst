@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=56">
+<link rel="stylesheet" href="css/style.css?v=60">
 </head>
 <body>
 
@@ -84,11 +84,6 @@
       <div class="guide-icon">🕐</div>
       <h3>Parties récentes & cache</h3>
       <p>Vos <b>5 dernières analyses</b> sont mises en cache localement. Relancez-les instantanément depuis la liste des parties récentes (badge <span class="cached-badge" style="font-size:11px">Analysé</span>).</p>
-    </div>
-    <div class="guide-block">
-      <div class="guide-icon">📈</div>
-      <h3>Tendances</h3>
-      <p>Après 2+ parties analysées, l'app détecte vos <b>tendances récurrentes</b> (gaffes en ouverture, pertes de matériel...) pour vous aider à cibler vos progrès.</p>
     </div>
     <div class="guide-block">
       <div class="guide-icon">📊</div>
@@ -284,7 +279,10 @@
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
+  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Commence par les <b>Finales</b> ci-dessous.</p>
+
   <h2 class="home-section-title">🎓 S'entraîner</h2>
+  <p class="home-section-sub">Trois façons de progresser, à ton rythme.</p>
 
   <button class="training-card" id="btn-open-training">
     <span class="training-icon">🎯</span>
@@ -337,6 +335,13 @@
         <span class="intro-label">Résumé</span>
       </div>
       <div class="intro-text" id="intro-text"></div>
+    </div>
+
+    <div class="blunder-focus-card" id="blunder-focus-card" hidden>
+      <div class="bf-headline" id="bf-headline"></div>
+      <div class="bf-sub" id="bf-sub"></div>
+      <div class="bf-chips" id="bf-chips"></div>
+      <button class="bf-drill" id="bf-drill" hidden></button>
     </div>
 
     <div class="board-wrapper">
@@ -488,16 +493,16 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=56"></script>
-<script src="js/board.js?v=56"></script>
-<script src="js/engine.js?v=56"></script>
-<script src="js/openings.js?v=56"></script>
-<script src="js/analysis.js?v=56"></script>
-<script src="js/training.js?v=56"></script>
-<script src="js/guess.js?v=56"></script>
-<script src="js/endgame.js?v=56"></script>
-<script src="js/coach.js?v=56"></script>
-<script src="js/app.js?v=56"></script>
+<script src="js/chess.min.js?v=60"></script>
+<script src="js/board.js?v=60"></script>
+<script src="js/engine.js?v=60"></script>
+<script src="js/openings.js?v=60"></script>
+<script src="js/analysis.js?v=60"></script>
+<script src="js/training.js?v=60"></script>
+<script src="js/guess.js?v=60"></script>
+<script src="js/endgame.js?v=60"></script>
+<script src="js/coach.js?v=60"></script>
+<script src="js/app.js?v=60"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

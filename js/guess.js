@@ -7,13 +7,22 @@ const GuessMove = (() => {
   let plies = [];
   let gi = 0, score = 0, answered = false, selected = null;
   let userColor = 'w';
+  let title = '🎯 Devine le coup';
+  let focused = false;
 
-  function start(analysis, header, color) {
+  // opts.indices: restrict the drill to these analysis indices (focused mode).
+  // opts.title: override the overlay title.
+  function start(analysis, header, color, opts) {
+    opts = opts || {};
     userColor = color || 'w';
+    title = opts.title || '🎯 Devine le coup';
+    const only = opts.indices ? new Set(opts.indices) : null;
+    focused = !!only;
     plies = [];
     for (let i = 0; i < (analysis || []).length; i++) {
       const r = analysis[i];
       if (!r || !r.move || r.move.color !== userColor || !r.fenBefore) continue;
+      if (only && !only.has(i)) continue;
       plies.push({
         moveNo: Math.floor(i / 2) + 1,
         fenBefore: r.fenBefore,
@@ -46,7 +55,7 @@ const GuessMove = (() => {
       <div class="guess-panel">
         <div class="guess-head">
           <button class="back-btn" id="guess-close">←</button>
-          <span class="guess-title">🎯 Devine le coup</span>
+          <span class="guess-title" id="guess-title">🎯 Devine le coup</span>
           <span class="guess-score" id="guess-score"></span>
         </div>
         <div id="guess-stage"></div>
@@ -57,6 +66,8 @@ const GuessMove = (() => {
 
   function render() {
     const stage = $('#guess-stage');
+    const titleEl = $('#guess-title');
+    if (titleEl) titleEl.textContent = title;
     $('#guess-score').textContent = plies.length ? `${score} / ${gi}` : '';
     if (!plies.length) {
       stage.innerHTML = `<div class="guess-empty">Aucun coup à deviner.<br><span>Analyse une partie où tu as joués des coups, puis relance.</span></div>`;
@@ -89,6 +100,12 @@ const GuessMove = (() => {
     $('#guess-skip').onclick = () => reveal(null);
   }
 
+  function legalTargets(fen, from) {
+    try {
+      return new Chess(fen).moves({ square: from, verbose: true }).map(m => ({ to: m.to, capture: !!m.captured }));
+    } catch (_) { return []; }
+  }
+
   function attachClicks() {
     const b = $('#guess-board');
     b.onclick = (e) => {
@@ -98,7 +115,7 @@ const GuessMove = (() => {
       const arrows = $('#guess-arrows');
       if (!selected) {
         selected = sq;
-        BoardRenderer.highlightSquares(arrows, [sq], '#e2b857');
+        BoardRenderer.showMoveHints(arrows, sq, legalTargets(plies[gi].fenBefore, sq));
       } else if (sq === selected) {
         selected = null;
         BoardRenderer.clearArrows(arrows);

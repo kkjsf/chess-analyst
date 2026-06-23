@@ -275,8 +275,10 @@ const Coach = (() => {
       renderTrends(an) +
       renderRepertoire(an) +
       renderWeakness(an) +
+      renderGamesDrill(an) +
       renderTrainingCta();
     bindTrainingCta();
+    bindGamesDrill();
   }
 
   function renderSyncBar() {
@@ -556,6 +558,71 @@ const Coach = (() => {
   function bindTrainingCta() {
     const b = $('#coach-open-training');
     if (b) b.addEventListener('click', () => { if (typeof Training !== 'undefined') Training.show(); });
+  }
+
+  // Replay one archive game's own mistakes as a focused "Devine le coup" drill.
+  // Archive games aren't in the analyzer's localStorage cache, so we rebuild a
+  // sparse, ply-indexed analysis array from the stored blunderList and hand it
+  // to GuessMove's focused mode.
+  function renderGamesDrill(an) {
+    if (typeof GuessMove === 'undefined') return '';
+    const withErr = an
+      .filter(g => g.analysis.blunderList && g.analysis.blunderList.length)
+      .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
+      .slice(0, 8);
+    if (!withErr.length) return '';
+    const resLbl = { win: 'V', draw: 'N', loss: 'D' };
+    const rows = withErr.map(g => {
+      const n = g.analysis.blunderList.length;
+      return `<div class="coach-drill-row">
+        <span class="coach-drill-res ${g.result || 'draw'}">${resLbl[g.result] || '·'}</span>
+        <span class="coach-drill-opp">${esc(g.oppName)}</span>
+        <span class="coach-drill-date">${g.endTime ? fmtDate(g.endTime) : ''}</span>
+        <span class="coach-drill-count">${n} erreur${n > 1 ? 's' : ''}</span>
+        <button class="coach-drill-btn" data-uuid="${esc(g.uuid)}">🎯 Rejouer</button>
+      </div>`;
+    }).join('');
+    return `<div class="home-card coach-card" id="coach-games-drill">
+      <h3>🎯 Rejoue tes erreurs partie par partie</h3>
+      <p class="coach-puz-intro">Reprends une partie récente et retrouve le bon coup à chacune de tes erreurs.</p>
+      ${rows}
+    </div>`;
+  }
+
+  function bindGamesDrill() {
+    document.querySelectorAll('#coach-games-drill .coach-drill-btn').forEach(b =>
+      b.addEventListener('click', () => drillGame(b.dataset.uuid)));
+  }
+
+  function drillGame(uuid) {
+    if (typeof GuessMove === 'undefined') return;
+    const g = games.find(x => x.uuid === uuid);
+    const bl = g && g.analysis && g.analysis.blunderList;
+    if (!bl || !bl.length) return;
+    const side = g.userColor;
+    const analysis = [];
+    const indices = [];
+    for (const b of bl) {
+      if (b.ply == null || !b.fenBefore || !b.bestUci) continue;
+      let from = null, to = null;
+      try {
+        const c = new Chess(b.fenBefore);
+        let mv = c.move(b.playedSan, { sloppy: true });
+        if (!mv && b.playedSan) {
+          const en = b.playedSan.replace(/[CFTDR]/g, x => ({ C: 'N', F: 'B', T: 'R', D: 'Q', R: 'K' }[x]));
+          mv = c.move(en, { sloppy: true });
+        }
+        if (mv) { from = mv.from; to = mv.to; }
+      } catch (_) {}
+      analysis[b.ply] = {
+        move: { color: side, from, to, san: b.playedSan },
+        fenBefore: b.fenBefore, sanFr: b.playedSan,
+        bestUci: b.bestUci, bestSan: b.bestSan || '', type: b.type
+      };
+      indices.push(b.ply);
+    }
+    if (!indices.length) return;
+    GuessMove.start(analysis, null, side, { indices, title: '🎯 Tes erreurs vs ' + (g.oppName || '?') });
   }
 
   // ─────────────── UI actions ───────────────

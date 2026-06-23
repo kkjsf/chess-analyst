@@ -2,7 +2,6 @@ const App = (() => {
   const STORAGE_KEY = 'chess-analyst-games';
   const CACHE_KEY = 'chess-analyst-cache';
   const MAX_CACHED = 15;
-  const STATS_KEY = 'chess-analyst-stats';
   let currentAnalysis = null;
   let currentIndex = 0;
   let currentHeader = null;
@@ -150,78 +149,6 @@ const App = (() => {
 
   function isGameCached(header, moveCount) {
     return !!getCachedAnalysis(cacheKey(header, moveCount));
-  }
-
-  function saveGameStats(key, analysis, summary, header, user) {
-    try {
-      const stats = JSON.parse(localStorage.getItem(STATS_KEY) || '[]');
-      const existing = stats.findIndex(s => s.key === key);
-      if (existing >= 0) stats.splice(existing, 1);
-      const side = user || 'w';
-      const s = summary.stats;
-      const us = side === 'w' ? s.w : s.b;
-      const result = header.Result || '*';
-      const tc = header.TimeControl || '';
-
-      let phaseErrors = { opening: 0, middle: 0, endgame: 0 };
-      let phaseAccuracy = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
-      for (let i = 0; i < analysis.length; i++) {
-        const r = analysis[i];
-        if (!r.move || r.move.color !== side) continue;
-        const phase = i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame';
-        if (r.type === 'blunder' || r.type === 'mistake') phaseErrors[phase]++;
-        const loss = r.winPctLoss || 0;
-        phaseAccuracy[phase].total += Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
-        phaseAccuracy[phase].count++;
-      }
-
-      stats.unshift({
-        key,
-        opening: summary.opening?.name || null,
-        eco: summary.opening?.eco || null,
-        accuracy: us.accuracy,
-        blunders: us.blunders,
-        mistakes: us.mistakes,
-        inaccuracies: us.inaccuracies,
-        result,
-        side,
-        timeControl: tc,
-        phaseErrors,
-        phaseAccuracy,
-        white: header.White || '?',
-        black: header.Black || '?',
-        date: header.Date || '',
-        savedAt: Date.now()
-      });
-      if (stats.length > 30) stats.length = 30;
-      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-    } catch (_) {}
-  }
-
-  function classifyTimeControl(tc) {
-    if (!tc) return null;
-    if (tc.includes('86400') || tc.includes('172800')) return 'daily';
-    if (tc.includes('+') || tc.includes('/')) {
-      const secs = parseInt(tc);
-      if (isNaN(secs)) return null;
-      if (secs < 180) return 'bullet';
-      if (secs <= 600) return 'blitz';
-      if (secs <= 1800) return 'rapid';
-      return 'classical';
-    }
-    const secs = parseInt(tc);
-    if (!isNaN(secs)) {
-      if (secs < 180) return 'bullet';
-      if (secs <= 600) return 'blitz';
-      if (secs <= 1800) return 'rapid';
-      return 'classical';
-    }
-    return null;
-  }
-
-  function getTimeControlLabel(tc) {
-    const labels = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'Rapide', classical: 'Classique', daily: 'Journalier' };
-    return labels[tc] || tc;
   }
 
   function extractChessComUrl(text) {
@@ -399,7 +326,6 @@ const App = (() => {
     summary.engineUsed = engineUsed;
 
     saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
-    saveGameStats(ck, analysis, summary, header, detectUser(header));
     if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, detectUser(header));
     saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
@@ -472,6 +398,7 @@ const App = (() => {
     $('#move-slider').value = 0;
 
     buildIntro(header, analysis, summary);
+    buildBlunderFocus(header, analysis);
     buildWinGraph(analysis);
     buildHighlights(header, analysis);
     buildMistakeProfile(header, analysis);
@@ -1250,6 +1177,86 @@ const App = (() => {
     if (text.length <= max) return text;
     const cut = text.lastIndexOf(' ', max);
     return text.substring(0, cut > 0 ? cut : max) + '…';
+  }
+
+  const PIECE_NAMES_FR = { p: 'pion', n: 'cavalier', b: 'fou', r: 'tour', q: 'dame' };
+  const PIECE_GLYPHS = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' };
+
+  // Headline card: at ~400 Elo the #1 leak is leaving pieces "en prise". Surface
+  // exactly which of YOUR moves hung material, let each jump to that position,
+  // and offer a focused replay drill on just those moments.
+  function buildBlunderFocus(header, analysis) {
+    const card = $('#blunder-focus-card');
+    const user = detectUser(header);
+    if (!user || typeof Training === 'undefined' || !Training.hungPiece) { card.hidden = true; return; }
+
+    const hung = [];
+    const otherErrors = [];
+    for (let i = 0; i < analysis.length; i++) {
+      const r = analysis[i];
+      if (!r || !r.move || r.move.color !== user || !r.fenBefore) continue;
+      if (r.type !== 'blunder' && r.type !== 'mistake') continue;
+      const info = Training.hungPiece(r.fenBefore, r.sanFr || r.move.san);
+      const entry = { index: i, moveNo: Math.floor(i / 2) + 1, dot: i % 2 === 0 ? '.' : '...', san: r.sanFr || r.move.san, type: r.type };
+      if (info) { entry.lost = info.type; hung.push(entry); }
+      else otherErrors.push(entry);
+    }
+
+    if (hung.length === 0 && otherErrors.length === 0) { card.hidden = true; return; }
+
+    const headline = $('#bf-headline');
+    const sub = $('#bf-sub');
+    const chipsBox = $('#bf-chips');
+    const drill = $('#bf-drill');
+    chipsBox.innerHTML = '';
+
+    let chipSource, drillIndices;
+    if (hung.length > 0) {
+      card.classList.remove('bf-clean');
+      const n = hung.length;
+      headline.innerHTML = `⚠️ Vous avez laissé <b>${n} pièce${n > 1 ? 's' : ''} en prise</b>`;
+      sub.textContent = "C'est l'erreur n°1 à corriger. Touchez un moment pour le revoir sur l'échiquier.";
+      chipSource = hung;
+      drillIndices = hung.map(h => h.index);
+    } else {
+      card.classList.add('bf-clean');
+      const n = otherErrors.length;
+      const hasBlunder = otherErrors.some(e => e.type === 'blunder');
+      headline.innerHTML = `👍 Aucune pièce laissée en prise`;
+      sub.textContent = hasBlunder
+        ? `Bon réflexe ! Il reste tout de même ${n} erreur${n > 1 ? 's' : ''} à revoir ci-dessous.`
+        : `Bon réflexe ! Encore ${n} coup${n > 1 ? 's' : ''} à revoir pour gagner en précision.`;
+      chipSource = otherErrors;
+      drillIndices = otherErrors.map(e => e.index);
+    }
+
+    for (const c of chipSource) {
+      const chip = document.createElement('button');
+      chip.className = 'bf-chip';
+      const glyph = c.lost ? `<span class="bf-glyph">${PIECE_GLYPHS[c.lost] || ''}</span>` : '';
+      const lostLabel = c.lost ? ` <span class="bf-lost">${PIECE_NAMES_FR[c.lost] || ''}</span>` : '';
+      chip.innerHTML = `<span class="bf-mv">${c.moveNo}${c.dot} ${c.san}</span>${glyph}${lostLabel}`;
+      chip.addEventListener('click', () => {
+        goTo(c.index + 1);
+        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      chipsBox.appendChild(chip);
+    }
+
+    if (drillIndices.length > 0 && typeof GuessMove !== 'undefined') {
+      drill.hidden = false;
+      const n = drillIndices.length;
+      const noun = hung.length > 0 ? 'moment' : 'coup';
+      drill.textContent = n > 1 ? `🎯 Rejouer ces ${n} ${noun}s` : `🎯 Rejouer ce ${noun}`;
+      drill.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, {
+        indices: drillIndices,
+        title: hung.length > 0 ? '🎯 Tes pièces en prise' : '🎯 Tes coups à revoir',
+      });
+    } else {
+      drill.hidden = true;
+    }
+
+    card.hidden = false;
   }
 
   function buildHighlights(header, analysis) {
@@ -2487,6 +2494,8 @@ const App = (() => {
     const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     const section = $('#recent-section');
     const list = $('#recent-list');
+    const hint = $('#home-hint');
+    if (hint) hint.hidden = games.length > 0;
 
     if (games.length === 0) {
       section.hidden = true;

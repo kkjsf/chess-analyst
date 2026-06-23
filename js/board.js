@@ -221,5 +221,26 @@ const BoardRenderer = (() => {
     overlaySvg.innerHTML = html;
   }
 
-  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares };
+  // Highlight the selected square and show its legal destinations: a dot on
+  // empty targets, a ring on capture targets (chess.com convention).
+  // targets: [{ to, capture }]
+  function showMoveHints(overlaySvg, fromSq, targets) {
+    let html = '';
+    if (fromSq) {
+      const { row, col } = squareToCoords(fromSq);
+      html += `<rect x="${col * SQ}" y="${row * SQ}" width="${SQ}" height="${SQ}" fill="#e2b857" opacity="0.4"/>`;
+    }
+    for (const t of (targets || [])) {
+      const { row, col } = squareToCoords(t.to);
+      const cx = col * SQ + SQ / 2, cy = row * SQ + SQ / 2;
+      if (t.capture) {
+        html += `<circle cx="${cx}" cy="${cy}" r="${SQ / 2 - 3}" fill="none" stroke="#1a1a2e" stroke-width="4" opacity="0.32"/>`;
+      } else {
+        html += `<circle cx="${cx}" cy="${cy}" r="7" fill="#1a1a2e" opacity="0.32"/>`;
+      }
+    }
+    overlaySvg.innerHTML = html;
+  }
+
+  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints };
 })();

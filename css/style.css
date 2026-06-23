@@ -206,6 +206,58 @@ html, body {
 .intro-text { font-size: 14px; line-height: 1.7; color: var(--text); }
 .intro-text p { margin: 0 0 10px; }
 .intro-narrative { color: var(--text); line-height: 1.6; }
+
+/* Blunder focus — the beginner headline ("you hung N pieces") */
+.blunder-focus-card {
+  background: linear-gradient(180deg, rgba(214,107,107,0.16), rgba(214,107,107,0.06));
+  border: 1px solid rgba(214,107,107,0.4);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-top: 10px;
+}
+.blunder-focus-card.bf-clean {
+  background: linear-gradient(180deg, rgba(86,184,134,0.14), rgba(86,184,134,0.05));
+  border-color: rgba(86,184,134,0.4);
+  border-left-color: var(--success);
+}
+.bf-headline { font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.4; }
+.bf-headline b { color: var(--danger); }
+.bf-clean .bf-headline b { color: var(--success); }
+.bf-sub { font-size: 13px; color: var(--text-dim); margin-top: 4px; line-height: 1.45; }
+.bf-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.bf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid rgba(214,107,107,0.5);
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.bf-clean .bf-chip { border-color: rgba(86,184,134,0.5); }
+.bf-chip:hover { border-color: var(--danger); }
+.bf-clean .bf-chip:hover { border-color: var(--success); }
+.bf-chip .bf-mv { font-weight: 600; }
+.bf-chip .bf-glyph { font-size: 16px; line-height: 1; }
+.bf-chip .bf-lost { color: var(--text-dim); font-size: 12px; }
+.bf-drill {
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 16px;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bf-clean .bf-drill { background: var(--success); color: #14241a; }
+.bf-drill:hover { filter: brightness(1.08); }
 .intro-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1565,30 +1617,6 @@ html, body {
 }
 .phase-row .accuracy-label { min-width: 70px; }
 
-/* Patterns card */
-.patterns-section {
-  width: 100%;
-  max-width: 440px;
-  margin-top: 4px;
-}
-.patterns-section h3 {
-  font-size: 14px;
-  color: var(--text-dim);
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.pattern-item {
-  background: var(--bg-card);
-  border-left: 3px solid var(--warning);
-  border-radius: 0 8px 8px 0;
-  padding: 10px 14px;
-  margin-bottom: 6px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text);
-}
-
 /* Trends dashboard */
 .trends-summary { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .trends-stat { background: var(--bg); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 100px; text-align: center; }
@@ -1809,6 +1837,12 @@ body.guess-open { overflow: hidden; }
 .eg-card:active { transform: scale(0.99); }
 .eg-card-icon { font-size: 28px; flex-shrink: 0; }
 .eg-card-name { font-size: 15px; font-weight: 600; }
+.eg-card-badge {
+  margin-left: auto; flex-shrink: 0; font-size: 11px; font-weight: 600;
+  color: var(--text-dim); background: var(--bg); border-radius: 10px; padding: 3px 9px; white-space: nowrap;
+}
+.eg-card-badge.done { color: var(--success); background: rgba(74,222,128,0.12); }
+.eg-card-done { border-color: rgba(74,222,128,0.35); }
 .eg-tip {
   font-size: 13px; line-height: 1.55; background: var(--bg-card);
   border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
@@ -1830,8 +1864,22 @@ body.guess-open { overflow: hidden; }
 /* ── Home section heading ── */
 .home-section-title {
   font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
-  color: var(--text-dim); margin: 20px 4px 8px; font-weight: 700;
+  color: var(--text-dim); margin: 20px 4px 4px; font-weight: 700;
 }
+.home-section-sub {
+  font-size: 13px; color: var(--text-dim); margin: 0 4px 10px; line-height: 1.4;
+}
+.home-hint {
+  background: rgba(226,184,87,0.1);
+  border: 1px solid rgba(226,184,87,0.3);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.home-hint b { color: var(--accent); }
 
 /* ── Move-list legend + stronger error tints ── */
 .moves-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
@@ -1945,19 +1993,23 @@ body.guess-open { overflow: hidden; }
 .coach-narrative p { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0; }
 .coach-narrative b { color: var(--accent); font-weight: 600; }
 .coach-puz-intro { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 12px; }
-.coach-puz-cat { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-.coach-puz-done { font-size: 11px; font-weight: 600; color: var(--success); background: rgba(74,222,128,0.12); padding: 1px 7px; border-radius: 8px; margin-left: 6px; }
-.coach-puz-played { font-size: 12px; color: var(--text-dim); font-weight: 400; }
-.coach-count { background: var(--accent); color: #1a1a2e; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
-.coach-puz-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.coach-puz-filter { background: var(--bg); border: 1px solid #2a3a5c; color: var(--text-dim); border-radius: 14px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
-.coach-puz-filter.active { background: var(--accent); color: #1a1a2e; border-color: var(--accent); font-weight: 600; }
-.coach-puz-meta { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; text-align: center; }
-.coach-puz-board { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1; margin: 0 auto; }
-.coach-puz-board svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.coach-puz-prompt { font-size: 14px; text-align: center; margin: 12px 0; }
-.coach-puz-answer { font-size: 14px; background: rgba(74,222,128,0.1); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-.coach-puz-tip { font-size: 13px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
-.coach-puz-nav { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.coach-puz-counter { font-size: 12px; color: var(--text-dim); min-width: 56px; text-align: center; }
-.coach-puz-reveal { padding: 10px 18px; font-size: 14px; }
+
+.coach-drill-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.06); font-size: 13px;
+}
+.coach-drill-res {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 5px; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; color: #1a1a2e;
+}
+.coach-drill-res.win { background: var(--success); }
+.coach-drill-res.loss { background: var(--danger); color: #fff; }
+.coach-drill-res.draw { background: var(--text-dim); }
+.coach-drill-opp { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coach-drill-date { color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+.coach-drill-count { color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+.coach-drill-btn {
+  flex-shrink: 0; background: var(--accent); color: #1a1a2e; border: none; border-radius: 8px;
+  padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.coach-drill-btn:hover { filter: brightness(1.08); }

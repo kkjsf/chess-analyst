@@ -56,23 +56,30 @@ const Training = (() => {
   // they can win ~a minor piece or more net (after any immediate recapture),
   // you hung something. A 1-ply static-exchange approximation — good enough to
   // label, not to evaluate.
-  function hangsMaterial(fen, playedSan, side) {
+  // Returns {type, value, square} of the most valuable piece you left hanging
+  // after `playedSan`, or null. `type` is the chess.js piece letter (n/b/r/q…).
+  function hungPiece(fen, playedSan) {
     try {
       const g = new Chess(fen);
-      if (!playMove(g, playedSan)) return false;
+      if (!playMove(g, playedSan)) return null;
       const caps = g.moves({ verbose: true }).filter(m => m.captured);
-      if (!caps.length) return false;
+      if (!caps.length) return null;
       caps.sort((a, b) => (PIECE_VALUES[b.captured] || 0) - (PIECE_VALUES[a.captured] || 0));
       const cap = caps[0];
       const gain = PIECE_VALUES[cap.captured] || 0;
-      if (gain < 3) return false; // only flag hanging a minor piece or more
+      if (gain < 3) return null; // only flag hanging a minor piece or more
       const g2 = new Chess(g.fen());
       const c2 = g2.move(cap.san, { sloppy: true });
-      if (!c2) return false;
+      if (!c2) return null;
       const recap = g2.moves({ verbose: true }).some(m => m.to === cap.to);
       const recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
-      return (gain - recapVal) >= 2;
-    } catch (_) { return false; }
+      if ((gain - recapVal) < 2) return null;
+      return { type: cap.captured, value: gain, square: cap.to };
+    } catch (_) { return null; }
+  }
+
+  function hangsMaterial(fen, playedSan, side) {
+    return !!hungPiece(fen, playedSan);
   }
 
   // Classify a mistake by what's most instructive: missed mate, then YOUR
@@ -528,5 +535,5 @@ const Training = (() => {
     else renderMotifs();
   }
 
-  return { capture, ingestGame, dueCount, show };
+  return { capture, ingestGame, dueCount, show, hungPiece };
 })();
