@@ -717,6 +717,15 @@ const Coach = (() => {
       <p class="coach-sub2">Tes 5 grandes forces, notées sur 100 d'après tes ${an.length} parties analysées.</p>
       ${radarChart(axes)}
       <p class="coach-cap">Point fort : <b>${strong.k}</b> (${strong.v}/100). Point faible : <b>${weak.k}</b> (${weak.v}/100). ${axisAdvice(weak.k)}</p>
+      <details class="coach-howto">
+        <summary>Comment ces notes sont calculées ?</summary>
+        <ul>
+          <li><b>Ouverture / Milieu / Finale</b> — ta précision moyenne dans chaque phase : la part de tes coups proches du meilleur coup du moteur. ${accOf('opening')}, ${accOf('middle')} et ${accOf('endgame')} ici.</li>
+          <li><b>Vigilance</b> — à quel point tu évites les gaffes. Part de 100 et baisse avec ton taux de gaffes (environ 1 coup sur 4 en gaffe → 0). Tu es à ${blunderRate.toFixed(1)}% de gaffes, soit ${vigilance}/100.</li>
+          <li><b>Conversion</b> — quand tu as un avantage nettement gagnant (≈ +2, une pièce de plus), le pourcentage de ces parties que tu gagnes vraiment. ${winnable.length} partie(s) concernée(s) ici.</li>
+        </ul>
+        <p>Chaque note est sur 100 (plus haut = mieux) et te compare à <b>toi-même</b>, pas aux autres joueurs.</p>
+      </details>
     </div>`;
   }
 
