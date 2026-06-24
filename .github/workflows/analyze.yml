@@ -64,5 +64,15 @@ jobs:
             echo "No changes to coach-data.json"
           else
             git commit -m "chore: update coach analysis data [skip ci]"
-            git push
+            # A full analysis can run for hours; if another commit lands on
+            # main meanwhile, a bare push is non-fast-forward and fails (it
+            # silently lost a 3h42m depth-20 run on 2026-06-23). Rebase onto
+            # the latest main and retry before giving up.
+            for i in 1 2 3; do
+              if git pull --rebase --autostash origin main && git push; then
+                echo "pushed"; break
+              fi
+              echo "push attempt $i failed, retrying in 5s…"
+              sleep 5
+            done
           fi
