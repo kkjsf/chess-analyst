@@ -322,10 +322,12 @@ const Coach = (() => {
     const cards = an.length
       ? renderNarrative(an) +
         renderTrends(an) +
-        renderProgress(an) +
+        renderProfile(an) +
         renderMoveQuality(an) +
+        renderTacticalWeakness(an) +
         renderConversion(an) +
         renderTime(an) +
+        renderProgress(an) +
         renderRepertoire(an) +
         renderWeakness(an) +
         renderGamesDrill(an) +
@@ -338,6 +340,7 @@ const Coach = (() => {
       bindGamesDrill();
       bindRepertoire();
       bindConversion();
+      bindTactics();
     }
   }
 
@@ -648,19 +651,122 @@ const Coach = (() => {
     }[k] || '';
   }
 
-  // Small inline trend line over a chronological series of values.
-  function sparkline(vals, color) {
-    const v = vals.filter(x => typeof x === 'number');
-    if (v.length < 3) return '';
-    const W = 320, H = 56, pad = 4;
-    const min = Math.min(...v), max = Math.max(...v), range = Math.max(1, max - min);
-    const x = (i) => pad + (i / (v.length - 1)) * (W - 2 * pad);
-    const y = (val) => H - pad - ((val - min) / range) * (H - 2 * pad);
-    const path = v.map((val, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(val).toFixed(1)}`).join(' ');
-    return `<svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg" preserveAspectRatio="none">
-      <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
-      <circle cx="${x(v.length - 1).toFixed(1)}" cy="${y(v[v.length - 1]).toFixed(1)}" r="3" fill="${color}"/>
-    </svg>`;
+  // ── Profil de joueur (radar 5 axes) ──
+  function radarChart(axes) {
+    const W = 300, H = 240, cx = 150, cy = 112, R = 72, n = axes.length;
+    const clamp = v => Math.max(0, Math.min(100, v));
+    const pt = (i, frac) => {
+      const a = (-90 + i * 360 / n) * Math.PI / 180;
+      return [cx + Math.cos(a) * R * frac, cy + Math.sin(a) * R * frac];
+    };
+    let grid = '';
+    [0.25, 0.5, 0.75, 1].forEach(f => {
+      grid += `<polygon points="${axes.map((_, i) => pt(i, f).map(v => v.toFixed(1)).join(',')).join(' ')}" class="radar-grid"/>`;
+    });
+    let spokes = '';
+    axes.forEach((_, i) => { const [x, y] = pt(i, 1); spokes += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" class="radar-grid"/>`; });
+    const dataPoly = axes.map((a, i) => pt(i, clamp(a.v) / 100).map(v => v.toFixed(1)).join(',')).join(' ');
+    let dots = '', labels = '';
+    axes.forEach((a, i) => {
+      const [dx, dy] = pt(i, clamp(a.v) / 100);
+      dots += `<circle cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="2.6" class="radar-dot"/>`;
+      const [lx, ly] = pt(i, 1.26);
+      const c = Math.cos((-90 + i * 360 / n) * Math.PI / 180);
+      const anchor = c > 0.3 ? 'start' : c < -0.3 ? 'end' : 'middle';
+      labels += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="${anchor}" class="radar-label">${a.k}</text>`;
+      labels += `<text x="${lx.toFixed(1)}" y="${(ly + 12).toFixed(1)}" text-anchor="${anchor}" class="radar-val">${a.v}</text>`;
+    });
+    return `<svg viewBox="0 0 ${W} ${H}" class="radar-svg">${grid}${spokes}<polygon points="${dataPoly}" class="radar-area"/>${dots}${labels}</svg>`;
+  }
+
+  function axisAdvice(k) {
+    return {
+      'Ouverture': "Révise les principes : développe tes pièces, occupe le centre, roque tôt.",
+      'Milieu': "Travaille la tactique et fixe-toi un plan clair à chaque coup.",
+      'Finale': "Apprends les finales de base (roi + pion, tours) et active ton roi.",
+      'Vigilance': "Avant chaque coup, vérifie les pièces en prise et les coups forçants adverses (méthode CCT).",
+      'Conversion': "Quand tu mènes, simplifie et joue solide plutôt que de chercher le coup brillant."
+    }[k] || '';
+  }
+
+  function renderProfile(an) {
+    const pa = { opening: { t: 0, c: 0 }, middle: { t: 0, c: 0 }, endgame: { t: 0, c: 0 } };
+    let blunders = 0, moves = 0;
+    an.forEach(g => {
+      const a = g.analysis;
+      ['opening', 'middle', 'endgame'].forEach(p => { if (a.phaseAccuracy[p]) { pa[p].t += a.phaseAccuracy[p].total; pa[p].c += a.phaseAccuracy[p].count; } });
+      blunders += a.blunders || 0; moves += a.moveCount || 0;
+    });
+    const accOf = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : 0;
+    const blunderRate = moves ? blunders / moves * 100 : 0;
+    // 0 gaffes → 100 ; ~25% des coups en gaffe → 0 (échelle adaptée débutant).
+    const vigilance = Math.max(0, Math.min(100, Math.round(100 - blunderRate * 4)));
+    const winnable = an.filter(g => typeof g.analysis.maxUserEval === 'number' && g.analysis.maxUserEval >= 200);
+    const conversion = winnable.length ? pct(winnable.filter(g => g.result === 'win').length, winnable.length) : 50;
+    const axes = [
+      { k: 'Ouverture', v: accOf('opening') },
+      { k: 'Milieu', v: accOf('middle') },
+      { k: 'Finale', v: accOf('endgame') },
+      { k: 'Vigilance', v: vigilance },
+      { k: 'Conversion', v: conversion }
+    ];
+    const sorted = axes.slice().sort((a, b) => b.v - a.v);
+    const strong = sorted[0], weak = sorted[sorted.length - 1];
+    return `<div class="home-card coach-card">
+      <h3>🧭 Ton profil de joueur</h3>
+      <p class="coach-sub2">Tes 5 grandes forces, notées sur 100 d'après tes ${an.length} parties analysées.</p>
+      ${radarChart(axes)}
+      <p class="coach-cap">Point fort : <b>${strong.k}</b> (${strong.v}/100). Point faible : <b>${weak.k}</b> (${weak.v}/100). ${axisAdvice(weak.k)}</p>
+    </div>`;
+  }
+
+  // ── Faiblesses tactiques (répartition des erreurs par motif) ──
+  function motifAdvice(m) {
+    return {
+      prise: "Avant de jouer, vérifie qu'aucune de tes pièces — surtout celle que tu déplaces — ne reste en prise.",
+      fourchette: "Méfie-toi des cases d'où un cavalier ou une dame frappe deux pièces à la fois.",
+      mat: "Quand le roi adverse est exposé, cherche le mat avant toute autre idée.",
+      gain: "Compte attaquants et défenseurs avant chaque prise pour ne pas perdre de matériel.",
+      attaque: "Pare les échecs en priorité et anticipe les coups forçants adverses.",
+      positionnel: "Cherche un plan : améliore ta pièce la moins active, occupe les colonnes ouvertes.",
+      manoeuvre: "Cherche un plan : améliore ta pièce la moins active, occupe les colonnes ouvertes."
+    }[m] || '';
+  }
+
+  function renderTacticalWeakness(an) {
+    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
+    const counts = {};
+    let total = 0;
+    an.forEach(g => {
+      const side = g.userColor;
+      (g.analysis.blunderList || []).forEach(b => {
+        if (!b.fenBefore || !b.bestUci) return;
+        const m = Training.detectMotif(b.fenBefore, b.bestUci, side, b.playedSan);
+        counts[m] = (counts[m] || 0) + 1; total++;
+      });
+    });
+    if (!total) return '';
+    const labels = Training.MOTIF_LABELS || {}, tactical = Training.TACTICAL || [];
+    const rows = Object.keys(counts).map(k => ({ k, n: counts[k] })).sort((a, b) => b.n - a.n);
+    const worst = rows.filter(r => tactical.includes(r.k))[0] || rows[0];
+    const maxN = Math.max(...rows.map(r => r.n), 1);
+    const bars = rows.map(r => `
+      <div class="coach-row">
+        <span class="coach-row-label">${labels[r.k] || r.k}</span>
+        <div class="coach-bar"><span style="width:${pct(r.n, maxN)}%;background:${tactical.includes(r.k) ? '#d36b6b' : '#8a8aa0'}"></span></div>
+        <span class="coach-row-val">${r.n} · ${pct(r.n, total)}%</span>
+      </div>`).join('');
+    return `<div class="home-card coach-card" id="coach-tactics">
+      <h3>🎯 Tes faiblesses tactiques</h3>
+      <p class="coach-sub2">Répartition de tes <b>${total} erreurs</b> par type. En rouge, les ratés tactiques — les plus coûteux.</p>
+      ${bars}
+      <p class="coach-cap">Ta priorité : <b>${labels[worst.k] || worst.k}</b>. ${motifAdvice(worst.k)}</p>
+      <button class="btn-primary" id="coach-tactics-train">🎯 M'entraîner sur mes erreurs</button>
+    </div>`;
+  }
+  function bindTactics() {
+    const b = $('#coach-tactics-train');
+    if (b) b.addEventListener('click', () => { if (typeof Training !== 'undefined') Training.show(); });
   }
 
   function endReasonLabel(r) {
@@ -779,14 +885,6 @@ const Coach = (() => {
   function renderProgress(an) {
     const byTime = an.filter(g => g.endTime).slice().sort((a, b) => a.endTime - b.endTime);
     if (byTime.length < 3) return '';
-    const accSpark = sparkline(byTime.map(g => g.analysis.accuracy), '#56b886');
-    const acplSpark = sparkline(byTime.map(g => g.analysis.acpl), '#d36b6b');
-    const accVals = byTime.map(g => g.analysis.accuracy).filter(x => typeof x === 'number');
-    const acplVals = byTime.map(g => g.analysis.acpl).filter(x => typeof x === 'number');
-    const avgAcc = accVals.length ? Math.round(avg(accVals)) : null;
-    const lastAcc = accVals.length ? Math.round(accVals[accVals.length - 1]) : null;
-    const avgAcpl = acplVals.length ? Math.round(avg(acplVals)) : null;
-    const lastAcpl = acplVals.length ? Math.round(acplVals[acplVals.length - 1]) : null;
 
     const rated = an.filter(g => g.oppRating);
     let perf = null;
@@ -819,10 +917,6 @@ const Coach = (() => {
         <div class="coach-metric"><b>${cur} ${ctL}</b><span>série en cours</span></div>
         <div class="coach-metric"><b>${lw}</b><span>+ longue série de victoires</span></div>
       </div>
-      ${accSpark ? `<div class="coach-sub">Précision au fil du temps</div>
-        <p class="coach-cap">Part de tes coups proches du meilleur coup, partie après partie (du plus ancien au plus récent). <b>Plus haut = mieux.</b>${avgAcc != null ? ` Moyenne ${avgAcc}%, dernière partie ${lastAcc}%.` : ''}</p>${accSpark}` : ''}
-      ${acplSpark ? `<div class="coach-sub">Perte moyenne par coup (ACPL) au fil du temps</div>
-        <p class="coach-cap">À quel point tes coups s'écartent en moyenne du meilleur, en centièmes de pion (100 = un pion perdu). <b>Plus c'est bas, mieux c'est.</b>${avgAcpl != null ? ` Moyenne ${avgAcpl}, dernière partie ${lastAcpl}.` : ''}</p>${acplSpark}` : ''}
       ${lossRows ? `<div class="coach-sub">Comment tu perds (${losses.length} défaites)</div>${lossRows}` : ''}
     </div>`;
   }

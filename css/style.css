@@ -2034,6 +2034,14 @@ body.guess-open { overflow: hidden; }
 .coach-cap b { color: var(--text); }
 .coach-row-n { color: var(--text-dim); font-weight: 400; }
 
+/* Profil de joueur — radar chart */
+.radar-svg { width: 100%; max-width: 300px; height: auto; display: block; margin: 4px auto 2px; }
+.radar-grid { fill: none; stroke: #2a3a5c; stroke-width: 1; }
+.radar-area { fill: rgba(226, 184, 87, 0.25); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.radar-dot { fill: var(--accent); }
+.radar-label { fill: var(--text-dim); font-size: 10px; font-weight: 600; }
+.radar-val { fill: var(--text); font-size: 11px; font-weight: 700; }
+
 /* Repertoire: clickable opening name + external link */
 .coach-rep-explore { background: none; border: none; color: var(--accent); font: inherit; padding: 0; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
 .coach-rep-ext { color: var(--text-dim); text-decoration: none; font-size: 12px; }

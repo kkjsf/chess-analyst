@@ -535,5 +535,5 @@ const Training = (() => {
     else renderMotifs();
   }
 
-  return { capture, ingestGame, dueCount, show, hungPiece };
+  return { capture, ingestGame, dueCount, show, hungPiece, detectMotif, MOTIF_LABELS, TACTICAL };
 })();
