@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=66">
+<link rel="stylesheet" href="css/style.css?v=67">
 </head>
 <body>
 
@@ -279,37 +279,7 @@
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
-  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Commence par les <b>Finales</b> ci-dessous.</p>
-
-  <h2 class="home-section-title">🎓 S'entraîner</h2>
-  <p class="home-section-sub">Trois façons de progresser, à ton rythme.</p>
-
-  <button class="training-card" id="btn-open-training">
-    <span class="training-icon">🎯</span>
-    <span class="training-text">
-      <span class="training-title">Mode entraînement</span>
-      <span class="training-sub">Rejoue tes erreurs, repère les tactiques</span>
-    </span>
-    <span class="training-due" id="training-due">À jour</span>
-  </button>
-
-  <button class="training-card coach-entry" id="btn-open-coach">
-    <span class="training-icon">📊</span>
-    <span class="training-text">
-      <span class="training-title">Coach — toutes mes parties</span>
-      <span class="training-sub">Analyse en masse de Chess.com, bilan & progression</span>
-    </span>
-    <span class="training-due">→</span>
-  </button>
-
-  <button class="training-card" id="btn-open-endgame">
-    <span class="training-icon">🏰</span>
-    <span class="training-text">
-      <span class="training-title">Finales — apprends à mater</span>
-      <span class="training-sub">Mate avec dame, tour, deux tours, ou un pion</span>
-    </span>
-    <span class="training-due">→</span>
-  </button>
+  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> ou <b>Finales</b> dans la barre du bas.</p>
 
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
@@ -329,19 +299,30 @@
   </div>
 
   <div class="analysis-body">
+    <div class="accuracy-hero" id="accuracy-hero" hidden>
+      <div class="acc-gauge">
+        <svg class="acc-ring-svg" viewBox="0 0 60 60" aria-hidden="true">
+          <circle class="acc-track" cx="30" cy="30" r="25"/>
+          <circle class="acc-fill" id="acc-fill-ring" cx="30" cy="30" r="25" transform="rotate(-90 30 30)"/>
+          <text class="acc-num" id="acc-hero-num" x="30" y="34" text-anchor="middle">–</text>
+        </svg>
+        <div class="acc-meta">
+          <div class="acc-label" id="acc-hero-label">Ta précision</div>
+          <div class="acc-grade" id="acc-hero-grade"></div>
+        </div>
+      </div>
+      <div class="acc-opp">
+        <div class="acc-opp-label" id="acc-opp-label">Adversaire</div>
+        <div class="acc-opp-val"><span id="acc-opp-num">–</span><span class="acc-opp-pct">%</span></div>
+      </div>
+    </div>
+
     <div class="intro-card" id="intro-card" hidden>
       <div class="intro-header">
         <span class="intro-icon">📋</span>
         <span class="intro-label">Résumé</span>
       </div>
       <div class="intro-text" id="intro-text"></div>
-    </div>
-
-    <div class="blunder-focus-card" id="blunder-focus-card" hidden>
-      <div class="bf-headline" id="bf-headline"></div>
-      <div class="bf-sub" id="bf-sub"></div>
-      <div class="bf-chips" id="bf-chips"></div>
-      <button class="bf-drill" id="bf-drill" hidden></button>
     </div>
 
     <div class="board-wrapper">
@@ -381,6 +362,15 @@
       <span class="move-counter" id="move-counter">Coup 0</span>
       <button class="nav-btn" id="btn-next" title="Coup suivant">▶</button>
       <button class="nav-btn" id="btn-last" title="Dernier coup">⏭</button>
+    </div>
+
+    <div class="turning-card" id="turning-card" hidden>
+      <div class="turning-head">
+        <svg class="turning-bulb" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10.5c-.7.7-1 1.2-1 2.5H9c0-1.3-.3-1.8-1-2.5A6 6 0 0 1 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="turning-title" id="turning-title">Le tournant</span>
+      </div>
+      <div class="turning-text" id="turning-text"></div>
+      <div class="turning-actions" id="turning-actions"></div>
     </div>
 
     <div class="tip-card" id="tip-card">
@@ -493,16 +483,37 @@
   </div>
 </div>
 
-<script src="js/chess.min.js?v=66"></script>
-<script src="js/board.js?v=66"></script>
-<script src="js/engine.js?v=66"></script>
-<script src="js/openings.js?v=66"></script>
-<script src="js/analysis.js?v=66"></script>
-<script src="js/training.js?v=66"></script>
-<script src="js/guess.js?v=66"></script>
-<script src="js/endgame.js?v=66"></script>
-<script src="js/coach.js?v=66"></script>
-<script src="js/app.js?v=66"></script>
+<!-- ═══════ BOTTOM TAB BAR ═══════ -->
+<nav class="tabbar" id="tabbar">
+  <button class="tab active" data-tab="analyser" aria-label="Analyser">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7.5 11.7 9.6 9.2l1.9 1.9 2.4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Analyser</span>
+  </button>
+  <button class="tab" data-tab="coach" aria-label="Coach">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    <span>Coach</span>
+  </button>
+  <button class="tab" data-tab="entrainer" aria-label="Entraîner">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Entraîner</span>
+    <span class="tab-badge" id="tab-train-badge" hidden></span>
+  </button>
+  <button class="tab" data-tab="finales" aria-label="Finales">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6 4h11l-2.6 4L17 12H6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+    <span>Finales</span>
+  </button>
+</nav>
+
+<script src="js/chess.min.js?v=67"></script>
+<script src="js/board.js?v=67"></script>
+<script src="js/engine.js?v=67"></script>
+<script src="js/openings.js?v=67"></script>
+<script src="js/analysis.js?v=67"></script>
+<script src="js/training.js?v=67"></script>
+<script src="js/guess.js?v=67"></script>
+<script src="js/endgame.js?v=67"></script>
+<script src="js/coach.js?v=67"></script>
+<script src="js/app.js?v=67"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

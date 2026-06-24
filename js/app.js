@@ -15,6 +15,7 @@ const App = (() => {
 
   function init() {
     bindEvents();
+    wireTabSync();
     loadRecent();
     handleShareTarget();
     initGlossary();
@@ -44,6 +45,8 @@ const App = (() => {
     $('#btn-next').addEventListener('click', () => goTo(currentIndex + 1));
     $('#btn-last').addEventListener('click', () => goTo(currentAnalysis.length));
     $('#move-slider').addEventListener('input', (e) => goTo(+e.target.value));
+
+    $$('.tabbar .tab').forEach(t => t.addEventListener('click', () => navTo(t.dataset.tab)));
 
     document.addEventListener('keydown', (e) => {
       if (!$('#screen-analysis').classList.contains('active')) return;
@@ -398,7 +401,8 @@ const App = (() => {
     $('#move-slider').value = 0;
 
     buildIntro(header, analysis, summary);
-    buildBlunderFocus(header, analysis);
+    buildAccuracyHero(header, summary);
+    buildTurningPoint(header, analysis);
     buildWinGraph(analysis);
     buildHighlights(header, analysis);
     buildMistakeProfile(header, analysis);
@@ -412,6 +416,7 @@ const App = (() => {
 
     $('#screen-import').classList.remove('active');
     $('#screen-analysis').classList.add('active');
+    setTab('analyser');
 
     goTo(0);
   }
@@ -698,14 +703,6 @@ const App = (() => {
 
     let accuracyHtml = '';
     if (summary.engineUsed) {
-      const wPct = s.w.accuracy;
-      const bPct = s.b.accuracy;
-      accuracyHtml = `
-        <div class="intro-accuracy">
-          <div class="accuracy-row"><span class="accuracy-label">⚪ Précision</span><div class="accuracy-bar-bg"><div class="accuracy-bar" style="width:${wPct}%"></div></div><span class="accuracy-val">${wPct}%</span></div>
-          <div class="accuracy-row"><span class="accuracy-label">⚫ Précision</span><div class="accuracy-bar-bg"><div class="accuracy-bar black" style="width:${bPct}%"></div></div><span class="accuracy-val">${bPct}%</span></div>
-        </div>`;
-
       const phaseRanges = [
         { label: 'Ouverture', from: 0, to: Math.min(20, analysis.length) },
         { label: 'Milieu', from: 20, to: Math.min(50, analysis.length) },
@@ -1179,81 +1176,95 @@ const App = (() => {
     return text.substring(0, cut > 0 ? cut : max) + '…';
   }
 
-  const PIECE_NAMES_FR = { p: 'pion', n: 'cavalier', b: 'fou', r: 'tour', q: 'dame' };
-  const PIECE_GLYPHS = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' };
+  // Turning-point banner: one focused card highlighting the single most decisive
+  // moment (your biggest swing), with a primary "Rejouer ce coup" drill and a
+  // secondary "Voir l'échiquier". Consolidates the old stacked tip/blunder cards.
+  function gradeWord(a) {
+    return a >= 90 ? 'Excellent' : a >= 80 ? 'Très bon' : a >= 70 ? 'Bon' : a >= 55 ? 'Correct' : a >= 40 ? 'Fragile' : 'Difficile';
+  }
 
-  // Headline card: at ~400 Elo the #1 leak is leaving pieces "en prise". Surface
-  // exactly which of YOUR moves hung material, let each jump to that position,
-  // and offer a focused replay drill on just those moments.
-  function buildBlunderFocus(header, analysis) {
-    const card = $('#blunder-focus-card');
+  function buildAccuracyHero(header, summary) {
+    const hero = $('#accuracy-hero');
+    if (!summary || !summary.engineUsed) { hero.hidden = true; return; }
+    const s = summary.stats;
     const user = detectUser(header);
-    if (!user || typeof Training === 'undefined' || !Training.hungPiece) { card.hidden = true; return; }
+    const uw = user === 'w';
+    let myAcc, oppAcc, myLabel, oppLabel;
+    if (user) {
+      myAcc = (uw ? s.w : s.b).accuracy; oppAcc = (uw ? s.b : s.w).accuracy;
+      myLabel = 'Ta précision'; oppLabel = 'Adversaire';
+    } else {
+      myAcc = s.w.accuracy; oppAcc = s.b.accuracy;
+      myLabel = 'Blancs'; oppLabel = 'Noirs';
+    }
 
-    const hung = [];
-    const otherErrors = [];
+    const C = 2 * Math.PI * 25; // ring circumference (r=25)
+    const ring = $('#acc-fill-ring');
+    ring.setAttribute('stroke-dasharray', `${(myAcc / 100 * C).toFixed(1)} ${C.toFixed(1)}`);
+    const col = myAcc >= 75 ? 'var(--success)' : myAcc >= 55 ? 'var(--accent)' : 'var(--danger)';
+    ring.style.stroke = col;
+    $('#acc-hero-num').textContent = myAcc;
+    $('#acc-hero-label').textContent = myLabel;
+    const grade = $('#acc-hero-grade');
+    grade.textContent = gradeWord(myAcc);
+    grade.style.color = col;
+    $('#acc-opp-label').textContent = oppLabel;
+    $('#acc-opp-num').textContent = oppAcc;
+    hero.hidden = false;
+  }
+
+  function buildTurningPoint(header, analysis) {
+    const card = $('#turning-card');
+    const user = detectUser(header);
+
+    const errs = [];
+    let best = null;
     for (let i = 0; i < analysis.length; i++) {
       const r = analysis[i];
-      if (!r || !r.move || r.move.color !== user || !r.fenBefore) continue;
-      if (r.type !== 'blunder' && r.type !== 'mistake') continue;
-      const info = Training.hungPiece(r.fenBefore, r.sanFr || r.move.san);
-      const entry = { index: i, moveNo: Math.floor(i / 2) + 1, dot: i % 2 === 0 ? '.' : '...', san: r.sanFr || r.move.san, type: r.type };
-      if (info) { entry.lost = info.type; hung.push(entry); }
-      else otherErrors.push(entry);
+      if (!r || !r.move) continue;
+      if (user && r.move.color !== user) continue;
+      if (r.type !== 'blunder' && r.type !== 'mistake' && r.type !== 'inaccuracy') continue;
+      errs.push(i);
+      const weight = r.type === 'blunder' ? 3 : r.type === 'mistake' ? 2 : 1;
+      const score = weight * 1000 + (r.winPctLoss || 0) * 100 + (r.cpLoss || 0) / 100;
+      if (!best || score > best.score) best = { i, r, score };
     }
 
-    if (hung.length === 0 && otherErrors.length === 0) { card.hidden = true; return; }
+    if (!best) { card.hidden = true; return; }
 
-    const headline = $('#bf-headline');
-    const sub = $('#bf-sub');
-    const chipsBox = $('#bf-chips');
-    const drill = $('#bf-drill');
-    chipsBox.innerHTML = '';
+    const i = best.i, r = best.r;
+    const moveNo = Math.floor(i / 2) + 1;
+    const dot = i % 2 === 0 ? '.' : '...';
+    const isUser = user && r.move.color === user;
+    const who = user ? (isUser ? '' : ' (adversaire)') : (r.move.color === 'w' ? ' (Blancs)' : ' (Noirs)');
 
-    let chipSource, drillIndices;
-    if (hung.length > 0) {
-      card.classList.remove('bf-clean');
-      const n = hung.length;
-      headline.innerHTML = `⚠️ Vous avez laissé <b>${n} pièce${n > 1 ? 's' : ''} en prise</b>`;
-      sub.textContent = "C'est l'erreur n°1 à corriger. Touchez un moment pour le revoir sur l'échiquier.";
-      chipSource = hung;
-      drillIndices = hung.map(h => h.index);
-    } else {
-      card.classList.add('bf-clean');
-      const n = otherErrors.length;
-      const hasBlunder = otherErrors.some(e => e.type === 'blunder');
-      headline.innerHTML = `👍 Aucune pièce laissée en prise`;
-      sub.textContent = hasBlunder
-        ? `Bon réflexe ! Il reste tout de même ${n} erreur${n > 1 ? 's' : ''} à revoir ci-dessous.`
-        : `Bon réflexe ! Encore ${n} coup${n > 1 ? 's' : ''} à revoir pour gagner en précision.`;
-      chipSource = otherErrors;
-      drillIndices = otherErrors.map(e => e.index);
+    $('#turning-title').textContent = `Le tournant — coup ${moveNo}${who}`;
+    const tip = (r.tipFr || '').replace(/<[^>]*>/g, '').trim();
+    $('#turning-text').innerHTML = `<b>${moveNo}${dot} ${r.sanFr}</b> — ${tip}`;
+
+    const actions = $('#turning-actions');
+    actions.innerHTML = '';
+
+    if (isUser && typeof GuessMove !== 'undefined') {
+      const replay = document.createElement('button');
+      replay.className = 'pill pill-gold';
+      replay.textContent = 'Rejouer ce coup';
+      replay.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, { indices: [i], title: '🎯 Le tournant' });
+      actions.appendChild(replay);
     }
 
-    for (const c of chipSource) {
-      const chip = document.createElement('button');
-      chip.className = 'bf-chip';
-      const glyph = c.lost ? `<span class="bf-glyph">${PIECE_GLYPHS[c.lost] || ''}</span>` : '';
-      const lostLabel = c.lost ? ` <span class="bf-lost">${PIECE_NAMES_FR[c.lost] || ''}</span>` : '';
-      chip.innerHTML = `<span class="bf-mv">${c.moveNo}${c.dot} ${c.san}</span>${glyph}${lostLabel}`;
-      chip.addEventListener('click', () => {
-        goTo(c.index + 1);
-        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-      chipsBox.appendChild(chip);
-    }
+    const view = document.createElement('button');
+    view.className = 'pill pill-ghost';
+    view.textContent = "Voir l'échiquier";
+    view.onclick = () => { goTo(i + 1); $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    actions.appendChild(view);
 
-    if (drillIndices.length > 0 && typeof GuessMove !== 'undefined') {
-      drill.hidden = false;
-      const n = drillIndices.length;
-      const noun = hung.length > 0 ? 'moment' : 'coup';
-      drill.textContent = n > 1 ? `🎯 Rejouer ces ${n} ${noun}s` : `🎯 Rejouer ce ${noun}`;
-      drill.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, {
-        indices: drillIndices,
-        title: hung.length > 0 ? '🎯 Tes pièces en prise' : '🎯 Tes coups à revoir',
-      });
-    } else {
-      drill.hidden = true;
+    if (user && errs.length > 1 && typeof GuessMove !== 'undefined') {
+      const all = document.createElement('button');
+      all.className = 'pill pill-ghost';
+      all.textContent = `Revoir mes ${errs.length} erreurs`;
+      all.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, { indices: errs, title: '🎯 Tes coups à revoir' });
+      actions.appendChild(all);
     }
 
     card.hidden = false;
@@ -1367,19 +1378,19 @@ const App = (() => {
 
     list.innerHTML = '';
     for (const p of picks) {
-      const item = document.createElement('div');
-      item.className = 'highlight-item';
-      const sideLabel = p.user
-        ? (p.isUserMove ? 'Vous' : 'Adversaire')
-        : (p.isWhite ? 'Blancs' : 'Noirs');
-      const sideClass = p.user
-        ? (p.isUserMove ? 'tip-side-you' : 'tip-side-opp')
-        : '';
+      const r = analysis[p.index];
+      let evalStr = '';
+      if (r && typeof r.eval === 'number') {
+        const v = Math.max(-99, Math.min(99, r.eval / 100));
+        evalStr = (v >= 0 ? '+' : '') + v.toFixed(1);
+      }
+      const item = document.createElement('button');
+      item.className = 'gm-chip ' + p.badgeClass;
       item.innerHTML = `
-        <span class="highlight-move">${p.label}</span>
-        <span class="tip-side-tag ${sideClass}">${sideLabel}</span>
-        <span class="highlight-desc">${p.desc}</span>
-        <span class="highlight-badge ${p.badgeClass}">${p.badge}</span>`;
+        <span class="gm-dot"></span>
+        <span class="gm-move">${p.label}</span>
+        <span class="gm-label">${p.badge.toLowerCase()}</span>
+        <span class="gm-eval">${evalStr}</span>`;
       item.addEventListener('click', () => {
         goTo(p.index + 1);
         $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2459,9 +2470,51 @@ const App = (() => {
     return null;
   }
 
+  function setTab(name) {
+    $$('.tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  }
+
+  function syncTabbar() {
+    if ($('#screen-coach').classList.contains('active')) setTab('coach');
+    else if ($('#screen-training').classList.contains('active')) setTab('entrainer');
+    else setTab('analyser');
+  }
+
+  function navTo(tab) {
+    if (tab === 'coach') { if (typeof Coach !== 'undefined') Coach.show(); return; }
+    if (tab === 'entrainer') { if (typeof Training !== 'undefined') Training.show(); return; }
+    if (tab === 'finales') { if (typeof Endgame !== 'undefined') Endgame.show(); return; }
+    // analyser: leave any sub-screen, show the loaded game or the import home
+    $('#screen-training').classList.remove('active');
+    $('#screen-coach').classList.remove('active');
+    if (currentAnalysis) {
+      $('#screen-import').classList.remove('active');
+      $('#screen-analysis').classList.add('active');
+      setTab('analyser');
+    } else {
+      showImport();
+    }
+  }
+
+  // Keep the bottom-tab highlight in sync when screens change via their own buttons.
+  function wireTabSync() {
+    const patch = (obj, method, after) => {
+      if (!obj || typeof obj[method] !== 'function') return;
+      const orig = obj[method];
+      obj[method] = function () { const ret = orig.apply(obj, arguments); after(); return ret; };
+    };
+    if (typeof Coach !== 'undefined') { patch(Coach, 'show', () => setTab('coach')); patch(Coach, 'hide', syncTabbar); }
+    if (typeof Training !== 'undefined') { patch(Training, 'show', () => setTab('entrainer')); patch(Training, 'hide', syncTabbar); }
+    if (typeof Endgame !== 'undefined') { patch(Endgame, 'show', () => setTab('finales')); patch(Endgame, 'close', syncTabbar); }
+    // Endgame/GuessMove are overlays toggling body.guess-open; re-sync the tab when one closes.
+    new MutationObserver(() => { if (!document.body.classList.contains('guess-open')) syncTabbar(); })
+      .observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+
   function showImport() {
     $('#screen-analysis').classList.remove('active');
     $('#screen-import').classList.add('active');
+    setTab('analyser');
     loadRecent();
   }
 
@@ -2551,11 +2604,12 @@ const App = (() => {
   }
 
   function refreshHome() {
-    const badge = $('#training-due');
-    if (!badge || typeof Training === 'undefined') return;
+    if (typeof Training === 'undefined') return;
     const due = Training.dueCount();
-    badge.textContent = due > 0 ? `${due} à réviser` : 'À jour';
-    badge.classList.toggle('has-due', due > 0);
+    const badge = $('#tab-train-badge');
+    if (!badge) return;
+    badge.hidden = !(due > 0);
+    badge.textContent = due > 99 ? '99+' : String(due);
   }
 
   function formatDate(dateStr) {
