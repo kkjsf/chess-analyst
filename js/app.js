@@ -932,7 +932,7 @@ const App = (() => {
       pumpEval();
     }
 
-    if (rich && typeof StockfishEngine !== 'undefined') {
+    if ((rich || opening.showEval) && typeof StockfishEngine !== 'undefined') {
       evalEl.hidden = false;
       evalEl.innerHTML = `<span class="oe-text">⏳ Le moteur analyse la position…</span>`;
       (StockfishEngine.isReady() ? Promise.resolve() : StockfishEngine.init())
@@ -3103,5 +3103,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo, refreshHome };
+  return { goTo, refreshHome, openOpeningExplorer };
 })();

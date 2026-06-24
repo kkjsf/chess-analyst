@@ -23,6 +23,7 @@ const Coach = (() => {
   let busy = false;
   let stopFlag = false;
   let hostedInfo = null;
+  let filterTc = 'all'; // whole-page cadence filter (all | bullet | blitz | rapid | daily | autre)
 
   const $ = (s) => document.querySelector(s);
 
@@ -82,6 +83,74 @@ const Coach = (() => {
     if (!name) return 'Inconnue';
     const words = name.split(/\s+/);
     return words.slice(0, 2).join(' ');
+  }
+
+  // ── French opening names (Coach repertoire) ──
+  // Chess.com stores the opening as an English URL slug; we re-derive a French
+  // name + family + an explorable move line from the actual PGN moves so the
+  // repertoire is in French and each opening is replayable.
+  const FAMILY_MAP = [
+    ['Ruy Lopez', 'Espagnole (Ruy Lopez)'], ['Espagnole', 'Espagnole (Ruy Lopez)'],
+    ['Sicilienne', 'Sicilienne'],
+    ['Française', 'Française'],
+    ['Caro-Kann', 'Caro-Kann'],
+    ['Scandinave', 'Scandinave'],
+    ['Giuoco', 'Italienne'], ['Italienne', 'Italienne'], ['Deux Cavaliers', 'Italienne'], ['Evans', 'Italienne'],
+    ['Écossais', 'Écossaise'], ['Écossaise', 'Écossaise'],
+    ['Petrov', 'Petrov'], ['Philidor', 'Philidor'], ['Viennoise', 'Viennoise'],
+    ['Gambit du Roi', 'Gambit du Roi'], ['Gambit du Centre', 'Gambit du Centre'],
+    ['Évêque', "Ouverture de l'Évêque"],
+    ['Pirc', 'Pirc'], ['Alekhine', 'Alekhine'], ['Moderne', 'Défense Moderne'],
+    ['Owen', 'Défense Owen'], ['Nimzowitsch', 'Défense Nimzowitsch'],
+    ['Trois Cavaliers', 'Trois/Quatre Cavaliers'], ['Quatre Cavaliers', 'Trois/Quatre Cavaliers'],
+    ['Nimzo', 'Nimzo-Indienne'], ['Est-Indienne', 'Est-Indienne'], ['Ouest-Indienne', 'Ouest-Indienne'],
+    ['Grünfeld', 'Grünfeld'], ['Benoni', 'Benoni'], ['Benko', 'Benko'], ['Budapest', 'Budapest'],
+    ['Catalane', 'Catalane'], ['Slave', 'Slave'],
+    ['Gambit Dame', 'Gambit Dame'], ['GDR', 'Gambit Dame'], ['GDA', 'Gambit Dame'], ['Tarrasch', 'Gambit Dame'],
+    ['Londres', 'Système de Londres'], ['Colle', 'Système Colle'],
+    ['Trompowsky', 'Trompowsky'], ['Torre', 'Attaque Torre'], ['Veresov', 'Veresov'], ['Old Indian', 'Old Indian'],
+    ['Hollandaise', 'Hollandaise'],
+    ['Anglaise', 'Anglaise'], ['Réti', 'Réti'], ['Larsen', 'Larsen'], ['Bird', 'Bird'], ['Hongroise', 'Hongroise'],
+    ['Scholar', 'Attaque Scholar'], ['Parham', 'Attaque Scholar'],
+    ['Pion Roi', 'Ouverture Pion Roi'], ['Pion Dame', 'Ouverture Pion Dame']
+  ];
+  function familyFr(name) {
+    if (!name) return 'Inconnue';
+    for (const [kw, fam] of FAMILY_MAP) if (name.indexOf(kw) >= 0) return fam;
+    return name.split(' — ')[0];
+  }
+  function frenchOpening(g) {
+    if (g._fr) return g._fr;
+    let info = null;
+    try { info = Openings.detect(Analyzer.parsePgnMoves(g.pgn)); } catch (_) {}
+    const name = (info && info.name) || g.opening || 'Inconnue';
+    g._fr = {
+      name,
+      family: familyFr(name),
+      line: (info && info.line) || null,
+      moves: (info && info.moves) || 0,
+      eco: (info && info.eco) || null,
+      url: (g.eco && /^https?:/.test(g.eco)) ? g.eco : null
+    };
+    return g._fr;
+  }
+  // Rebuild from/to of a played move (handles French SAN) for focused drills.
+  function fromToOf(fen, playedSan) {
+    try {
+      const c = new Chess(fen);
+      let mv = c.move(playedSan, { sloppy: true });
+      if (!mv && playedSan) {
+        const en = playedSan.replace(/[CFTDR]/g, x => ({ C: 'N', F: 'B', T: 'R', D: 'Q', R: 'K' }[x]));
+        mv = c.move(en, { sloppy: true });
+      }
+      if (mv) return { from: mv.from, to: mv.to };
+    } catch (_) {}
+    return { from: null, to: null };
+  }
+  // Ply (0-based) → French move-number prefix, e.g. ply 6 → "4.", ply 7 → "4…".
+  function moveNo(ply) {
+    const n = Math.floor(ply / 2) + 1;
+    return ply % 2 === 0 ? n + '.' : n + '…';
   }
 
   function normalize(g, user) {
@@ -239,29 +308,50 @@ const Coach = (() => {
   // ─────────────── Dashboard rendering ───────────────
   function render() {
     renderSyncBar();
-    const an = analyzed();
     const body = $('#coach-dashboard');
     if (!games.length) {
       body.innerHTML = `<div class="coach-empty">Aucune partie. Lancez une synchronisation pour récupérer vos parties Chess.com.</div>`;
       return;
     }
-    if (!an.length) {
+    const anAll = analyzed();
+    if (!anAll.length) {
       body.innerHTML = `<div class="coach-empty">${games.length} parties synchronisées. Lancez l'analyse complète pour générer votre bilan.</div>`;
       return;
     }
-    body.innerHTML =
-      renderNarrative(an) +
-      renderTrends(an) +
-      renderProgress(an) +
-      renderMoveQuality(an) +
-      renderConversion(an) +
-      renderTime(an) +
-      renderRepertoire(an) +
-      renderWeakness(an) +
-      renderGamesDrill(an) +
-      renderTrainingCta();
-    bindTrainingCta();
-    bindGamesDrill();
+    const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
+    const cards = an.length
+      ? renderNarrative(an) +
+        renderTrends(an) +
+        renderProgress(an) +
+        renderMoveQuality(an) +
+        renderConversion(an) +
+        renderTime(an) +
+        renderRepertoire(an) +
+        renderWeakness(an) +
+        renderGamesDrill(an) +
+        renderTrainingCta()
+      : `<div class="coach-empty-mini">Aucune partie « ${tcLabel(filterTc)} » analysée. Choisissez une autre cadence.</div>`;
+    body.innerHTML = renderFilterBar(anAll) + cards;
+    bindFilterBar();
+    if (an.length) {
+      bindTrainingCta();
+      bindGamesDrill();
+      bindRepertoire();
+      bindConversion();
+    }
+  }
+
+  // Whole-page filter by time control + raw game counts per cadence.
+  function renderFilterBar(anAll) {
+    const counts = {};
+    anAll.forEach(g => { const k = g.timeClass || 'autre'; counts[k] = (counts[k] || 0) + 1; });
+    const order = ['bullet', 'blitz', 'rapid', 'daily', 'autre'].filter(k => counts[k]);
+    const chip = (k, label, n) => `<button class="coach-fchip${filterTc === k ? ' active' : ''}" data-tc="${k}">${label}<b>${n}</b></button>`;
+    return `<div class="coach-filter">${chip('all', 'Toutes', anAll.length)}${order.map(k => chip(k, tcLabel(k), counts[k])).join('')}</div>`;
+  }
+  function bindFilterBar() {
+    document.querySelectorAll('.coach-filter .coach-fchip').forEach(b =>
+      b.addEventListener('click', () => { filterTc = b.dataset.tc; render(); }));
   }
 
   function renderSyncBar() {
@@ -373,7 +463,7 @@ const Coach = (() => {
       const gs = classes[k];
       const w = gs.filter(g => g.result === 'win').length;
       return `<div class="coach-row">
-        <span class="coach-row-label">${tcLabel(k)}</span>
+        <span class="coach-row-label">${tcLabel(k)}<small class="coach-row-n"> ${gs.length}</small></span>
         ${donut([{ v: w, color: '#56b886' }, { v: gs.filter(g => g.result === 'draw').length, color: '#8a8aa0' }, { v: gs.filter(g => g.result === 'loss').length, color: '#d36b6b' }], gs.length)}
         <span class="coach-row-val">${pct(w, gs.length)}%</span>
       </div>`;
@@ -432,36 +522,69 @@ const Coach = (() => {
 
   function renderRepertoire(an) {
     function table(colorKey, label) {
-      const gs = an.filter(g => g.userColor === colorKey && g.family && g.family !== 'Inconnue');
+      const gs = an.filter(g => g.userColor === colorKey);
       const fam = {};
-      gs.forEach(g => { (fam[g.family] = fam[g.family] || []).push(g); });
+      gs.forEach(g => {
+        const fr = frenchOpening(g);
+        if (!fr.family || fr.family === 'Inconnue') return;
+        (fam[fr.family] = fam[fr.family] || []).push({ g, fr });
+      });
       const rows = Object.keys(fam).map(name => {
         const list = fam[name];
-        const w = list.filter(g => g.result === 'win').length;
-        const d = list.filter(g => g.result === 'draw').length;
-        const l = list.filter(g => g.result === 'loss').length;
-        const acc = Math.round(avg(list.map(g => g.analysis.accuracy)));
+        const w = list.filter(x => x.g.result === 'win').length;
+        const d = list.filter(x => x.g.result === 'draw').length;
+        const l = list.filter(x => x.g.result === 'loss').length;
+        const acc = Math.round(avg(list.map(x => x.g.analysis.accuracy)));
         const score = (w + d * 0.5) / list.length;
-        return { name, n: list.length, w, d, l, acc, score };
+        // Representative line for the explorer = the deepest detected line; URL = first available.
+        let rep = null, url = null;
+        list.forEach(x => {
+          if (x.fr.line && (!rep || x.fr.line.split(' ').length > rep.line.split(' ').length)) rep = x.fr;
+          if (!url && x.fr.url) url = x.fr.url;
+        });
+        return { name, n: list.length, w, d, l, acc, score, rep, url };
       }).filter(r => r.n >= 1).sort((a, b) => b.n - a.n);
       if (!rows.length) return '';
       const worst = rows.filter(r => r.n >= 2).sort((a, b) => a.score - b.score)[0];
-      const top = rows.slice(0, 6);
+      const shown = rows.slice(0, 6);
+      // Always surface the flagged weakest opening, even if it's outside the top 6.
+      if (worst && !shown.some(r => r.name === worst.name)) shown.push(worst);
+      const cell = (r) => {
+        const nm = esc(r.name);
+        const btn = r.rep
+          ? `<button class="coach-rep-explore" data-line="${esc(r.rep.line)}" data-name="${nm}" data-eco="${esc(r.rep.eco || '')}">${nm}</button>`
+          : nm;
+        const ext = r.url ? ` <a class="coach-rep-ext" href="${esc(r.url)}" target="_blank" rel="noopener" title="Voir sur Chess.com">↗</a>` : '';
+        return btn + ext;
+      };
       return `<div class="coach-sub">${label}</div>
         <table class="coach-rep-table">
           <thead><tr><th>Ouverture</th><th>P</th><th>Bilan</th><th>Préc.</th></tr></thead>
-          <tbody>${top.map(r => `<tr class="${worst && r.name === worst.name ? 'rep-weak' : ''}">
-            <td>${esc(r.name)}</td><td>${r.n}</td>
+          <tbody>${shown.map(r => `<tr class="${worst && r.name === worst.name ? 'rep-weak' : ''}">
+            <td>${cell(r)}</td><td>${r.n}</td>
             <td><span class="wdl-w">${r.w}</span>/<span class="wdl-d">${r.d}</span>/<span class="wdl-l">${r.l}</span></td>
             <td>${r.acc}%</td></tr>`).join('')}</tbody>
         </table>
-        ${worst ? `<div class="coach-flag">⚠ Plus faible : <b>${esc(worst.name)}</b> (${pct(worst.w, worst.n)}% · ${worst.acc}% préc.) — à réviser.</div>` : ''}`;
+        ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touchez son nom pour la revoir.</div>` : ''}`;
     }
-    return `<div class="home-card coach-card">
+    return `<div class="home-card coach-card" id="coach-repertoire">
       <h3>📖 Répertoire d'ouvertures</h3>
+      <p class="coach-sub2">Touchez le nom d'une ouverture pour la rejouer sur l'échiquier, ou ↗ pour l'ouvrir sur Chess.com.</p>
       ${table('w', 'Avec les Blancs')}
       ${table('b', 'Avec les Noirs')}
     </div>`;
+  }
+
+  function bindRepertoire() {
+    document.querySelectorAll('#coach-repertoire .coach-rep-explore').forEach(b =>
+      b.addEventListener('click', () => {
+        const line = b.dataset.line;
+        if (!line || typeof App === 'undefined' || !App.openOpeningExplorer) return;
+        App.openOpeningExplorer(
+          { name: b.dataset.name, eco: b.dataset.eco || '', line, moves: line.split(' ').length, showEval: true },
+          [], 'Explorez les premiers coups de cette ouverture.'
+        );
+      }));
   }
 
   function renderWeakness(an) {
@@ -491,7 +614,7 @@ const Coach = (() => {
     // prioritized recommendations
     const recs = [];
     if (worstPhase && worstPhase.acc < 80) recs.push(`Votre <b>${worstPhase.label.toLowerCase()}</b> est votre maillon faible (${worstPhase.acc}% de précision, ${worstPhase.errors} erreurs). ${phaseAdvice(worstPhase.k)}`);
-    if (blunderRate > 6) recs.push(`Vous commettez une gaffe tous les ${Math.round(100 / blunderRate)} coups environ. Avant chaque coup, vérifiez les <b>captures, échecs et pièces en prise</b> (méthode CCT).`);
+    if (blunderRate > 6) recs.push(`Vous commettez une gaffe tous les ${Math.round(100 / blunderRate)} coups environ. Avant de jouer, appliquez la méthode <b>CCT</b> — passez en revue les <b>Checks</b> (échecs), <b>Captures</b> et <b>Threats</b> (menaces) possibles, pour vous comme pour l'adversaire. C'est le réflexe anti-gaffe n°1.`);
     if (totalMistakes + totalBlunders > 0) recs.push(`Entraînez-vous sur vos <b>${totalMistakes + totalBlunders} erreurs réelles</b> dans la section ci-dessous — c'est le moyen le plus rapide de progresser.`);
     if (!recs.length) recs.push('Belle régularité ! Continuez à analyser et visez moins d\'imprécisions.');
 
@@ -506,6 +629,7 @@ const Coach = (() => {
       <h3>🎯 Points à travailler</h3>
       <div class="coach-sub">Précision par phase</div>
       ${phaseRows}
+      <p class="coach-cap">ACPL = perte moyenne par coup (en centièmes de pion, 100 = un pion) ; plus c'est bas, mieux c'est.</p>
       <div class="coach-metric-row">
         <div class="coach-metric"><b>${blunderRate.toFixed(1)}%</b><span>taux de gaffe</span></div>
         <div class="coach-metric"><b>${totalBlunders}</b><span>gaffes</span></div>
@@ -586,23 +710,32 @@ const Coach = (() => {
     const converted = winnable.filter(g => g.result === 'win').length;
     const saved = losing.filter(g => g.result !== 'loss').length;
     const tps = an.map(g => ({ g, tp: g.analysis.turningPoint }))
-      .filter(x => x.tp && x.tp.winPctLoss >= 0.25)
+      .filter(x => x.tp && x.tp.winPctLoss >= 0.25 && x.tp.fenBefore)
       .sort((a, b) => b.tp.winPctLoss - a.tp.winPctLoss)
       .slice(0, 5);
-    const tpRows = tps.map(({ g, tp }) => `
-      <div class="coach-row">
-        <span class="coach-row-label">${fmtDate(g.endTime)} · ${esc(g.oppName)}</span>
-        <span class="coach-tp-move">${esc(tp.playedSan || '?')}${tp.bestSan ? ` <span class="coach-tp-best">→ ${esc(tp.bestSan)}</span>` : ''}</span>
-        <span class="coach-row-val">−${Math.round(tp.winPctLoss * 100)}%</span>
-      </div>`).join('');
-    return `<div class="home-card coach-card">
+    const tpRows = tps.map(({ g, tp }) => {
+      const lost = Math.round(tp.winPctLoss * 100);
+      const best = tp.bestSan ? ` À la place, <b>${esc(tp.bestSan)}</b> gardait l'avantage.` : '';
+      const canDrill = typeof GuessMove !== 'undefined' && tp.bestUci;
+      return `<div class="coach-tp">
+        <div class="coach-tp-head">
+          <span class="coach-tp-when">vs ${esc(g.oppName)} · ${fmtDate(g.endTime)}</span>
+          <span class="coach-tp-loss">−${lost}%</span>
+        </div>
+        <p class="coach-tp-text">Au coup <b>${moveNo(tp.ply)} ${esc(tp.playedSan || '?')}</b>, tu as perdu <b>${lost}%</b> de tes chances de gagner.${best}</p>
+        ${canDrill ? `<button class="coach-tp-btn" data-uuid="${esc(g.uuid)}">🎯 Revoir ce moment</button>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="home-card coach-card" id="coach-conversion">
       <h3>🔁 Conversion & moments charnières</h3>
-      <p class="coach-sub2"><b>${winnable.length}</b> parties avec un avantage gagnant (+2) · <b>${losing.length}</b> où tu étais en danger (−2).</p>
+      <p class="coach-sub2">Que fais-tu quand la partie penche nettement d'un côté ? Une position « gagnante » = environ <b>+2</b> d'avantage (une pièce mineure de plus) ; « perdante » = <b>−2</b>.</p>
       <div class="coach-metric-row">
-        <div class="coach-metric"><b>${winnable.length ? pct(converted, winnable.length) : '—'}%</b><span>positions gagnantes converties</span></div>
-        <div class="coach-metric"><b>${losing.length ? pct(saved, losing.length) : '—'}%</b><span>positions perdantes sauvées</span></div>
+        <div class="coach-metric"><b>${winnable.length ? pct(converted, winnable.length) : '—'}%</b><span>avantages gagnants transformés en victoire</span></div>
+        <div class="coach-metric"><b>${losing.length ? pct(saved, losing.length) : '—'}%</b><span>positions perdantes sauvées (nulle ou gain)</span></div>
       </div>
-      ${tps.length ? `<div class="coach-sub">Tes plus gros tournants (chances de gain perdues)</div>${tpRows}` : ''}
+      <p class="coach-sub2"><b>${winnable.length}</b> parties où tu menais nettement · <b>${losing.length}</b> où tu étais en danger.</p>
+      ${tps.length ? `<div class="coach-sub">Tes plus gros tournants</div>
+        <p class="coach-cap">Le « tournant » d'une partie, c'est le seul coup où tu as perdu le plus de chances de gagner. Rejoue-le pour trouver ce qu'il fallait faire.</p>${tpRows}` : ''}
     </div>`;
   }
 
@@ -648,6 +781,12 @@ const Coach = (() => {
     if (byTime.length < 3) return '';
     const accSpark = sparkline(byTime.map(g => g.analysis.accuracy), '#56b886');
     const acplSpark = sparkline(byTime.map(g => g.analysis.acpl), '#d36b6b');
+    const accVals = byTime.map(g => g.analysis.accuracy).filter(x => typeof x === 'number');
+    const acplVals = byTime.map(g => g.analysis.acpl).filter(x => typeof x === 'number');
+    const avgAcc = accVals.length ? Math.round(avg(accVals)) : null;
+    const lastAcc = accVals.length ? Math.round(accVals[accVals.length - 1]) : null;
+    const avgAcpl = acplVals.length ? Math.round(avg(acplVals)) : null;
+    const lastAcpl = acplVals.length ? Math.round(acplVals[acplVals.length - 1]) : null;
 
     const rated = an.filter(g => g.oppRating);
     let perf = null;
@@ -673,25 +812,18 @@ const Coach = (() => {
     for (let i = seq.length - 1; i >= 0 && seq[i] === ct; i--) cur++;
     const ctL = ct === 'win' ? 'V' : ct === 'loss' ? 'D' : 'N';
 
-    const days = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
-    const dayCount = Array(7).fill(0);
-    an.forEach(g => { if (g.endTime) dayCount[new Date(g.endTime * 1000).getDay()]++; });
-    const maxDay = Math.max(...dayCount, 1);
-    const dayBars = `<div class="coach-days">` + dayCount.map((c, i) =>
-      `<div class="coach-day"><div class="coach-day-bar" style="height:${Math.round(c / maxDay * 100)}%" title="${c}"></div><span>${days[i]}</span></div>`).join('') + `</div>`;
-
     return `<div class="home-card coach-card">
       <h3>📊 Progression & activité</h3>
       <div class="coach-metric-row">
-        ${perf ? `<div class="coach-metric"><b>${perf}</b><span>perf. estimée</span></div>` : ''}
-        <div class="coach-metric"><b>${cur} ${ctL}</b><span>série actuelle</span></div>
-        <div class="coach-metric"><b>${lw}</b><span>+ longue série V</span></div>
+        ${perf ? `<div class="coach-metric"><b>${perf}</b><span>niveau estimé (vs adversaires)</span></div>` : ''}
+        <div class="coach-metric"><b>${cur} ${ctL}</b><span>série en cours</span></div>
+        <div class="coach-metric"><b>${lw}</b><span>+ longue série de victoires</span></div>
       </div>
-      ${accSpark ? `<div class="coach-sub">Précision (chronologique)</div>${accSpark}` : ''}
-      ${acplSpark ? `<div class="coach-sub">Perte moyenne ACPL (plus bas = mieux)</div>${acplSpark}` : ''}
+      ${accSpark ? `<div class="coach-sub">Précision au fil du temps</div>
+        <p class="coach-cap">Part de tes coups proches du meilleur coup, partie après partie (du plus ancien au plus récent). <b>Plus haut = mieux.</b>${avgAcc != null ? ` Moyenne ${avgAcc}%, dernière partie ${lastAcc}%.` : ''}</p>${accSpark}` : ''}
+      ${acplSpark ? `<div class="coach-sub">Perte moyenne par coup (ACPL) au fil du temps</div>
+        <p class="coach-cap">À quel point tes coups s'écartent en moyenne du meilleur, en centièmes de pion (100 = un pion perdu). <b>Plus c'est bas, mieux c'est.</b>${avgAcpl != null ? ` Moyenne ${avgAcpl}, dernière partie ${lastAcpl}.` : ''}</p>${acplSpark}` : ''}
       ${lossRows ? `<div class="coach-sub">Comment tu perds (${losses.length} défaites)</div>${lossRows}` : ''}
-      <div class="coach-sub">Quand tu joues</div>
-      ${dayBars}
     </div>`;
   }
 
@@ -761,16 +893,7 @@ const Coach = (() => {
     const indices = [];
     for (const b of bl) {
       if (b.ply == null || !b.fenBefore || !b.bestUci) continue;
-      let from = null, to = null;
-      try {
-        const c = new Chess(b.fenBefore);
-        let mv = c.move(b.playedSan, { sloppy: true });
-        if (!mv && b.playedSan) {
-          const en = b.playedSan.replace(/[CFTDR]/g, x => ({ C: 'N', F: 'B', T: 'R', D: 'Q', R: 'K' }[x]));
-          mv = c.move(en, { sloppy: true });
-        }
-        if (mv) { from = mv.from; to = mv.to; }
-      } catch (_) {}
+      const { from, to } = fromToOf(b.fenBefore, b.playedSan);
       analysis[b.ply] = {
         move: { color: side, from, to, san: b.playedSan },
         fenBefore: b.fenBefore, sanFr: b.playedSan,
@@ -780,6 +903,27 @@ const Coach = (() => {
     }
     if (!indices.length) return;
     GuessMove.start(analysis, null, side, { indices, title: '🎯 Tes erreurs vs ' + (g.oppName || '?') });
+  }
+
+  // Replay just the single turning-point position of a game (from Conversion card).
+  function bindConversion() {
+    document.querySelectorAll('#coach-conversion .coach-tp-btn').forEach(b =>
+      b.addEventListener('click', () => drillTurningPoint(b.dataset.uuid)));
+  }
+  function drillTurningPoint(uuid) {
+    if (typeof GuessMove === 'undefined') return;
+    const g = games.find(x => x.uuid === uuid);
+    const tp = g && g.analysis && g.analysis.turningPoint;
+    if (!tp || !tp.fenBefore || !tp.bestUci) return;
+    const side = g.userColor;
+    const { from, to } = fromToOf(tp.fenBefore, tp.playedSan);
+    const analysis = [];
+    analysis[tp.ply] = {
+      move: { color: side, from, to, san: tp.playedSan },
+      fenBefore: tp.fenBefore, sanFr: tp.playedSan,
+      bestUci: tp.bestUci, bestSan: tp.bestSan || '', type: tp.type
+    };
+    GuessMove.start(analysis, null, side, { indices: [tp.ply], title: '🎯 Le tournant vs ' + (g.oppName || '?') });
   }
 
   // ─────────────── UI actions ───────────────
