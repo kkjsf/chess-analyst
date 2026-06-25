@@ -2741,7 +2741,10 @@ const App = (() => {
         actions.hidden = false;
         const n = c.puzzles.length;
         actions.innerHTML = `<button class="concept-train-btn" id="concept-train-btn">🎯 S'entraîner — ${n} position${n > 1 ? 's' : ''}</button>`;
-        $('#concept-train-btn').onclick = () => Tactics.start(c.puzzles, c.name);
+        $('#concept-train-btn').onclick = () => {
+          overlay.classList.remove('visible'); // close the zoom modal so practice isn't behind it
+          Tactics.start(c.puzzles, c.name);
+        };
       } else {
         actions.hidden = true;
         actions.innerHTML = '';
