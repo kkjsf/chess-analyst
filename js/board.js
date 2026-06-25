@@ -148,30 +148,40 @@ const BoardRenderer = (() => {
   function drawArrows(overlaySvg, arrows) {
     if (!arrows || arrows.length === 0) { clearArrows(overlaySvg); return; }
 
+    // Arrowhead in user-space units (constant size, not scaled by stroke width)
+    // so short one-square arrows aren't swallowed by a giant head.
     const colors = [...new Set(arrows.map(a => a.color || '#56b886'))];
     let defsHtml = '<defs>';
     for (const c of colors) {
       const id = 'ah-' + c.replace('#', '');
-      defsHtml += `<marker id="${id}" markerWidth="4" markerHeight="4" refX="2.5" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0.5,0.3 L3.5,2 L0.5,3.7 Z" fill="${c}"/></marker>`;
+      defsHtml += `<marker id="${id}" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M2,2 L12,7 L2,12 Z" fill="${c}"/></marker>`;
     }
     defsHtml += '</defs>';
 
     let html = defsHtml;
     for (const a of arrows) {
+      const color = a.color || '#56b886';
+      const op = a.opacity || 0.85;
+      const w = a.width || 6;
       const f = squareToCoords(a.from);
       const t = squareToCoords(a.to);
       const x1 = f.col * SQ + SQ / 2, y1 = f.row * SQ + SQ / 2;
       const x2 = t.col * SQ + SQ / 2, y2 = t.row * SQ + SQ / 2;
       const dx = x2 - x1, dy = y2 - y1;
       const len = Math.sqrt(dx * dx + dy * dy);
-      if (len === 0) continue;
+      // Same square (from === to): mark it with a ring — used to flag an
+      // outpost / weak square where a piece should settle.
+      if (len < 1) {
+        html += `<circle cx="${x1}" cy="${y1}" r="${SQ / 2 - 4}" fill="none" stroke="${color}" stroke-width="${w}" opacity="${op}"/>`;
+        continue;
+      }
       const ux = dx / len, uy = dy / len;
-      const sx = x1 + ux * 10, sy = y1 + uy * 10;
-      const ex = x2 - ux * 12, ey = y2 - uy * 12;
-      const color = a.color || '#56b886';
+      // Trim ends proportionally so short arrows keep a visible shaft.
+      const startTrim = Math.min(SQ * 0.30, len * 0.20);
+      const headTrim = Math.min(SQ * 0.36, len * 0.34);
+      const sx = x1 + ux * startTrim, sy = y1 + uy * startTrim;
+      const ex = x2 - ux * headTrim, ey = y2 - uy * headTrim;
       const markerId = 'ah-' + color.replace('#', '');
-      const w = a.width || 6;
-      const op = a.opacity || 0.85;
       html += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${w}" opacity="${op}" marker-end="url(#${markerId})" stroke-linecap="round"/>`;
     }
     overlaySvg.innerHTML = html;

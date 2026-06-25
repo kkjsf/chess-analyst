@@ -2476,17 +2476,20 @@ const App = (() => {
 
   function syncTabbar() {
     if ($('#screen-coach').classList.contains('active')) setTab('coach');
+    else if ($('#screen-learn').classList.contains('active')) setTab('apprendre');
     else if ($('#screen-training').classList.contains('active')) setTab('entrainer');
     else setTab('analyser');
   }
 
   function navTo(tab) {
     if (tab === 'coach') { if (typeof Coach !== 'undefined') Coach.show(); return; }
+    if (tab === 'apprendre') { showLearn(); return; }
     if (tab === 'entrainer') { if (typeof Training !== 'undefined') Training.show(); return; }
     if (tab === 'finales') { if (typeof Endgame !== 'undefined') Endgame.show(); return; }
     // analyser: leave any sub-screen, show the loaded game or the import home
     $('#screen-training').classList.remove('active');
     $('#screen-coach').classList.remove('active');
+    $('#screen-learn').classList.remove('active');
     if (currentAnalysis) {
       $('#screen-import').classList.remove('active');
       $('#screen-analysis').classList.add('active');
@@ -2630,6 +2633,8 @@ const App = (() => {
     if (quizBtn) quizBtn.addEventListener('click', startQuiz);
   }
 
+  let _openPanel = null;
+
   function initPanels() {
     const overlay = $('#panel-overlay');
     const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), technical: $('#panel-technical') };
@@ -2654,6 +2659,7 @@ const App = (() => {
       }, 300);
     }
 
+    _openPanel = openPanel;
     Object.entries(btns).forEach(([name, btn]) => {
       if (btn) btn.addEventListener('click', () => openPanel(name));
     });
@@ -2664,71 +2670,24 @@ const App = (() => {
     });
   }
 
-  const CONCEPTS = (() => {
-    const G = '#56b886', B = '#5b8fb9', R = '#d36b6b';
-    return [
-      { cat: '⚔️ Tactiques', name: 'Clouage', en: 'Pin',
-        desc: `Une pièce est <b>clouée</b> quand elle ne peut pas bouger sans exposer une pièce plus précieuse derrière elle. Clouage <b>absolu</b> si la pièce protégée est le roi (bouger devient illégal), <b>relatif</b> sinon. Ici, le fou b5 cloue le cavalier c6 contre le roi e8.`,
-        fen: '4k3/8/2n5/1B6/8/8/8/4K3', arrows: [{ from: 'b5', to: 'e8', color: G }] },
-      { cat: '⚔️ Tactiques', name: 'Enfilade', en: 'Skewer',
-        desc: `L'inverse du clouage : on attaque une pièce de valeur qui, en se déplaçant, <b>découvre une pièce moins précieuse</b> derrière elle. La tour e1 met le roi en échec ; il s'écarte et la dame e8 tombe.`,
-        fen: '4q3/4k3/8/8/8/8/8/K3R3', arrows: [{ from: 'e1', to: 'e8', color: G }] },
-      { cat: '⚔️ Tactiques', name: 'Fourchette', en: 'Fork',
-        desc: `Une seule pièce <b>attaque deux cibles à la fois</b>. Le cavalier est le roi de la fourchette : en d6 il menace simultanément le roi e8 et la dame f7. L'adversaire ne peut en sauver qu'une.`,
-        fen: '4k3/5q2/3N4/8/8/8/8/4K3', arrows: [{ from: 'd6', to: 'e8', color: G }, { from: 'd6', to: 'f7', color: G }] },
-      { cat: '⚔️ Tactiques', name: 'Attaque double', en: 'Double attack',
-        desc: `Terme général : un coup crée <b>deux menaces simultanées</b> impossibles à parer en un seul coup. Ici la dame e4 attaque à la fois le cavalier b7 et le fou e7.`,
-        fen: '6k1/1n2b3/8/8/4Q3/8/8/4K3', arrows: [{ from: 'e4', to: 'b7', color: G }, { from: 'e4', to: 'e7', color: G }] },
-      { cat: '⚔️ Tactiques', name: 'Attaque / échec à la découverte', en: 'Discovered attack / discovered check',
-        desc: `On déplace une pièce qui <b>démasque l'attaque d'une autre</b> derrière elle. Le cavalier e5 quitte la diagonale (flèche bleue) : le fou b2 donne alors échec au roi h8. Si la pièce qui bouge capture en plus, c'est dévastateur.`,
-        fen: '7k/8/8/4N3/8/8/1B6/4K3', arrows: [{ from: 'b2', to: 'h8', color: G }, { from: 'e5', to: 'f7', color: B }] },
-      { cat: '⚔️ Tactiques', name: 'Déviation', en: 'Deflection',
-        desc: `On force une pièce adverse à <b>quitter une case ou une défense clés</b> (souvent par une capture ou une menace), pour exploiter ensuite la faiblesse qu'elle protégeait.` },
-      { cat: '⚔️ Tactiques', name: 'Attraction', en: 'Decoy',
-        desc: `À l'inverse, on <b>attire une pièce (souvent le roi) sur une case piégée</b>, généralement par un sacrifice, pour enchaîner avec une fourchette, un clouage ou un mat.` },
-      { cat: '⚔️ Tactiques', name: 'Surcharge', en: 'Overloading',
-        desc: `Une pièce a <b>trop de tâches défensives</b> : elle protège deux choses à la fois. On capture l'une, la pièce doit reprendre, et l'autre tombe.` },
-      { cat: '⚔️ Tactiques', name: 'Rayon X', en: 'X-ray',
-        desc: `Une pièce longue exerce une pression <b>à travers</b> une pièce adverse, comme si celle-ci était transparente — soit pour attaquer, soit pour défendre une case au-delà.` },
+  // ───────────────────────── Apprendre hub ─────────────────────────
+  let learnBound = false;
+  function showLearn() {
+    $$('.screen').forEach(s => s.classList.remove('active'));
+    $('#screen-learn').classList.add('active');
+    setTab('apprendre');
+    window.scrollTo(0, 0);
+    if (!learnBound) {
+      $('#btn-learn-back').addEventListener('click', () => { $('#screen-learn').classList.remove('active'); showImport(); });
+      $$('#screen-learn .learn-tile').forEach(tile => {
+        tile.addEventListener('click', () => { if (_openPanel) _openPanel(tile.dataset.panel); });
+      });
+      learnBound = true;
+    }
+  }
 
-      { cat: '♚ Mats classiques', name: 'Coup du Berger', en: "Scholar's Mate",
-        desc: `Mat en 4 coups visant le point faible <b>f7</b> : la dame, soutenue par le fou c4, prend en f7 (1.e4 e5 2.Fc4 Cc6 3.Dh5 Cf6?? 4.Dxf7#). Facile à parer une fois connu — mais ravageur contre les débutants.`,
-        fen: 'r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR', arrows: [{ from: 'c4', to: 'f7', color: G }, { from: 'f7', to: 'e8', color: R }] },
-      { cat: '♚ Mats classiques', name: 'Mat du couloir', en: 'Back-rank mate',
-        desc: `Le <b>back-rank mate</b> : le roi est coincé sur sa rangée par ses propres pions, et une tour ou une dame donne mat dessus. Prévention : créer une « lucarne » en avançant un pion devant le roi.`,
-        fen: '4R1k1/5ppp/8/8/8/8/8/6K1', arrows: [{ from: 'e8', to: 'g8', color: R }] },
-      { cat: '♚ Mats classiques', name: "Mat de l'escalier", en: 'Ladder mate',
-        desc: `Deux tours repoussent le roi adverse rangée après rangée. La tour a7 verrouille la 7<sup>e</sup> rangée pendant que la tour b8 donne mat sur la 8<sup>e</sup>. Technique de finale fondamentale.`,
-        fen: '1R2k3/R7/8/8/8/8/8/6K1', arrows: [{ from: 'a7', to: 'h7', color: G }, { from: 'b8', to: 'e8', color: R }] },
-      { cat: '♚ Mats classiques', name: 'Mat étouffé', en: 'Smothered mate',
-        desc: `Le roi est <b>entouré de ses propres pièces</b> et un cavalier donne mat — aucune fuite. Ici le roi h8 est étouffé par sa tour g8 et ses pions g7/h7 ; le cavalier f7 mate. Souvent précédé d'un sacrifice de dame pour forcer le blocage.`,
-        fen: '6rk/5Npp/8/8/8/8/8/6K1', arrows: [{ from: 'f7', to: 'h8', color: R }] },
-      { cat: '♚ Mats classiques', name: 'Mat de Légal', en: "Légal's Mate",
-        desc: `Un sacrifice de dame en ouverture exploitant un cavalier cloué : on « ignore » le clouage pour mater avec les pièces mineures. Piège célèbre de l'ouverture italienne.` },
-      { cat: '♚ Mats classiques', name: 'Baiser de la mort', en: 'Kiss of death',
-        desc: `La dame, <b>soutenue par une pièce</b>, se colle au roi adverse dans un coin. En g7 elle est défendue par le roi f6 : le roi h8 ne peut ni fuir ni la capturer. Mat élémentaire mais élégant.`,
-        fen: '7k/6Q1/5K2/8/8/8/8/8', arrows: [{ from: 'f6', to: 'g7', color: G }, { from: 'g7', to: 'h8', color: R }] },
-
-      { cat: '♟ Concepts stratégiques', name: 'Pion passé', en: 'Passed pawn',
-        desc: `Un pion qui n'a <b>plus aucun pion adverse</b> pour l'arrêter sur sa colonne ni les colonnes voisines. Le pion e5 file vers la promotion sans opposition — un atout majeur, surtout en finale.`,
-        fen: '6k1/pp5p/8/4P3/8/8/8/6K1', arrows: [{ from: 'e5', to: 'e8', color: G }] },
-      { cat: '♟ Concepts stratégiques', name: 'Pion isolé', en: 'Isolated pawn',
-        desc: `Un pion sans pion ami sur les colonnes adjacentes (ici le pion d4, sans pion en c ni e). Il ne peut être défendu par un pion : faiblesse à long terme, mais il offre souvent des cases actives et de l'initiative.`,
-        fen: '6k1/8/2p1p3/8/3P4/8/8/6K1', arrows: [] },
-      { cat: '♟ Concepts stratégiques', name: 'Colonne ouverte & avant-poste', en: 'Open file & outpost',
-        desc: `Une <b>colonne ouverte</b> (sans pion) est l'autoroute des tours : la tour d1 contrôle toute la colonne d. Un <b>avant-poste</b> est une case avancée protégée par un pion et inattaquable par un pion adverse — idéale pour un cavalier (d5, soutenu par e4).`,
-        fen: '3r2k1/1p3p2/8/3N4/4P3/8/8/3R2K1', arrows: [{ from: 'd1', to: 'd8', color: G }, { from: 'e4', to: 'd5', color: B }] },
-      { cat: '♟ Concepts stratégiques', name: 'Paire de fous', en: 'Bishop pair',
-        desc: `Posséder ses <b>deux fous</b> quand l'adversaire n'en a qu'un (ou aucun) : un avantage durable dans les positions ouvertes, où les fous balaient tout l'échiquier.` },
-      { cat: '♟ Concepts stratégiques', name: 'Zugzwang', en: 'Zugzwang',
-        desc: `Situation où <b>tout coup dégrade sa propre position</b> — mais on est obligé de jouer. Ici, trait aux Noirs : le roi e8 doit céder le passage, et le roi blanc escorte son pion vers la promotion. C'est l'obligation de bouger qui perd.`,
-        fen: '4k3/8/4K3/4P3/8/8/8/8', arrows: [] },
-      { cat: '♟ Concepts stratégiques', name: 'Initiative & tempo', en: 'Initiative & tempo',
-        desc: `L'<b>initiative</b>, c'est dicter le jeu en enchaînant les menaces ; l'adversaire ne fait que réagir. Un <b>tempo</b> est une unité de temps (un coup) : gagner un tempo, c'est développer en menaçant et faire perdre un coup à l'adversaire.` },
-      { cat: '♟ Concepts stratégiques', name: 'Prophylaxie', en: 'Prophylaxis',
-        desc: `Jouer un coup qui <b>empêche le plan adverse</b> avant même qu'il ne se déclenche. L'art de « penser pour l'adversaire » et d'étouffer ses idées.` },
-    ];
-  })();
+  // Tactics catalog lives in js/tactics.js (single source of truth).
+  const CONCEPTS = (typeof Tactics !== 'undefined' && Tactics.CATALOG) ? Tactics.CATALOG : [];
 
   function initConcepts() {
     const host = $('#concepts-list');
@@ -2741,7 +2700,8 @@ const App = (() => {
         ? `<div class="concept-diagram"><svg class="cd-board" viewBox="0 0 360 360"></svg><svg class="cd-arrows" viewBox="0 0 360 360"></svg></div>`
         : '';
       const en = c.en ? ` <span class="concept-en">${c.en}</span>` : '';
-      html += `<div class="concept">${diagram}<div class="concept-body"><span class="concept-name">${c.name}${en}</span><p>${c.desc}</p></div></div>`;
+      const train = (c.puzzles && c.puzzles.length) ? ` <span class="concept-train" title="Entraînement disponible">🎯</span>` : '';
+      html += `<div class="concept">${diagram}<div class="concept-body"><span class="concept-name">${c.name}${en}${train}</span><p>${c.desc}</p></div></div>`;
     }
     host.innerHTML = html;
 
@@ -2774,6 +2734,18 @@ const App = (() => {
       BoardRenderer.setFlipped(prevFlip);
     } else {
       boardWrap.hidden = true;
+    }
+    const actions = $('#concept-modal-actions');
+    if (actions) {
+      if (c.puzzles && c.puzzles.length && typeof Tactics !== 'undefined') {
+        actions.hidden = false;
+        const n = c.puzzles.length;
+        actions.innerHTML = `<button class="concept-train-btn" id="concept-train-btn">🎯 S'entraîner — ${n} position${n > 1 ? 's' : ''}</button>`;
+        $('#concept-train-btn').onclick = () => Tactics.start(c.puzzles, c.name);
+      } else {
+        actions.hidden = true;
+        actions.innerHTML = '';
+      }
     }
     overlay.classList.add('visible');
   }

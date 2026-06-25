@@ -13,30 +13,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=67">
+<link rel="stylesheet" href="css/style.css?v=69">
 </head>
 <body>
 
-<!-- ═══════ ICON BAR (top-right) ═══════ -->
-<div class="icon-bar" id="icon-bar">
-  <button class="icon-bar-btn" id="btn-guide" title="Guide d'utilisation" aria-label="Guide d'utilisation">
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7.5" stroke="currentColor" stroke-width="1.4"/><path d="M7 7c0-1.1.9-2 2-2s2 .9 2 2c0 1.1-.7 1.5-1.4 2-.4.3-.6.7-.6 1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="9" cy="13" r=".8" fill="currentColor"/></svg>
-  </button>
-  <button class="icon-bar-btn" id="btn-notation" title="Notation des échecs" aria-label="Notation des échecs">
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 14V4h7l-2.5 5L11 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-  </button>
-  <button class="icon-bar-btn" id="btn-concepts" title="Concepts & tactiques" aria-label="Concepts &amp; tactiques">
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6.8" stroke="currentColor" stroke-width="1.3"/><circle cx="9" cy="9" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M9 .8v3.2M9 14v3.2M.8 9h3.2M14 9h3.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-  </button>
-  <button class="icon-bar-btn" id="btn-openings" title="Ouvertures" aria-label="Ouvertures">
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 4.2C7.6 3.2 5.7 2.8 3.5 2.8c-.7 0-1.3.1-1.7.2v10.2c.4-.1 1-.2 1.7-.2 2.2 0 4.1.4 5.5 1.4 1.4-1 3.3-1.4 5.5-1.4.7 0 1.3.1 1.7.2V3c-.4-.1-1-.2-1.7-.2-2.2 0-4.1.4-5.5 1.4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4.2v10.2" stroke="currentColor" stroke-width="1.3"/></svg>
-  </button>
-  <button class="icon-bar-btn" id="btn-technical" title="Fonctionnement technique" aria-label="Fonctionnement technique">
-    <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M14.2 3.5a3.5 3.5 0 00-4.7 4.7L3.8 14a1 1 0 001.4 1.4l5.8-5.7a3.5 3.5 0 004.7-4.7l-2.2 2.2-1.5-1.5 2.2-2.2z" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
-</div>
+<!-- ═══════ PANELS (opened from the Apprendre hub) ═══════ -->
 
-<!-- ═══════ PANELS ═══════ -->
 <div class="panel-overlay" id="panel-overlay" hidden></div>
 
 <div class="panel" id="panel-guide" hidden>
@@ -202,11 +184,11 @@
 
 <div class="panel panel-wide" id="panel-concepts" hidden>
   <div class="panel-header">
-    <h2>Concepts &amp; tactiques</h2>
+    <h2>Tactiques &amp; concepts</h2>
     <button class="panel-close" aria-label="Fermer">&times;</button>
   </div>
   <div class="panel-body">
-    <p class="concepts-intro">Petit lexique des motifs tactiques et stratégiques que l'on retrouve dans presque toutes les parties. Reconnaître ces schémas est la clé pour progresser. Les diagrammes illustrent chaque motif : flèche <span style="color:#56b886">verte</span> = ligne d'attaque ou soutien, flèche <span style="color:#5b8fb9">bleue</span> = pièce qui se déplace, flèche <span style="color:#d36b6b">rouge</span> = coup décisif.</p>
+    <p class="concepts-intro">Lexique des motifs tactiques, des mats classiques, des méthodes de calcul et des concepts stratégiques que l'on retrouve dans presque toutes les parties. Touche un motif pour l'agrandir — et, quand l'icône <b>🎯</b> apparaît, pour <b>t'entraîner</b> à le jouer sur l'échiquier. Flèche <span style="color:#56b886">verte</span> = ligne d'attaque/soutien, <span style="color:#5b8fb9">bleue</span> = pièce qui se déplace, <span style="color:#d36b6b">rouge</span> = coup décisif.</p>
     <div class="concepts-grid" id="concepts-list"></div>
   </div>
 </div>
@@ -234,6 +216,7 @@
       <svg id="cm-arrows" viewBox="0 0 360 360"></svg>
     </div>
     <p class="concept-modal-text" id="concept-modal-text"></p>
+    <div class="concept-modal-actions" id="concept-modal-actions" hidden></div>
   </div>
 </div>
 
@@ -483,6 +466,59 @@
   </div>
 </div>
 
+<!-- ═══════ SCREEN 5: APPRENDRE (hub) ═══════ -->
+<div id="screen-learn" class="screen learn-screen">
+  <div class="top-bar">
+    <button class="back-btn" id="btn-learn-back">←</button>
+    <div class="match-info">
+      <div class="players-line">📚 Apprendre</div>
+      <div class="elo-line">Tactiques, ouvertures et notions essentielles</div>
+    </div>
+  </div>
+  <div class="learn-body">
+    <button class="learn-tile learn-tile-hero" data-panel="concepts">
+      <div class="learn-tile-icon">⚔️</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Tactiques &amp; concepts</span>
+        <span class="learn-tile-sub">Fourchette, clouage, zwischenzug, mats… 35 motifs illustrés, avec entraînement sur l'échiquier.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
+    <button class="learn-tile" data-panel="openings">
+      <div class="learn-tile-icon">📖</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Ouvertures</span>
+        <span class="learn-tile-sub">Les grandes ouvertures, des plus simples aux plus exigeantes, coup par coup.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
+    <button class="learn-tile" data-panel="notation">
+      <div class="learn-tile-icon">♟</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Notation des échecs</span>
+        <span class="learn-tile-sub">Lire et écrire les coups — avec un petit quiz pour s'exercer.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
+    <button class="learn-tile" data-panel="guide">
+      <div class="learn-tile-icon">💡</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Guide d'utilisation</span>
+        <span class="learn-tile-sub">Importer une partie, lire l'analyse, comprendre les couleurs et le Coach.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
+    <button class="learn-tile" data-panel="technical">
+      <div class="learn-tile-icon">⚙️</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Comment ça marche ?</span>
+        <span class="learn-tile-sub">Stockfish, analyse Multi-PV, score de précision (WDL) et limites.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
+  </div>
+</div>
+
 <!-- ═══════ BOTTOM TAB BAR ═══════ -->
 <nav class="tabbar" id="tabbar">
   <button class="tab active" data-tab="analyser" aria-label="Analyser">
@@ -492,6 +528,10 @@
   <button class="tab" data-tab="coach" aria-label="Coach">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
     <span>Coach</span>
+  </button>
+  <button class="tab" data-tab="apprendre" aria-label="Apprendre">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 6.5C10 5 6.5 4.6 3.5 5v13c3-.4 6.5 0 8.5 1.5 2-1.5 5.5-1.9 8.5-1.5V5c-3-.4-6.5 0-8.5 1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 6.5v13" stroke="currentColor" stroke-width="1.7"/></svg>
+    <span>Apprendre</span>
   </button>
   <button class="tab" data-tab="entrainer" aria-label="Entraîner">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -504,16 +544,17 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=67"></script>
-<script src="js/board.js?v=67"></script>
-<script src="js/engine.js?v=67"></script>
-<script src="js/openings.js?v=67"></script>
-<script src="js/analysis.js?v=67"></script>
-<script src="js/training.js?v=67"></script>
-<script src="js/guess.js?v=67"></script>
-<script src="js/endgame.js?v=67"></script>
-<script src="js/coach.js?v=67"></script>
-<script src="js/app.js?v=67"></script>
+<script src="js/chess.min.js?v=69"></script>
+<script src="js/board.js?v=69"></script>
+<script src="js/engine.js?v=69"></script>
+<script src="js/openings.js?v=69"></script>
+<script src="js/analysis.js?v=69"></script>
+<script src="js/training.js?v=69"></script>
+<script src="js/guess.js?v=69"></script>
+<script src="js/endgame.js?v=69"></script>
+<script src="js/tactics.js?v=69"></script>
+<script src="js/coach.js?v=69"></script>
+<script src="js/app.js?v=69"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
