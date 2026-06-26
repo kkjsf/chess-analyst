@@ -61,8 +61,11 @@ const Tactics = (() => {
     { cat: '⚔️ Tactiques', name: 'Attraction', en: 'Decoy',
       desc: `À l'inverse de la déviation, on <b>attire une pièce (souvent le roi) sur une case piégée</b>, généralement par un sacrifice, pour enchaîner avec une fourchette, un clouage ou un mat. Exemple classique : un échec de dame que le roi est obligé de prendre… pour tomber aussitôt dans une fourchette de cavalier.` },
     { cat: '⚔️ Tactiques', name: 'Surcharge', en: 'Overloading',
-      desc: `Une pièce a <b>trop de tâches défensives</b> : elle garde deux choses à la fois. On capture l'une — la pièce doit reprendre — et l'autre tombe. La dame e7 défend à la fois e8 (le mat du couloir) et le fou b4 : un de trop.`,
-      fen: '4r1k1/4q1pp/8/8/1b6/8/6PP/3RR1K1', arrows: [{ from: 'e7', to: 'e8', color: B }, { from: 'e7', to: 'b4', color: B }] },
+      desc: `Une pièce a <b>trop de tâches défensives</b> : elle garde deux choses à la fois. On capture l'une — la pièce doit reprendre — et l'autre tombe. Ici la dame e7 défend à la fois la tour d8 et le fou a3 : une de trop.`,
+      fen: '3r2k1/4qppp/8/8/8/b7/5PPP/2BR2K1', arrows: [{ from: 'e7', to: 'd8', color: B }, { from: 'e7', to: 'a3', color: B }],
+      puzzles: [
+        { fen: '3r2k1/4qppp/8/8/8/b7/5PPP/2BR2K1 w - - 0 1', sol: ['Rxd8+', 'Qxd8', 'Bxa3'], hint: 'La dame garde la tour d8 ET le fou a3 — une de trop. Force-la à reprendre avec un échec, puis encaisse l\'autre.' },
+      ] },
     { cat: '⚔️ Tactiques', name: 'Interférence', en: 'Interference',
       desc: `On <b>coupe la ligne entre une pièce défensive et ce qu'elle protège</b>, en interposant une pièce (parfois en la sacrifiant). La communication est rompue le temps d'un coup décisif.`,
       fen: '3r2k1/5ppp/8/8/8/8/b7/3R2K1', arrows: [{ from: 'a2', to: 'd5', color: B }, { from: 'd8', to: 'd1', color: B }] },
