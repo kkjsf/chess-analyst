@@ -59,7 +59,10 @@ const Tactics = (() => {
         { fen: '5r1k/6pp/7N/8/8/8/Q7/6K1 w - - 0 1', sol: ['Qg8+', 'Rxg8', 'Nf7#'], hint: 'Sacrifie la dame pour attirer la tour : la case f7 devient mortelle.' },
       ] },
     { cat: '⚔️ Tactiques', name: 'Attraction', en: 'Decoy',
-      desc: `À l'inverse de la déviation, on <b>attire une pièce (souvent le roi) sur une case piégée</b>, généralement par un sacrifice, pour enchaîner avec une fourchette, un clouage ou un mat. Exemple classique : un échec de dame que le roi est obligé de prendre… pour tomber aussitôt dans une fourchette de cavalier.` },
+      desc: `À l'inverse de la déviation, on <b>attire une pièce (souvent le roi) sur une case piégée</b>, généralement par un sacrifice, pour enchaîner avec une fourchette, un clouage ou un mat. Exemple classique : un échec de dame que le roi est obligé de prendre… pour tomber aussitôt dans une fourchette de cavalier.`,
+      puzzles: [
+        { fen: '6k1/3Q4/8/2q3N1/8/8/7K/8 w - - 0 1', sol: ['Qg7+', 'Kxg7', 'Ne6+', 'Kg8', 'Nxc5'], hint: 'Sacrifie la dame en g7 : le roi est forcé de la prendre… et tombe dans une fourchette de cavalier qui rafle la dame noire.' },
+      ] },
     { cat: '⚔️ Tactiques', name: 'Surcharge', en: 'Overloading',
       desc: `Une pièce a <b>trop de tâches défensives</b> : elle garde deux choses à la fois. On capture l'une — la pièce doit reprendre — et l'autre tombe. Ici la dame e7 défend à la fois la tour d8 et le fou a3 : une de trop.`,
       fen: '3r2k1/4qppp/8/8/8/b7/5PPP/2BR2K1', arrows: [{ from: 'e7', to: 'd8', color: B }, { from: 'e7', to: 'a3', color: B }],
@@ -71,18 +74,33 @@ const Tactics = (() => {
       fen: '3r2k1/5ppp/8/8/8/8/b7/3R2K1', arrows: [{ from: 'a2', to: 'd5', color: B }, { from: 'd8', to: 'd1', color: B }] },
     { cat: '⚔️ Tactiques', name: 'Rayon X', en: 'X-ray',
       desc: `Une pièce longue exerce une pression <b>à travers</b> une pièce adverse, comme si celle-ci était transparente — soit pour attaquer une cible au-delà, soit pour défendre une case derrière l'écran.`,
-      fen: '3r2k1/8/8/8/8/8/3R4/3RK3', arrows: [{ from: 'd1', to: 'd8', color: G }] },
+      fen: '3r2k1/8/8/8/8/8/3R4/3RK3', arrows: [{ from: 'd1', to: 'd8', color: G }],
+      puzzles: [
+        { fen: 'q7/8/8/8/k7/8/8/3Q2K1 w - - 0 1', sol: ['Qa1+', 'Kb4', 'Qxa8'], hint: 'Donne échec sur la colonne a : le roi et la dame noire sont alignés. Le roi doit s\'écarter et laisse tomber la dame derrière lui (embrochade).' },
+      ] },
     { cat: '⚔️ Tactiques', name: 'Coup intermédiaire', en: 'Zwischenzug',
-      desc: `Le <b>zwischenzug</b> (« coup intermédiaire ») : au lieu de jouer le coup attendu — typiquement une reprise — on <b>intercale d'abord un coup plus fort</b> (souvent un échec ou une menace), puis on revient à l'idée initiale avec un temps gagné. Toujours chercher : « ai-je un coup encore plus fort avant de reprendre ? »` },
+      desc: `Le <b>zwischenzug</b> (« coup intermédiaire ») : au lieu de jouer le coup attendu — typiquement une reprise — on <b>intercale d'abord un coup plus fort</b> (souvent un échec ou une menace), puis on revient à l'idée initiale avec un temps gagné. Toujours chercher : « ai-je un coup encore plus fort avant de reprendre ? »`,
+      puzzles: [
+        { fen: '6k1/6r1/8/8/8/3q4/4Q3/4K1R1 w - - 0 1', sol: ['Rxg7+', 'Kxg7', 'Qxd3'], hint: 'Tu peux prendre la dame en d3, mais joue d\'abord l\'échec qui s\'impose : capture en g7 avec échec, puis encaisse la dame avec un temps gagné.' },
+      ] },
     { cat: '⚔️ Tactiques', name: 'Desperado', en: 'Desperado',
       desc: `Une pièce <b>condamnée de toute façon</b> se « suicide » utilement : avant d'être perdue, elle capture le plus possible, ou se sacrifie pour un pat / une combinaison. « Tant qu'à mourir, faisons-le cher. »`,
-      fen: '6k1/5ppp/8/8/8/2n5/5PPP/3N2K1', arrows: [{ from: 'c3', to: 'd1', color: R }] },
+      fen: '6k1/5ppp/8/8/8/2n5/5PPP/3N2K1', arrows: [{ from: 'c3', to: 'd1', color: R }],
+      puzzles: [
+        { fen: '4k3/3q4/3p4/4N3/8/8/8/4K3 w - - 0 1', sol: ['Nxd7'], hint: 'Le pion d6 attaque ton cavalier : il est perdu de toute façon. Avant de tomber, fais-lui capturer la dame.' },
+      ] },
     { cat: '⚔️ Tactiques', name: 'Moulin', en: 'Windmill',
       desc: `Le <b>moulin</b> : une série d'<b>échecs à la découverte</b> alternés qui raflent le matériel adverse coup après coup. La pièce qui découvre l'échec revient se placer, redonne échec, et rafle encore — la machine tourne tant qu'il reste à prendre.`,
-      fen: '6k1/5ppp/8/8/8/8/1B6/4R1K1', arrows: [{ from: 'b2', to: 'g7', color: G }, { from: 'e1', to: 'e7', color: R }] },
+      fen: '6k1/5ppp/8/8/8/8/1B6/4R1K1', arrows: [{ from: 'b2', to: 'g7', color: G }, { from: 'e1', to: 'e7', color: R }],
+      puzzles: [
+        { fen: '7k/1p3pRp/5B2/8/8/Q7/8/6K1 w - - 0 1', sol: ['Rxf7+', 'Kg8', 'Rg7+', 'Kh8', 'Rxb7+'], hint: 'Le fou f6 cloue le roi en h8. La tour découvre l\'échec en quittant g7, revient redonner échec, repart… et rafle un pion à chaque tour de moulin.' },
+      ] },
     { cat: '⚔️ Tactiques', name: 'Dégagement', en: 'Clearance',
       desc: `On <b>libère une case ou une ligne</b> pour une autre pièce, souvent en y sacrifiant la pièce qui gênait. Le tempo et la case dégagée valent plus que le matériel cédé.`,
-      fen: '6k1/5ppp/8/3B4/8/8/8/3Q2K1', arrows: [{ from: 'd5', to: 'a8', color: B }, { from: 'd1', to: 'd8', color: G }] },
+      fen: '6k1/5ppp/8/3B4/8/8/8/3Q2K1', arrows: [{ from: 'd5', to: 'a8', color: B }, { from: 'd1', to: 'd8', color: G }],
+      puzzles: [
+        { fen: '4k3/3R4/8/8/8/8/1B6/3QK3 w - - 0 1', sol: ['Rd8+', 'Ke7', 'Qd7#'], hint: 'La tour occupe d7, la case dont la dame a besoin. Joue Rd8+ : la tour dégage d7 en donnant échec, puis la dame s\'y installe pour mater (le fou b2 coupe la fuite en f6).' },
+      ] },
 
     // ════════ ♚ Mats classiques ════════
     { cat: '♚ Mats classiques', name: 'Mat du couloir', en: 'Back-rank mate',
