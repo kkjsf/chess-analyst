@@ -1752,6 +1752,8 @@ html, body {
   background: var(--bg-card); color: var(--text-dim); border: none;
   border-radius: 10px; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
+.train-options.vig-yn { flex-direction: row; }
+.train-options.vig-yn .train-opt { text-align: center; }
 .train-tab.active { background: var(--accent); color: #1a1a2e; }
 .train-body { width: 100%; max-width: 560px; margin: 0 auto; padding: 6px 14px calc(78px + env(safe-area-inset-bottom, 0)); }
 .train-panel { display: none; }
@@ -1765,7 +1767,7 @@ html, body {
 .train-board-wrap .train-board {
   position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px;
 }
-#train-arrows, #thr-board { pointer-events: none; }
+#train-arrows, #vig-arrows { pointer-events: none; }
 #train-board { cursor: pointer; }
 
 .train-feedback { min-height: 24px; margin: 12px 0; font-size: 14px; line-height: 1.5; }
@@ -2152,6 +2154,27 @@ body.guess-open { overflow: hidden; }
 /* Coach — extended stats (move quality, conversion, time, progress) */
 .coach-sub2 { font-size: 12px; color: var(--text-dim); margin: 2px 0 10px; line-height: 1.5; }
 .coach-sub2 b { color: var(--accent); }
+
+/* Ta priorité — focus headline card */
+.coach-focus {
+  background: linear-gradient(150deg, rgba(226,184,87,0.14), var(--bg-card) 70%);
+  border: 1px solid rgba(226,184,87,0.35);
+}
+.coach-focus-tag { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.02em; }
+.coach-focus-head { font-size: 21px; line-height: 1.2; margin: 6px 0 8px; color: var(--text); }
+.coach-focus-sub { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px; }
+.coach-focus-sub b { color: var(--text); }
+.coach-focus-btn { width: 100%; }
+
+/* Nationalités des adversaires */
+.coach-nat-row { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
+.coach-nat-flag { font-size: 18px; flex-shrink: 0; width: 22px; text-align: center; }
+.coach-nat-name { font-size: 13px; color: var(--text); width: 108px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.coach-nat-row .coach-bar { flex: 1; }
+.coach-nat-val { font-size: 12px; color: var(--text); width: 78px; text-align: right; flex-shrink: 0; }
+.coach-nat-val small { color: var(--text-dim); }
+.coach-nat-more { margin-top: 12px; }
+.coach-nat-prog { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
 .coach-bar-tall { height: 20px; }
 .coach-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 9px; font-size: 11px; color: var(--text-dim); }
 .coach-legend-item { display: inline-flex; align-items: center; gap: 4px; }

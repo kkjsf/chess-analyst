@@ -10,14 +10,15 @@ const Training = (() => {
   const MOTIF_LABELS = {
     mat: 'Mat / mat forcé',
     prise: 'Pièce en prise',
+    defense: 'Défense / parade',
     fourchette: 'Fourchette / double attaque',
     gain: 'Gain de matériel',
     attaque: 'Attaque / échec',
     positionnel: 'Jeu positionnel',
     manoeuvre: 'Jeu positionnel', // legacy alias for decks built before v50
   };
-  const MOTIF_ORDER = ['mat', 'prise', 'fourchette', 'gain', 'attaque', 'positionnel'];
-  const TACTICAL = ['mat', 'prise', 'fourchette', 'gain', 'attaque'];
+  const MOTIF_ORDER = ['mat', 'prise', 'defense', 'fourchette', 'gain', 'attaque', 'positionnel'];
+  const TACTICAL = ['mat', 'prise', 'defense', 'fourchette', 'gain', 'attaque'];
 
   // ───────────────────────── storage ─────────────────────────
   function load() {
@@ -82,6 +83,84 @@ const Training = (() => {
     return !!hungPiece(fen, playedSan);
   }
 
+  // Best capture available to whoever is to move in `fen` that wins at least
+  // ~2 net material (a 1-ply static-exchange approximation). Returns the target
+  // {square, piece, value, net} or null. Shared by the Vigilance drill and the
+  // 'defense' motif so "en prise" is judged the same way everywhere.
+  function bestHang(fen) {
+    let g;
+    try { g = new Chess(fen); } catch (_) { return null; }
+    const caps = g.moves({ verbose: true }).filter(m => m.captured);
+    let best = null;
+    for (const cap of caps) {
+      const gain = PIECE_VALUES[cap.captured] || 0;
+      if (gain < 3) continue; // only care about a minor piece or more
+      let recapVal = 0;
+      try {
+        const g2 = new Chess(g.fen());
+        const c2 = g2.move(cap.san, { sloppy: true });
+        if (!c2) continue;
+        const recap = g2.moves({ verbose: true }).some(m => m.to === cap.to);
+        recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
+      } catch (_) { continue; }
+      const net = gain - recapVal;
+      if (net >= 2 && (!best || net > best.net)) best = { square: cap.to, piece: cap.captured, value: gain, net };
+    }
+    return best;
+  }
+
+  // Does `defColor` defend `square`? (Drop an enemy pawn there and see if
+  // defColor can recapture it.) Used to tell a real fork from one whose targets
+  // are protected.
+  function opponentDefends(afterFen, square, defColor) {
+    const parts = afterFen.split(' ');
+    parts[1] = defColor; parts[3] = '-';
+    let g;
+    try { g = new Chess(parts.join(' ')); } catch (_) { return true; }
+    const enemy = defColor === 'w' ? 'b' : 'w';
+    try { g.remove(square); g.put({ type: 'p', color: enemy }, square); } catch (_) { return true; }
+    try { return g.moves({ verbose: true }).some(m => m.to === square && m.captured); } catch (_) { return true; }
+  }
+
+  // Can the opponent win the piece sitting on `square` for >=2 net material?
+  // A "fork" whose own forking piece just gets taken isn't a fork.
+  function pieceWinnable(afterFen, square, side) {
+    const opp = side === 'w' ? 'b' : 'w';
+    const parts = afterFen.split(' ');
+    parts[1] = opp; parts[3] = '-';
+    let g;
+    try { g = new Chess(parts.join(' ')); } catch (_) { return false; }
+    const caps = g.moves({ verbose: true }).filter(m => m.to === square && m.captured);
+    for (const cap of caps) {
+      const gain = PIECE_VALUES[cap.captured] || 0;
+      try {
+        const g2 = new Chess(g.fen());
+        g2.move(cap.san, { sloppy: true });
+        const recap = g2.moves({ verbose: true }).some(m => m.to === square);
+        const rv = recap ? (PIECE_VALUES[cap.piece] || 0) : 0;
+        if (gain - rv >= 2) return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  // Is one of `side`'s own pieces hanging in this position (before they move)?
+  // We hand the move to the opponent and look for a winning capture. Returns the
+  // threatened square {square, piece, value, net} or null.
+  function myHanging(fen, side) {
+    const opp = side === 'w' ? 'b' : 'w';
+    const parts = fen.split(' ');
+    parts[1] = opp; parts[3] = '-';
+    return bestHang(parts.join(' '));
+  }
+
+  // Can `side` (to move in `fen`) win material outright right now?
+  function oppHanging(fen, side) {
+    const parts = fen.split(' ');
+    if (parts[1] !== side) { parts[1] = side; parts[3] = '-'; }
+    return bestHang(parts.join(' '));
+  }
+
   // Classify a mistake by what's most instructive: missed mate, then YOUR
   // hung piece (the #1 beginner error), then the tactic the best move lands.
   function detectMotif(fenBefore, bestUci, side, playedSan) {
@@ -97,15 +176,29 @@ const Training = (() => {
     if (move.san.includes('#')) return 'mat';
     if (playedSan && hangsMaterial(fenBefore, playedSan, side)) return 'prise';
 
-    // Fork: the moved piece now attacks 2+ valuable targets (or a target + check).
-    const targets = movesFrom(after, bestUci.slice(2, 4), side)
-      .filter(m => m.captured && PIECE_VALUES[m.captured] >= 3);
+    // Fork: the moved piece attacks 2+ WINNABLE targets (or a target + check),
+    // and isn't simply capturable itself. The loose "attacks two things" test
+    // over-fired ~1/3 of the time on captures/checks that are really just
+    // material grabs (audit 2026-07-02), so verify it actually wins material —
+    // otherwise fall through to 'gain'/'positionnel'.
+    const forkSq = bestUci.slice(2, 4);
+    const forkVal = PIECE_VALUES[move.piece] || 0;
     const givesCheck = move.san.includes('+');
-    if (targets.length >= 2 || (targets.length >= 1 && givesCheck)) return 'fourchette';
+    const targets = movesFrom(after, forkSq, side)
+      .filter(m => m.captured && PIECE_VALUES[m.captured] >= 3);
+    if (targets.length) {
+      const opp = side === 'w' ? 'b' : 'w';
+      const winnable = targets.filter(m => PIECE_VALUES[m.captured] >= forkVal || !opponentDefends(after, m.to, opp));
+      if (!pieceWinnable(after, forkSq, side) && (winnable.length >= 2 || (winnable.length >= 1 && givesCheck)))
+        return 'fourchette';
+    }
 
     if (move.captured && PIECE_VALUES[move.captured] >= 3) return 'gain';
     if (givesCheck) return 'attaque';
     if (move.captured) return 'gain';
+    // Quiet best move, but you already had a piece hanging → the lesson is
+    // defending, not a positional plan. Catches many mislabelled 'positionnel'.
+    if (myHanging(fenBefore, side)) return 'defense';
     return 'positionnel';
   }
 
@@ -380,86 +473,6 @@ const Training = (() => {
     });
   }
 
-  // ───────────────────────── MENACES (recognition) tab ─────────────────────────
-  let mQueue = [], mi = 0, mScore = 0;
-
-  function startThreats() {
-    const all = load().slice();
-    // shuffle (Fisher–Yates) for variety
-    for (let i = all.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [all[i], all[j]] = [all[j], all[i]];
-    }
-    mQueue = all.slice(0, 10);
-    mi = 0; mScore = 0;
-    renderThreat();
-  }
-
-  function renderThreat() {
-    const host = $('#train-threats');
-    if (!mQueue.length) {
-      host.innerHTML = `<div class="train-empty">Aucune position disponible.<br><span>Analyse quelques parties d'abord.</span></div>`;
-      return;
-    }
-    if (mi >= mQueue.length) {
-      host.innerHTML = `<div class="train-empty">Score : <b>${mScore} / ${mQueue.length}</b><br><span>${mScore >= 8 ? 'Excellent œil tactique !' : mScore >= 5 ? 'Pas mal — continue à t\'entraîner.' : 'L\'entraînement paie : recommence une série.'}</span></div>
-        <div class="train-actions"><button class="train-btn good" id="thr-again">Nouvelle série</button></div>`;
-      $('#thr-again').onclick = startThreats;
-      return;
-    }
-    const it = mQueue[mi];
-    const correct = it.motif;
-    const opts = buildOptions(correct);
-    host.innerHTML = `
-      <div class="train-progress">Question ${mi + 1} / ${mQueue.length} · Score ${mScore}</div>
-      <div class="train-prompt">Trait aux <b>${it.side === 'w' ? 'Blancs' : 'Noirs'}</b> — quelle est la meilleure idée tactique ici ?</div>
-      <div class="train-board-wrap">
-        <svg class="train-board" viewBox="0 0 360 360" id="thr-board"></svg>
-      </div>
-      <div class="train-options" id="thr-options"></div>
-      <div class="train-feedback" id="thr-feedback"></div>`;
-    BoardRenderer.setFlipped(it.side === 'b');
-    BoardRenderer.render($('#thr-board'), it.fen);
-    const optHost = $('#thr-options');
-    opts.forEach(opt => {
-      const b = document.createElement('button');
-      b.className = 'train-opt';
-      b.textContent = MOTIF_LABELS[opt];
-      b.onclick = () => answerThreat(b, opt, correct, it);
-      optHost.appendChild(b);
-    });
-  }
-
-  function buildOptions(correct) {
-    const pool = MOTIF_ORDER.filter(m => m !== correct);
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    const opts = [correct, ...pool.slice(0, 3)];
-    for (let i = opts.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [opts[i], opts[j]] = [opts[j], opts[i]];
-    }
-    return opts;
-  }
-
-  function answerThreat(btn, chosen, correct, it) {
-    if ($('#thr-options').classList.contains('done')) return;
-    $('#thr-options').classList.add('done');
-    const right = chosen === correct;
-    if (right) mScore++;
-    $$('#thr-options .train-opt').forEach(b => {
-      if (b.textContent === MOTIF_LABELS[correct]) b.classList.add('correct');
-      else if (b === btn) b.classList.add('incorrect');
-      b.disabled = true;
-    });
-    const fb = $('#thr-feedback');
-    fb.className = 'train-feedback ' + (right ? 'right' : 'wrong');
-    fb.innerHTML = `${right ? '✅ Oui !' : '❌ C\'était : ' + MOTIF_LABELS[correct] + '.'} La solution était <b>${it.bestSan || ''}</b>. <button class="train-btn good" id="thr-next">Suivant ▶</button>`;
-    $('#thr-next').onclick = () => { mi++; renderThreat(); };
-  }
-
   // ───────────────────────── MOTIFS dashboard tab ─────────────────────────
   function renderMotifs() {
     const host = $('#train-motifs');
@@ -505,6 +518,98 @@ const Training = (() => {
     $$('#train-motifs .motif-row').forEach(b => { b.onclick = () => drillMotif(b.dataset.motif); });
   }
 
+  // ───────────────────────── VIGILANCE (anti-gaffe reflex) tab ─────────────────────────
+  // Before every move a beginner should scan: is one of MY pieces hanging? can I
+  // win material for free? This drill trains exactly that on your real positions:
+  // a yes/no question, then it reveals and highlights the piece.
+  let vQueue = [], vi = 0, vScore = 0;
+  const PIECE_FR = {
+    p: { a: 'Ton', n: 'pion' }, n: { a: 'Ton', n: 'cavalier' }, b: { a: 'Ton', n: 'fou' },
+    r: { a: 'Ta', n: 'tour' }, q: { a: 'Ta', n: 'dame' }, k: { a: 'Ton', n: 'roi' }
+  };
+  const OPP_PIECE_FR = { p: 'un pion', n: 'un cavalier', b: 'un fou', r: 'une tour', q: 'une dame', k: 'un roi' };
+
+  function startVigilance() {
+    const all = load().slice();
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+    vQueue = all.slice(0, 8).map(it => {
+      const mode = Math.random() < 0.5 ? 'def' : 'off';
+      const hazard = mode === 'def' ? myHanging(it.fen, it.side) : oppHanging(it.fen, it.side);
+      return { fen: it.fen, side: it.side, mode, hazard: hazard || null };
+    });
+    vi = 0; vScore = 0;
+    renderVigilance();
+  }
+
+  function renderVigilance() {
+    const host = $('#train-vigilance');
+    if (load().length < 4) {
+      host.innerHTML = `<div class="train-empty">Pas encore assez de positions.<br><span>Analyse quelques parties : on te fera travailler le réflexe anti-gaffe sur tes vraies positions.</span></div>`;
+      return;
+    }
+    if (!vQueue.length) { startVigilance(); return; }
+    if (vi >= vQueue.length) {
+      const msg = vScore >= 7 ? 'Œil de lynx ! Ce réflexe te fera gagner des parties.'
+        : vScore >= 4 ? 'Ça vient — refais une série.'
+        : 'Prends l\'habitude : à chaque coup, checke d\'abord les prises.';
+      host.innerHTML = `<div class="train-empty">Score : <b>${vScore} / ${vQueue.length}</b><br><span>${msg}</span></div>
+        <div class="train-actions"><button class="train-btn good" id="vig-again">Nouvelle série</button></div>`;
+      $('#vig-again').onclick = startVigilance;
+      return;
+    }
+    const q = vQueue[vi];
+    const question = q.mode === 'def'
+      ? 'Une de tes pièces est-elle <b>en prise</b> ?'
+      : 'Peux-tu <b>gagner du matériel</b> tout de suite ?';
+    host.innerHTML = `
+      <div class="train-progress">Position ${vi + 1} / ${vQueue.length} · Score ${vScore}</div>
+      <div class="train-prompt">Trait aux <b>${q.side === 'w' ? 'Blancs' : 'Noirs'}</b> (toi). ${question}</div>
+      <div class="train-board-wrap">
+        <svg class="train-board" viewBox="0 0 360 360" id="vig-board"></svg>
+        <svg class="train-board" viewBox="0 0 360 360" id="vig-arrows"></svg>
+      </div>
+      <div class="train-options vig-yn" id="vig-options">
+        <button class="train-opt" data-a="yes">Oui</button>
+        <button class="train-opt" data-a="no">Non</button>
+      </div>
+      <div class="train-feedback" id="vig-feedback"></div>`;
+    BoardRenderer.setFlipped(q.side === 'b');
+    BoardRenderer.render($('#vig-board'), q.fen);
+    $$('#vig-options .train-opt').forEach(b => b.onclick = () => answerVig(b.dataset.a === 'yes'));
+  }
+
+  function answerVig(saidYes) {
+    const opts = $('#vig-options');
+    if (opts.classList.contains('done')) return;
+    opts.classList.add('done');
+    const q = vQueue[vi];
+    const has = !!q.hazard;
+    const correct = saidYes === has;
+    if (correct) vScore++;
+    $$('#vig-options .train-opt').forEach(b => {
+      const isYes = b.dataset.a === 'yes';
+      if (isYes === has) b.classList.add('correct');
+      else if (isYes === saidYes) b.classList.add('incorrect');
+      b.disabled = true;
+    });
+    if (has) BoardRenderer.highlightSquares($('#vig-arrows'), [q.hazard.square], q.mode === 'def' ? '#d36b6b' : '#56b886');
+    let detail;
+    if (has && q.mode === 'def') {
+      const p = PIECE_FR[q.hazard.piece] || { a: 'Ta', n: 'pièce' };
+      detail = ` ${p.a} <b>${p.n}</b> en <b>${q.hazard.square}</b> est en prise — sauve-la ou défends-la avant de jouer autre chose.`;
+    } else if (has) {
+      detail = ` Tu peux prendre <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b> en <b>${q.hazard.square}</b>.`;
+    } else if (q.mode === 'def') {
+      detail = ' Rien en prise ici — tu peux suivre ton plan sereinement.';
+    } else {
+      detail = ' Rien à gagner de force ici — cherche plutôt à améliorer une pièce.';
+    }
+    const fb = $('#vig-feedback');
+    fb.className = 'train-feedback ' + (correct ? 'right' : 'wrong');
+    fb.innerHTML = (correct ? '✅ Bien vu !' : '❌ Raté.') + detail + ` <button class="train-btn good" id="vig-next">Suivant ▶</button>`;
+    $('#vig-next').onclick = () => { vi++; renderVigilance(); };
+  }
+
   // ───────────────────────── screen + tabs ─────────────────────────
   let bound = false;
   function show() {
@@ -531,9 +636,15 @@ const Training = (() => {
     $$('.train-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
     $$('.train-panel').forEach(p => p.classList.toggle('active', p.id === 'train-' + tab));
     if (tab === 'puzzles') startPuzzles();
-    else if (tab === 'threats') startThreats();
+    else if (tab === 'vigilance') startVigilance();
     else renderMotifs();
   }
 
-  return { capture, ingestGame, dueCount, show, hungPiece, detectMotif, MOTIF_LABELS, TACTICAL };
+  // Open the trainer directly on one motif (used by Coach's focus card).
+  function showMotif(m) {
+    show();
+    if (m) { motifFilter = m; switchTab('puzzles'); }
+  }
+
+  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, MOTIF_LABELS, TACTICAL };
 })();

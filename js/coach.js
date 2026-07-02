@@ -24,6 +24,21 @@ const Coach = (() => {
   let stopFlag = false;
   let hostedInfo = null;
   let filterTc = 'all'; // whole-page cadence filter (all | bullet | blitz | rapid | daily | autre)
+  let countryCache = {}; // { lowercaseUsername: ISO-code | '??' }, persisted in IndexedDB meta
+
+  let regionNames = null;
+  try { regionNames = new Intl.DisplayNames(['fr'], { type: 'region' }); } catch (_) {}
+  const SPECIAL_COUNTRY = { XE: 'Angleterre', XS: 'Écosse', XW: 'Pays de Galles', XB: 'Pays basque', XK: 'Kosovo', XA: 'International' };
+  function countryName(code) {
+    if (!code || code === '??') return 'Inconnu';
+    if (SPECIAL_COUNTRY[code]) return SPECIAL_COUNTRY[code];
+    try { return (regionNames && regionNames.of(code)) || code; } catch (_) { return code; }
+  }
+  function flagEmoji(code) {
+    if (!code || code.length !== 2 || code[0] === 'X') return '🏳️';
+    const A = 0x1F1E6;
+    return String.fromCodePoint(A + code.charCodeAt(0) - 65, A + code.charCodeAt(1) - 65);
+  }
 
   const $ = (s) => document.querySelector(s);
 
@@ -320,7 +335,8 @@ const Coach = (() => {
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     const cards = an.length
-      ? renderNarrative(an) +
+      ? renderFocus(an) +
+        renderNarrative(an) +
         renderTrends(an) +
         renderProfile(an) +
         renderMoveQuality(an) +
@@ -330,17 +346,20 @@ const Coach = (() => {
         renderProgress(an) +
         renderRepertoire(an) +
         renderWeakness(an) +
+        renderNationality(an) +
         renderGamesDrill(an) +
         renderTrainingCta()
       : `<div class="coach-empty-mini">Aucune partie « ${tcLabel(filterTc)} » analysée. Choisissez une autre cadence.</div>`;
     body.innerHTML = renderFilterBar(anAll) + cards;
     bindFilterBar();
     if (an.length) {
+      bindFocus();
       bindTrainingCta();
       bindGamesDrill();
       bindRepertoire();
       bindConversion();
       bindTactics();
+      bindNationality();
     }
   }
 
@@ -394,6 +413,53 @@ const Coach = (() => {
     if (!total) return '';
     return `<div class="coach-bar">` + parts.map(p =>
       p.v ? `<span style="width:${pct(p.v, total)}%;background:${p.color}"></span>` : '').join('') + `</div>`;
+  }
+
+  // ── Ta priorité (single most-impactful thing to fix, with one drill CTA) ──
+  const FOCUS_HEADLINE = {
+    prise: 'Arrête de laisser des pièces en prise',
+    defense: 'Réponds aux menaces avant de jouer',
+    fourchette: 'Attention aux fourchettes',
+    gain: 'Ne rate plus le matériel gratuit',
+    attaque: 'Gère mieux échecs et coups forçants',
+    mat: 'Repère les mats — les tiens et ceux de l\'adverse'
+  };
+  function renderFocus(an) {
+    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
+    const recent = an.slice().sort((a, b) => (b.endTime || 0) - (a.endTime || 0)).slice(0, 15);
+    const counts = {}, cpBy = {};
+    let total = 0;
+    recent.forEach(g => {
+      (g.analysis.blunderList || []).forEach(b => {
+        if (!b.fenBefore || !b.bestUci) return;
+        const m = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
+        counts[m] = (counts[m] || 0) + 1; cpBy[m] = (cpBy[m] || 0) + (b.cpLoss || 0); total++;
+      });
+    });
+    if (!total) return '';
+    const tactical = Training.TACTICAL || [];
+    const labels = Training.MOTIF_LABELS || {};
+    const ranked = Object.keys(counts)
+      .filter(k => tactical.includes(k))
+      .sort((a, b) => (counts[b] - counts[a]) || ((cpBy[b] || 0) - (cpBy[a] || 0)));
+    const top = ranked[0] || Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    if (!top) return '';
+    const n = counts[top];
+    const headline = FOCUS_HEADLINE[top] || ('Travaille : ' + (labels[top] || top));
+    const canDrill = typeof Training.showMotif === 'function';
+    return `<div class="home-card coach-card coach-focus" id="coach-focus">
+      <div class="coach-focus-tag">🎯 Ta priorité en ce moment</div>
+      <h2 class="coach-focus-head">${headline}</h2>
+      <p class="coach-focus-sub">Sur tes <b>${recent.length} dernières parties</b>, ce motif revient <b>${n} fois</b> (${pct(n, total)}% de tes erreurs) — c'est de loin ta fuite n°1.</p>
+      ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${top}">🎯 M'entraîner là-dessus</button>` : ''}
+    </div>`;
+  }
+  function bindFocus() {
+    const b = $('#coach-focus .coach-focus-btn');
+    if (b) b.addEventListener('click', () => {
+      if (typeof Training === 'undefined') return;
+      if (Training.showMotif) Training.showMotif(b.dataset.motif); else Training.show();
+    });
   }
 
   function renderNarrative(an) {
@@ -733,6 +799,7 @@ const Coach = (() => {
   function motifAdvice(m) {
     return {
       prise: "Avant de jouer, vérifie qu'aucune de tes pièces — surtout celle que tu déplaces — ne reste en prise.",
+      defense: "Quand une de tes pièces est attaquée, réponds à la menace (fuir, défendre, contre-attaquer) avant de suivre ton plan.",
       fourchette: "Méfie-toi des cases d'où un cavalier ou une dame frappe deux pièces à la fois.",
       mat: "Quand le roi adverse est exposé, cherche le mat avant toute autre idée.",
       gain: "Compte attaquants et défenseurs avant chaque prise pour ne pas perdre de matériel.",
@@ -776,6 +843,76 @@ const Coach = (() => {
   function bindTactics() {
     const b = $('#coach-tactics-train');
     if (b) b.addEventListener('click', () => { if (typeof Training !== 'undefined') Training.show(); });
+  }
+
+  // ── Nationalités des adversaires (info tirée des profils Chess.com) ──
+  function oppKeys(an) {
+    return [...new Set(an.map(g => (g.oppName || '').toLowerCase()).filter(u => u && u !== '?'))];
+  }
+  async function fetchCountries(an, onProg) {
+    const todo = oppKeys(an).filter(u => !(u in countryCache));
+    let done = 0;
+    for (const u of todo) {
+      try {
+        const p = await fetchJson(`https://api.chess.com/pub/player/${encodeURIComponent(u)}`);
+        countryCache[u] = (p.country && p.country.split('/').pop()) || '??';
+      } catch (_) { countryCache[u] = '??'; }
+      done++;
+      onProg && onProg(done, todo.length);
+    }
+    await setMeta('oppCountry', countryCache);
+  }
+  function renderNationality(an) {
+    const opps = oppKeys(an);
+    if (!opps.length) return '';
+    const loaded = opps.filter(u => u in countryCache);
+    const missing = opps.length - loaded.length;
+    const agg = {};
+    let known = 0;
+    an.forEach(g => {
+      const code = countryCache[(g.oppName || '').toLowerCase()];
+      if (!code || code === '??') return;
+      known++;
+      const a = (agg[code] = agg[code] || { code, n: 0, w: 0 });
+      a.n++; if (g.result === 'win') a.w++;
+    });
+    if (!known) {
+      return `<div class="home-card coach-card coach-nat" id="coach-nat">
+        <h3>🌍 Nationalités de tes adversaires</h3>
+        <p class="coach-sub2">Découvre d'où viennent les joueurs que tu affrontes. L'info est lue une seule fois depuis leur profil Chess.com, puis gardée hors-ligne.</p>
+        <button class="btn-primary" id="coach-nat-load">🌍 Charger les nationalités (${opps.length} adversaires)</button>
+        <div class="coach-nat-prog" id="coach-nat-prog" hidden></div>
+      </div>`;
+    }
+    const rows = Object.values(agg).sort((a, b) => b.n - a.n);
+    const top = rows.slice(0, 12);
+    const maxN = Math.max(...rows.map(r => r.n), 1);
+    const body = top.map(r => `
+      <div class="coach-nat-row">
+        <span class="coach-nat-flag">${flagEmoji(r.code)}</span>
+        <span class="coach-nat-name">${esc(countryName(r.code))}</span>
+        <div class="coach-bar"><span style="width:${pct(r.n, maxN)}%;background:#5b8fb9"></span></div>
+        <span class="coach-nat-val">${r.n}<small> · ${pct(r.w, r.n)}% V</small></span>
+      </div>`).join('');
+    const t = rows[0];
+    return `<div class="home-card coach-card coach-nat" id="coach-nat">
+      <h3>🌍 Nationalités de tes adversaires</h3>
+      <p class="coach-sub2"><b>${rows.length} pays</b> sur ${known} parties. Ton adversaire type vient de <b>${esc(countryName(t.code))}</b> ${flagEmoji(t.code)}.</p>
+      ${body}
+      ${missing > 0 ? `<button class="btn-secondary coach-nat-more" id="coach-nat-load">Charger ${missing} adversaire(s) de plus</button>
+        <div class="coach-nat-prog" id="coach-nat-prog" hidden></div>` : ''}
+    </div>`;
+  }
+  function bindNationality() {
+    const b = $('#coach-nat-load');
+    if (!b) return;
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      const prog = $('#coach-nat-prog');
+      if (prog) { prog.hidden = false; prog.textContent = 'Chargement…'; }
+      await fetchCountries(analyzed(), (d, t) => { if (prog) prog.textContent = `Chargement… ${d}/${t}`; });
+      render();
+    });
   }
 
   function endReasonLabel(r) {
@@ -1107,7 +1244,10 @@ const Coach = (() => {
     $('#screen-coach').classList.add('active');
     window.scrollTo(0, 0);
     if (!db) {
-      try { db = await openDB(); games = await getAll(); } catch (_) { games = []; }
+      try {
+        db = await openDB(); games = await getAll();
+        countryCache = (await getMeta('oppCountry')) || {};
+      } catch (_) { games = []; }
     }
     render(); // instant from local cache
     const info = await loadHosted(); // server analysis is authoritative
