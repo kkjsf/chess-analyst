@@ -2166,6 +2166,20 @@ body.guess-open { overflow: hidden; }
 .coach-focus-sub b { color: var(--text); }
 .coach-focus-btn { width: 100%; }
 
+/* Vigilance tactique card */
+.coach-vigilance {
+  background: linear-gradient(150deg, rgba(211,107,107,0.15), var(--bg-card) 70%);
+  border: 1px solid rgba(211,107,107,0.36);
+}
+.coach-vig-breakdown { margin: 2px 0 12px; display: flex; flex-direction: column; gap: 7px; }
+.coach-vig-row { display: flex; align-items: center; gap: 9px; }
+.coach-vig-lbl { font-size: 12px; color: var(--text-dim); width: 132px; flex-shrink: 0; }
+.coach-vig-bar { flex: 1; height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+.coach-vig-bar > span { display: block; height: 100%; border-radius: 4px; }
+.coach-vig-n { font-size: 13px; font-weight: 700; color: var(--text); width: 18px; text-align: right; }
+.coach-vig-tip { font-size: 12px; color: var(--text-dim); line-height: 1.55; margin-bottom: 12px; background: rgba(255,255,255,0.04); padding: 8px 10px; border-radius: 8px; }
+.coach-vig-tip b { color: var(--text); }
+
 /* Nationalités des adversaires */
 .coach-nat-row { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
 .coach-nat-flag { font-size: 18px; flex-shrink: 0; width: 22px; text-align: center; }

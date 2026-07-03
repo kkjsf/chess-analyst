@@ -341,7 +341,8 @@ const Coach = (() => {
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     const cards = an.length
-      ? renderFocus(an) +
+      ? renderVigilance(an) +
+        renderFocus(an) +
         renderNarrative(an) +
         renderTrends(an) +
         renderProfile(an) +
@@ -359,6 +360,7 @@ const Coach = (() => {
     body.innerHTML = renderFilterBar(anAll) + cards;
     bindFilterBar();
     if (an.length) {
+      bindVigilance();
       bindFocus();
       bindTrainingCta();
       bindGamesDrill();
@@ -421,6 +423,16 @@ const Coach = (() => {
       p.v ? `<span style="width:${pct(p.v, total)}%;background:${p.color}"></span>` : '').join('') + `</div>`;
   }
 
+  // Board-awareness leaks — hung pieces, unparried threats, forks. Grouped
+  // into the dedicated "Vigilance tactique" card; the generic focus card below
+  // skips them so the two cards surface different, complementary weaknesses.
+  const VIGILANCE_MOTIFS = ['prise', 'defense', 'fourchette'];
+  const VIG_META = {
+    prise: { label: 'Pièces en prise', color: '#d36b6b' },
+    defense: { label: 'Menaces non parées', color: '#e2b857' },
+    fourchette: { label: 'Fourchettes encaissées', color: '#5b8fb9' }
+  };
+
   // ── Ta priorité (single most-impactful thing to fix, with one drill CTA) ──
   const FOCUS_HEADLINE = {
     prise: 'Arrête de laisser des pièces en prise',
@@ -446,10 +458,10 @@ const Coach = (() => {
     const tactical = Training.TACTICAL || [];
     const labels = Training.MOTIF_LABELS || {};
     const ranked = Object.keys(counts)
-      .filter(k => tactical.includes(k))
+      .filter(k => tactical.includes(k) && !VIGILANCE_MOTIFS.includes(k))
       .sort((a, b) => (counts[b] - counts[a]) || ((cpBy[b] || 0) - (cpBy[a] || 0)));
-    const top = ranked[0] || Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
-    if (!top) return '';
+    const top = ranked[0];
+    if (!top) return ''; // vigilance motifs are covered by the Vigilance card
     const n = counts[top];
     const headline = FOCUS_HEADLINE[top] || ('Travaille : ' + (labels[top] || top));
     const canDrill = typeof Training.showMotif === 'function';
@@ -462,6 +474,45 @@ const Coach = (() => {
   }
   function bindFocus() {
     const b = $('#coach-focus .coach-focus-btn');
+    if (b) b.addEventListener('click', () => {
+      if (typeof Training === 'undefined') return;
+      if (Training.showMotif) Training.showMotif(b.dataset.motif); else Training.show();
+    });
+  }
+
+  // ── Vigilance tactique: board-awareness leaks (hung pieces + forks) ──
+  function renderVigilance(an) {
+    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
+    const recent = an.slice().sort((a, b) => (b.endTime || 0) - (a.endTime || 0)).slice(0, 15);
+    const sub = { prise: 0, defense: 0, fourchette: 0 };
+    const gamesHit = new Set();
+    let vig = 0, total = 0;
+    recent.forEach(g => (g.analysis.blunderList || []).forEach(b => {
+      if (!b.fenBefore || !b.bestUci) return;
+      total++;
+      const m = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
+      if (Object.prototype.hasOwnProperty.call(sub, m)) { sub[m]++; vig++; gamesHit.add(g.uuid); }
+    }));
+    if (vig < 2) return '';
+    const topSub = Object.keys(sub).sort((a, b) => sub[b] - sub[a])[0];
+    const canDrill = typeof Training.showMotif === 'function';
+    const rows = VIGILANCE_MOTIFS.filter(k => sub[k] > 0).map(k => {
+      const w = Math.round((sub[k] / vig) * 100);
+      return `<div class="coach-vig-row"><span class="coach-vig-lbl">${VIG_META[k].label}</span>` +
+        `<span class="coach-vig-bar"><span style="width:${w}%;background:${VIG_META[k].color}"></span></span>` +
+        `<span class="coach-vig-n">${sub[k]}</span></div>`;
+    }).join('');
+    return `<div class="home-card coach-card coach-focus coach-vigilance" id="coach-vigilance">
+      <div class="coach-focus-tag">🛡️ Vigilance tactique</div>
+      <h2 class="coach-focus-head">Regarde les menaces avant de jouer</h2>
+      <p class="coach-focus-sub"><b>${vig}</b> de tes <b>${total}</b> gaffes (${pct(vig, total)}%) sur tes ${recent.length} dernières parties sont des pièces laissées en prise ou des fourchettes encaissées, réparties sur <b>${gamesHit.size}</b> parties. C'est de loin ce qui te coûte le plus de points.</p>
+      <div class="coach-vig-breakdown">${rows}</div>
+      <p class="coach-vig-tip">💡 Avant <b>chaque</b> coup : « Qu'est-ce que son dernier coup menace ? Un échec, une prise, une fourchette ? » — 5 secondes suffisent.</p>
+      ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${topSub}">🎯 M'entraîner sur ce point</button>` : ''}
+    </div>`;
+  }
+  function bindVigilance() {
+    const b = $('#coach-vigilance .coach-focus-btn');
     if (b) b.addEventListener('click', () => {
       if (typeof Training === 'undefined') return;
       if (Training.showMotif) Training.showMotif(b.dataset.motif); else Training.show();
