@@ -202,6 +202,25 @@ const Training = (() => {
     return 'positionnel';
   }
 
+  // A blunder makes a good DRILL only if its engine "solution" is clean and
+  // satisfying — otherwise the trainer shows a confusing "best move" that still
+  // loses. Reject two junk cases (user-reported 2026-07-03, the Qxf6 puzzle):
+  //   • mate-scale cpLoss → you were mating or being mated, not a material tactic
+  //   • desperado → the solution throws the piece it moves (Qxf6, Rxf6 recaptures)
+  // Forcing mate that keeps the piece is always kept.
+  function isCleanPuzzle(item) {
+    if (!item || !item.fen || !item.bestUci || item.bestUci.length < 4) return false;
+    if ((item.cpLoss || 0) > 2000) return false;
+    let g, move;
+    try {
+      g = new Chess(item.fen);
+      move = g.move({ from: item.bestUci.slice(0, 2), to: item.bestUci.slice(2, 4), promotion: item.bestUci[4] || 'q' });
+      if (!move) return false;
+    } catch (_) { return false; }
+    if (move.san.includes('#')) return true;
+    return !pieceWinnable(g.fen(), item.bestUci.slice(2, 4), item.side);
+  }
+
   // ───────────────────────── capture from a game ─────────────────────────
   // Build SRS-ready items from one analyzed game's blunders, then merge them
   // into the deck. Used when you open a single game in the analyzer.
@@ -255,6 +274,7 @@ const Training = (() => {
   // already in review when capping.
   const MUTABLE = ['bestSan', 'playedSan', 'type', 'cpLoss', 'motif', 'moveNo', 'white', 'black', 'date'];
   function mergeItems(base) {
+    base = base.filter(isCleanPuzzle);
     if (!base.length) return 0;
     const items = load();
     const byId = new Map(items.map(it => [it.id, it]));
@@ -286,7 +306,7 @@ const Training = (() => {
   // mistakes first), so a freshly-fed deck never dumps hundreds at once.
   function buildSession() {
     const now = Date.now();
-    const all = load();
+    const all = load().filter(isCleanPuzzle);
     const reviews = all.filter(it => (it.reps || 0) > 0 && (it.due || 0) <= now)
       .sort((a, b) => (a.due || 0) - (b.due || 0));
     const fresh = all.filter(it => (it.reps || 0) === 0 && (it.due || 0) <= now)
@@ -356,7 +376,7 @@ const Training = (() => {
   // Drill one motif: due cards of that motif first, then biggest mistakes.
   function motifQueue(m) {
     const now = Date.now();
-    return load().filter(it => it.motif === m)
+    return load().filter(it => it.motif === m && isCleanPuzzle(it))
       .sort((a, b) => (((a.due || 0) <= now ? 0 : 1) - ((b.due || 0) <= now ? 0 : 1))
         || ((b.cpLoss || 0) - (a.cpLoss || 0)))
       .slice(0, 20);
