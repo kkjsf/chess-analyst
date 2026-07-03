@@ -682,7 +682,7 @@ const App = (() => {
     const userStats = user ? (userIsWhite ? s.w : s.b) : null;
     const oppStats = user ? (userIsWhite ? s.b : s.w) : null;
 
-    const narrative = buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, summary.opening);
+    const narrative = buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, summary.opening, summary.engineUsed);
 
     const dateStr = header.Date || '';
     let dateLine = '';
@@ -988,186 +988,219 @@ const App = (() => {
     renderStep(false);
   }
 
-  function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening) {
+  function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening, engineUsed) {
     const byTime = termLower.includes('time');
     const byMate = termLower.includes('checkmate') || termLower.includes('mat');
     const byResign = termLower.includes('resign') || termLower.includes('abandon');
 
-    const phases = [
-      { name: 'opening', from: 0, to: Math.min(20, analysis.length) },
-      { name: 'middle', from: 20, to: Math.min(50, analysis.length) },
-      { name: 'end', from: 50, to: analysis.length }
-    ];
+    const N = analysis.length;
+    const isUserMove = r => user && r.move && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b'));
+    const userEvalOf = r => (typeof r.eval === 'number') ? (userIsWhite ? r.eval : -r.eval) : null;
+    const fmtEval = cp => { const v = cp / 100; return (v > 0 ? '+' : '') + v.toFixed(1); };
 
-    const phaseErrors = phases.map(p => {
-      let userBlunders = 0, userMistakes = 0, userInaccuracies = 0, oppBlunders = 0, oppMistakes = 0;
-      for (let i = p.from; i < p.to; i++) {
-        const r = analysis[i];
-        if (!r.move) continue;
-        const isUserMove = user && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b'));
-        if (r.type === 'blunder') { if (isUserMove) userBlunders++; else oppBlunders++; }
-        if (r.type === 'mistake') { if (isUserMove) userMistakes++; else oppMistakes++; }
-        if (r.type === 'inaccuracy') { if (isUserMove) userInaccuracies++; }
-      }
-      return { ...p, userBlunders, userMistakes, userInaccuracies, oppBlunders, oppMistakes };
-    });
-
-    let turningPoint = null;
-    let biggestSwing = 0;
-    for (let i = 1; i < analysis.length; i++) {
-      const r = analysis[i];
-      if (!r.move || (r.type !== 'blunder' && r.type !== 'mistake')) continue;
-      const prevEval = analysis[i - 1]?.eval || 0;
-      const swing = Math.abs((r.eval || 0) - prevEval);
-      if (swing > biggestSwing) {
-        biggestSwing = swing;
-        const moveNum = Math.floor(i / 2) + 1;
-        const dot = i % 2 === 0 ? '.' : '...';
-        turningPoint = { moveNum, dot, san: r.sanFr, index: i, move: r.move, type: r.type };
-      }
-    }
+    // Deterministic per-game seed: phrasing stays stable for a given game but
+    // varies across games, so two similar games don't read identically.
+    let seed = N * 13;
+    if (analysis[0] && analysis[0].san) for (const ch of analysis[0].san) seed += ch.charCodeAt(0);
+    if (userStats) seed += userStats.blunders * 5 + userStats.mistakes * 3 + (userStats.inaccuracies || 0);
+    const pick = (arr, salt) => arr[Math.abs(seed + salt) % arr.length];
 
     const tc = header ? (header.TimeControl || '') : '';
     let isFastTc = false;
-    if (tc.includes('+')) {
-      const secs = parseInt(tc);
-      if (secs < 180) isFastTc = true;
+    if (tc.includes('+')) { const secs = parseInt(tc); if (secs < 180) isFastTc = true; }
+
+    const phases = [
+      { name: 'opening', label: 'l\'ouverture', from: 0, to: Math.min(20, N) },
+      { name: 'middle', label: 'le milieu de partie', from: 20, to: Math.min(50, N) },
+      { name: 'end', label: 'la finale', from: 50, to: N }
+    ];
+    const phaseData = phases.map(p => {
+      let ub = 0, um = 0, ui = 0, ob = 0, om = 0, uWinLoss = 0, uCount = 0;
+      for (let i = p.from; i < p.to; i++) {
+        const r = analysis[i]; if (!r.move) continue;
+        const mine = isUserMove(r);
+        if (mine) { uWinLoss += r.winPctLoss || 0; uCount++; }
+        if (r.type === 'blunder') { mine ? ub++ : ob++; }
+        else if (r.type === 'mistake') { mine ? um++ : om++; }
+        else if (r.type === 'inaccuracy' && mine) ui++;
+      }
+      const acc = uCount ? Math.max(0, Math.min(100, Math.round((1 - (uWinLoss / uCount) * 2) * 100))) : null;
+      return { ...p, ub, um, ui, ob, om, acc, uCount };
+    });
+    const [op, mid, end] = phaseData;
+
+    // Swings and the single most damaging move for each side (by win% lost).
+    let maxUserEval = null, minUserEval = null;
+    let userCrit = null, oppCrit = null;
+    for (let i = 0; i < N; i++) {
+      const r = analysis[i]; if (!r.move) continue;
+      const ue = userEvalOf(r);
+      if (ue !== null) {
+        if (maxUserEval === null || ue > maxUserEval) maxUserEval = ue;
+        if (minUserEval === null || ue < minUserEval) minUserEval = ue;
+      }
+      if ((r.type === 'blunder' || r.type === 'mistake') && (r.winPctLoss || 0) > 0) {
+        const rec = { wl: r.winPctLoss, san: r.sanFr || r.san, moveNum: Math.floor(i / 2) + 1, dot: i % 2 === 0 ? '.' : '...', type: r.type };
+        if (isUserMove(r)) { if (!userCrit || rec.wl > userCrit.wl) userCrit = rec; }
+        else if (!oppCrit || rec.wl > oppCrit.wl) oppCrit = rec;
+      }
     }
 
     const lines = [];
-    const [op, mid, end] = phaseErrors;
 
-    if (user) {
+    // ---- Spectator view (no user perspective) ----
+    if (!user) {
       if (opening) {
-        if (op.userBlunders === 0 && op.userMistakes === 0) {
-          lines.push(`Vous jouez la ${opening.name} de façon solide, sans erreur dans les premiers coups.`);
-        } else if (op.userBlunders > 0) {
-          lines.push(`Dans la ${opening.name}, vous trébuchez rapidement — votre adversaire prend l'avantage dès les premiers échanges.`);
-        } else {
-          lines.push(`La ${opening.name} se passe correctement malgré quelques imprécisions de votre part.`);
-        }
-      } else {
-        if (op.userBlunders === 0 && op.userMistakes === 0 && op.oppBlunders === 0) {
-          lines.push('Les premiers coups se déroulent sans accroc des deux côtés.');
-        } else if (op.userBlunders > 0) {
-          lines.push('Vous trébuchez dès l\'ouverture, offrant un avantage précoce à votre adversaire.');
-        } else if (op.oppBlunders > 0) {
-          lines.push('Votre adversaire fait une erreur en ouverture et vous prenez un avantage rapide.');
-        } else if (op.userMistakes > 0) {
-          lines.push('Quelques imprécisions en ouverture vous placent dans une position légèrement inconfortable.');
-        }
+        lines.push(pick([
+          `${opening.name} — ouverture ${(op.ub + op.ob === 0) ? 'saine des deux côtés' : 'déjà agitée'}.`,
+          `Les deux camps passent par la ${opening.name}${(op.ub + op.ob === 0) ? ', sans heurt' : ', mais les erreurs arrivent vite'}.`
+        ], 1));
       }
-
-      if (turningPoint) {
-        const isUserTP = (user === 'w' && turningPoint.move.color === 'w') || (user === 'b' && turningPoint.move.color === 'b');
-        if (isUserTP) {
-          lines.push(`Votre ${turningPoint.moveNum}${turningPoint.dot} ${turningPoint.san} est le tournant de la partie — une ${turningPoint.type === 'blunder' ? 'gaffe' : 'erreur'} qui change l'évaluation.`);
-        } else {
-          lines.push(`Au coup ${turningPoint.moveNum}, votre adversaire gaffe avec ${turningPoint.san} — un tournant que vous exploitez bien.`);
-        }
-      } else if (mid.from < analysis.length) {
-        if (mid.userMistakes === 0 && mid.userBlunders === 0 && mid.oppMistakes === 0 && mid.oppBlunders === 0) {
-          lines.push('Le milieu de partie est tendu mais propre, sans erreur des deux côtés.');
-        } else if (mid.userBlunders >= 2) {
-          lines.push('Le milieu de partie est chaotique avec plusieurs gaffes de votre part.');
-        } else if (mid.oppBlunders >= 2) {
-          lines.push('Votre adversaire multiplie les erreurs en milieu de partie.');
-        }
+      const bigCrit = [userCrit, oppCrit].filter(Boolean).sort((a, b) => b.wl - a.wl)[0];
+      if (bigCrit && bigCrit.wl >= 0.2) {
+        lines.push(`Le tournant : ${bigCrit.moveNum}${bigCrit.dot} ${bigCrit.san} fait basculer l'évaluation.`);
       }
-
-      if (end.to > end.from && analysis.length > 50) {
-        if (end.userBlunders > 0 && userLost) {
-          const lastBlunder = [...analysis].reverse().find(r => r.type === 'blunder' && r.move && ((user === 'w' && r.move.color === 'w') || (user === 'b' && r.move.color === 'b')));
-          if (lastBlunder) {
-            const idx = analysis.indexOf(lastBlunder);
-            const mn = Math.floor(idx / 2) + 1;
-            lines.push(`La finale vous échappe avec ${mn}${idx % 2 === 0 ? '.' : '...'} ${lastBlunder.sanFr} qui scelle la partie.`);
-          } else {
-            lines.push('Une erreur tardive en finale scelle l\'issue.');
-          }
-        } else if (end.oppBlunders > 0 && userWon) {
-          lines.push('En finale, votre adversaire craque et vous convertissez.');
-        } else if (end.userMistakes === 0 && end.oppMistakes === 0) {
-          lines.push('Finale bien maîtrisée avec un jeu précis jusqu\'au bout.');
-        }
-      }
-
-      if (userWon) {
-        if (byMate) {
-          lines.push('Mat conclusif — la meilleure façon de finir !');
-        } else if (byTime) {
-          if (isFastTc && oppStats.blunders >= 1) {
-            lines.push('Sous la pression de la pendule, votre adversaire craque. Bien géré.');
-          } else if (userStats.blunders >= 2) {
-            lines.push('Victoire au temps, mais la position était fragile — à retravailler.');
-          } else {
-            lines.push('Victoire au temps grâce à une bonne gestion de la pendule.');
-          }
-        } else if (byResign) {
-          if (userStats.blunders === 0 && userStats.mistakes === 0) {
-            lines.push('Abandon adverse face à un jeu irréprochable — victoire nette.');
-          } else {
-            lines.push('Votre adversaire préfère abandonner dans une position sans espoir.');
-          }
-        } else {
-          if (userStats.blunders === 0 && userStats.mistakes === 0) {
-            lines.push('Partie sans faute de votre côté — victoire méritée.');
-          } else if (oppStats.blunders > userStats.blunders) {
-            lines.push('Vous profitez des erreurs adverses pour l\'emporter.');
-          } else {
-            lines.push('Victoire acquise, mais des gaffes auraient pu la compromettre.');
-          }
-        }
-      } else if (userLost) {
-        if (byTime && isFastTc) {
-          if (userStats.blunders === 0) {
-            lines.push('Défaite au temps dans une position jouable — la pendule fait la différence en Bullet.');
-          } else {
-            lines.push('Le temps et les erreurs s\'accumulent — difficile de s\'en sortir en cadence rapide.');
-          }
-        } else if (byMate) {
-          lines.push('Mat adverse — revoyez les derniers coups pour repérer la menace plus tôt.');
-        } else if (byTime) {
-          lines.push('Défaite au temps. Pensez à jouer plus vite dans les positions simples.');
-        } else if (userStats.blunders === 1 && !turningPoint) {
-          lines.push('La défaite tient à une seule gaffe — un point précis à corriger.');
-        } else if (userStats.blunders >= 2) {
-          lines.push('Plusieurs gaffes ont conduit à cette défaite — revoyez les moments clés.');
-        } else if (oppStats.blunders === 0 && oppStats.mistakes <= 1) {
-          lines.push('Votre adversaire a joué très solidement — la marge de manœuvre était faible.');
-        } else {
-          lines.push('Défaite serrée où quelques imprécisions ont fait la différence.');
-        }
-      } else if (isDraw) {
-        if (userStats.blunders === 0 && oppStats.blunders === 0) {
-          lines.push('Partie nulle logique — jeu précis des deux côtés.');
-        } else {
-          lines.push('Les erreurs se compensent, menant au partage des points.');
-        }
-      }
-    } else {
-      const wLabel = 'les Blancs';
-      const bLabel = 'les Noirs';
-      if (opening) {
-        lines.push(`${opening.name} — ouverture ${(op.userBlunders + op.oppBlunders === 0) ? 'correcte des deux côtés' : 'avec des erreurs précoces'}.`);
-      } else if (op.userBlunders === 0 && op.oppBlunders === 0) {
-        lines.push('Ouverture correcte des deux côtés.');
-      }
-
-      if (turningPoint) {
-        const side = turningPoint.move.color === 'w' ? wLabel : bLabel;
-        lines.push(`Le tournant : ${turningPoint.moveNum}${turningPoint.dot} ${turningPoint.san} — ${side} gaffent.`);
-      }
-
       const totalBlunders = s.w.blunders + s.b.blunders;
-      if (totalBlunders >= 4) {
-        lines.push('Partie chaotique, riche en erreurs des deux côtés.');
-      } else if (totalBlunders === 0 && s.w.mistakes + s.b.mistakes <= 2) {
-        lines.push('Partie de bonne qualité avec très peu d\'imprécisions.');
-      }
+      if (totalBlunders >= 4) lines.push('Partie mouvementée, riche en erreurs de part et d\'autre.');
+      else if (totalBlunders === 0 && s.w.mistakes + s.b.mistakes <= 2) lines.push('Partie de bonne facture, avec très peu d\'imprécisions.');
+      return lines.length ? lines.slice(0, 4).join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
     }
 
-    return lines.length > 0 ? lines.slice(0, 5).join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
+    // ---- Slot A: opening ----
+    if (opening) {
+      if (op.ub === 0 && op.um === 0) {
+        lines.push(pick([
+          `Vous déroulez la ${opening.name} proprement, sans fausse note dans les premiers coups.`,
+          `La ${opening.name} est menée avec assurance : rien à redire sur la sortie d'ouverture.`,
+          `Bon départ dans la ${opening.name}, la position sort saine de l'ouverture.`
+        ], 1));
+      } else if (op.ub > 0) {
+        let openLow = null;
+        for (let i = 0; i < Math.min(20, N); i++) { const ue = userEvalOf(analysis[i]); if (ue !== null && (openLow === null || ue < openLow)) openLow = ue; }
+        if (openLow !== null && openLow <= -200) {
+          lines.push(pick([
+            `L'ouverture tourne court : une bourde dans la ${opening.name} vous met tout de suite sous pression (${fmtEval(openLow)}).`,
+            `Mauvaise entame — la ${opening.name} déraille sur une gaffe précoce et l'avantage passe à l'adversaire.`
+          ], 2));
+        } else {
+          lines.push(pick([
+            `Un accroc dans la ${opening.name}, mais la position tient malgré cette erreur de sortie.`,
+            `La ${opening.name} n'est pas parfaite : une gaffe précoce, sans conséquence immédiate toutefois.`
+          ], 3));
+        }
+      } else {
+        lines.push(pick([
+          `La ${opening.name} se déroule correctement, à quelques imprécisions près.`,
+          `Sortie d'ouverture honnête dans la ${opening.name}, sans erreur grave.`
+        ], 4));
+      }
+    } else if (op.ub === 0 && op.um === 0 && op.ob === 0) {
+      lines.push(pick(['Les premiers coups se déroulent sans accroc des deux côtés.', 'Ouverture calme, aucune erreur de part et d\'autre.'], 5));
+    } else if (op.ub > 0) {
+      lines.push(pick(['Vous concédez un avantage dès l\'ouverture.', 'L\'ouverture est difficile : une gaffe précoce vous met en retard.'], 6));
+    } else if (op.ob > 0) {
+      lines.push(pick(['Votre adversaire se trompe dès l\'ouverture et vous prenez les devants.', 'Cadeau adverse en ouverture : l\'avantage est pour vous d\'entrée.'], 7));
+    }
+
+    // ---- Slot B: the decisive moment ----
+    let usedCrit = false;
+    if (engineUsed && userLost && maxUserEval !== null && maxUserEval >= 300) {
+      lines.push(pick([
+        `Vous aviez pourtant la partie en main (jusqu'à ${fmtEval(maxUserEval)}) avant de laisser filer l'avantage.`,
+        `Le plus frustrant : une position gagnante (${fmtEval(maxUserEval)}) qui vous échappe en cours de route.`
+      ], 8));
+      usedCrit = true;
+    } else if (engineUsed && isDraw && maxUserEval !== null && maxUserEval >= 300) {
+      lines.push(pick([
+        `Une position nettement supérieure (${fmtEval(maxUserEval)}) que vous ne convertissez pas — la nulle laisse un goût d'inachevé.`,
+        `Vous teniez le gain (${fmtEval(maxUserEval)}), mais la partie se dilue vers le partage.`
+      ], 9));
+      usedCrit = true;
+    } else if (engineUsed && userWon && minUserEval !== null && minUserEval <= -300) {
+      lines.push(pick([
+        `Belle résilience : donné perdant (${fmtEval(minUserEval)}), vous renversez la partie.`,
+        `Remontée remarquable depuis une position compromise (${fmtEval(minUserEval)}) jusqu'à la victoire.`
+      ], 10));
+      usedCrit = true;
+    } else if (userCrit && userCrit.wl >= 0.25) {
+      lines.push(pick([
+        `Le tournant vient de votre ${userCrit.moveNum}${userCrit.dot} ${userCrit.san} — la ${userCrit.type === 'blunder' ? 'gaffe' : 'erreur'} qui fait basculer la partie.`,
+        `Tout se joue sur votre ${userCrit.moveNum}${userCrit.dot} ${userCrit.san}, le coup qui coûte le plus cher.`
+      ], 11));
+      usedCrit = true;
+    } else if (oppCrit && oppCrit.wl >= 0.25 && userWon) {
+      lines.push(pick([
+        `Le tournant : l'adversaire craque sur ${oppCrit.moveNum}${oppCrit.dot} ${oppCrit.san}, et vous en profitez.`,
+        `Votre adversaire lâche prise avec ${oppCrit.moveNum}${oppCrit.dot} ${oppCrit.san} — une ouverture que vous saisissez.`
+      ], 12));
+      usedCrit = true;
+    }
+
+    // ---- Slot C: the actionable insight ----
+    let usedInsight = false;
+    if (engineUsed) {
+      const withAcc = phaseData.filter(p => p.acc !== null && p.uCount >= 4);
+      if (withAcc.length >= 2) {
+        const weak = withAcc.reduce((a, b) => b.acc < a.acc ? b : a);
+        const strong = withAcc.reduce((a, b) => b.acc > a.acc ? b : a);
+        if (strong.acc - weak.acc >= 15) {
+          lines.push(pick([
+            `À retenir : votre précision décroche dans ${weak.label} (${weak.acc}%) alors que ${strong.label} tient bien (${strong.acc}%). C'est là qu'il faut travailler.`,
+            `Votre point faible ici est ${weak.label} (${weak.acc}% contre ${strong.acc}% ailleurs) — la phase à cibler à l'entraînement.`
+          ], 13));
+          usedInsight = true;
+        }
+      }
+    }
+    if (!usedInsight && !usedCrit && userStats.blunders === 1 && userLost) {
+      lines.push(pick([
+        'La défaite tient à une seule gaffe : corrigez ce type de coup et le résultat change.',
+        'Un unique faux pas décide de la partie — le reste de votre jeu tenait la route.'
+      ], 14));
+      usedInsight = true;
+    } else if (!usedInsight && engineUsed && userLost && (userStats.accuracy - oppStats.accuracy) >= 8) {
+      lines.push(pick([
+        `Frustrant : vous jouez globalement plus juste (${userStats.accuracy}% contre ${oppStats.accuracy}%), mais un moment clé vous coûte le point.`,
+        `Votre précision d'ensemble (${userStats.accuracy}%) dépasse celle de l'adversaire (${oppStats.accuracy}%) — c'est un détail décisif qui a manqué.`
+      ], 15));
+      usedInsight = true;
+    } else if (!usedInsight && (userStats.brilliants + userStats.great) >= 1) {
+      lines.push(pick([
+        `À souligner : vous trouvez ${userStats.brilliants ? 'une ressource brillante' : 'un coup fort'} dans la partie.`,
+        `Point positif : au moins un coup de grande qualité (${userStats.brilliants ? 'brillant' : 'très fort'}) dans votre jeu.`
+      ], 16));
+      usedInsight = true;
+    } else if (!usedInsight && engineUsed && userStats.accuracy >= 90 && userStats.blunders === 0) {
+      lines.push(pick([
+        `Partie très propre de votre part (${userStats.accuracy}% de précision, aucune gaffe).`,
+        `Jeu solide et régulier : ${userStats.accuracy}% de précision sans la moindre bourde.`
+      ], 17));
+      usedInsight = true;
+    } else if (!usedInsight && mid.ub >= 2) {
+      lines.push(pick([
+        'Le milieu de partie part dans tous les sens, avec plusieurs gaffes à enchaîner.',
+        'Trop d\'erreurs en milieu de partie : c\'est la zone à stabiliser.'
+      ], 18));
+      usedInsight = true;
+    }
+
+    // ---- Slot D: outcome framing ----
+    if (userWon) {
+      if (byMate) lines.push(pick(['Et la conclusion idéale : échec et mat.', 'Le point final au bout de l\'échiquier : mat.'], 19));
+      else if (byResign) lines.push(pick(['L\'adversaire rend les armes.', 'Abandon adverse : la victoire est nette.'], 20));
+      else if (byTime) lines.push(pick(['La pendule fait le reste : victoire au temps.', 'Vous gérez mieux le temps et l\'emportez à la pendule.'], 21));
+      else lines.push(pick(['Victoire au bout de l\'effort.', 'Le point est pour vous.'], 22));
+    } else if (userLost) {
+      if (byMate) lines.push(pick(['Sanction finale : échec et mat — repérez la menace plus tôt.', 'Mat au bout : anticipez ce motif la prochaine fois.'], 23));
+      else if (byTime && isFastTc) lines.push(pick(['Le drapeau tombe — fréquent en cadence rapide.', 'Défaite au temps, typique du jeu rapide : jouez plus vite les coups simples.'], 24));
+      else if (byTime) lines.push(pick(['Défaite au temps : accélérez dans les positions claires.', 'La pendule finit par vous rattraper.'], 25));
+      else if (byResign) lines.push(pick(['Position devenue intenable, l\'abandon s\'imposait.', 'Plus rien à sauver : l\'abandon était logique.'], 26));
+      else lines.push(pick(['Défaite serrée — les détails ont fait la différence.', 'Le point vous échappe de peu.'], 27));
+    } else if (isDraw && !usedCrit) {
+      lines.push(pick(['Partage des points au terme d\'une partie équilibrée.', 'Match nul : les chances se sont neutralisées.'], 28));
+    }
+
+    return lines.length > 0 ? lines.slice(0, 4).join(' ') : 'Consultez les moments clés ci-dessous pour le détail de la partie.';
   }
 
   function truncateText(text, max) {

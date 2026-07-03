@@ -653,6 +653,9 @@ const Analyzer = (() => {
       positions.push(made ? game.fen() : null);
     }
 
+    const bookInfo = Openings.detect(moves.map(m => (m && m.san) ? m.san : m));
+    const bookDepth = bookInfo && bookInfo.moves >= 3 ? bookInfo.moves : 0;
+
     const evals = [];
     const total = positions.length;
     for (let i = 0; i < total; i++) {
@@ -739,23 +742,31 @@ const Analyzer = (() => {
       const playedUciStr = madeMove.from + madeMove.to + (madeMove.promotion || '');
       const isBestMove = bestMoveUci && playedUciStr === bestMoveUci;
 
+      // Classify by win-probability loss (the practical yardstick), not raw
+      // centipawns: near equality a 50-100cp shift is often engine noise, and
+      // without an opening book the engine wrongly dings quiet theory moves.
+      // Opening plies get extra leniency — only a real material loss or a large
+      // win% swing counts, never a bare inaccuracy. wpl is in 0..1.
+      const wpl = winPctLoss;
+      const inOpening = i < 12;
       let type;
       if (madeMove.san.includes('#')) {
         type = 'best';
       } else if (cpLoss <= 5 && matChange <= -2) {
         type = 'brilliant';
-      } else if (cpLoss > 200) {
-        type = 'blunder';
-      } else if (cpLoss > 100) {
-        type = 'mistake';
-      } else if (cpLoss > 50) {
-        type = 'inaccuracy';
-      } else if (cpLoss === 0 && isBestMove) {
-        type = 'best';
-      } else if (cpLoss <= 10) {
-        type = 'great';
+      } else if (inOpening) {
+        if (wpl >= 0.30 || matChange <= -3) type = 'blunder';
+        else if (wpl >= 0.22) type = 'mistake';
+        else if (isBestMove || cpLoss === 0) type = 'best';
+        else if (cpLoss <= 12 || wpl < 0.04) type = 'great';
+        else type = 'neutral';
       } else {
-        type = 'neutral';
+        if (wpl >= 0.30 || cpLoss >= 300) type = 'blunder';
+        else if (wpl >= 0.17 || cpLoss >= 180) type = 'mistake';
+        else if (wpl >= 0.09 || cpLoss >= 110) type = 'inaccuracy';
+        else if (isBestMove || cpLoss === 0) type = 'best';
+        else if (cpLoss <= 12 || wpl < 0.03) type = 'great';
+        else type = 'neutral';
       }
 
       const evalDesc = evalAfter ? describeEval(evalForWhite) : '';
@@ -807,6 +818,11 @@ const Analyzer = (() => {
       } else {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched ? `${enriched}${ed}` : `Coup correct.${ed}`;
+      }
+
+      // Known theory: don't alarm on book moves, echo Chess.com's "coup théorique".
+      if (bookDepth && i < bookDepth && type !== 'blunder' && type !== 'mistake' && type !== 'inaccuracy') {
+        tipFr = `Coup théorique${bookInfo.name ? ' de la ' + bookInfo.name : ''}. Vous suivez la théorie d'ouverture reconnue.`;
       }
 
       const forkTargets = detectForkAfterMove(newFen, madeMove.to, madeMove.color);
