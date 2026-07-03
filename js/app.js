@@ -403,6 +403,7 @@ const App = (() => {
     buildIntro(header, analysis, summary);
     buildAccuracyHero(header, summary);
     buildTurningPoint(header, analysis);
+    buildPace(header, analysis);
     buildWinGraph(analysis);
     buildHighlights(header, analysis);
     buildMistakeProfile(header, analysis);
@@ -1758,6 +1759,84 @@ const App = (() => {
     cursor.setAttribute('opacity', index > 0 ? '0.7' : '0');
   }
 
+  // The opposite of time trouble: playing a 10-min game at blitz speed. Most
+  // beginner blunders here are played in seconds with a nearly-full clock —
+  // this card makes that visible and hammers the one rule that fixes it.
+  function buildPace(header, analysis) {
+    const card = $('#pace-card');
+    if (!card) return;
+    card.hidden = true;
+    if (currentClocks.length < 4) return;
+    const user = detectUser(header);
+    if (!user) return;
+
+    const clocks = currentClocks;
+    const times = Analyzer.clocksToTimePerMove(clocks);
+    const tc = header.TimeControl || '';
+    if (tc.includes('/')) return; // daily — no pace to manage
+    const base = parseInt(tc) || 0;
+    if (!base || base > 3600) return;
+
+    let userMoves = 0, spentTotal = 0, lastClock = base;
+    const fastErrors = [];
+    for (let i = 0; i < Math.min(clocks.length, analysis.length); i++) {
+      const r = analysis[i];
+      if (!r.move || r.move.color !== user) continue;
+      userMoves++;
+      const remaining = clocks[i];
+      const spent = i >= 2 ? (times[i] || 0) : 0;
+      spentTotal += spent;
+      if (typeof remaining === 'number') lastClock = remaining;
+      const isError = r.type === 'blunder' || r.type === 'mistake';
+      if (isError && spent < 15 && remaining > base / 2) {
+        const moveNum = Math.floor(i / 2) + 1;
+        const dot = i % 2 === 0 ? '.' : '...';
+        fastErrors.push({ index: i, label: `${moveNum}${dot} ${r.sanFr}`, spent: Math.round(spent), remaining, type: r.type });
+      }
+    }
+    if (userMoves < 4) return;
+
+    const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    const avgSpent = Math.round(spentTotal / Math.max(1, userMoves - 1));
+
+    let verdict, cls;
+    if (fastErrors.length) {
+      const worst = fastErrors[0];
+      verdict = `⚡ <b>Tu joues trop vite.</b> ${fastErrors.length === 1 ? 'Une erreur jouée' : fastErrors.length + ' erreurs jouées'} en moins de 15 secondes alors qu'il te restait plus de ${mmss(base / 2)} au compteur. Ce ne sont pas des fautes de niveau — ce sont des fautes de rythme : tu avais ${mmss(worst.remaining)} pour vérifier ce coup.`;
+      cls = 'pace-fast';
+    } else if (avgSpent < 12 && lastClock > base * 0.4) {
+      verdict = `⚡ <b>${avgSpent}s par coup</b> et tu finis avec ${mmss(lastClock)} inutilisées : ton temps est ta meilleure arme, dépense-le.`;
+      cls = 'pace-fast';
+    } else if (lastClock < 30) {
+      verdict = `🐢 Tu as fini à <b>${Math.round(lastClock)}s</b> — regarde la carte « Pression du temps » plus bas.`;
+      cls = 'pace-slow';
+    } else {
+      verdict = `✅ Bon équilibre : ${avgSpent}s par coup, ${mmss(lastClock)} de réserve à la fin.`;
+      cls = 'pace-ok';
+    }
+
+    let html = `<div class="pace-stats">
+      <div class="pace-stat"><span class="pace-val">${mmss(Math.min(spentTotal, base))}</span><span class="pace-lbl">utilisé sur ${mmss(base)}</span></div>
+      <div class="pace-stat"><span class="pace-val">${avgSpent}s</span><span class="pace-lbl">par coup</span></div>
+      <div class="pace-stat"><span class="pace-val">${mmss(lastClock)}</span><span class="pace-lbl">restant à la fin</span></div>
+    </div>
+    <div class="pace-verdict">${verdict}</div>`;
+
+    if (fastErrors.length) {
+      html += `<div class="pace-chips">` + fastErrors.slice(0, 4).map(f =>
+        `<button class="pace-chip" data-goto="${f.index + 1}">${f.label} · ${f.spent}s <span class="pace-chip-clk">(${mmss(f.remaining)} restants)</span></button>`
+      ).join('') + `</div>`;
+    }
+    html += `<div class="pace-rule">📏 <b>Règle d'or :</b> après le coup 4, jamais moins de 15 secondes par coup. Échecs, Captures, Menaces — puis joue.</div>`;
+
+    $('#pace-content').innerHTML = html;
+    card.hidden = false;
+    card.querySelectorAll('.pace-chip').forEach(el => el.addEventListener('click', () => {
+      goTo(+el.dataset.goto);
+      $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }));
+  }
+
   function buildTimeTrouble(header, analysis) {
     const card = $('#time-trouble-card');
     const content = $('#time-trouble-content');
@@ -2670,10 +2749,11 @@ const App = (() => {
 
   function initPanels() {
     const overlay = $('#panel-overlay');
-    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), technical: $('#panel-technical') };
+    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), repertoire: $('#panel-repertoire'), technical: $('#panel-technical') };
     const btns = { guide: $('#btn-guide'), notation: $('#btn-notation'), concepts: $('#btn-concepts'), openings: $('#btn-openings'), technical: $('#btn-technical') };
 
     function openPanel(name) {
+      if (name === 'repertoire' && typeof Repertoire !== 'undefined') Repertoire.renderPanel();
       Object.values(panels).forEach(p => { p.hidden = true; p.classList.remove('open'); });
       overlay.hidden = false;
       requestAnimationFrame(() => {
@@ -3165,5 +3245,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo, refreshHome, openOpeningExplorer };
+  return { goTo, refreshHome, openOpeningExplorer, openPanel: (name) => { if (_openPanel) _openPanel(name); } };
 })();

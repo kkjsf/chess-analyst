@@ -342,12 +342,15 @@ const Coach = (() => {
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     const cards = an.length
       ? renderVigilance(an) +
+        renderPace(an) +
         renderFocus(an) +
+        renderMissed(an) +
         renderNarrative(an) +
         renderTrends(an) +
         renderProfile(an) +
         renderMoveQuality(an) +
         renderTacticalWeakness(an) +
+        renderRepeated(an) +
         renderConversion(an) +
         renderTime(an) +
         renderProgress(an) +
@@ -362,6 +365,8 @@ const Coach = (() => {
     if (an.length) {
       bindVigilance();
       bindFocus();
+      bindMissed();
+      bindRepeated();
       bindTrainingCta();
       bindGamesDrill();
       bindRepertoire();
@@ -458,7 +463,7 @@ const Coach = (() => {
     const tactical = Training.TACTICAL || [];
     const labels = Training.MOTIF_LABELS || {};
     const ranked = Object.keys(counts)
-      .filter(k => tactical.includes(k) && !VIGILANCE_MOTIFS.includes(k))
+      .filter(k => tactical.includes(k) && !VIGILANCE_MOTIFS.includes(k) && k !== 'gain') // gain has its own "Cadeaux manqués" card
       .sort((a, b) => (counts[b] - counts[a]) || ((cpBy[b] || 0) - (cpBy[a] || 0)));
     const top = ranked[0];
     if (!top) return ''; // vigilance motifs are covered by the Vigilance card
@@ -517,6 +522,141 @@ const Coach = (() => {
       if (typeof Training === 'undefined') return;
       if (Training.showMotif) Training.showMotif(b.dataset.motif); else Training.show();
     });
+  }
+
+  // ── Rythme: the anti-blitz card. Parsed once per game from the PGN clocks. ──
+  function paceOf(g) {
+    if (g._pace !== undefined) return g._pace;
+    g._pace = null;
+    if (!g.pgn || g.timeClass === 'daily') return null;
+    const m = /\[TimeControl "(\d+)(?:\+\d+)?"\]/.exec(g.pgn);
+    const base = m ? parseInt(m[1]) : 0;
+    if (!base || base > 3600) return null;
+    const clocks = Analyzer.parseClocks(g.pgn);
+    if (clocks.length < 8) return null;
+    const times = Analyzer.clocksToTimePerMove(clocks);
+    const off = g.userColor === 'w' ? 0 : 1;
+    let moves = 0, spent = 0, last = base;
+    for (let i = off; i < clocks.length; i += 2) {
+      moves++;
+      spent += times[i] || 0;
+      last = clocks[i];
+    }
+    if (!moves) return null;
+    let errCount = 0, fastErr = 0;
+    for (const b of (g.analysis && g.analysis.blunderList) || []) {
+      if (b.type !== 'blunder' && b.type !== 'mistake') continue;
+      errCount++;
+      if ((times[b.ply] || 0) < 15 && (clocks[b.ply] || 0) > base / 2) fastErr++;
+    }
+    g._pace = { base, spentPerMove: spent / moves, last, errCount, fastErr };
+    return g._pace;
+  }
+
+  function renderPace(an) {
+    const ps = an.map(g => paceOf(g)).filter(Boolean);
+    if (ps.length < 3) return '';
+    const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    const avgSpd = Math.round(avg(ps.map(p => p.spentPerMove)));
+    const avgLeft = avg(ps.map(p => p.last));
+    const base = ps[0].base;
+    const errTot = ps.reduce((s, p) => s + p.errCount, 0);
+    const fastTot = ps.reduce((s, p) => s + p.fastErr, 0);
+    const fastPct = pct(fastTot, errTot);
+    if (!errTot) return '';
+    const rushing = fastPct >= 30 || (avgSpd < 12 && avgLeft > base * 0.3);
+    const head = rushing ? 'Tu joues trop vite — ton temps est ta meilleure arme'
+      : 'Ton rythme de jeu';
+    const diag = fastTot
+      ? `<b>${fastTot} de tes ${errTot} erreurs (${fastPct}%)</b> ont été jouées en <b>moins de 15 secondes</b> alors qu'il te restait plus de la moitié de ton temps. Ce ne sont pas des fautes de niveau : tu avais les minutes pour les éviter.`
+      : `Aucune de tes erreurs récentes n'a été jouée à la va-vite — continue comme ça.`;
+    return `<div class="home-card coach-card coach-focus coach-pace" id="coach-pace">
+      <div class="coach-focus-tag">⏱️ Ton rythme</div>
+      <h2 class="coach-focus-head">${head}</h2>
+      <div class="coach-pace-stats">
+        <div class="coach-pace-stat"><b>${avgSpd}s</b><span>par coup</span></div>
+        <div class="coach-pace-stat"><b>${mmss(avgLeft)}</b><span>restantes en fin de partie</span></div>
+        <div class="coach-pace-stat"><b>${fastPct}%</b><span>d'erreurs jouées en &lt;15s</span></div>
+      </div>
+      <p class="coach-focus-sub">${diag}</p>
+      <p class="coach-vig-tip">📏 <b>Règle d'or :</b> après le coup 4, jamais moins de 15 secondes par coup — Échecs, Captures, Menaces, puis joue.</p>
+    </div>`;
+  }
+
+  // ── Cadeaux manqués: free material the opponent handed you and you declined ──
+  const GIFT_PIECE_FR = { p: 'un pion', n: 'un cavalier', b: 'un fou', r: 'une tour', q: 'une dame', k: 'le roi' };
+  function renderMissed(an) {
+    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
+    const recent = an.slice().sort((a, b) => (b.endTime || 0) - (a.endTime || 0)).slice(0, 15);
+    let total = 0;
+    const gifts = [];
+    recent.forEach(g => (g.analysis.blunderList || []).forEach(b => {
+      if (!b.fenBefore || !b.bestUci) return;
+      total++;
+      if (Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan) !== 'gain') return;
+      let piece = null;
+      try {
+        const c = new Chess(b.fenBefore);
+        const mv = c.move({ from: b.bestUci.slice(0, 2), to: b.bestUci.slice(2, 4), promotion: 'q' });
+        piece = mv && mv.captured;
+      } catch (_) {}
+      gifts.push({ opp: g.oppName || '?', b, piece });
+    }));
+    if (gifts.length < 2) return '';
+    gifts.sort((a, b) => (b.b.cpLoss || 0) - (a.b.cpLoss || 0));
+    const rows = gifts.slice(0, 3).map(x =>
+      `<div class="coach-miss-row">vs <b>${esc(x.opp)}</b>, coup ${moveNo(x.b.ply)} : tu pouvais prendre <b>${GIFT_PIECE_FR[x.piece] || 'du matériel'}</b> avec <b>${esc(x.b.bestSan)}</b> — tu as joué ${esc(x.b.playedSan)}.</div>`).join('');
+    const canDrill = typeof Training.showMotif === 'function';
+    return `<div class="home-card coach-card coach-missed" id="coach-missed">
+      <h3>🎁 Cadeaux manqués</h3>
+      <p class="coach-focus-sub"><b>${gifts.length}</b> fois sur tes ${recent.length} dernières parties (${pct(gifts.length, total)}% de tes erreurs), l'adversaire t'a offert du matériel <b>et tu ne l'as pas pris</b>. La vigilance marche dans les deux sens : à chaque coup, demande-toi aussi « qu'est-ce que JE peux prendre ? »</p>
+      <div class="coach-miss-list">${rows}</div>
+      ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="gain">🎯 M'entraîner à saisir le matériel</button>` : ''}
+    </div>`;
+  }
+  function bindMissed() {
+    const b = $('#coach-missed .coach-focus-btn');
+    if (b) b.addEventListener('click', () => {
+      if (typeof Training !== 'undefined' && Training.showMotif) Training.showMotif('gain');
+    });
+  }
+
+  // ── Erreurs répétées: the exact same losing move across several games ──
+  function renderRepeated(an) {
+    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
+    const tactical = Training.TACTICAL || [];
+    const labels = Training.MOTIF_LABELS || {};
+    const seen = {};
+    an.forEach(g => (g.analysis.blunderList || []).forEach(b => {
+      if (!b.fenBefore || !b.playedSan) return;
+      const motif = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
+      if (!tactical.includes(motif)) return;
+      const san = b.playedSan.replace(/[+#!?]+$/, '');
+      const key = san + '|' + motif;
+      const e = seen[key] = seen[key] || { san, motif, n: 0, games: new Set() };
+      e.n++; e.games.add(g.uuid);
+    }));
+    const reps = Object.values(seen)
+      .filter(e => e.n >= 3 && e.games.size >= 2)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 3);
+    if (!reps.length) return '';
+    const canDrill = typeof Training.showMotif === 'function';
+    const rows = reps.map(e =>
+      `<div class="coach-repeat-row"><span class="coach-repeat-san">${esc(e.san)}</span>
+        <span class="coach-repeat-txt"><b>${e.n} fois</b> dans ${e.games.size} parties — ${esc((labels[e.motif] || e.motif).toLowerCase())}</span>
+        ${canDrill ? `<button class="coach-repeat-btn" data-motif="${e.motif}">🎯</button>` : ''}</div>`).join('');
+    return `<div class="home-card coach-card coach-repeat" id="coach-repeat">
+      <h3>🔁 La même erreur revient</h3>
+      <p class="coach-focus-sub">Ces coups précis t'ont coûté du matériel <b>plusieurs fois</b>. Quand l'un d'eux te démange, c'est le moment de prendre 20 secondes.</p>
+      <div class="coach-repeat-list">${rows}</div>
+    </div>`;
+  }
+  function bindRepeated() {
+    document.querySelectorAll('#coach-repeat .coach-repeat-btn').forEach(b =>
+      b.addEventListener('click', () => {
+        if (typeof Training !== 'undefined' && Training.showMotif) Training.showMotif(b.dataset.motif);
+      }));
   }
 
   function renderNarrative(an) {
@@ -693,8 +833,30 @@ const Coach = (() => {
         </table>
         ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touchez son nom pour la revoir.</div>` : ''}`;
     }
+    // Adherence to the taught repertoire (js/repertoire.js): did you actually
+    // play your prepared moves in real games?
+    let adh = '';
+    if (typeof Repertoire !== 'undefined' && Repertoire.adherence) {
+      const a = Repertoire.adherence(an);
+      if (a.known >= 5) {
+        const p = pct(a.followed, a.known);
+        const devs = a.deviations.slice(0, 3).map(d =>
+          `<div class="coach-rep-dev">vs <b>${esc(d.opp)}</b> : dévié au coup ${d.moveNo} — joué <b>${esc(d.played)}</b>, ton répertoire dit <b>${esc(d.expected)}</b>.</div>`).join('');
+        adh = `<div class="coach-rep-adh">
+          <div class="coach-rep-adh-head">🗺️ Fidélité à ton répertoire : <b>${p}%</b> <span>(${a.followed}/${a.known} coups connus sur ${a.gamesKnown} parties)</span></div>
+          ${devs}
+          <button class="btn-secondary coach-rep-open">🗺️ Réviser mon répertoire</button>
+        </div>`;
+      } else {
+        adh = `<div class="coach-rep-adh">
+          <div class="coach-rep-adh-head">🗺️ Un répertoire simple (un seul schéma, les deux couleurs) t'attend dans l'onglet Apprendre.</div>
+          <button class="btn-secondary coach-rep-open">🗺️ Découvrir mon répertoire</button>
+        </div>`;
+      }
+    }
     return `<div class="home-card coach-card" id="coach-repertoire">
       <h3>📖 Répertoire d'ouvertures</h3>
+      ${adh}
       <p class="coach-sub2">Touchez le nom d'une ouverture pour la rejouer sur l'échiquier, ou ↗ pour l'ouvrir sur Chess.com.</p>
       ${table('w', 'Avec les Blancs')}
       ${table('b', 'Avec les Noirs')}
@@ -711,6 +873,10 @@ const Coach = (() => {
           [], 'Explorez les premiers coups de cette ouverture.'
         );
       }));
+    const open = $('#coach-repertoire .coach-rep-open');
+    if (open) open.addEventListener('click', () => {
+      if (typeof App !== 'undefined' && App.openPanel) App.openPanel('repertoire');
+    });
   }
 
   function renderWeakness(an) {

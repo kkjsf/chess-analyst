@@ -144,6 +144,45 @@ const Training = (() => {
     return false;
   }
 
+  // After you play `playedSan`, can the opponent land a DANGEROUS check — mate,
+  // a check that wins material outright, or a fork-with-check? This is the
+  // pattern behind most beginner collapses (the "…g6 → échec-fourchette" trap).
+  // Returns {san, from, to, why:'mat'|'gain'|'fourchette', piece?} or null.
+  function dangerousCheckAfter(fen, playedSan) {
+    let g;
+    try { g = new Chess(fen); } catch (_) { return null; }
+    const me = g.turn();
+    if (!playMove(g, playedSan)) return null;
+    const after = g.fen();
+    const opp = g.turn();
+    let checks;
+    try { checks = g.moves({ verbose: true }).filter(m => /[+#]/.test(m.san)); } catch (_) { return null; }
+    for (const c of checks) {
+      if (c.san.includes('#')) return { san: c.san, from: c.from, to: c.to, why: 'mat' };
+      if (c.captured && (PIECE_VALUES[c.captured] || 0) >= 3) {
+        try {
+          const g2 = new Chess(after);
+          g2.move(c.san, { sloppy: true });
+          const recap = g2.moves({ verbose: true }).some(m => m.to === c.to && m.captured);
+          const net = (PIECE_VALUES[c.captured] || 0) - (recap ? (PIECE_VALUES[c.piece] || 0) : 0);
+          if (net >= 2) return { san: c.san, from: c.from, to: c.to, why: 'gain', piece: c.captured };
+        } catch (_) {}
+      }
+      try {
+        const g2 = new Chess(after);
+        if (!g2.move(c.san, { sloppy: true })) continue;
+        const fen2 = g2.fen();
+        // king excluded: the check IS the king attack — the fork needs a second,
+        // capturable target.
+        const targets = movesFrom(fen2, c.to, opp).filter(m => m.captured && m.captured !== 'k' && (PIECE_VALUES[m.captured] || 0) >= 3);
+        const winnable = targets.filter(m => (PIECE_VALUES[m.captured] || 0) >= (PIECE_VALUES[c.piece] || 0) || !opponentDefends(fen2, m.to, me));
+        if (winnable.length && !pieceWinnable(fen2, c.to, opp))
+          return { san: c.san, from: c.from, to: c.to, why: 'fourchette', piece: winnable[0].captured };
+      } catch (_) {}
+    }
+    return null;
+  }
+
   // Is one of `side`'s own pieces hanging in this position (before they move)?
   // We hand the move to the opponent and look for a winning capture. Returns the
   // threatened square {square, piece, value, net} or null.
@@ -549,13 +588,34 @@ const Training = (() => {
   };
   const OPP_PIECE_FR = { p: 'un pion', n: 'un cavalier', b: 'un fou', r: 'une tour', q: 'une dame', k: 'un roi' };
 
+  function enToFr(san) {
+    return (san || '').replace(/[KQRBN]/g, c => ({ K: 'R', Q: 'D', R: 'T', B: 'F', N: 'C' }[c]));
+  }
+
+  // Resolve a (possibly French) SAN on a fen → {from, to, afterFen}, or null.
+  function sanApply(fen, san) {
+    try {
+      const g = new Chess(fen);
+      const m = playMove(g, san);
+      return m ? { from: m.from, to: m.to, afterFen: g.fen() } : null;
+    } catch (_) { return null; }
+  }
+
   function startVigilance() {
     const all = load().slice();
     for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
     vQueue = all.slice(0, 8).map(it => {
-      const mode = Math.random() < 0.5 ? 'def' : 'off';
-      const hazard = mode === 'def' ? myHanging(it.fen, it.side) : oppHanging(it.fen, it.side);
-      return { fen: it.fen, side: it.side, mode, hazard: hazard || null };
+      const r = Math.random();
+      let mode = r < 0.34 ? 'def' : r < 0.67 ? 'off' : 'chk';
+      let planned = null;
+      if (mode === 'chk') {
+        planned = it.playedSan ? sanApply(it.fen, it.playedSan) : null;
+        if (!planned) mode = r < 0.5 ? 'def' : 'off';
+      }
+      const hazard = mode === 'def' ? myHanging(it.fen, it.side)
+        : mode === 'off' ? oppHanging(it.fen, it.side)
+        : dangerousCheckAfter(it.fen, it.playedSan);
+      return { fen: it.fen, side: it.side, mode, planned, played: it.playedSan || '', hazard: hazard || null };
     });
     vi = 0; vScore = 0;
     renderVigilance();
@@ -580,7 +640,9 @@ const Training = (() => {
     const q = vQueue[vi];
     const question = q.mode === 'def'
       ? 'Une de tes pièces est-elle <b>en prise</b> ?'
-      : 'Peux-tu <b>gagner du matériel</b> tout de suite ?';
+      : q.mode === 'off'
+      ? 'Peux-tu <b>gagner du matériel</b> tout de suite ?'
+      : `Tu envisages <b>${q.played}</b> (flèche). L'adversaire aura-t-il un <b>échec dangereux</b> en réponse ?`;
     host.innerHTML = `
       <div class="train-progress">Position ${vi + 1} / ${vQueue.length} · Score ${vScore}</div>
       <div class="train-prompt">Trait aux <b>${q.side === 'w' ? 'Blancs' : 'Noirs'}</b> (toi). ${question}</div>
@@ -595,6 +657,8 @@ const Training = (() => {
       <div class="train-feedback" id="vig-feedback"></div>`;
     BoardRenderer.setFlipped(q.side === 'b');
     BoardRenderer.render($('#vig-board'), q.fen);
+    if (q.mode === 'chk' && q.planned)
+      BoardRenderer.drawArrows($('#vig-arrows'), [{ from: q.planned.from, to: q.planned.to, color: '#5b8fb9' }]);
     $$('#vig-options .train-opt').forEach(b => b.onclick = () => answerVig(b.dataset.a === 'yes'));
   }
 
@@ -612,17 +676,31 @@ const Training = (() => {
       else if (isYes === saidYes) b.classList.add('incorrect');
       b.disabled = true;
     });
-    if (has) BoardRenderer.highlightSquares($('#vig-arrows'), [q.hazard.square], q.mode === 'def' ? '#d36b6b' : '#56b886');
+    if (has && q.mode === 'chk') {
+      // Reveal the position AFTER the planned move, with the punishing check drawn.
+      BoardRenderer.render($('#vig-board'), q.planned.afterFen);
+      BoardRenderer.drawArrows($('#vig-arrows'), [{ from: q.hazard.from, to: q.hazard.to, color: '#d36b6b' }]);
+    } else if (has) {
+      BoardRenderer.highlightSquares($('#vig-arrows'), [q.hazard.square], q.mode === 'def' ? '#d36b6b' : '#56b886');
+    }
     let detail;
     if (has && q.mode === 'def') {
       const p = PIECE_FR[q.hazard.piece] || { a: 'Ta', n: 'pièce' };
       detail = ` ${p.a} <b>${p.n}</b> en <b>${q.hazard.square}</b> est en prise — sauve-la ou défends-la avant de jouer autre chose.`;
-    } else if (has) {
+    } else if (has && q.mode === 'off') {
       detail = ` Tu peux prendre <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b> en <b>${q.hazard.square}</b>.`;
+    } else if (has && q.hazard.why === 'mat') {
+      detail = ` Après ${q.played}, <b>${enToFr(q.hazard.san)}</b> serait mat ! Cherche toujours les échecs adverses avant de jouer.`;
+    } else if (has && q.hazard.why === 'fourchette') {
+      detail = ` Après ${q.played}, <b>${enToFr(q.hazard.san)}</b> fait échec ET attaque <b>${OPP_PIECE_FR[q.hazard.piece] || 'une pièce'}</b> — une fourchette : le matériel tombe au coup suivant.`;
+    } else if (has) {
+      detail = ` Après ${q.played}, l'échec <b>${enToFr(q.hazard.san)}</b> gagne <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b>.`;
     } else if (q.mode === 'def') {
       detail = ' Rien en prise ici — tu peux suivre ton plan sereinement.';
-    } else {
+    } else if (q.mode === 'off') {
       detail = ' Rien à gagner de force ici — cherche plutôt à améliorer une pièce.';
+    } else {
+      detail = ` Pas d'échec dangereux en réponse — de ce côté-là, ${q.played} ne t'expose pas.`;
     }
     const fb = $('#vig-feedback');
     fb.className = 'train-feedback ' + (correct ? 'right' : 'wrong');

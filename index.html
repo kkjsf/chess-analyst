@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=74">
+<link rel="stylesheet" href="css/style.css?v=80">
 </head>
 <body>
 
@@ -204,6 +204,16 @@
   </div>
 </div>
 
+<div class="panel panel-wide" id="panel-repertoire" hidden>
+  <div class="panel-header">
+    <h2>📖 Mon répertoire</h2>
+    <button class="panel-close" aria-label="Fermer">&times;</button>
+  </div>
+  <div class="panel-body">
+    <div id="repertoire-content"></div>
+  </div>
+</div>
+
 <!-- ═══════ CONCEPT ZOOM MODAL ═══════ -->
 <div class="concept-modal-overlay" id="concept-modal">
   <div class="concept-modal">
@@ -356,6 +366,11 @@
       <div class="turning-actions" id="turning-actions"></div>
     </div>
 
+    <div class="pace-card" id="pace-card" hidden>
+      <div class="pace-head">⏱️ <span>Ton rythme</span></div>
+      <div id="pace-content"></div>
+    </div>
+
     <div class="tip-card" id="tip-card">
       <div class="tip-header">
         <span class="bulb">💡</span>
@@ -484,6 +499,14 @@
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
+    <button class="learn-tile" data-panel="repertoire">
+      <div class="learn-tile-icon">🗺️</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Mon répertoire</span>
+        <span class="learn-tile-sub">Un seul schéma d'ouverture, appris à fond — tes premiers coups avec chaque couleur, à réviser sur l'échiquier.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
     <button class="learn-tile" data-panel="openings">
       <div class="learn-tile-icon">📖</div>
       <div class="learn-tile-txt">
@@ -544,17 +567,18 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=74"></script>
-<script src="js/board.js?v=74"></script>
-<script src="js/engine.js?v=74"></script>
-<script src="js/openings.js?v=74"></script>
-<script src="js/analysis.js?v=74"></script>
-<script src="js/training.js?v=74"></script>
-<script src="js/guess.js?v=74"></script>
-<script src="js/endgame.js?v=74"></script>
-<script src="js/tactics.js?v=74"></script>
-<script src="js/coach.js?v=74"></script>
-<script src="js/app.js?v=74"></script>
+<script src="js/chess.min.js?v=80"></script>
+<script src="js/board.js?v=80"></script>
+<script src="js/engine.js?v=80"></script>
+<script src="js/openings.js?v=80"></script>
+<script src="js/analysis.js?v=80"></script>
+<script src="js/training.js?v=80"></script>
+<script src="js/guess.js?v=80"></script>
+<script src="js/endgame.js?v=80"></script>
+<script src="js/tactics.js?v=80"></script>
+<script src="js/repertoire.js?v=80"></script>
+<script src="js/coach.js?v=80"></script>
+<script src="js/app.js?v=80"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
