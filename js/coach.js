@@ -23,7 +23,11 @@ const Coach = (() => {
   let busy = false;
   let stopFlag = false;
   let hostedInfo = null;
-  let filterTc = 'all'; // whole-page cadence filter (all | bullet | blitz | rapid | daily | autre)
+  let filterTc = 'rapid'; // whole-page cadence filter, defaults to 10-min (rapid) games
+  // Bullet/blitz are excluded from the coach: too fast to be instructive, they
+  // only add noise. The coach focuses on rapid (10-min) games and slower.
+  const COACH_SKIP_TC = new Set(['bullet', 'blitz']);
+  const skipCadence = tc => COACH_SKIP_TC.has(tc);
   let countryCache = {}; // { lowercaseUsername: ISO-code | '??' }, persisted in IndexedDB meta
 
   let regionNames = null;
@@ -216,6 +220,7 @@ const Coach = (() => {
       for (const g of (data.games || [])) {
         if (g.rules && g.rules !== 'chess') continue;
         if (!g.uuid || !g.pgn) continue;
+        if (skipCadence(g.time_class)) continue;
         if (isExcludedGame(g, user)) continue;
         const existing = await getOne(g.uuid);
         if (existing) continue; // keep existing analysis
@@ -245,6 +250,7 @@ const Coach = (() => {
     const prevGen = await getMeta('hostedGeneratedAt');
     if (prevGen === data.generatedAt) return { ...hostedInfo, unchanged: true };
     for (const hg of data.games) {
+      if (skipCadence(hg.timeClass)) continue;
       if (hg.analysis && !hg.analysis.error) await put(hg);
       else { const ex = await getOne(hg.uuid); if (!ex) await put(hg); }
     }
@@ -273,7 +279,7 @@ const Coach = (() => {
   async function analyzePending(onProg) {
     if (busy) return;
     busy = true; stopFlag = false;
-    const pending = games.filter(g => !g.analysis);
+    const pending = games.filter(g => !g.analysis && !skipCadence(g.timeClass));
     let engineOk = true;
     try { await StockfishEngine.init(); } catch (_) { engineOk = false; }
     if (!engineOk) { busy = false; return { engineFailed: true }; }
@@ -294,7 +300,7 @@ const Coach = (() => {
   function stop() { stopFlag = true; }
 
   // ─────────────── Aggregation helpers ───────────────
-  function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && !excludedOpp(g.oppName)); }
+  function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && !excludedOpp(g.oppName) && !skipCadence(g.timeClass)); }
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
   function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
   function fmtDate(ts) { const d = new Date(ts * 1000); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }); }
