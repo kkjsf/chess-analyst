@@ -9,6 +9,8 @@ const App = (() => {
   let currentPgn = null;
   let currentClocks = [];
   let gameHistory = [];
+  let inspectSq = null;
+  let lastRenderIndex = -1;
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -47,6 +49,13 @@ const App = (() => {
     $('#move-slider').addEventListener('input', (e) => goTo(+e.target.value));
 
     $$('.tabbar .tab').forEach(t => t.addEventListener('click', () => navTo(t.dataset.tab)));
+
+    $$('#analysis-segmented .seg-btn').forEach(b => b.addEventListener('click', () => setSegment(b.dataset.seg)));
+
+    $('#board-svg').addEventListener('click', (e) => {
+      const sq = BoardRenderer.coordToSquare($('#board-svg'), e.clientX, e.clientY);
+      if (sq) toggleInspect(sq);
+    });
 
     document.addEventListener('keydown', (e) => {
       if (!$('#screen-analysis').classList.contains('active')) return;
@@ -418,8 +427,61 @@ const App = (() => {
     $('#screen-import').classList.remove('active');
     $('#screen-analysis').classList.add('active');
     setTab('analyser');
+    setSegment('conseil');
 
+    lastRenderIndex = -1;
     goTo(0);
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function setSegment(seg) {
+    $$('#analysis-segmented .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
+    $$('#screen-analysis .seg-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === seg));
+  }
+
+  const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  function currentFen() {
+    if (!currentAnalysis || currentIndex === 0) return START_FEN;
+    return currentAnalysis[currentIndex - 1].fen;
+  }
+
+  const INSPECT_GLYPH = {
+    w: { p:'♙', n:'♘', b:'♗', r:'♖', q:'♕', k:'♔' },
+    b: { p:'♟', n:'♞', b:'♝', r:'♜', q:'♛', k:'♚' }
+  };
+
+  function toggleInspect(sq) {
+    if (inspectSq === sq) { clearInspect(); return; }
+    const info = BoardRenderer.squareControl(currentFen(), sq);
+    const occ = info.occupant;
+    const attackers = [], defenders = [];
+    for (const c of info.controllers) {
+      const friendly = occ ? c.color === occ.color : c.color === 'w';
+      (friendly ? defenders : attackers).push(c);
+    }
+    BoardRenderer.drawControl($('#inspect-overlay'), sq, attackers.map(c => c.sq), defenders.map(c => c.sq));
+
+    const pop = $('#inspect-popup');
+    if (occ) {
+      const g = INSPECT_GLYPH[occ.color][occ.type];
+      let html = `<span class="sq">${g} ${sq}</span> <span class="def">🛡 ${defenders.length}</span> <span class="atk">⚔ ${attackers.length}</span>`;
+      if (attackers.length > defenders.length) html += ` <span class="pc">en prise&nbsp;?</span>`;
+      pop.innerHTML = html;
+    } else {
+      pop.innerHTML = `<span class="sq">${sq}</span> <span class="def">⚪ ${defenders.length}</span> <span class="atk">⚫ ${attackers.length}</span>`;
+    }
+    pop.hidden = false;
+    inspectSq = sq;
+  }
+
+  function clearInspect() {
+    if (inspectSq === null) return;
+    inspectSq = null;
+    const ov = $('#inspect-overlay'); if (ov) ov.innerHTML = '';
+    const pop = $('#inspect-popup'); if (pop) { pop.hidden = true; pop.innerHTML = ''; }
   }
 
   function goTo(index) {
@@ -430,6 +492,8 @@ const App = (() => {
     const backBtn = $('#alt-back');
     if (backBtn) backBtn.hidden = true;
 
+    clearInspect();
+
     let fen, lastMove = null;
     if (index === 0) {
       fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -439,7 +503,15 @@ const App = (() => {
       lastMove = r.move;
     }
 
-    BoardRenderer.render($('#board-svg'), fen, lastMove);
+    // Slide the piece only on a single-step forward move; jumps render instantly.
+    if (!prefersReducedMotion() && index === lastRenderIndex + 1 && index > 0 && lastMove) {
+      const prevFen = index >= 2 ? currentAnalysis[index - 2].fen
+        : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      BoardRenderer.renderAnimated($('#board-svg'), prevFen, fen, lastMove, 190);
+    } else {
+      BoardRenderer.render($('#board-svg'), fen, lastMove);
+    }
+    lastRenderIndex = index;
 
     const captured = BoardRenderer.getCapturedPieces(fen);
     const isFlipped = BoardRenderer.isFlipped();

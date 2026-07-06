@@ -211,6 +211,62 @@ const BoardRenderer = (() => {
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
 
+  // Who attacks/defends a given square in this position. Pure board scan,
+  // independent of chess.js. Returns the occupant (if any) plus every piece
+  // of either colour that bears on the square.
+  function squareControl(fen, sq) {
+    const board = fenToBoard(fen);
+    const tc = FILES.indexOf(sq[0]);
+    const tr = 8 - parseInt(sq[1]);
+    if (tc < 0 || tr < 0 || tr > 7) return { occupant: null, controllers: [] };
+    const at = (r, c) => (r >= 0 && r < 8 && c >= 0 && c < 8) ? board[r][c] : undefined;
+    const controllers = [];
+    const add = (r, c) => {
+      const p = board[r][c];
+      controllers.push({ color: p === p.toUpperCase() ? 'w' : 'b', type: p.toLowerCase(), sq: FILES[c] + (8 - r) });
+    };
+    const KN = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+    for (const [dr, dc] of KN) { const p = at(tr+dr, tc+dc); if (p && p.toLowerCase() === 'n') add(tr+dr, tc+dc); }
+    const KG = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    for (const [dr, dc] of KG) { const p = at(tr+dr, tc+dc); if (p && p.toLowerCase() === 'k') add(tr+dr, tc+dc); }
+    // Pawns: a white pawn one rank below (higher row index) on a diagonal
+    // attacks the square; a black pawn one rank above (lower row index).
+    for (const dc of [-1, 1]) {
+      if (at(tr+1, tc+dc) === 'P') add(tr+1, tc+dc);
+      if (at(tr-1, tc+dc) === 'p') add(tr-1, tc+dc);
+    }
+    const DIAG = [[-1,-1],[-1,1],[1,-1],[1,1]];
+    for (const [dr, dc] of DIAG) {
+      let r = tr+dr, c = tc+dc;
+      while (r >= 0 && r < 8 && c >= 0 && c < 8) { const p = board[r][c]; if (p) { const t = p.toLowerCase(); if (t === 'b' || t === 'q') add(r, c); break; } r += dr; c += dc; }
+    }
+    const ORTH = [[-1,0],[1,0],[0,-1],[0,1]];
+    for (const [dr, dc] of ORTH) {
+      let r = tr+dr, c = tc+dc;
+      while (r >= 0 && r < 8 && c >= 0 && c < 8) { const p = board[r][c]; if (p) { const t = p.toLowerCase(); if (t === 'r' || t === 'q') add(r, c); break; } r += dr; c += dc; }
+    }
+    const occ = board[tr][tc];
+    return {
+      occupant: occ ? { color: occ === occ.toUpperCase() ? 'w' : 'b', type: occ.toLowerCase() } : null,
+      controllers
+    };
+  }
+
+  // Overlay for square inspection: outline the target, ring attackers in red
+  // and defenders in green.
+  function drawControl(overlaySvg, targetSq, attackerSqs, defenderSqs) {
+    let html = '';
+    const t = squareToCoords(targetSq);
+    html += `<rect x="${t.col*SQ}" y="${t.row*SQ}" width="${SQ}" height="${SQ}" fill="#e2b857" opacity="0.22"/>`;
+    const ring = (sq, color) => {
+      const { row, col } = squareToCoords(sq);
+      return `<circle cx="${col*SQ + SQ/2}" cy="${row*SQ + SQ/2}" r="${SQ/2 - 4}" fill="none" stroke="${color}" stroke-width="3.5" opacity="0.9"/>`;
+    };
+    for (const sq of (defenderSqs || [])) html += ring(sq, '#56b886');
+    for (const sq of (attackerSqs || [])) html += ring(sq, '#d36b6b');
+    overlaySvg.innerHTML = html;
+  }
+
   function coordToSquare(svgEl, clientX, clientY) {
     const rect = svgEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
@@ -252,5 +308,5 @@ const BoardRenderer = (() => {
     overlaySvg.innerHTML = html;
   }
 
-  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints };
+  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl };
 })();

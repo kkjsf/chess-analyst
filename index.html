@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=80">
+<link rel="stylesheet" href="css/style.css?v=81">
 </head>
 <body>
 
@@ -318,6 +318,7 @@
       <div class="intro-text" id="intro-text"></div>
     </div>
 
+    <div class="board-sticky">
     <div class="board-wrapper">
       <div class="player-bar" id="top-player">
         <span class="piece-icon">⚫</span>
@@ -338,6 +339,8 @@
             </marker>
           </defs>
         </svg>
+        <svg class="arrow-overlay inspect-overlay" viewBox="0 0 360 360" id="inspect-overlay"></svg>
+        <div class="inspect-popup" id="inspect-popup" hidden></div>
       </div>
 
       <div class="player-bar" id="bottom-player">
@@ -356,6 +359,15 @@
       <button class="nav-btn" id="btn-next" title="Coup suivant">▶</button>
       <button class="nav-btn" id="btn-last" title="Dernier coup">⏭</button>
     </div>
+
+    <div class="analysis-segmented" id="analysis-segmented">
+      <button class="seg-btn active" data-seg="conseil">💡 Conseil</button>
+      <button class="seg-btn" data-seg="coups">♟ Coups</button>
+      <button class="seg-btn" data-seg="analyse">📊 Analyse</button>
+    </div>
+    </div><!-- /board-sticky -->
+
+    <div class="seg-panel active" data-panel="conseil">
 
     <div class="turning-card" id="turning-card" hidden>
       <div class="turning-head">
@@ -383,6 +395,10 @@
 
     <button class="guess-launch" id="btn-guess">🎯 Devine le coup — rejoue cette partie</button>
 
+    </div><!-- /seg-panel conseil -->
+
+    <div class="seg-panel" data-panel="coups">
+
     <div class="highlights-card" id="highlights-card" hidden>
       <h3>Moments clés</h3>
       <div class="highlights-list" id="highlights-list"></div>
@@ -398,8 +414,9 @@
       <div class="moves-grid" id="moves-grid"></div>
     </div>
 
-    <details class="analysis-more">
-      <summary>Plus d'analyse ▾</summary>
+    </div><!-- /seg-panel coups -->
+
+    <div class="seg-panel" data-panel="analyse">
 
       <div class="win-graph-card" id="win-graph-card" hidden>
         <h3>Chances de gain</h3>
@@ -440,7 +457,8 @@
       <h3>Résumé de la partie</h3>
       <div id="summary-content"></div>
     </div>
-    </details>
+
+    </div><!-- /seg-panel analyse -->
   </div>
 </div>
 
@@ -567,18 +585,18 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=80"></script>
-<script src="js/board.js?v=80"></script>
-<script src="js/engine.js?v=80"></script>
-<script src="js/openings.js?v=80"></script>
-<script src="js/analysis.js?v=80"></script>
-<script src="js/training.js?v=80"></script>
-<script src="js/guess.js?v=80"></script>
-<script src="js/endgame.js?v=80"></script>
-<script src="js/tactics.js?v=80"></script>
-<script src="js/repertoire.js?v=80"></script>
-<script src="js/coach.js?v=80"></script>
-<script src="js/app.js?v=80"></script>
+<script src="js/chess.min.js?v=81"></script>
+<script src="js/board.js?v=81"></script>
+<script src="js/engine.js?v=81"></script>
+<script src="js/openings.js?v=81"></script>
+<script src="js/analysis.js?v=81"></script>
+<script src="js/training.js?v=81"></script>
+<script src="js/guess.js?v=81"></script>
+<script src="js/endgame.js?v=81"></script>
+<script src="js/tactics.js?v=81"></script>
+<script src="js/repertoire.js?v=81"></script>
+<script src="js/coach.js?v=81"></script>
+<script src="js/app.js?v=81"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
