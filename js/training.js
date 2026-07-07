@@ -322,6 +322,44 @@ const Training = (() => {
     return !pieceWinnable(g.fen(), item.bestUci.slice(2, 4), item.side);
   }
 
+  // Canonical drillable-item set for a batch of analyzed games — the SAME
+  // pipeline the SRS deck is built from (classify → isCleanPuzzle → dedup by
+  // position). Coach tallies its motif cards from this so what it SHOWS equals
+  // what you'll DRILL — one source of truth, no divergent raw blunder counts.
+  // Each game must look like a Coach game: {uuid, oppName, userColor,
+  // analysis:{blunderList:[{ply,fenBefore,bestUci,bestSan,playedSan,cpLoss}]}}.
+  function itemsForGames(games) {
+    const base = [];
+    for (const g of games || []) {
+      if (!g || !g.analysis) continue;
+      const side = g.userColor;
+      for (const b of g.analysis.blunderList || []) {
+        if (!b || !b.fenBefore || !b.bestUci || b.bestUci.length < 4) continue;
+        base.push({
+          uuid: g.uuid, oppName: g.oppName || '?', ply: b.ply,
+          fen: b.fenBefore, side, bestUci: b.bestUci, bestSan: b.bestSan || '',
+          playedSan: b.playedSan || '', cpLoss: b.cpLoss || 0,
+          motif: detectMotif(b.fenBefore, b.bestUci, side, b.playedSan || ''),
+        });
+      }
+    }
+    // Same clean filter + position-dedup as mergeItems (keep the costliest per
+    // position, matching the deck's cpLoss cap sort).
+    const bySig = new Map();
+    for (const it of base.filter(isCleanPuzzle)) {
+      const sig = it.fen + '|' + it.bestUci;
+      const prev = bySig.get(sig);
+      if (!prev || (it.cpLoss || 0) > (prev.cpLoss || 0)) bySig.set(sig, it);
+    }
+    return [...bySig.values()];
+  }
+
+  function motifCountsForGames(games) {
+    const counts = {};
+    for (const it of itemsForGames(games)) counts[it.motif] = (counts[it.motif] || 0) + 1;
+    return counts;
+  }
+
   // ───────────────────────── capture from a game ─────────────────────────
   // Build SRS-ready items from one analyzed game's blunders, then merge them
   // into the deck. Used when you open a single game in the analyzer.
@@ -810,5 +848,5 @@ const Training = (() => {
   // global — chess.min.js is included before this file).
   try { retagDeck(); } catch (_) {}
 
-  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, retagDeck, MOTIF_LABELS, TACTICAL };
+  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, MOTIF_LABELS, TACTICAL };
 })();

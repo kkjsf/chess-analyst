@@ -23,7 +23,11 @@ const Coach = (() => {
   let busy = false;
   let stopFlag = false;
   let hostedInfo = null;
-  let filterTc = 'rapid'; // whole-page cadence filter, defaults to 10-min (rapid) games
+  // Whole-page cadence filter. Defaults to 'all' (rapid + daily, minus
+  // bullet/blitz) so Coach's default view matches exactly what the SRS trainer
+  // drills — one and the same set of mistakes. The chips still let you narrow
+  // to a single cadence as an explicit lens.
+  let filterTc = 'all';
   // Bullet/blitz are excluded from the coach: too fast to be instructive, they
   // only add noise. The coach focuses on rapid (10-min) games and slower.
   const COACH_SKIP_TC = new Set(['bullet', 'blitz']);
@@ -448,17 +452,13 @@ const Coach = (() => {
     mat: 'Repère les mats — les tiens et ceux de l\'adverse'
   };
   function renderFocus(an) {
-    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
-    const recent = an.slice().sort((a, b) => (b.endTime || 0) - (a.endTime || 0)).slice(0, 15);
+    if (typeof Training === 'undefined' || !Training.itemsForGames) return '';
+    // Same drillable set as the trainer — the priority you see is the priority
+    // you'll drill.
+    const items = Training.itemsForGames(an);
     const counts = {}, cpBy = {};
-    let total = 0;
-    recent.forEach(g => {
-      (g.analysis.blunderList || []).forEach(b => {
-        if (!b.fenBefore || !b.bestUci) return;
-        const m = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
-        counts[m] = (counts[m] || 0) + 1; cpBy[m] = (cpBy[m] || 0) + (b.cpLoss || 0); total++;
-      });
-    });
+    items.forEach(it => { counts[it.motif] = (counts[it.motif] || 0) + 1; cpBy[it.motif] = (cpBy[it.motif] || 0) + (it.cpLoss || 0); });
+    const total = items.length;
     if (!total) return '';
     const tactical = Training.TACTICAL || [];
     const labels = Training.MOTIF_LABELS || {};
@@ -473,7 +473,7 @@ const Coach = (() => {
     return `<div class="home-card coach-card coach-focus" id="coach-focus">
       <div class="coach-focus-tag">🎯 Ta priorité en ce moment</div>
       <h2 class="coach-focus-head">${headline}</h2>
-      <p class="coach-focus-sub">Sur tes <b>${recent.length} dernières parties</b>, ce motif revient <b>${n} fois</b> (${pct(n, total)}% de tes erreurs) — c'est de loin ta fuite n°1.</p>
+      <p class="coach-focus-sub">Sur tes <b>${total} erreurs à réviser</b>, ce motif revient <b>${n} fois</b> (${pct(n, total)}%) — c'est de loin ta fuite n°1.</p>
       ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${top}">🎯 M'entraîner là-dessus</button>` : ''}
     </div>`;
   }
@@ -487,17 +487,16 @@ const Coach = (() => {
 
   // ── Vigilance tactique: board-awareness leaks (hung pieces + forks) ──
   function renderVigilance(an) {
-    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
-    const recent = an.slice().sort((a, b) => (b.endTime || 0) - (a.endTime || 0)).slice(0, 15);
+    if (typeof Training === 'undefined' || !Training.itemsForGames) return '';
+    // Same drillable set as the trainer.
+    const items = Training.itemsForGames(an);
     const sub = { prise: 0, defense: 0, fourchette: 0 };
     const gamesHit = new Set();
-    let vig = 0, total = 0;
-    recent.forEach(g => (g.analysis.blunderList || []).forEach(b => {
-      if (!b.fenBefore || !b.bestUci) return;
-      total++;
-      const m = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
-      if (Object.prototype.hasOwnProperty.call(sub, m)) { sub[m]++; vig++; gamesHit.add(g.uuid); }
-    }));
+    let vig = 0;
+    const total = items.length;
+    items.forEach(it => {
+      if (Object.prototype.hasOwnProperty.call(sub, it.motif)) { sub[it.motif]++; vig++; gamesHit.add(it.uuid); }
+    });
     if (vig < 2) return '';
     const topSub = Object.keys(sub).sort((a, b) => sub[b] - sub[a])[0];
     const canDrill = typeof Training.showMotif === 'function';
@@ -510,7 +509,7 @@ const Coach = (() => {
     return `<div class="home-card coach-card coach-focus coach-vigilance" id="coach-vigilance">
       <div class="coach-focus-tag">🛡️ Vigilance tactique</div>
       <h2 class="coach-focus-head">Regarde les menaces avant de jouer</h2>
-      <p class="coach-focus-sub"><b>${vig}</b> de tes <b>${total}</b> gaffes (${pct(vig, total)}%) sur tes ${recent.length} dernières parties sont des pièces laissées en prise ou des fourchettes encaissées, réparties sur <b>${gamesHit.size}</b> parties. C'est de loin ce qui te coûte le plus de points.</p>
+      <p class="coach-focus-sub"><b>${vig}</b> de tes <b>${total}</b> erreurs à réviser (${pct(vig, total)}%) sont des pièces laissées en prise ou des fourchettes encaissées, réparties sur <b>${gamesHit.size}</b> parties. C'est de loin ce qui te coûte le plus de points.</p>
       <div class="coach-vig-breakdown">${rows}</div>
       <p class="coach-vig-tip">💡 Avant <b>chaque</b> coup : « Qu'est-ce que son dernier coup menace ? Un échec, une prise, une fourchette ? » — 5 secondes suffisent.</p>
       ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${topSub}">🎯 M'entraîner sur ce point</button>` : ''}
@@ -586,22 +585,19 @@ const Coach = (() => {
   // ── Cadeaux manqués: free material the opponent handed you and you declined ──
   const GIFT_PIECE_FR = { p: 'un pion', n: 'un cavalier', b: 'un fou', r: 'une tour', q: 'une dame', k: 'le roi' };
   function renderMissed(an) {
-    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
-    const recent = an.slice().sort((a, b) => (b.endTime || 0) - (a.endTime || 0)).slice(0, 15);
-    let total = 0;
-    const gifts = [];
-    recent.forEach(g => (g.analysis.blunderList || []).forEach(b => {
-      if (!b.fenBefore || !b.bestUci) return;
-      total++;
-      if (Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan) !== 'gain') return;
+    if (typeof Training === 'undefined' || !Training.itemsForGames) return '';
+    // Same drillable set as the trainer.
+    const items = Training.itemsForGames(an);
+    const total = items.length;
+    const gifts = items.filter(it => it.motif === 'gain').map(it => {
       let piece = null;
       try {
-        const c = new Chess(b.fenBefore);
-        const mv = c.move({ from: b.bestUci.slice(0, 2), to: b.bestUci.slice(2, 4), promotion: 'q' });
+        const c = new Chess(it.fen);
+        const mv = c.move({ from: it.bestUci.slice(0, 2), to: it.bestUci.slice(2, 4), promotion: 'q' });
         piece = mv && mv.captured;
       } catch (_) {}
-      gifts.push({ opp: g.oppName || '?', b, piece });
-    }));
+      return { opp: it.oppName, b: { ply: it.ply, bestSan: it.bestSan, playedSan: it.playedSan, cpLoss: it.cpLoss }, piece };
+    });
     if (gifts.length < 2) return '';
     gifts.sort((a, b) => (b.b.cpLoss || 0) - (a.b.cpLoss || 0));
     const rows = gifts.slice(0, 3).map(x =>
@@ -609,7 +605,7 @@ const Coach = (() => {
     const canDrill = typeof Training.showMotif === 'function';
     return `<div class="home-card coach-card coach-missed" id="coach-missed">
       <h3>🎁 Cadeaux manqués</h3>
-      <p class="coach-focus-sub"><b>${gifts.length}</b> fois sur tes ${recent.length} dernières parties (${pct(gifts.length, total)}% de tes erreurs), l'adversaire t'a offert du matériel <b>et tu ne l'as pas pris</b>. La vigilance marche dans les deux sens : à chaque coup, demande-toi aussi « qu'est-ce que JE peux prendre ? »</p>
+      <p class="coach-focus-sub"><b>${gifts.length}</b> fois (${pct(gifts.length, total)}% de tes erreurs à réviser), l'adversaire t'a offert du matériel <b>et tu ne l'as pas pris</b>. La vigilance marche dans les deux sens : à chaque coup, demande-toi aussi « qu'est-ce que JE peux prendre ? »</p>
       <div class="coach-miss-list">${rows}</div>
       ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="gain">🎯 M'entraîner à saisir le matériel</button>` : ''}
     </div>`;
@@ -1033,17 +1029,11 @@ const Coach = (() => {
   }
 
   function renderTacticalWeakness(an) {
-    if (typeof Training === 'undefined' || !Training.detectMotif) return '';
-    const counts = {};
-    let total = 0;
-    an.forEach(g => {
-      const side = g.userColor;
-      (g.analysis.blunderList || []).forEach(b => {
-        if (!b.fenBefore || !b.bestUci) return;
-        const m = Training.detectMotif(b.fenBefore, b.bestUci, side, b.playedSan);
-        counts[m] = (counts[m] || 0) + 1; total++;
-      });
-    });
+    if (typeof Training === 'undefined' || !Training.motifCountsForGames) return '';
+    // Same drillable set as the trainer (clean + de-duplicated), so these
+    // counts equal what you'll actually review.
+    const counts = Training.motifCountsForGames(an);
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
     if (!total) return '';
     const labels = Training.MOTIF_LABELS || {}, tactical = Training.TACTICAL || [];
     const rows = Object.keys(counts).map(k => ({ k, n: counts[k] })).sort((a, b) => b.n - a.n);
