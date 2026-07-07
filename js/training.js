@@ -1,5 +1,9 @@
 const Training = (() => {
   const KEY = 'chess-analyst-training';
+  // Bump when detectMotif's logic changes so the stored deck is re-tagged on
+  // next load (see retagDeck). v2: fork-with-check is now verified past the
+  // opponent's parry instead of on the in-check position.
+  const CLASSIFIER_VERSION = 2;
   const MAX_ITEMS = 500;
   const NEW_PER_SESSION = 15;
   const DAY = 86400000;
@@ -26,6 +30,26 @@ const Training = (() => {
   }
   function save(items) {
     try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (_) {}
+  }
+
+  // Re-tag every stored card with the current classifier, once per version bump.
+  // Cards keep enough info (fen/bestUci/side/playedSan) to recompute the motif,
+  // so a logic fix retroactively fixes the whole error bank — no re-analysis.
+  const CV_KEY = KEY + '-cv';
+  function retagDeck() {
+    let stored = 0;
+    try { stored = parseInt(localStorage.getItem(CV_KEY) || '0', 10) || 0; } catch (_) {}
+    if (stored >= CLASSIFIER_VERSION) return 0;
+    const items = load();
+    let changed = 0;
+    for (const it of items) {
+      if (!it.fen || !it.bestUci || !it.side) continue;
+      const m = detectMotif(it.fen, it.bestUci, it.side, it.playedSan || '');
+      if (m && m !== it.motif) { it.motif = m; changed++; }
+    }
+    if (changed) save(items);
+    try { localStorage.setItem(CV_KEY, String(CLASSIFIER_VERSION)); } catch (_) {}
+    return changed;
   }
 
   // ───────────────────────── motif detection ─────────────────────────
@@ -144,6 +168,35 @@ const Training = (() => {
     return false;
   }
 
+  // A CHECKING move only forks if the target survives the parry. The old test
+  // judged "is the target defended?" on the position that is still IN CHECK,
+  // where chess.js only yields check-parrying moves — so real defenders were
+  // invisible and any queen check grazing a defended piece looked like a fork
+  // (the Dh4+ false positive). This plays out EVERY legal reply to the check
+  // first, then asks whether the checking piece can still win a >=3 target for
+  // net >=2. If even one reply saves everything, it isn't a fork.
+  function winsTargetAfterCheck(afterFen, forkSq, side) {
+    let g;
+    try { g = new Chess(afterFen); } catch (_) { return false; }
+    const opp = side === 'w' ? 'b' : 'w';
+    let replies;
+    try { replies = g.moves({ verbose: true }); } catch (_) { return false; }
+    if (!replies.length) return false; // mate/stalemate → not a material fork
+    for (const r of replies) {
+      let g2;
+      try { g2 = new Chess(afterFen); if (!g2.move(r.san, { sloppy: true })) return false; } catch (_) { return false; }
+      const fen2 = g2.fen();
+      const caps = movesFrom(fen2, forkSq, side).filter(m => m.captured && PIECE_VALUES[m.captured] >= 3);
+      let winsHere = false;
+      for (const c of caps) {
+        const recapVal = opponentDefends(fen2, c.to, opp) ? (PIECE_VALUES[c.piece] || 0) : 0;
+        if ((PIECE_VALUES[c.captured] || 0) - recapVal >= 2) { winsHere = true; break; }
+      }
+      if (!winsHere) return false; // this parry rescues the target → no fork
+    }
+    return true;
+  }
+
   // After you play `playedSan`, can the opponent land a DANGEROUS check — mate,
   // a check that wins material outright, or a fork-with-check? This is the
   // pattern behind most beginner collapses (the "…g6 → échec-fourchette" trap).
@@ -173,11 +226,13 @@ const Training = (() => {
         if (!g2.move(c.san, { sloppy: true })) continue;
         const fen2 = g2.fen();
         // king excluded: the check IS the king attack — the fork needs a second,
-        // capturable target.
+        // capturable target that survives our parry (verified past the check,
+        // not on the in-check position — same fix as detectMotif).
         const targets = movesFrom(fen2, c.to, opp).filter(m => m.captured && m.captured !== 'k' && (PIECE_VALUES[m.captured] || 0) >= 3);
-        const winnable = targets.filter(m => (PIECE_VALUES[m.captured] || 0) >= (PIECE_VALUES[c.piece] || 0) || !opponentDefends(fen2, m.to, me));
-        if (winnable.length && !pieceWinnable(fen2, c.to, opp))
-          return { san: c.san, from: c.from, to: c.to, why: 'fourchette', piece: winnable[0].captured };
+        if (targets.length && !pieceWinnable(fen2, c.to, opp) && winsTargetAfterCheck(fen2, c.to, opp)) {
+          const victim = targets.slice().sort((a, b) => (PIECE_VALUES[b.captured] || 0) - (PIECE_VALUES[a.captured] || 0))[0];
+          return { san: c.san, from: c.from, to: c.to, why: 'fourchette', piece: victim.captured };
+        }
       } catch (_) {}
     }
     return null;
@@ -225,11 +280,18 @@ const Training = (() => {
     const givesCheck = move.san.includes('+');
     const targets = movesFrom(after, forkSq, side)
       .filter(m => m.captured && PIECE_VALUES[m.captured] >= 3);
-    if (targets.length) {
+    if (targets.length && !pieceWinnable(after, forkSq, side)) {
       const opp = side === 'w' ? 'b' : 'w';
-      const winnable = targets.filter(m => PIECE_VALUES[m.captured] >= forkVal || !opponentDefends(after, m.to, opp));
-      if (!pieceWinnable(after, forkSq, side) && (winnable.length >= 2 || (winnable.length >= 1 && givesCheck)))
-        return 'fourchette';
+      if (givesCheck) {
+        // Check-fork: the check is one "prong", but only counts if a real
+        // target survives the forced reply (verified past the parry).
+        if (winsTargetAfterCheck(after, forkSq, side)) return 'fourchette';
+      } else {
+        // Quiet fork: needs 2+ genuinely winnable targets. Safe to judge
+        // defenders on `after` here — no check means chess.js sees them all.
+        const winnable = targets.filter(m => PIECE_VALUES[m.captured] >= forkVal || !opponentDefends(after, m.to, opp));
+        if (winnable.length >= 2) return 'fourchette';
+      }
     }
 
     if (move.captured && PIECE_VALUES[move.captured] >= 3) return 'gain';
@@ -744,5 +806,9 @@ const Training = (() => {
     if (m) { motifFilter = m; switchTab('puzzles'); }
   }
 
-  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, MOTIF_LABELS, TACTICAL };
+  // Re-tag the stored deck once, as soon as the module loads (Chess is already
+  // global — chess.min.js is included before this file).
+  try { retagDeck(); } catch (_) {}
+
+  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, retagDeck, MOTIF_LABELS, TACTICAL };
 })();
