@@ -687,7 +687,17 @@ const Training = (() => {
           ? `<b>${bs}</b> met à l'abri ${p.a.toLowerCase()} <b>${p.n}</b> qui était en prise en <b>${mh.square}</b>.`
           : `<b>${bs}</b> pare la menace et garde ton matériel.`);
       } else if (item.motif === 'prise') {
-        parts.push(`<b>${bs}</b> était le coup solide : il garde ton matériel en sécurité.`);
+        const capVal = move.captured ? (PIECE_VALUES[move.captured] || 0) : 0;
+        if (capVal >= 3 && capturedIsAttackerOf(fen, move, side)) {
+          const p = PIECE_FR[move.piece] || { a: 'Ta', n: 'pièce' };
+          parts.push(`<b>${bs}</b> capture <b>${ADV_PIECE_FR[move.captured] || 'la pièce adverse'}</b> qui menaçait ${p.a.toLowerCase()} <b>${p.n}</b> — tu sauves ton matériel en contre-attaquant.`);
+        } else if (capVal >= 3) {
+          parts.push(`<b>${bs}</b> contre-attaque en capturant ${OPP_PIECE_FR[move.captured] || 'du matériel'} — tu gardes ton matériel en sécurité.`);
+        } else if (move.captured) {
+          parts.push(`<b>${bs}</b> met ton matériel à l'abri tout en gagnant un pion.`);
+        } else {
+          parts.push(`<b>${bs}</b> était le coup solide : il met ton matériel à l'abri.`);
+        }
       } else if (item.motif === 'attaque') {
         parts.push(`<b>${bs}</b> donne un échec qui reprend l'initiative.`);
       } else if (item.motif === 'mat') {
@@ -700,6 +710,16 @@ const Training = (() => {
     }
 
     return parts.join(' ');
+  }
+
+  // Did the piece the best move just captured (sitting on move.to in `fen`)
+  // attack the square the mover came from? i.e. was this capture a counter-hit
+  // on the very piece that was threatening yours. Judged on `fen` (before the
+  // move), giving the opponent the move so its attacks are visible.
+  function capturedIsAttackerOf(fen, move, side) {
+    if (!move || !move.captured) return false;
+    const opp = side === 'w' ? 'b' : 'w';
+    return movesFrom(fen, move.to, opp).some(m => m.to === move.from && m.captured);
   }
 
   // Continuation line is a nice-to-have: only if Stockfish is ALREADY warm
@@ -794,6 +814,7 @@ const Training = (() => {
     r: { a: 'Ta', n: 'tour' }, q: { a: 'Ta', n: 'dame' }, k: { a: 'Ton', n: 'roi' }
   };
   const OPP_PIECE_FR = { p: 'un pion', n: 'un cavalier', b: 'un fou', r: 'une tour', q: 'une dame', k: 'un roi' };
+  const ADV_PIECE_FR = { p: 'le pion adverse', n: 'le cavalier adverse', b: 'le fou adverse', r: 'la tour adverse', q: 'la dame adverse', k: 'le roi adverse' };
 
   function enToFr(san) {
     return (san || '').replace(/[KQRBN]/g, c => ({ K: 'R', Q: 'D', R: 'T', B: 'F', N: 'C' }[c]));
