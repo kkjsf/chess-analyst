@@ -505,6 +505,9 @@ const Training = (() => {
 
   // ───────────────────────── PUZZLES tab ─────────────────────────
   let queue = [], qi = 0, current = null, solved = false, motifFilter = null;
+  // Bumped on every puzzle render; a late engine continuation checks it so its
+  // text never lands on the next puzzle the user has already moved to.
+  let explainToken = 0;
 
   function startPuzzles() {
     queue = motifFilter ? motifQueue(motifFilter) : buildSession();
@@ -557,6 +560,8 @@ const Training = (() => {
     }
     current = queue[qi];
     solved = false;
+    explainToken++;
+    warmEngine();
     const flip = current.side === 'b';
     host.innerHTML = bannerHtml() + `
       <div class="train-progress">Puzzle ${qi + 1} / ${queue.length}</div>
@@ -608,10 +613,11 @@ const Training = (() => {
   function revealSolution(correct) {
     solved = true;
     onMove = null;
-    let move;
+    let move, afterFen = null;
     try {
       const g = new Chess(current.fen);
       move = g.move({ from: current.bestUci.slice(0, 2), to: current.bestUci.slice(2, 4), promotion: current.bestUci[4] || 'q' });
+      afterFen = g.fen();
       BoardRenderer.render(board, g.fen(), move);
     } catch (_) {}
     BoardRenderer.drawArrows(arrows, [{ from: current.bestUci.slice(0, 2), to: current.bestUci.slice(2, 4), color: '#56b886', opacity: 0.9, width: 7 }]);
@@ -619,9 +625,15 @@ const Training = (() => {
     const fb = $('#train-feedback');
     fb.className = 'train-feedback ' + (correct ? 'right' : 'shown');
     const motif = MOTIF_LABELS[current.motif] || 'Tactique';
-    fb.innerHTML = correct
-      ? `✅ Bravo ! <b>${current.bestSan || move?.san || ''}</b> — motif : ${motif}.`
-      : `Solution : <b>${current.bestSan || move?.san || ''}</b> — motif : ${motif}.`;
+    const bestFr = current.bestSan || (move ? enToFr(move.san) : '');
+    const head = correct
+      ? `✅ Bravo ! <b>${bestFr}</b> — motif : ${motif}.`
+      : `Solution : <b>${bestFr}</b> — motif : ${motif}.`;
+    const prose = explainPuzzle(current, move, afterFen);
+    fb.innerHTML = head + (prose
+      ? `<div class="train-explain">${prose}<span id="train-explain-line"></span></div>`
+      : '');
+    if (afterFen) maybeContinuation(afterFen, bestFr, explainToken);
 
     $('#train-actions').innerHTML = `
       <button class="train-btn again" data-g="again">À revoir</button>
@@ -630,6 +642,101 @@ const Training = (() => {
     $$('#train-actions .train-btn').forEach(b => {
       b.onclick = () => { schedule(current, b.dataset.g); qi++; renderPuzzle(); };
     });
+  }
+
+  // Build the "pourquoi" prose for a solved puzzle: what the played move gave
+  // away (hung piece / punishing check) + why the engine's move is the answer.
+  // Fully local (reuses the motif SEE helpers) — no engine needed.
+  function explainPuzzle(item, move, afterFen) {
+    const fen = item.fen, side = item.side, parts = [];
+
+    if (item.playedSan) {
+      const hp = hungPiece(fen, item.playedSan);
+      if (hp) {
+        const p = PIECE_FR[hp.type] || { a: 'Ta', n: 'pièce' };
+        parts.push(`En jouant <b>${item.playedSan}</b>, tu laissais ${p.a.toLowerCase()} <b>${p.n}</b> en prise en <b>${hp.square}</b>.`);
+      } else {
+        const dc = dangerousCheckAfter(fen, item.playedSan);
+        if (dc && dc.why === 'mat') parts.push(`Après <b>${item.playedSan}</b>, l'adversaire avait <b>${enToFr(dc.san)}</b> : échec et mat.`);
+        else if (dc && dc.why === 'fourchette') parts.push(`Après <b>${item.playedSan}</b>, <b>${enToFr(dc.san)}</b> faisait échec ET fourchette — il gagnait ${OPP_PIECE_FR[dc.piece] || 'du matériel'}.`);
+        else if (dc) parts.push(`Après <b>${item.playedSan}</b>, l'échec <b>${enToFr(dc.san)}</b> gagnait ${OPP_PIECE_FR[dc.piece] || 'du matériel'}.`);
+      }
+    }
+
+    const bs = item.bestSan || (move ? enToFr(move.san) : '');
+    if (move && afterFen) {
+      if (move.san.includes('#')) {
+        parts.push(`<b>${bs}</b> est échec et mat.`);
+      } else if (item.motif === 'fourchette') {
+        const forkSq = item.bestUci.slice(2, 4);
+        const names = [...new Set(movesFrom(afterFen, forkSq, side)
+          .filter(m => m.captured && (PIECE_VALUES[m.captured] || 0) >= 3)
+          .sort((a, b) => (PIECE_VALUES[b.captured] || 0) - (PIECE_VALUES[a.captured] || 0))
+          .map(t => OPP_PIECE_FR[t.captured] || 'une pièce'))].slice(0, 2);
+        parts.push(names.length >= 2
+          ? `<b>${bs}</b> fait une fourchette : ${names[0]} et ${names[1]} sont attaqués en même temps — le matériel tombe au coup suivant.`
+          : `<b>${bs}</b> fait une fourchette et gagne du matériel au coup suivant.`);
+      } else if (item.motif === 'gain') {
+        parts.push(move.captured
+          ? `<b>${bs}</b> gagne ${OPP_PIECE_FR[move.captured] || 'du matériel'}${(PIECE_VALUES[move.captured] || 0) >= 5 ? ' — une pièce lourde' : ''}.`
+          : `<b>${bs}</b> gagne du matériel.`);
+      } else if (item.motif === 'defense') {
+        const mh = myHanging(fen, side);
+        const p = mh ? (PIECE_FR[mh.piece] || { a: 'Ta', n: 'pièce' }) : null;
+        parts.push(mh
+          ? `<b>${bs}</b> met à l'abri ${p.a.toLowerCase()} <b>${p.n}</b> qui était en prise en <b>${mh.square}</b>.`
+          : `<b>${bs}</b> pare la menace et garde ton matériel.`);
+      } else if (item.motif === 'prise') {
+        parts.push(`<b>${bs}</b> était le coup solide : il garde ton matériel en sécurité.`);
+      } else if (item.motif === 'attaque') {
+        parts.push(`<b>${bs}</b> donne un échec qui reprend l'initiative.`);
+      } else if (item.motif === 'mat') {
+        parts.push(`<b>${bs}</b> lance un mat forcé.`);
+      } else if (move.captured) {
+        parts.push(`<b>${bs}</b> gagne ${OPP_PIECE_FR[move.captured] || 'du matériel'}.`);
+      } else {
+        parts.push(`<b>${bs}</b> garde l'avantage et améliore ta position.`);
+      }
+    }
+
+    return parts.join(' ');
+  }
+
+  // Continuation line is a nice-to-have: only if Stockfish is ALREADY warm
+  // (never force a 10s init just for this). Warm it in the background on the
+  // first puzzle so later reveals can show a line.
+  let engineWarmTried = false;
+  function warmEngine() {
+    if (engineWarmTried || typeof StockfishEngine === 'undefined') return;
+    engineWarmTried = true;
+    if (StockfishEngine.isReady()) return;
+    try { StockfishEngine.init().catch(() => {}); } catch (_) {}
+  }
+
+  function pvLineFr(startFen, pvUci, maxPlies) {
+    if (!pvUci) return [];
+    const out = [];
+    try {
+      const g = new Chess(startFen);
+      for (const u of pvUci.trim().split(/\s+/)) {
+        if (out.length >= maxPlies) break;
+        const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] || 'q' });
+        if (!m) break;
+        out.push(enToFr(m.san));
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  async function maybeContinuation(afterFen, bestFr, token) {
+    if (typeof StockfishEngine === 'undefined' || !StockfishEngine.isReady()) return;
+    let res;
+    try { res = await StockfishEngine.evaluate(afterFen, 'movetime 350'); } catch (_) { return; }
+    if (token !== explainToken) return; // user already moved to another puzzle
+    const line = pvLineFr(afterFen, res && res.pv, 3);
+    const el = $('#train-explain-line');
+    if (!line.length || !el) return;
+    el.innerHTML = ` <span class="train-cont">Suite probable : <b>${[bestFr].concat(line).join(' ')}</b></span>`;
   }
 
   // ───────────────────────── MOTIFS dashboard tab ─────────────────────────
@@ -848,5 +955,5 @@ const Training = (() => {
   // global — chess.min.js is included before this file).
   try { retagDeck(); } catch (_) {}
 
-  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, MOTIF_LABELS, TACTICAL };
+  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, explainPuzzle, MOTIF_LABELS, TACTICAL };
 })();

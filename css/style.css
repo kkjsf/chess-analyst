@@ -1775,6 +1775,14 @@ html, body {
 .train-feedback.right { color: var(--success); }
 .train-feedback.wrong { color: var(--danger); }
 .train-feedback.shown { color: var(--accent); }
+.train-explain {
+  margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+  background: var(--card-alt, rgba(255, 255, 255, 0.04));
+  color: var(--text); font-size: 13.5px; line-height: 1.55; text-align: left;
+}
+.train-explain b { color: var(--accent); }
+.train-cont { display: block; margin-top: 6px; color: var(--text-dim); }
+.train-cont b { color: var(--text); }
 
 .train-actions { display: flex; gap: 8px; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
 .train-btn {
