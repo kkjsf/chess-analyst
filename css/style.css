@@ -2095,7 +2095,6 @@ body.guess-open { overflow: hidden; }
 @media (min-width: 720px) {
   .analysis-body { max-width: 600px; padding: 24px 24px calc(78px + env(safe-area-inset-bottom,0)); gap: 18px; }
   .board-container, .player-bar { max-width: 440px; }
-  .coach-body, .coach-sync-bar, .coach-card { max-width: 560px; }
   .tabbar {
     left: 50%; right: auto;
     transform: translateX(-50%);
@@ -2104,6 +2103,34 @@ body.guess-open { overflow: hidden; }
     border-right: 1px solid rgba(255,255,255,0.08);
     border-radius: 16px 16px 0 0;
   }
+
+  /* ── Coach: multi-column dashboard ──────────────────────────────────────
+     Mobile keeps the single stacked column; on wider screens the dashboard
+     becomes a 2-column masonry so the many cards use the horizontal space and
+     roughly halve the vertical scroll. Multi-column (not grid) so variable-
+     height cards pack densely with no row-alignment gaps. */
+  .coach-body { max-width: 1160px; padding-left: 24px; padding-right: 24px; }
+  .coach-sync-bar { max-width: 720px; }
+  #coach-dashboard { width: 100%; column-count: 2; column-gap: 20px; }
+  #coach-dashboard > .home-card,
+  #coach-dashboard > .coach-card {
+    max-width: none; width: 100%; margin: 0 0 20px;
+    break-inside: avoid; -webkit-column-break-inside: avoid;
+  }
+  /* Full-width bands spanning both columns: the cadence filter, empty-state
+     notices, and the hero row of top priority cards. */
+  .coach-filter,
+  #coach-dashboard > .coach-empty,
+  #coach-dashboard > .coach-empty-mini,
+  .coach-hero-row {
+    column-span: all; -webkit-column-span: all;
+  }
+  .coach-filter { margin-bottom: 20px; }
+  /* Hero header: the two most actionable cards (Vigilance + Rythme) sit
+     side-by-side above the masonry to establish clear priority. */
+  .coach-hero-row { display: flex; gap: 20px; align-items: stretch; }
+  .coach-hero-row > .home-card { flex: 1; margin: 0 0 20px; max-width: none; }
+  .coach-hero-row:empty { display: none; }
 }
 
 /* Touch swipe hint */
@@ -2165,6 +2192,14 @@ body.guess-open { overflow: hidden; }
 
 .coach-empty, .coach-empty-mini { color: var(--text-dim); font-size: 14px; text-align: center; padding: 24px 12px; }
 .coach-empty-mini { padding: 14px; font-size: 13px; }
+
+/* Loading skeleton — shown for one frame while the dashboard is built. */
+.coach-skel-wrap { display: flex; flex-direction: column; gap: 12px; }
+.coach-skel { position: relative; overflow: hidden; background: var(--card-bg); }
+.coach-skel::after { content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
+  transform: translateX(-100%); animation: coachShimmer 1.2s infinite; }
+@keyframes coachShimmer { 100% { transform: translateX(100%); } }
 
 .coach-headline { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
 .coach-big { display: flex; flex-direction: column; align-items: center; }

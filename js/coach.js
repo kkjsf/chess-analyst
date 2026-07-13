@@ -23,6 +23,7 @@ const Coach = (() => {
   let busy = false;
   let stopFlag = false;
   let hostedInfo = null;
+  let syncedOnce = false; // feed the SRS deck once per session, or when data changes
   // Whole-page cadence filter. Defaults to 'all' (rapid + daily, minus
   // bullet/blitz) so Coach's default view matches exactly what the SRS trainer
   // drills — one and the same set of mistakes. The chips still let you narrow
@@ -77,6 +78,21 @@ const Coach = (() => {
   }
   function put(rec) {
     return new Promise((res, rej) => { const r = store(STORE, 'readwrite').put(rec); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
+  }
+  // Import many hosted records in a single transaction. Fresh server analysis
+  // overwrites; records without analysis only fill gaps (keep local analysis).
+  function bulkImport(recs) {
+    return new Promise((res, rej) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      const os = tx.objectStore(STORE);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+      for (const hg of recs) {
+        if (hg.analysis && !hg.analysis.error) { os.put(hg); continue; }
+        const gr = os.get(hg.uuid);
+        gr.onsuccess = () => { if (!gr.result) os.put(hg); };
+      }
+    });
   }
   function getMeta(k) {
     return new Promise((res) => { const r = store(META, 'readonly').get(k); r.onsuccess = () => res(r.result ? r.result.v : null); r.onerror = () => res(null); });
@@ -253,11 +269,10 @@ const Coach = (() => {
     hostedInfo = { generatedAt: data.generatedAt, count: data.count, analyzedCount: data.analyzedCount };
     const prevGen = await getMeta('hostedGeneratedAt');
     if (prevGen === data.generatedAt) return { ...hostedInfo, unchanged: true };
-    for (const hg of data.games) {
-      if (skipCadence(hg.timeClass)) continue;
-      if (hg.analysis && !hg.analysis.error) await put(hg);
-      else { const ex = await getOne(hg.uuid); if (!ex) await put(hg); }
-    }
+    // Import the whole hosted set in ONE transaction (was one round-trip per
+    // game). Games with fresh server analysis overwrite; games without keep any
+    // existing local record.
+    await bulkImport(data.games.filter(hg => !skipCadence(hg.timeClass)));
     await setMeta('hostedGeneratedAt', data.generatedAt);
     games = await getAll();
     return hostedInfo;
@@ -345,8 +360,7 @@ const Coach = (() => {
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     const cards = an.length
-      ? renderVigilance(an) +
-        renderPace(an) +
+      ? `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>` +
         renderFocus(an) +
         renderMissed(an) +
         renderNarrative(an) +
@@ -365,6 +379,7 @@ const Coach = (() => {
         renderTrainingCta()
       : `<div class="coach-empty-mini">Aucune partie « ${tcLabel(filterTc)} » analysée. Choisissez une autre cadence.</div>`;
     body.innerHTML = renderFilterBar(anAll) + cards;
+    body.dataset.ready = '1';
     bindFilterBar();
     if (an.length) {
       bindVigilance();
@@ -1466,25 +1481,49 @@ const Coach = (() => {
     flashTimer = setTimeout(() => { el.className = 'coach-flash'; }, 4000);
   }
 
+  // Placeholder cards shown the instant the Coach screen opens, so the user
+  // sees structure immediately instead of a frozen blank while the first
+  // dashboard render (which classifies the whole archive) runs.
+  function skeleton() {
+    const card = (h) => `<div class="home-card coach-card coach-skel" style="height:${h}px"></div>`;
+    return `<div class="coach-skel-wrap">${card(120) + card(150) + card(110) + card(180)}</div>`;
+  }
+  // Yield one frame so the skeleton paints before the heavy render — but never
+  // stall: requestAnimationFrame is throttled/paused when the tab is hidden, so
+  // race it with a short timeout that always fires.
+  const raf = () => new Promise(r => {
+    let done = false; const fin = () => { if (!done) { done = true; r(); } };
+    requestAnimationFrame(() => requestAnimationFrame(fin));
+    setTimeout(fin, 50);
+  });
+
   // ─────────────── Entry ───────────────
   async function show() {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     $('#screen-coach').classList.add('active');
     window.scrollTo(0, 0);
+    const body = $('#coach-dashboard');
+    if (body && !body.dataset.ready) body.innerHTML = skeleton();
     if (!db) {
       try {
         db = await openDB(); games = await getAll();
         countryCache = (await getMeta('oppCountry')) || {};
       } catch (_) { games = []; }
     }
+    // Yield one frame so the screen transition + skeleton paint before the
+    // (still synchronous) classification pass blocks the main thread.
+    await raf();
     render(); // instant from local cache
     const info = await loadHosted(); // server analysis is authoritative
-    if (info) { render(); }
-    else if (!games.length) {
+    const changed = info && !info.unchanged;
+    if (changed) { render(); } // unchanged → first render already correct
+    else if (!info && !games.length) {
       const last = await getMeta('lastSync');
       if (!last) onSync(); // no hosted data yet → local-engine fallback
     }
-    syncToTraining();
+    // Re-feeding the whole archive into the SRS deck is ~200ms; only do it when
+    // the data actually changed or on the first open of the session.
+    if (changed || !syncedOnce) { syncedOnce = true; syncToTraining(); }
   }
 
   function hide() {

@@ -257,7 +257,20 @@ const Training = (() => {
 
   // Classify a mistake by what's most instructive: missed mate, then YOUR
   // hung piece (the #1 beginner error), then the tactic the best move lands.
+  // detectMotif runs several chess.js move-generations per call (~2.5ms). Coach
+  // re-derives the same motifs on every dashboard render (Vigilance/Focus/
+  // Missed/Repeated all reclassify the whole archive), so cache on the pure
+  // inputs — hundreds of blunders would otherwise cost ~800ms each render.
+  const _motifCache = new Map();
   function detectMotif(fenBefore, bestUci, side, playedSan) {
+    const ck = fenBefore + '|' + bestUci + '|' + side + '|' + (playedSan || '');
+    const hit = _motifCache.get(ck);
+    if (hit !== undefined) return hit;
+    const res = _detectMotif(fenBefore, bestUci, side, playedSan);
+    _motifCache.set(ck, res);
+    return res;
+  }
+  function _detectMotif(fenBefore, bestUci, side, playedSan) {
     if (!bestUci || bestUci.length < 4) return 'positionnel';
     let move, after;
     try {
@@ -309,9 +322,18 @@ const Training = (() => {
   //   • mate-scale cpLoss → you were mating or being mated, not a material tactic
   //   • desperado → the solution throws the piece it moves (Qxf6, Rxf6 recaptures)
   // Forcing mate that keeps the piece is always kept.
+  const _cleanCache = new Map();
   function isCleanPuzzle(item) {
     if (!item || !item.fen || !item.bestUci || item.bestUci.length < 4) return false;
     if ((item.cpLoss || 0) > 2000) return false;
+    const ck = item.fen + '|' + item.bestUci + '|' + item.side;
+    const hit = _cleanCache.get(ck);
+    if (hit !== undefined) return hit;
+    const res = _isCleanPuzzle(item);
+    _cleanCache.set(ck, res);
+    return res;
+  }
+  function _isCleanPuzzle(item) {
     let g, move;
     try {
       g = new Chess(item.fen);
@@ -328,7 +350,17 @@ const Training = (() => {
   // what you'll DRILL — one source of truth, no divergent raw blunder counts.
   // Each game must look like a Coach game: {uuid, oppName, userColor,
   // analysis:{blunderList:[{ply,fenBefore,bestUci,bestSan,playedSan,cpLoss}]}}.
+  // Coach passes the SAME analyzed-games array to Vigilance/Focus/Missed in one
+  // render pass; memoize on the array identity so the deck is built once, not
+  // three times. (detectMotif/isCleanPuzzle caches cover repeats across passes.)
+  const _itemsMemo = new WeakMap();
   function itemsForGames(games) {
+    if (games && _itemsMemo.has(games)) return _itemsMemo.get(games);
+    const res = _buildItemsForGames(games);
+    if (games) _itemsMemo.set(games, res);
+    return res;
+  }
+  function _buildItemsForGames(games) {
     const base = [];
     for (const g of games || []) {
       if (!g || !g.analysis) continue;

@@ -540,7 +540,7 @@ const App = (() => {
     if (!prefersReducedMotion() && index === lastRenderIndex + 1 && index > 0 && lastMove) {
       const prevFen = index >= 2 ? currentAnalysis[index - 2].fen
         : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-      BoardRenderer.renderAnimated($('#board-svg'), prevFen, fen, lastMove, 190);
+      BoardRenderer.renderAnimated($('#board-svg'), prevFen, fen, lastMove, 240);
     } else {
       BoardRenderer.render($('#board-svg'), fen, lastMove);
     }
