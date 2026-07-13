@@ -2105,32 +2105,39 @@ body.guess-open { overflow: hidden; }
   }
 
   /* ── Coach: multi-column dashboard ──────────────────────────────────────
-     Mobile keeps the single stacked column; on wider screens the dashboard
-     becomes a 2-column masonry so the many cards use the horizontal space and
-     roughly halve the vertical scroll. Multi-column (not grid) so variable-
-     height cards pack densely with no row-alignment gaps. */
-  .coach-body { max-width: 1160px; padding-left: 24px; padding-right: 24px; }
-  .coach-sync-bar { max-width: 720px; }
-  #coach-dashboard { width: 100%; column-count: 2; column-gap: 20px; }
+     Mobile keeps the single stacked column; on wide screens the dashboard
+     fills the width like the full-width top banner and flows its many cards
+     into a masonry (multi-column, not grid, so variable-height cards pack
+     densely with no row-alignment gaps). ID+class selectors so these win over
+     the later mobile `.coach-body`/`.coach-card { max-width }` base rules. */
+  #screen-coach .coach-body { max-width: 1600px; padding-left: 16px; padding-right: 16px; }
+  #screen-coach .coach-sync-bar { max-width: 820px; }
+  #coach-dashboard { width: 100%; column-count: 2; column-gap: 22px; }
   #coach-dashboard > .home-card,
   #coach-dashboard > .coach-card {
-    max-width: none; width: 100%; margin: 0 0 20px;
+    max-width: none; width: 100%; margin: 0 0 22px;
     break-inside: avoid; -webkit-column-break-inside: avoid;
   }
-  /* Full-width bands spanning both columns: the cadence filter, empty-state
+  /* Full-width bands spanning all columns: the cadence filter, empty-state
      notices, and the hero row of top priority cards. */
   .coach-filter,
   #coach-dashboard > .coach-empty,
   #coach-dashboard > .coach-empty-mini,
-  .coach-hero-row {
+  #coach-dashboard > .coach-hero-row {
     column-span: all; -webkit-column-span: all;
   }
-  .coach-filter { margin-bottom: 20px; }
+  .coach-filter { margin-bottom: 22px; }
   /* Hero header: the two most actionable cards (Vigilance + Rythme) sit
      side-by-side above the masonry to establish clear priority. */
-  .coach-hero-row { display: flex; gap: 20px; align-items: stretch; }
-  .coach-hero-row > .home-card { flex: 1; margin: 0 0 20px; max-width: none; }
-  .coach-hero-row:empty { display: none; }
+  #coach-dashboard > .coach-hero-row { display: flex; gap: 22px; align-items: stretch; }
+  #coach-dashboard > .coach-hero-row > .home-card { flex: 1; margin: 0 0 22px; max-width: none; }
+  #coach-dashboard > .coach-hero-row:empty { display: none; }
+}
+
+/* Three columns once there's room, so the cards keep a comfortable width
+   instead of stretching too wide. */
+@media (min-width: 1180px) {
+  #coach-dashboard { column-count: 3; }
 }
 
 /* Touch swipe hint */
