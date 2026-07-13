@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=88">
+<link rel="stylesheet" href="css/style.css?v=91">
 </head>
 <body>
 
@@ -43,13 +43,16 @@
       <div class="guide-icon">🏷️</div>
       <h3>Comprendre les couleurs</h3>
       <ul class="guide-badges">
-        <li><span class="info-badge brillant">Brillant</span> Sacrifice ou seul coup viable</li>
-        <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur</li>
-        <li><span class="info-badge great">Excellent</span> Presque aussi bon que le meilleur coup</li>
-        <li><span class="info-badge neutre">Correct</span> Coup acceptable</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart, avantage grignoté</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux, avantage perdu</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave, la position bascule</li>
+        <li><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span> Un sacrifice de pièce gagnant</li>
+        <li><span class="info-badge great"><i class="mv-mark mv-great">!</i> Formidable</span> Le seul bon coup de la position</li>
+        <li><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span> Le coup #1 du moteur</li>
+        <li><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span> Presque aussi bon que le meilleur coup</li>
+        <li><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span> Un bon coup, sans être optimal</li>
+        <li><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span> Coup d'ouverture reconnu</li>
+        <li><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span> Petit écart, avantage grignoté</li>
+        <li><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Occasion manquée</span> Un gain laissé passer</li>
+        <li><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span> Coup coûteux, avantage perdu</li>
+        <li><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span> Erreur grave, la position bascule</li>
       </ul>
     </div>
     <div class="guide-block">
@@ -145,19 +148,23 @@
       <p><b>Analyse Multi-PV</b><br>
       Pour chaque position, Stockfish évalue les <b>3 meilleurs coups possibles</b> (Multi-PV) pendant 1,5 seconde. Cela permet non seulement de trouver le meilleur coup, mais aussi de proposer des alternatives intéressantes. Le score est exprimé en <b>centipièces</b> (cp) : 100 cp ≈ un pion, 300 cp ≈ un cavalier ou fou, 900 cp ≈ une dame.</p>
 
-      <p><b>Classification des coups</b></p>
+      <p><b>Classification des coups (modèle Chess.com)</b><br>
+      Chaque coup est noté sur les <b>points espérés perdus</b> : la chance de gain (0 à 1) juste avant le coup, moins celle juste après. C'est le même « Expected Points Model » que la Revue de partie de Chess.com.</p>
       <ul>
-        <li><span class="info-badge brillant">Brillant</span> Meilleur coup dans une position difficile — sacrifice correct ou seul coup viable</li>
-        <li><span class="info-badge best">Meilleur</span> Le coup #1 du moteur</li>
-        <li><span class="info-badge great">Excellent</span> Presque aussi bon que le meilleur coup</li>
-        <li><span class="info-badge neutre">Correct</span> Coup acceptable, pas d'erreur significative</li>
-        <li><span class="info-badge imprecision">Imprécision</span> Petit écart, avantage grignoté</li>
-        <li><span class="info-badge erreur">Erreur</span> Coup coûteux, avantage perdu</li>
-        <li><span class="info-badge gaffe">Gaffe</span> Erreur grave, la position bascule</li>
+        <li><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span> Un sacrifice de pièce gagnant, difficile à trouver</li>
+        <li><span class="info-badge great"><i class="mv-mark mv-great">!</i> Formidable</span> Le seul bon coup de la position</li>
+        <li><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span> Le coup #1 du moteur</li>
+        <li><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span> Presque optimal (≤ 0,02 point perdu)</li>
+        <li><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span> Un bon coup (0,02–0,05)</li>
+        <li><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span> Coup d'ouverture reconnu</li>
+        <li><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span> Petit écart (0,05–0,10)</li>
+        <li><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Occasion manquée</span> Une position gagnante laissée filer</li>
+        <li><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span> Coup coûteux (0,10–0,20)</li>
+        <li><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span> Erreur grave (0,20–1,00)</li>
       </ul>
 
-      <p><b>Score de précision (WDL)</b><br>
-      Le pourcentage de précision utilise un modèle <b>Win/Draw/Loss</b> : chaque score en centipièces est converti en probabilité de victoire. La précision mesure combien de chances de gain vous avez conservées à chaque coup par rapport au coup optimal. C'est la même approche que les grands sites d'échecs.</p>
+      <p><b>Score de précision</b><br>
+      La précision reprend la <b>formule de Chess.com</b> : chaque coup reçoit une note (100 % = aucune chance de gain perdue), calculée à partir des points espérés perdus, puis moyennée sur la partie. C'est la même approche que la Revue de partie.</p>
 
       <p><b>Flèches et alternatives</b><br>
       Quand vous faites une erreur, le moteur affiche des <b>flèches colorées</b> sur l'échiquier : la flèche <span style="color:#56b886">verte</span> indique le meilleur coup, les flèches <span style="color:#5b8fb9">bleues</span> montrent les alternatives viables. Vous pouvez <b>cliquer sur un coup alternatif</b> dans le conseil pour voir la position résultante sur l'échiquier.</p>
@@ -586,18 +593,18 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=88"></script>
-<script src="js/board.js?v=88"></script>
-<script src="js/engine.js?v=88"></script>
-<script src="js/openings.js?v=88"></script>
-<script src="js/analysis.js?v=88"></script>
-<script src="js/training.js?v=88"></script>
-<script src="js/guess.js?v=88"></script>
-<script src="js/endgame.js?v=88"></script>
-<script src="js/tactics.js?v=88"></script>
-<script src="js/repertoire.js?v=88"></script>
-<script src="js/coach.js?v=88"></script>
-<script src="js/app.js?v=88"></script>
+<script src="js/chess.min.js?v=91"></script>
+<script src="js/board.js?v=91"></script>
+<script src="js/engine.js?v=91"></script>
+<script src="js/openings.js?v=91"></script>
+<script src="js/analysis.js?v=91"></script>
+<script src="js/training.js?v=91"></script>
+<script src="js/guess.js?v=91"></script>
+<script src="js/endgame.js?v=91"></script>
+<script src="js/tactics.js?v=91"></script>
+<script src="js/repertoire.js?v=91"></script>
+<script src="js/coach.js?v=91"></script>
+<script src="js/app.js?v=91"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');

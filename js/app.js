@@ -15,6 +15,29 @@ const App = (() => {
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
+  // Canonical move-classification taxonomy, mirroring Chess.com's Game Review.
+  // label = French name shown to the user, cls = CSS modifier (badge + move cell
+  // share the same suffix), mark = the classical annotation glyph.
+  // mark = the glyph shown on the move, matching Chess.com's Game Review icons:
+  // !! Brilliant · ! Great · ★ Best · ✔ Excellent · ✓ Good · 📖 Book ·
+  // ?! Inaccuracy · ✗ Miss · ? Mistake · ?? Blunder.
+  const MOVE_CLASS = {
+    brilliant:  { label: 'Brillant',          cls: 'brilliant',  mark: '!!' },
+    great:      { label: 'Formidable',        cls: 'great',      mark: '!' },
+    best:       { label: 'Meilleur',          cls: 'best',       mark: '★' },
+    excellent:  { label: 'Excellent',         cls: 'excellent',  mark: '✔' },
+    good:       { label: 'Bon',               cls: 'good',       mark: '✓' },
+    book:       { label: 'Théorique',         cls: 'book',       mark: '📖' },
+    inaccuracy: { label: 'Imprécision',       cls: 'inaccuracy', mark: '?!' },
+    miss:       { label: 'Occasion manquée',  cls: 'miss',       mark: '✗' },
+    mistake:    { label: 'Erreur',            cls: 'mistake',    mark: '?' },
+    blunder:    { label: 'Gaffe',             cls: 'blunder',    mark: '??' }
+  };
+  const markSpan = (type) => {
+    const m = MOVE_CLASS[type];
+    return m && m.mark ? ` <span class="mv-mark mv-${m.cls}">${m.mark}</span>` : '';
+  };
+
   function init() {
     bindEvents();
     wireTabSync();
@@ -574,13 +597,8 @@ const App = (() => {
 
       const badge = $('#tip-badge');
       badge.className = 'eval-badge';
-      if (r.type === 'brilliant') { badge.textContent = 'Brillant !'; badge.classList.add('brilliant'); }
-      else if (r.type === 'best') { badge.textContent = 'Meilleur'; badge.classList.add('best'); }
-      else if (r.type === 'great') { badge.textContent = 'Excellent'; badge.classList.add('great'); }
-      else if (r.type === 'blunder') { badge.textContent = 'Gaffe !'; badge.classList.add('blunder'); }
-      else if (r.type === 'mistake') { badge.textContent = 'Erreur'; badge.classList.add('mistake'); }
-      else if (r.type === 'inaccuracy') { badge.textContent = 'Imprécision'; badge.classList.add('inaccuracy'); }
-      else if (r.type === 'good') { badge.textContent = 'Bon coup'; badge.classList.add('good'); }
+      const meta = MOVE_CLASS[r.type];
+      if (meta) { badge.textContent = (meta.mark ? meta.mark + ' ' : '') + meta.label; badge.classList.add(meta.cls); }
       else { badge.textContent = ''; }
     }
 
@@ -1461,6 +1479,12 @@ const App = (() => {
         candidates.push({ index: i, label, score: 10 + swing, desc, badge: 'Gaffe' + badgeSuffix, badgeClass: 'gaffe', isUserMove, user, isWhite });
       }
 
+      if (r.type === 'miss') {
+        let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
+        if (isUserMove) desc += ' Un gain à ne pas laisser passer.';
+        candidates.push({ index: i, label, score: 11, desc, badge: 'Occasion manquée' + badgeSuffix, badgeClass: 'miss', isUserMove, user, isWhite });
+      }
+
       if (r.type === 'inaccuracy') {
         let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
         candidates.push({ index: i, label, score: 4, desc, badge: 'Imprécision' + badgeSuffix, badgeClass: 'imprecision', isUserMove, user, isWhite });
@@ -1522,7 +1546,7 @@ const App = (() => {
       item.className = 'gm-chip ' + p.badgeClass;
       item.innerHTML = `
         <span class="gm-dot"></span>
-        <span class="gm-move">${p.label}</span>
+        <span class="gm-move">${p.label}${markSpan(r.type)}</span>
         <span class="gm-label">${p.badge.toLowerCase()}</span>
         <span class="gm-eval">${evalStr}</span>`;
       item.addEventListener('click', () => userNav(p.index + 1));
@@ -1703,14 +1727,9 @@ const App = (() => {
     const cell = document.createElement('span');
     cell.className = 'move-cell';
     cell.dataset.index = index;
-    cell.textContent = result.sanFr;
-    if (result.type === 'brilliant') cell.classList.add('brilliant-move');
-    if (result.type === 'best') cell.classList.add('best-move');
-    if (result.type === 'great') cell.classList.add('great-move');
-    if (result.type === 'blunder') cell.classList.add('blunder-move');
-    if (result.type === 'mistake') cell.classList.add('mistake-move');
-    if (result.type === 'inaccuracy') cell.classList.add('inaccuracy-move');
-    if (result.type === 'good') cell.classList.add('good-move');
+    const meta = MOVE_CLASS[result.type];
+    cell.innerHTML = result.sanFr + markSpan(result.type);
+    if (meta) cell.classList.add(meta.cls + '-move');
     cell.addEventListener('click', () => userNav(index + 1));
     return cell;
   }
@@ -1719,13 +1738,16 @@ const App = (() => {
     const s = summary.stats;
     const pillsHtml = (side) => {
       let pills = '';
-      if (side.brilliants) pills += `<span class="stat-pill brilliants">${side.brilliants} brillant${side.brilliants !== 1 ? 's' : ''}</span>`;
-      if (side.best) pills += `<span class="stat-pill best-moves">${side.best} meilleur${side.best !== 1 ? 's' : ''}</span>`;
-      if (side.great) pills += `<span class="stat-pill great-moves">${side.great} excellent${side.great !== 1 ? 's' : ''}</span>`;
-      if (side.good) pills += `<span class="stat-pill good-moves">${side.good} bon${side.good !== 1 ? 's' : ''}</span>`;
-      if (side.inaccuracies) pills += `<span class="stat-pill inaccuracies">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
-      pills += `<span class="stat-pill mistakes">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
-      pills += `<span class="stat-pill blunders">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
+      if (side.brilliants) pills += `<span class="stat-pill brilliant">${side.brilliants} brillant${side.brilliants !== 1 ? 's' : ''}</span>`;
+      if (side.great) pills += `<span class="stat-pill great">${side.great} formidable${side.great !== 1 ? 's' : ''}</span>`;
+      if (side.best) pills += `<span class="stat-pill best">${side.best} meilleur${side.best !== 1 ? 's' : ''}</span>`;
+      if (side.excellent) pills += `<span class="stat-pill excellent">${side.excellent} excellent${side.excellent !== 1 ? 's' : ''}</span>`;
+      if (side.good) pills += `<span class="stat-pill good">${side.good} bon${side.good !== 1 ? 's' : ''}</span>`;
+      if (side.book) pills += `<span class="stat-pill book">${side.book} théorique${side.book !== 1 ? 's' : ''}</span>`;
+      if (side.inaccuracies) pills += `<span class="stat-pill inaccuracy">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
+      if (side.misses) pills += `<span class="stat-pill miss">${side.misses} occasion${side.misses !== 1 ? 's' : ''} manquée${side.misses !== 1 ? 's' : ''}</span>`;
+      pills += `<span class="stat-pill mistake">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
+      pills += `<span class="stat-pill blunder">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
       return pills;
     };
     let html = `

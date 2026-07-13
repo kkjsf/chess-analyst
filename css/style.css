@@ -812,23 +812,82 @@ html, body {
   color: var(--text-dim);
 }
 
-/* Brilliant badge & move */
-.eval-badge.brilliant { background: #1a2e3b; color: #67d4e8; }
-.eval-badge.best { background: #1a3b2a; color: #4ade80; }
-.eval-badge.great { background: #1e3328; color: #7dd8a8; }
+/* ── Move classification colours (Chess.com's 10 categories) ──
+   One palette shared by the move badge, the stat pills and the move-list cells.
+   brilliant=cyan · formidable=blue · best/excellent=green · good=olive ·
+   théorique=tan · imprécision=jaune · occasion manquée=orange-rouge ·
+   erreur=orange · gaffe=rouge. */
+.eval-badge.brilliant  { background: #16303b; color: #67d4e8; }
+.eval-badge.great      { background: #1a2740; color: #86b3e6; }
+.eval-badge.best       { background: #14331f; color: #4ade80; }
+.eval-badge.excellent  { background: #17321f; color: #86d99a; }
+.eval-badge.good       { background: #262f18; color: #c2d69a; }
+.eval-badge.book       { background: #2f2717; color: #d4b177; }
 .eval-badge.inaccuracy { background: #3b2e1a; color: var(--warning); }
-.move-cell.brilliant-move { border-bottom: 2px solid #67d4e8; }
-.move-cell.best-move { border-bottom: 2px solid #4ade80; }
-.move-cell.great-move { border-bottom: 2px solid #7dd8a8; }
+.eval-badge.miss       { background: #38221a; color: #f0956e; }
+.eval-badge.mistake    { background: #3b2a1a; color: #f0a050; }
+.eval-badge.blunder    { background: #3b1a1a; color: var(--danger); }
+.eval-badge.neutral    { background: #2a2a3a; color: var(--text-dim); }
+
+.stat-pill.brilliant  { background: #16303b; color: #67d4e8; }
+.stat-pill.great      { background: #1a2740; color: #86b3e6; }
+.stat-pill.best       { background: #14331f; color: #4ade80; }
+.stat-pill.excellent  { background: #17321f; color: #86d99a; }
+.stat-pill.good       { background: #262f18; color: #c2d69a; }
+.stat-pill.book       { background: #2f2717; color: #d4b177; }
+.stat-pill.inaccuracy { background: #3b2e1a; color: var(--warning); }
+.stat-pill.miss       { background: #38221a; color: #f0956e; }
+.stat-pill.mistake    { background: #3b2a1a; color: #f0a050; }
+.stat-pill.blunder    { background: #3b1a1a; color: var(--danger); }
+
+.move-cell.brilliant-move  { border-bottom: 2px solid #67d4e8; }
+.move-cell.great-move      { border-bottom: 2px solid #86b3e6; }
+.move-cell.best-move       { border-bottom: 2px solid #4ade80; }
+.move-cell.excellent-move  { border-bottom: 2px solid #86d99a; }
+.move-cell.good-move       { border-bottom: 2px solid #c2d69a; }
+.move-cell.book-move       { border-bottom: 2px solid #d4b177; }
 .move-cell.inaccuracy-move { border-bottom: 2px solid var(--warning); }
-.highlight-badge.brillant { background: #1a2e3b; color: #67d4e8; }
-.highlight-badge.best { background: #1a3b2a; color: #4ade80; }
-.highlight-badge.great { background: #1e3328; color: #7dd8a8; }
+.move-cell.miss-move       { border-bottom: 2px solid #f0956e; }
+.move-cell.mistake-move    { border-bottom: 2px solid #f0a050; }
+.move-cell.blunder-move    { border-bottom: 2px solid var(--danger); }
+
+.gm-chip.miss .gm-dot { background: #f0956e; }
+.gm-chip.miss .gm-label { color: #f0b79e; }
+
+.highlight-badge.brillant { background: #16303b; color: #67d4e8; }
+.highlight-badge.best { background: #14331f; color: #4ade80; }
+.highlight-badge.great { background: #1a2740; color: #86b3e6; }
 .highlight-badge.erreur { background: #3b2a1a; color: #f0a050; }
-.stat-pill.brilliants { background: #1a2e3b; color: #67d4e8; }
-.stat-pill.best-moves { background: #1a3b2a; color: #4ade80; }
-.stat-pill.great-moves { background: #1e3328; color: #7dd8a8; }
-.stat-pill.inaccuracies { background: #3b2e1a; color: var(--warning); }
+
+/* Move-classification glyph — the little Chess.com-style icon shown on each
+   move (!! ! ★ ✔ ✓ 📖 ?! ✗ ? ??). Bright category colour, dark glyph. */
+.mv-mark {
+  display: inline-block;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  font-style: normal;
+  line-height: 15px;
+  text-align: center;
+  vertical-align: middle;
+  color: #16181f;
+  margin-left: 3px;
+}
+.mv-mark.mv-brilliant  { background: #67d4e8; }
+.mv-mark.mv-great      { background: #86b3e6; }
+.mv-mark.mv-best       { background: #4ade80; }
+.mv-mark.mv-excellent  { background: #86d99a; }
+.mv-mark.mv-good       { background: #c2d69a; }
+.mv-mark.mv-book       { background: none; margin-left: 2px; }
+.mv-mark.mv-inaccuracy { background: #f7c631; }
+.mv-mark.mv-miss       { background: #f0956e; }
+.mv-mark.mv-mistake    { background: #f0a050; }
+.mv-mark.mv-blunder    { background: #e86a6a; color: #fff; }
+/* Inside the guide legend pills, the glyph sits before the name */
+.info-badge .mv-mark { margin-left: 0; margin-right: 4px; }
 
 /* Win chance graph */
 .win-graph-card {
@@ -1508,14 +1567,17 @@ html, body {
   margin-right: 4px;
   vertical-align: middle;
 }
-.info-badge.brillant { background: #1a2e3b; color: #67d4e8; }
-.info-badge.best { background: #1a3b2a; color: #4ade80; }
-.info-badge.great { background: #1e3328; color: #7dd8a8; }
-.info-badge.bon-coup { background: #1a3b2a; color: var(--success); }
-.info-badge.neutre { background: #2a2a3a; color: var(--text-dim); }
-.info-badge.imprecision { background: #3b2e1a; color: var(--warning); }
-.info-badge.erreur { background: #3b2a1a; color: #f0a050; }
-.info-badge.gaffe { background: #3b1a1a; color: var(--danger); }
+.info-badge.brilliant  { background: #16303b; color: #67d4e8; }
+.info-badge.great      { background: #1a2740; color: #86b3e6; }
+.info-badge.best       { background: #14331f; color: #4ade80; }
+.info-badge.excellent  { background: #17321f; color: #86d99a; }
+.info-badge.good       { background: #262f18; color: #c2d69a; }
+.info-badge.book       { background: #2f2717; color: #d4b177; }
+.info-badge.neutre     { background: #2a2a3a; color: var(--text-dim); }
+.info-badge.inaccuracy { background: #3b2e1a; color: var(--warning); }
+.info-badge.miss       { background: #38221a; color: #f0956e; }
+.info-badge.mistake    { background: #3b2a1a; color: #f0a050; }
+.info-badge.blunder    { background: #3b1a1a; color: var(--danger); }
 
 /* Alt move explorer */
 .alt-move {

@@ -17,6 +17,11 @@ on:
         description: 'Stockfish search depth per position'
         required: false
         default: '20'
+      full:
+        description: 'Re-analyze the ENTIRE archive (after a classification change). Slow (~3h).'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [main]
     # Run when the analyzer changes — NOT when coach-data.json is committed
@@ -53,6 +58,7 @@ jobs:
         working-directory: tools
         env:
           STOCKFISH_PATH: /usr/games/stockfish
+          FULL: ${{ github.event.inputs.full == 'true' && '1' || '0' }}
         run: node analyze.mjs --user "${{ github.event.inputs.user || 'nimokaji' }}" --depth "${{ github.event.inputs.depth || '20' }}"
 
       - name: Commit results

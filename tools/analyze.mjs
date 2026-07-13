@@ -29,6 +29,10 @@ const USER = getArg('user', process.env.CHESSCOM_USER || 'nimokaji');
 const DEPTH = parseInt(getArg('depth', '20'), 10);
 const MAX = getArg('max', null) ? parseInt(getArg('max'), 10) : null;
 const MOCK = !!getArg('mock', false);
+// --full (or FULL=1) ignores the existing coach-data.json so EVERY game is
+// re-analyzed from scratch — use it after a classification change so the whole
+// archive is re-graded, not just new games (the default is incremental).
+const FULL = !!getArg('full', false) || process.env.FULL === '1' || process.env.FULL === 'true';
 const OUT = resolve(__dirname, getArg('out', '../coach-data.json'));
 const STOCKFISH_PATH = process.env.STOCKFISH_PATH || 'stockfish';
 const UA = 'chess-analyst-coach/1.0 (+https://github.com/kkjsf/chess-analyst)';
@@ -179,11 +183,14 @@ async function analyzeGame(rec) {
 
 // ─────────────── main ───────────────
 async function main() {
-  console.log(`[coach] user=${USER} depth=${DEPTH} engine=${MOCK ? 'mock' : STOCKFISH_PATH}${MAX ? ` max=${MAX}` : ''}`);
+  console.log(`[coach] user=${USER} depth=${DEPTH} engine=${MOCK ? 'mock' : STOCKFISH_PATH}${MAX ? ` max=${MAX}` : ''}${FULL ? ' FULL' : ''}`);
 
-  // load existing output → keep already-analyzed games
+  // load existing output → keep already-analyzed games (skipped when --full,
+  // which forces a complete re-analysis of the whole archive)
   let existing = {};
-  if (existsSync(OUT)) {
+  if (FULL) {
+    console.log('[coach] FULL re-analysis — ignoring existing results, re-grading every game');
+  } else if (existsSync(OUT)) {
     try {
       const prev = JSON.parse(readFileSync(OUT, 'utf8'));
       for (const g of (prev.games || [])) if (g.analysis && !g.analysis.error && !excludedOpp(g.oppName) && !SKIP_TC.has(g.timeClass)) existing[g.uuid] = g;

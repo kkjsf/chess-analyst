@@ -1139,16 +1139,19 @@ const Coach = (() => {
 
   // ── Qualité des coups (répartition meilleur → gaffe) ──
   function renderMoveQuality(an) {
-    const q = { brilliant: 0, best: 0, great: 0, good: 0, ok: 0, inaccuracy: 0, mistake: 0, blunder: 0, moveCount: 0 };
+    const q = { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, ok: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0, moveCount: 0 };
     an.forEach(g => { const m = g.analysis.moveQuality; if (!m) return; for (const k in q) q[k] += m[k] || 0; });
     if (!q.moveCount) return '';
     const order = [
-      { k: 'brilliant', l: 'Brillant', c: '#46c6b0' },
+      { k: 'brilliant', l: 'Brillant', c: '#67d4e8' },
+      { k: 'great', l: 'Formidable', c: '#7ba7d6' },
       { k: 'best', l: 'Meilleur', c: '#56b886' },
-      { k: 'great', l: 'Excellent', c: '#7bbf8c' },
-      { k: 'good', l: 'Bon', c: '#9ab87f' },
+      { k: 'excellent', l: 'Excellent', c: '#86d99a' },
+      { k: 'good', l: 'Bon', c: '#b9cf8f' },
+      { k: 'book', l: 'Théorique', c: '#cdab72' },
       { k: 'ok', l: 'Correct', c: '#8a8aa0' },
       { k: 'inaccuracy', l: 'Imprécision', c: '#e2b857' },
+      { k: 'miss', l: 'Occasion manquée', c: '#ef7c6a' },
       { k: 'mistake', l: 'Erreur', c: '#e08a4b' },
       { k: 'blunder', l: 'Gaffe', c: '#d36b6b' }
     ];
@@ -1157,7 +1160,7 @@ const Coach = (() => {
       q[o.k] ? `<span style="width:${pct(q[o.k], total)}%;background:${o.c}" title="${o.l} : ${q[o.k]}"></span>` : '').join('') + `</div>`;
     const legend = order.filter(o => q[o.k]).map(o =>
       `<span class="coach-legend-item"><i style="background:${o.c}"></i>${o.l} <b>${q[o.k]}</b> · ${pct(q[o.k], total)}%</span>`).join('');
-    const goodPct = pct(q.brilliant + q.best + q.great + q.good, total);
+    const goodPct = pct(q.brilliant + q.great + q.best + q.excellent + q.good + q.book, total);
     return `<div class="home-card coach-card">
       <h3>♟ Qualité de tes coups</h3>
       <p class="coach-sub2">${total} coups sur ${an.length} parties · <b>${goodPct}%</b> de très bons coups</p>

@@ -7,13 +7,17 @@ const Endgame = (() => {
 
   const SCENARIOS = [
     { id: '2r', icon: '🪜', name: 'Deux tours (le plus simple)', fen: '4k3/8/8/8/8/8/8/R3K2R w - - 0 1',
-      tip: "L'escalier : une tour barre une rangée, l'autre repousse le roi noir d'un cran. Garde tes tours loin du roi ennemi." },
+      tip: "L'escalier : une tour barre une rangée, l'autre repousse le roi noir d'un cran. Garde tes tours loin du roi ennemi.",
+      mate: "le <b>mat de l'escalier</b> : les deux tours repoussent le roi rangée par rangée jusqu'au bord." },
     { id: 'q', icon: '👑', name: 'Dame + Roi', fen: '4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1',
-      tip: "Approche ton roi. Garde la dame à un saut de cavalier du roi noir (jamais juste à côté) pour éviter le PAT, puis mate au bord." },
+      tip: "Approche ton roi. Garde la dame à un saut de cavalier du roi noir (jamais juste à côté) pour éviter le PAT, puis mate au bord.",
+      mate: "le <b>mat à la dame</b> : le roi acculé au bord, la dame donne l'échec final soutenue par ton roi." },
     { id: 'r', icon: '🏰', name: 'Tour + Roi', fen: '4k3/8/8/8/8/8/8/R3K3 w - - 0 1',
-      tip: "Roi et tour ensemble : prends l'opposition avec ton roi face au roi noir, la tour donne l'échec qui le repousse vers le bord." },
+      tip: "Roi et tour ensemble : prends l'opposition avec ton roi face au roi noir, la tour donne l'échec qui le repousse vers le bord.",
+      mate: "le <b>mat à la tour</b> : le roi enfermé sur la dernière rangée, comme un <b>mat du couloir</b>." },
     { id: 'p', icon: '♙', name: 'Pousser un pion', fen: '4k3/8/8/8/8/4P3/8/4K3 w - - 0 1',
-      tip: "Mets ton ROI devant le pion (l'opposition), fais la dame, puis mate. Attention au pat quand le roi noir est coincé !" },
+      tip: "Mets ton ROI devant le pion (l'opposition), fais la dame, puis mate. Attention au pat quand le roi noir est coincé !",
+      mate: "la <b>promotion puis mat à la dame</b> : le pion devenu dame livre le mat au bord." },
   ];
 
   let chess = null, sc = null, busy = false, selected = null, plies = 0;
@@ -183,7 +187,8 @@ const Endgame = (() => {
       } else {
         const rec = recordWin(sc.id, plies);
         const recLine = rec.isRecord ? ' 🏅 Nouveau record !' : ` (ton record : ${rec.best} coups)`;
-        setStatus(`🎉 Échec et mat en ${plies} coups ! Bravo, finale gagnée.${recLine}`, 'right');
+        const patt = sc && sc.mate ? ` Tu viens de réussir ${sc.mate}` : '';
+        setStatus(`🎉 Échec et mat en ${plies} coups ! Bravo, finale gagnée.${recLine}${patt}`, 'right');
       }
       lockBoard(); return true;
     }

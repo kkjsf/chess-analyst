@@ -440,8 +440,8 @@ const Analyzer = (() => {
 
   function generateSummary(results, moves) {
     const stats = {
-      w: { brilliants: 0, best: 0, great: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 },
-      b: { brilliants: 0, best: 0, great: 0, good: 0, inaccuracies: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, moveCount: 0 }
+      w: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 },
+      b: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 }
     };
     let keyMoment = null;
 
@@ -452,15 +452,21 @@ const Analyzer = (() => {
       stats[side].moveCount++;
       stats[side].totalCpLoss += r.cpLoss || 0;
       stats[side].totalWinLoss += r.winPctLoss || 0;
+      // Per-move accuracy, Chess.com's formula: 103.1668·e^(−0.04354·Δwin%) − 3.1669
+      stats[side].totalAcc += Math.max(0, Math.min(100,
+        103.1668 * Math.exp(-0.04354 * ((r.winPctLoss || 0) * 100)) - 3.1669));
 
       if (r.type === 'brilliant') stats[side].brilliants++;
       if (r.type === 'best') stats[side].best++;
       if (r.type === 'great') stats[side].great++;
+      if (r.type === 'excellent') stats[side].excellent++;
       if (r.type === 'good') stats[side].good++;
+      if (r.type === 'book') stats[side].book++;
       if (r.type === 'inaccuracy') stats[side].inaccuracies++;
+      if (r.type === 'miss') stats[side].misses++;
       if (r.type === 'mistake') stats[side].mistakes++;
-      if (r.type === 'blunder') {
-        stats[side].blunders++;
+      if (r.type === 'blunder' || r.type === 'miss') {
+        if (r.type === 'blunder') stats[side].blunders++;
         if (!keyMoment) {
           keyMoment = { index: i, result: r, moveNum: Math.floor(i / 2) + 1 };
         }
@@ -479,8 +485,7 @@ const Analyzer = (() => {
     for (const side of ['w', 'b']) {
       const s = stats[side];
       s.acpl = s.moveCount > 0 ? Math.round(s.totalCpLoss / s.moveCount) : 0;
-      const avgWinLoss = s.moveCount > 0 ? s.totalWinLoss / s.moveCount : 0;
-      s.accuracy = Math.max(0, Math.min(100, Math.round((1 - avgWinLoss * 2) * 100)));
+      s.accuracy = s.moveCount > 0 ? Math.round(s.totalAcc / s.moveCount) : 100;
     }
 
     const opening = moves ? Openings.detect(moves.map(m => m.san || m)) : null;
@@ -558,7 +563,7 @@ const Analyzer = (() => {
         if (minUserEval === null || ue < minUserEval) minUserEval = ue;
       }
 
-      if (r.type === 'blunder' || r.type === 'mistake') {
+      if (r.type === 'blunder' || r.type === 'mistake' || r.type === 'miss') {
         phaseErrors[phase]++;
         if (r.fenBefore && r.bestUci) {
           blunders.push({
@@ -570,7 +575,7 @@ const Analyzer = (() => {
       }
 
       const loss = r.winPctLoss || 0;
-      phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round((1 - loss * 2) * 100)));
+      phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round(103.1668 * Math.exp(-0.04354 * loss * 100) - 3.1669)));
       phaseAcc[phase].count++;
       phaseCp[phase].total += r.cpLoss || 0;
       phaseCp[phase].count++;
@@ -586,11 +591,12 @@ const Analyzer = (() => {
 
     const acplOf = (k) => phaseCp[k].count ? Math.round(phaseCp[k].total / phaseCp[k].count) : 0;
     const mq = {
-      brilliant: us.brilliants || 0, best: us.best || 0, great: us.great || 0, good: us.good || 0,
-      inaccuracy: us.inaccuracies || 0, mistake: us.mistakes || 0, blunder: us.blunders || 0,
+      brilliant: us.brilliants || 0, best: us.best || 0, great: us.great || 0,
+      excellent: us.excellent || 0, good: us.good || 0, book: us.book || 0,
+      inaccuracy: us.inaccuracies || 0, miss: us.misses || 0, mistake: us.mistakes || 0, blunder: us.blunders || 0,
       moveCount: us.moveCount || 0
     };
-    mq.ok = Math.max(0, mq.moveCount - (mq.brilliant + mq.best + mq.great + mq.good + mq.inaccuracy + mq.mistake + mq.blunder));
+    mq.ok = Math.max(0, mq.moveCount - (mq.brilliant + mq.best + mq.great + mq.excellent + mq.good + mq.book + mq.inaccuracy + mq.miss + mq.mistake + mq.blunder));
 
     const time = computeTimeStats(results, info, side, blunders.map(b => b.ply));
 
@@ -698,6 +704,7 @@ const Analyzer = (() => {
       let bestMoveUci = null;
       let evalForWhite = null;
       let winPctLoss = 0;
+      let winBefore = 0.5, winAfterPlayed = 0.5, onlyMoveGap = 0;
       const alternatives = [];
 
       if (evalBefore && evalAfter) {
@@ -719,9 +726,32 @@ const Analyzer = (() => {
 
         evalForWhite = isWhite ? -evalAfter.score : evalAfter.score;
 
-        const winBefore = cpToWinPct(evalBefore.score);
-        const winAfterPlayed = cpToWinPct(-evalAfter.score);
+        // Expected points before = value of the position with best play (mover
+        // POV). Expected points after the played move: score it INSIDE the same
+        // pre-move search whenever we can — the engine's own MultiPV line for
+        // that move — so the best move loses exactly 0 and we don't pick up
+        // noise from comparing two independent 1.5 s searches (which made even
+        // top moves look like inaccuracies). Only moves outside the top-N fall
+        // back to the after-position search. This mirrors Chess.com.
+        winBefore = cpToWinPct(evalBefore.score);
+        let scoreAfterMover;
+        if (bestMoveUci && playedUci === bestMoveUci) {
+          scoreAfterMover = evalBefore.score;
+        } else {
+          const playedLine = evalBefore.lines && evalBefore.lines.find(l => l && l.move === playedUci && typeof l.score === 'number');
+          scoreAfterMover = playedLine ? playedLine.score : -evalAfter.score;
+        }
+        winAfterPlayed = cpToWinPct(scoreAfterMover);
         winPctLoss = Math.max(0, winBefore - winAfterPlayed);
+
+        // Gap (in cp, mover POV) between the engine's #1 and #2 lines — how much
+        // worse every alternative is. A large gap means the best move was the
+        // "only move", which Chess.com rewards as a Great Move (!).
+        if (evalBefore.lines && evalBefore.lines.length >= 2 &&
+            typeof evalBefore.lines[0].score === 'number' &&
+            typeof evalBefore.lines[1].score === 'number') {
+          onlyMoveGap = evalBefore.lines[0].score - evalBefore.lines[1].score;
+        }
 
         if (evalBefore.lines) {
           for (const line of evalBefore.lines) {
@@ -742,32 +772,56 @@ const Analyzer = (() => {
       const playedUciStr = madeMove.from + madeMove.to + (madeMove.promotion || '');
       const isBestMove = bestMoveUci && playedUciStr === bestMoveUci;
 
-      // Classify by win-probability loss (the practical yardstick), not raw
-      // centipawns: near equality a 50-100cp shift is often engine noise, and
-      // without an opening book the engine wrongly dings quiet theory moves.
-      // Opening plies get extra leniency — only a real material loss or a large
-      // win% swing counts, never a bare inaccuracy. wpl is in 0..1.
+      // ── Chess.com move classification ──────────────────────────────────
+      // Every move is graded on "expected points lost" (wpl, 0..1) using the
+      // Expected-Points table from Chess.com's Game Review, plus their special
+      // categories (Brilliant, Great, Book, Miss). Order matters: the special
+      // categories are checked before the plain threshold bands.
+      //   Best        wpl ≈ 0 and you played the engine's #1
+      //   Excellent   wpl 0.00–0.02
+      //   Good        wpl 0.02–0.05
+      //   Inaccuracy  wpl 0.05–0.10
+      //   Mistake     wpl 0.10–0.20
+      //   Blunder     wpl 0.20–1.00
       const wpl = winPctLoss;
-      const inOpening = i < 12;
+      const inBook = bookDepth && i < bookDepth;
+      const noEngine = !(evalBefore && evalAfter);
+      // A "good piece sacrifice" for Brilliant: gave up ≥ a minor's worth of
+      // material, the move is still strong (not an error), you don't end up
+      // worse, and you weren't already completely winning without it.
+      const isSacrifice = matChange <= -2;
       let type;
-      if (madeMove.san.includes('#')) {
-        type = 'best';
-      } else if (cpLoss <= 5 && matChange <= -2) {
+
+      if (noEngine) {
+        // Heuristic fallback path (no Stockfish) — keep it simple.
+        type = madeMove.san.includes('#') ? 'best' : 'neutral';
+      } else if (isSacrifice && wpl < 0.05 && winAfterPlayed >= 0.50 && winBefore <= 0.97) {
         type = 'brilliant';
-      } else if (inOpening) {
-        if (wpl >= 0.30 || matChange <= -3) type = 'blunder';
-        else if (wpl >= 0.22) type = 'mistake';
-        else if (isBestMove || cpLoss === 0) type = 'best';
-        else if (cpLoss <= 12 || wpl < 0.04) type = 'great';
-        else type = 'neutral';
+      } else if (wpl >= 0.20) {
+        // Blunder — but if a winning move was on the board and you threw the
+        // win away (rather than a losing position getting worse), Chess.com
+        // shows this as a Miss.
+        type = (winBefore >= 0.70 && winAfterPlayed < 0.55) ? 'miss' : 'blunder';
+      } else if (wpl >= 0.10) {
+        type = (winBefore >= 0.70 && winAfterPlayed < 0.55) ? 'miss' : 'mistake';
+      } else if (inBook) {
+        // Recognised opening theory shows as Book (📖), never a bare inaccuracy —
+        // Chess.com trusts its book for any non-error move.
+        type = 'book';
+      } else if (wpl >= 0.05) {
+        type = 'inaccuracy';
+      } else if (wpl >= 0.02) {
+        type = 'good';
+      } else if ((isBestMove || cpLoss === 0) && onlyMoveGap >= 150 &&
+                 winBefore > 0.15 && winBefore < 0.92) {
+        // The only good move in a contested position — a Great Move (!).
+        type = 'great';
+      } else if (isBestMove || cpLoss === 0) {
+        type = 'best';
       } else {
-        if (wpl >= 0.30 || cpLoss >= 300) type = 'blunder';
-        else if (wpl >= 0.17 || cpLoss >= 180) type = 'mistake';
-        else if (wpl >= 0.09 || cpLoss >= 110) type = 'inaccuracy';
-        else if (isBestMove || cpLoss === 0) type = 'best';
-        else if (cpLoss <= 12 || wpl < 0.03) type = 'great';
-        else type = 'neutral';
+        type = 'excellent';
       }
+      if (madeMove.san.includes('#')) type = 'best';
 
       const evalDesc = evalAfter ? describeEval(evalForWhite) : '';
       const ed = evalDesc ? ' ' + evalDesc : '';
@@ -775,7 +829,15 @@ const Analyzer = (() => {
       if (madeMove.san.includes('#')) {
         tipFr = `Échec et mat ! Les ${side} remportent la partie.`;
       } else if (type === 'brilliant') {
-        tipFr = `Brillant ! Dans une position difficile, c'est le meilleur coup possible.${ed}`;
+        tipFr = `Brillant ! Un sacrifice de matériel gagnant — le meilleur coup, et difficile à trouver.${ed}`;
+      } else if (type === 'miss') {
+        const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
+        const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
+        tipFr = bestSpan
+          ? `Occasion manquée ! Vous étiez en position de gagner — il fallait jouer ${bestSpan}.${whyBad ? ' ' + whyBad : ''}`
+          : `Occasion manquée ! Vous laissez filer un avantage gagnant.${whyBad ? ' ' + whyBad : ''}`;
+        if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
+        tipFr += ed;
       } else if (type === 'blunder') {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
@@ -800,29 +862,36 @@ const Analyzer = (() => {
           : `Imprécision.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ed;
+      } else if (type === 'great') {
+        const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
+        tipFr = enriched
+          ? `Formidable ! Le seul bon coup de la position. ${enriched}${ed}`
+          : `Formidable ! C'était le seul bon coup de la position.${ed}`;
       } else if (type === 'best') {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched
           ? `Meilleur coup ! ${enriched}${ed}`
           : `Meilleur coup ! C'est exactement ce que recommande le moteur.${ed}`;
-      } else if (type === 'great') {
+      } else if (type === 'excellent') {
         if (madeMove.captured) {
           const capName = PIECE_NAMES_FR[madeMove.captured];
           tipFr = `Excellent ! Capture optimale${capName ? ' du ' + capName : ''}.${ed}`;
-        } else if (madeMove.san === 'O-O' || madeMove.san === 'O-O-O') {
-          tipFr = `Bon roque ! Le moteur confirme que c'est un très bon choix ici.${ed}`;
         } else {
           const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
-          tipFr = enriched ? `Très bon coup. ${enriched}${ed}` : `Très bon coup, quasi-optimal.${ed}`;
+          tipFr = enriched ? `Excellent coup. ${enriched}${ed}` : `Excellent coup, quasi-optimal.${ed}`;
         }
+      } else if (type === 'book') {
+        const note = openingMoveNote(madeMove.san);
+        const open = bookInfo && bookInfo.name ? ' de la ' + bookInfo.name : '';
+        tipFr = note
+          ? `Coup théorique${open}. ${note}`
+          : `Coup théorique${open}. Vous suivez la théorie d'ouverture reconnue.`;
+      } else if (type === 'good') {
+        const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
+        tipFr = enriched ? `Bon coup. ${enriched}${ed}` : `Bon coup, sans être optimal.${ed}`;
       } else {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched ? `${enriched}${ed}` : `Coup correct.${ed}`;
-      }
-
-      // Known theory: don't alarm on book moves, echo Chess.com's "coup théorique".
-      if (bookDepth && i < bookDepth && type !== 'blunder' && type !== 'mistake' && type !== 'inaccuracy') {
-        tipFr = `Coup théorique${bookInfo.name ? ' de la ' + bookInfo.name : ''}. Vous suivez la théorie d'ouverture reconnue.`;
       }
 
       const forkTargets = detectForkAfterMove(newFen, madeMove.to, madeMove.color);
@@ -887,10 +956,49 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
+  // Beginner-friendly notes for the most common opening moves, keyed by English
+  // SAN. Shown on "Théorique" moves so e4, the Sicilian, castling, etc. get a
+  // one-line explanation instead of a bare "coup théorique".
+  const OPENING_NOTES = {
+    'e4': "<b>e4</b>, le pion roi : il ouvre la dame et le fou-roi et prend le centre.",
+    'd4': "<b>d4</b>, le pion dame : une prise de centre solide, soutenue par la dame.",
+    'Nf3': "<b>Cf3</b> développe le cavalier roi, attaque e5 et contrôle le centre.",
+    'c4': "<b>c4</b>, l'Anglaise : le pion attaque la case d5 depuis le flanc.",
+    'g3': "<b>g3</b> prépare le fianchetto du fou en g2, sur la grande diagonale.",
+    'Nc3': "<b>Cc3</b> développe le cavalier dame et renforce le contrôle de d5 et e4.",
+    'e5': "<b>e5</b> réplique au centre et libère les pièces, en miroir de e4.",
+    'c5': "<b>c5</b>, la Sicilienne : on conteste le centre de biais, très combatif.",
+    'e6': "<b>e6</b>, la Française : prépare d5 pour défier le centre (enferme un peu le fou c8).",
+    'c6': "<b>c6</b>, la Caro-Kann : prépare d5 solidement, sans bloquer le fou c8.",
+    'd5': "<b>d5</b> conteste directement le centre.",
+    'd6': "<b>d6</b> soutient e5 et libère la voie au fou c8.",
+    'Nf6': "<b>Cf6</b> attaque e4 et développe le cavalier vers le centre.",
+    'Nc6': "<b>Cc6</b> développe le cavalier dame et soutient e5 / d4.",
+    'g6': "<b>g6</b> prépare le fianchetto du fou-roi (défenses indienne / moderne).",
+    'b6': "<b>b6</b> prépare le fianchetto du fou dame en b7.",
+    'Bb5': "<b>Fb5</b>, l'Espagnole : le fou attaque le cavalier qui défend e5.",
+    'Bc4': "<b>Fc4</b>, l'Italienne : le fou vise le point faible f7.",
+    'Bb4': "<b>Fb4</b> cloue le cavalier c3 sur la dame ou le roi.",
+    'Bg2': "<b>Fg2</b> achève le fianchetto : le fou rayonne sur la grande diagonale.",
+    'Bg7': "<b>Fg7</b> achève le fianchetto : le fou tient la grande diagonale.",
+    'O-O': "Le <b>petit roque</b> met le roi à l'abri et active la tour.",
+    'O-O-O': "Le <b>grand roque</b> met le roi à l'abri et centralise la tour dame."
+  };
+  function openingMoveNote(san) {
+    if (!san) return '';
+    const key = san.replace(/[+#!?]/g, '');
+    return OPENING_NOTES[key] || '';
+  }
+
+  // Expected-points / win-probability model, same logistic Chess.com & Lichess
+  // use (k = 0.00368208 per centipawn). Returns 0..1 from the mover's point of
+  // view — 1 = winning, 0.5 = equal, 0 = lost. Every move classification below
+  // is expressed as "expected points lost" = winPct(before) − winPct(after) on
+  // this curve, exactly like Chess.com's Game Review.
   function cpToWinPct(cp) {
     if (cp > 29000) return 1;
     if (cp < -29000) return 0;
-    return 1 / (1 + Math.pow(10, -cp / 400));
+    return 1 / (1 + Math.exp(-0.00368208 * cp));
   }
 
   function describeEval(cpWhite) {
