@@ -2048,10 +2048,10 @@ body.guess-open { overflow: hidden; }
 @media (max-width: 480px) {
   /* Leave a left gutter for the eval bar so it doesn't slide off-screen */
   .board-wrapper { padding-left: 22px; }
-  /* Cap the pinned board by viewport height too, so on short screens it never
-     eats more than ~half the screen and the scrolling content keeps room.
-     Tall phones stay width-limited (full board); short phones shrink it. */
-  .board-container { max-width: min(calc(100% - 22px), max(210px, calc(100dvh - 430px))); }
+  /* The board scrolls away when reading, so it no longer needs to be shrunk to
+     leave room for content — give it the full available width. When pinned for
+     move review it still fits: it's the only thing kept on screen. */
+  .board-container { max-width: calc(100% - 22px); }
   .player-bar { max-width: calc(100% - 22px); }
   .analysis-body { padding: 12px; padding-bottom: calc(78px + env(safe-area-inset-bottom, 0)); }
   .panel { max-width: 100%; }
@@ -2313,10 +2313,13 @@ body.guess-open { overflow: hidden; }
 .rep-plan { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; margin-bottom: 4px; }
 .rep-warn { font-size: 12px; color: var(--warning); line-height: 1.5; }
 
-/* ── Analysis screen: sticky board + segmented content ── */
+/* ── Analysis screen: board + segmented content ──
+   The board flows with the page by default (so reading the cards below gets
+   the full screen). It only pins to the top — via the .pinned class, toggled
+   in JS — while you're actively stepping through moves, then releases as soon
+   as you scroll to read again. */
 .board-sticky {
-  position: sticky;
-  top: 0;
+  position: static;
   z-index: 8;
   background: var(--bg);
   margin: 0 -16px;
@@ -2325,6 +2328,11 @@ body.guess-open { overflow: hidden; }
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  transition: box-shadow 0.2s ease;
+}
+.board-sticky.pinned {
+  position: sticky;
+  top: 0;
   box-shadow: 0 8px 16px -10px rgba(0,0,0,0.7);
 }
 

@@ -42,11 +42,11 @@ const App = (() => {
     const coachBack = $('#btn-coach-back');
     if (coachBack) coachBack.addEventListener('click', () => Coach.hide());
     $('#btn-back').addEventListener('click', showImport);
-    $('#btn-first').addEventListener('click', () => goTo(0));
-    $('#btn-prev').addEventListener('click', () => goTo(currentIndex - 1));
-    $('#btn-next').addEventListener('click', () => goTo(currentIndex + 1));
-    $('#btn-last').addEventListener('click', () => goTo(currentAnalysis.length));
-    $('#move-slider').addEventListener('input', (e) => goTo(+e.target.value));
+    $('#btn-first').addEventListener('click', () => userNav(0));
+    $('#btn-prev').addEventListener('click', () => userNav(currentIndex - 1));
+    $('#btn-next').addEventListener('click', () => userNav(currentIndex + 1));
+    $('#btn-last').addEventListener('click', () => userNav(currentAnalysis.length));
+    $('#move-slider').addEventListener('input', (e) => userNav(+e.target.value));
 
     $$('.tabbar .tab').forEach(t => t.addEventListener('click', () => navTo(t.dataset.tab)));
 
@@ -59,10 +59,10 @@ const App = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (!$('#screen-analysis').classList.contains('active')) return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(currentIndex - 1); scrollToBoard(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); goTo(currentIndex + 1); scrollToBoard(); }
-      if (e.key === 'Home') { e.preventDefault(); goTo(0); scrollToBoard(); }
-      if (e.key === 'End') { e.preventDefault(); goTo(currentAnalysis.length); scrollToBoard(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); userNav(currentIndex - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); userNav(currentIndex + 1); }
+      if (e.key === 'Home') { e.preventDefault(); userNav(0); }
+      if (e.key === 'End') { e.preventDefault(); userNav(currentAnalysis.length); }
     });
 
     const dropZone = $('#drop-zone');
@@ -88,11 +88,20 @@ const App = (() => {
     boardEl.addEventListener('touchend', (e) => {
       const dx = e.changedTouches[0].clientX - touchStartX;
       if (Math.abs(dx) > 40) {
-        if (dx > 0) goTo(currentIndex - 1);
-        else goTo(currentIndex + 1);
-        scrollToBoard();
+        if (dx > 0) userNav(currentIndex - 1);
+        else userNav(currentIndex + 1);
       }
     }, { passive: true });
+
+    // Release the pin as soon as the reader scrolls to read the cards below.
+    // A horizontal swipe on the board is navigation, not reading — keep it pinned.
+    const abody = $('#screen-analysis .analysis-body');
+    if (abody) {
+      abody.addEventListener('wheel', unpinBoard, { passive: true });
+      abody.addEventListener('touchmove', (e) => {
+        if (!boardEl.contains(e.target)) unpinBoard();
+      }, { passive: true });
+    }
   }
 
   function handleShareTarget() {
@@ -430,6 +439,7 @@ const App = (() => {
     setSegment('conseil');
 
     lastRenderIndex = -1;
+    unpinBoard();
     goTo(0);
   }
 
@@ -627,6 +637,24 @@ const App = (() => {
         } catch(_) {}
       });
     });
+  }
+
+  function pinBoard() {
+    const bs = document.querySelector('#screen-analysis .board-sticky');
+    if (bs) bs.classList.add('pinned');
+  }
+  function unpinBoard() {
+    const bs = document.querySelector('#screen-analysis .board-sticky');
+    if (bs) bs.classList.remove('pinned');
+  }
+
+  // Single entry point for every user-initiated move navigation: pin the board
+  // so it stays in view while stepping, jump to the move, and bring the board
+  // on screen if it had scrolled out of view.
+  function userNav(index) {
+    pinBoard();
+    goTo(index);
+    scrollToBoard();
   }
 
   function scrollToBoard() {
@@ -1362,7 +1390,7 @@ const App = (() => {
     const view = document.createElement('button');
     view.className = 'pill pill-ghost';
     view.textContent = "Voir l'échiquier";
-    view.onclick = () => { goTo(i + 1); $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    view.onclick = () => userNav(i + 1);
     actions.appendChild(view);
 
     if (user && errs.length > 1 && typeof GuessMove !== 'undefined') {
@@ -1497,10 +1525,7 @@ const App = (() => {
         <span class="gm-move">${p.label}</span>
         <span class="gm-label">${p.badge.toLowerCase()}</span>
         <span class="gm-eval">${evalStr}</span>`;
-      item.addEventListener('click', () => {
-        goTo(p.index + 1);
-        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      item.addEventListener('click', () => userNav(p.index + 1));
       list.appendChild(item);
     }
     card.hidden = false;
@@ -1686,7 +1711,7 @@ const App = (() => {
     if (result.type === 'mistake') cell.classList.add('mistake-move');
     if (result.type === 'inaccuracy') cell.classList.add('inaccuracy-move');
     if (result.type === 'good') cell.classList.add('good-move');
-    cell.addEventListener('click', () => goTo(index + 1));
+    cell.addEventListener('click', () => userNav(index + 1));
     return cell;
   }
 
@@ -1732,7 +1757,7 @@ const App = (() => {
     $('#summary-content').innerHTML = html;
 
     $$('.km-move[data-goto]').forEach(el => {
-      el.addEventListener('click', () => goTo(+el.dataset.goto));
+      el.addEventListener('click', () => userNav(+el.dataset.goto));
     });
   }
 
@@ -1810,10 +1835,7 @@ const App = (() => {
     card.hidden = false;
 
     container.querySelectorAll('.win-graph-hit').forEach(el => {
-      el.addEventListener('click', () => {
-        goTo(+el.dataset.move);
-        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      el.addEventListener('click', () => userNav(+el.dataset.move));
     });
   }
 
@@ -1903,10 +1925,7 @@ const App = (() => {
 
     $('#pace-content').innerHTML = html;
     card.hidden = false;
-    card.querySelectorAll('.pace-chip').forEach(el => el.addEventListener('click', () => {
-      goTo(+el.dataset.goto);
-      $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }));
+    card.querySelectorAll('.pace-chip').forEach(el => el.addEventListener('click', () => userNav(+el.dataset.goto)));
   }
 
   function buildTimeTrouble(header, analysis) {
@@ -2024,10 +2043,7 @@ const App = (() => {
     card.hidden = false;
 
     content.querySelectorAll('.tt-move-row').forEach(el => {
-      el.addEventListener('click', () => {
-        goTo(+el.dataset.goto);
-        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      el.addEventListener('click', () => userNav(+el.dataset.goto));
     });
   }
 
@@ -2137,10 +2153,7 @@ const App = (() => {
     card.hidden = false;
 
     container.querySelectorAll('.mat-graph-hit').forEach(el => {
-      el.addEventListener('click', () => {
-        goTo(+el.dataset.move);
-        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      el.addEventListener('click', () => userNav(+el.dataset.move));
     });
   }
 
@@ -2590,10 +2603,7 @@ const App = (() => {
     card.hidden = false;
 
     content.querySelectorAll('.tb-result').forEach(el => {
-      el.addEventListener('click', () => {
-        goTo(+el.dataset.goto);
-        $('#board-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      el.addEventListener('click', () => userNav(+el.dataset.goto));
     });
   }
 
