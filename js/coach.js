@@ -1155,17 +1155,29 @@ const Coach = (() => {
       { k: 'mistake', l: 'Erreur', c: '#e08a4b' },
       { k: 'blunder', l: 'Gaffe', c: '#d36b6b' }
     ];
+    const GLYPH = { brilliant: '!!', great: '!', best: '★', excellent: '✔', good: '✓', book: '📖', ok: '·', inaccuracy: '?!', miss: '✗', mistake: '?', blunder: '??' };
     const total = q.moveCount;
+    // Stacked overview bar (true proportions).
     const bar = `<div class="coach-bar coach-bar-tall">` + order.map(o =>
       q[o.k] ? `<span style="width:${pct(q[o.k], total)}%;background:${o.c}" title="${o.l} : ${q[o.k]}"></span>` : '').join('') + `</div>`;
-    const legend = order.filter(o => q[o.k]).map(o =>
-      `<span class="coach-legend-item"><i style="background:${o.c}"></i>${o.l} <b>${q[o.k]}</b> · ${pct(q[o.k], total)}%</span>`).join('');
+    // Per-category rows — bars scaled to the biggest category so rare ones stay
+    // visible; the number shows the true share of all your moves.
+    const present = order.filter(o => q[o.k]);
+    const maxCount = Math.max(1, ...present.map(o => q[o.k]));
+    const rows = present.map(o => `
+      <div class="mq-row">
+        <span class="mq-ico ${o.k === 'book' ? 'mq-ico-book' : ''}" style="${o.k === 'book' ? '' : 'background:' + o.c + ';'}color:${o.k === 'book' ? o.c : '#16181f'}">${GLYPH[o.k] || ''}</span>
+        <span class="mq-label">${o.l}</span>
+        <span class="mq-track"><span class="mq-fill" style="width:${Math.round(q[o.k] / maxCount * 100)}%;background:${o.c}"></span></span>
+        <span class="mq-count">${q[o.k]}</span>
+        <span class="mq-pct">${pct(q[o.k], total)}%</span>
+      </div>`).join('');
     const goodPct = pct(q.brilliant + q.great + q.best + q.excellent + q.good + q.book, total);
     return `<div class="home-card coach-card">
-      <h3>♟ Qualité de tes coups</h3>
-      <p class="coach-sub2">${total} coups sur ${an.length} parties · <b>${goodPct}%</b> de très bons coups</p>
+      <h3>♟ Répartition de tes coups</h3>
+      <p class="coach-sub2">${total} coups sur ${an.length} parties · <b>${goodPct}%</b> de bons coups ou mieux</p>
       ${bar}
-      <div class="coach-legend">${legend}</div>
+      <div class="mq-rows">${rows}</div>
     </div>`;
   }
 
