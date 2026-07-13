@@ -2269,6 +2269,15 @@ body.guess-open { overflow: hidden; }
 .coach-legend-item i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
 .coach-legend-item b { color: var(--text); font-weight: 600; }
 
+/* Documentation move-type table */
+.move-doc-table td { vertical-align: top; }
+.move-doc-table td:first-child { white-space: nowrap; }
+.move-doc-table td:nth-child(2) { color: var(--text-dim); white-space: nowrap; font-size: 11px; }
+.info-content code {
+  display: inline-block; background: var(--bg); color: var(--accent);
+  padding: 2px 7px; border-radius: 5px; font-size: 12.5px; margin: 2px 0;
+}
+
 /* Move-quality distribution: one row per category (glyph · label · bar · n · %) */
 .mq-rows { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .mq-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }

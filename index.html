@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=92">
+<link rel="stylesheet" href="css/style.css?v=93">
 </head>
 <body>
 
@@ -149,22 +149,38 @@
       Pour chaque position, Stockfish évalue les <b>3 meilleurs coups possibles</b> (Multi-PV) pendant 1,5 seconde. Cela permet non seulement de trouver le meilleur coup, mais aussi de proposer des alternatives intéressantes. Le score est exprimé en <b>centipièces</b> (cp) : 100 cp ≈ un pion, 300 cp ≈ un cavalier ou fou, 900 cp ≈ une dame.</p>
 
       <p><b>Classification des coups (modèle Chess.com)</b><br>
-      Chaque coup est noté sur les <b>points espérés perdus</b> : la chance de gain (0 à 1) juste avant le coup, moins celle juste après. C'est le même « Expected Points Model » que la Revue de partie de Chess.com.</p>
-      <ul>
-        <li><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span> Un sacrifice de pièce gagnant, difficile à trouver</li>
-        <li><span class="info-badge great"><i class="mv-mark mv-great">!</i> Formidable</span> Le seul bon coup de la position</li>
-        <li><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span> Le coup #1 du moteur</li>
-        <li><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span> Presque optimal (≤ 0,02 point perdu)</li>
-        <li><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span> Un bon coup (0,02–0,05)</li>
-        <li><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span> Coup d'ouverture reconnu</li>
-        <li><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span> Petit écart (0,05–0,10)</li>
-        <li><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Occasion manquée</span> Une position gagnante laissée filer</li>
-        <li><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span> Coup coûteux (0,10–0,20)</li>
-        <li><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span> Erreur grave (0,20–1,00)</li>
-      </ul>
+      Chaque coup est noté sur les <b>points espérés perdus</b> (pp) : ta chance de gain (0 à 1) juste avant le coup, moins celle juste après. C'est le même « Expected Points Model » que la Revue de partie de Chess.com. Les catégories sont testées de haut en bas — la première qui correspond gagne.</p>
+      <table class="notation-table move-doc-table">
+        <thead><tr><th>Type</th><th>Critère</th><th>Définition</th></tr></thead>
+        <tbody>
+          <tr><td><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span></td><td>&lt; 0,05 pp + sacrifice</td><td>Un sacrifice de pièce gagnant (≥ une mineure donnée), qui reste fort, sans être perdant après ni déjà totalement gagnant avant.</td></tr>
+          <tr><td><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Occasion manquée</span></td><td>≥ 0,10 pp + gain lâché</td><td>Tu étais gagnant (≥ 70 % de chances) et tu retombes sous 55 %. Remplace Erreur/Gaffe quand c'est un gain raté.</td></tr>
+          <tr><td><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span></td><td>≥ 0,20 pp</td><td>Erreur grave, la position bascule.</td></tr>
+          <tr><td><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span></td><td>0,10 – 0,20 pp</td><td>Coup coûteux, l'avantage change de camp.</td></tr>
+          <tr><td><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span></td><td>ouverture connue, &lt; 0,10 pp</td><td>Coup d'ouverture reconnu ; prioritaire sur « Imprécision » dans la théorie connue.</td></tr>
+          <tr><td><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span></td><td>0,05 – 0,10 pp</td><td>Petit écart, l'avantage se grignote.</td></tr>
+          <tr><td><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span></td><td>0,02 – 0,05 pp</td><td>Un bon coup, sans être optimal.</td></tr>
+          <tr><td><span class="info-badge great"><i class="mv-mark mv-great">!</i> Formidable</span></td><td>&lt; 0,02 pp + seul coup</td><td>Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée.</td></tr>
+          <tr><td><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span></td><td>&lt; 0,02 pp, coup n°1</td><td>Le coup n°1 du moteur (perte quasi nulle). Le mat est toujours classé ici.</td></tr>
+          <tr><td><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span></td><td>&lt; 0,02 pp</td><td>Presque optimal, sans être exactement le coup n°1.</td></tr>
+        </tbody>
+      </table>
+
+      <p><b>Le modèle des points espérés (Expected Points)</b><br>
+      Le score du moteur en centipièces (cp) est converti en chance de gain par une courbe logistique, la même que Chess.com et Lichess :<br>
+      <code>gain% = 1 / (1 + e<sup>−0,00368208 × cp</sup>)</code><br>
+      0 cp → 50 %, +100 cp (≈ un pion) → 59 %, +300 cp → 75 %. La <b>perte</b> d'un coup = gain%(avant) − gain%(après), toujours du point de vue du joueur qui joue.</p>
+
+      <p><b>Notation « dans le même cadre »</b><br>
+      Point technique important : le coup joué est évalué <b>à l'intérieur de la recherche de la position d'avant</b> (via sa ligne Multi-PV), pas en comparant deux analyses séparées. Résultat : le meilleur coup vaut exactement 0 perte, et le bruit d'une recherche courte ne transforme plus de bons coups en « imprécisions ». Seuls les coups hors du top-3 sont estimés par la recherche de la position d'après.</p>
 
       <p><b>Score de précision</b><br>
-      La précision reprend la <b>formule de Chess.com</b> : chaque coup reçoit une note (100 % = aucune chance de gain perdue), calculée à partir des points espérés perdus, puis moyennée sur la partie. C'est la même approche que la Revue de partie.</p>
+      Chaque coup reçoit une note avec la formule de Chess.com, puis on fait la moyenne sur la partie :<br>
+      <code>précision = 103,1668 × e<sup>−0,04354 × Δgain%</sup> − 3,1669</code> (bornée 0–100),<br>
+      où Δgain% est la perte du coup exprimée en points de pourcentage. 0 perte → 100 %, 5 % perdus → ≈ 80 %, 20 % perdus → ≈ 40 %.</p>
+
+      <p><b>Moteur & analyse Multi-PV</b><br>
+      Stockfish (WebAssembly) évalue chaque position avec <b>Multi-PV 3</b> (les 3 meilleurs coups) pendant ~1,5 s dans le navigateur. Côté serveur (le Coach), l'analyse tourne à <b>profondeur 20</b> sur GitHub Actions — plus profonde et plus stable. Une position évaluée plus profondément « tremble » moins : c'est pourquoi le bilan du Coach est plus fiable que l'analyse rapide faite sur le téléphone.</p>
 
       <p><b>Flèches et alternatives</b><br>
       Quand vous faites une erreur, le moteur affiche des <b>flèches colorées</b> sur l'échiquier : la flèche <span style="color:#56b886">verte</span> indique le meilleur coup, les flèches <span style="color:#5b8fb9">bleues</span> montrent les alternatives viables. Vous pouvez <b>cliquer sur un coup alternatif</b> dans le conseil pour voir la position résultante sur l'échiquier.</p>
@@ -172,16 +188,19 @@
       <p><b>Détection des menaces</b><br>
       Après chaque coup, l'application analyse la réponse de l'adversaire. Si une menace sérieuse existe (capture d'une pièce, échec, mat), un avertissement ⚠ apparaît dans le conseil.</p>
 
-      <p><b>Détection d'ouverture</b><br>
-      La base de données contient environ 190 ouvertures répertoriées (codes ECO), couvrant les principales variantes jouées au niveau club et au-delà.</p>
+      <p><b>Détection d'ouverture & commentaires</b><br>
+      La base contient environ 190 ouvertures répertoriées (codes ECO). Les coups d'ouverture reconnus sont classés « Théorique » et reçoivent un court commentaire (ex. « e4, le pion roi : il ouvre la dame et le fou-roi et prend le centre »).</p>
 
       <p><b>Barre d'évaluation</b><br>
       La barre verticale à gauche de l'échiquier reflète le score du moteur. Plus elle est blanche, plus les Blancs dominent ; plus elle est sombre, plus les Noirs ont l'avantage.</p>
 
+      <p><b>Le Coach (analyse serveur)</b><br>
+      Le Coach analyse l'ensemble de vos parties Chess.com à profondeur 20 sur un serveur (GitHub Actions), pas sur votre téléphone. Le résultat (~1 Mo) est téléchargé et conservé hors-ligne. Il se met à jour chaque semaine ; une re-analyse complète peut être relancée à la demande après une évolution du calcul.</p>
+
       <p><b>Limites</b></p>
       <ul>
-        <li>L'analyse tourne dans votre navigateur : comptez environ <b>1,5 minute pour 60 coups</b>, 2,5 minutes pour 100 coups.</li>
-        <li>Les conseils sont générés à partir de l'évaluation du moteur, pas d'une base de parties connues.</li>
+        <li>L'analyse locale tourne dans votre navigateur : comptez environ <b>1,5 minute pour 60 coups</b>, 2,5 minutes pour 100 coups.</li>
+        <li>À ~1,5 s/coup, la profondeur locale est limitée : la classification d'un coup près de l'égalité peut varier d'un cran par rapport au Coach (profondeur 20).</li>
         <li>Si le moteur ne se charge pas (navigateur ancien), une analyse heuristique simplifiée prend le relais.</li>
         <li>L'application fonctionne <b>hors-ligne</b> une fois chargée — idéal pour analyser en déplacement.</li>
       </ul>
@@ -593,18 +612,18 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=92"></script>
-<script src="js/board.js?v=92"></script>
-<script src="js/engine.js?v=92"></script>
-<script src="js/openings.js?v=92"></script>
-<script src="js/analysis.js?v=92"></script>
-<script src="js/training.js?v=92"></script>
-<script src="js/guess.js?v=92"></script>
-<script src="js/endgame.js?v=92"></script>
-<script src="js/tactics.js?v=92"></script>
-<script src="js/repertoire.js?v=92"></script>
-<script src="js/coach.js?v=92"></script>
-<script src="js/app.js?v=92"></script>
+<script src="js/chess.min.js?v=93"></script>
+<script src="js/board.js?v=93"></script>
+<script src="js/engine.js?v=93"></script>
+<script src="js/openings.js?v=93"></script>
+<script src="js/analysis.js?v=93"></script>
+<script src="js/training.js?v=93"></script>
+<script src="js/guess.js?v=93"></script>
+<script src="js/endgame.js?v=93"></script>
+<script src="js/tactics.js?v=93"></script>
+<script src="js/repertoire.js?v=93"></script>
+<script src="js/coach.js?v=93"></script>
+<script src="js/app.js?v=93"></script>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js');
