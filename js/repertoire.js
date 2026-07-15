@@ -58,6 +58,41 @@ const Repertoire = (() => {
     }
   ];
 
+  // Real, chess.js-validated tactical cases tied to each line - either a
+  // drillable one-move puzzle (fen+sol) or a text-only "why" note (hint only).
+  // Positions/moves verified offline (node + chess.min.js) before being added here.
+  const TRAPS = [
+    {
+      lineId: 'w-italienne', title: '🪤 S\'il oublie de roquer',
+      hint: 'S\'il traîne à roquer et que tu places Cg5, Cxf7! gagne le pion : son roi ne peut PAS reprendre (ton fou en c4 tient la case f7) et tu fourches Dame + Tour.',
+      fen: 'r1bqk2r/1pp2ppp/p1np1n2/2b1p1N1/2B1P3/2PP4/PP3PPP/RNBQK2R w KQkq - 0 7',
+      sol: ['Nxf7']
+    },
+    {
+      lineId: 'w-2cavaliers', title: '🪤 À connaître si TU joues Noir un jour (Fried Liver)',
+      hint: 'On ne joue pas 4.Cg5 nous-mêmes (trop risqué à retenir), mais si un adversaire te le fait subir : après 4.Cg5 d5 5.exd5, NE reprends PAS 5…Cxd5?? (perd à 6.Cxf7! fourchette Dame+Tour) - joue 5…Ca5! qui chasse le fou.',
+      fen: 'r1bqkb1r/ppp2ppp/2n2n2/3Pp1N1/2B5/8/PPPP1PPP/RNBQK2R b KQkq - 0 5',
+      sol: ['Na5']
+    },
+    {
+      lineId: 'b-italienne', title: '🪤 S\'il joue Cg5 avant que tu aies roqué',
+      hint: 'Roque TOUT DE SUITE (ta tour f8 protège alors f7). Si tu joues autre chose d\'abord, Cxf7! gagne le pion sans recapture possible (ton roi ne peut pas : son fou en c4 tient f7) et fourche Dame + Tour.',
+      fen: 'r1bqk2r/ppp2ppp/2np1n2/2b1p1N1/2B1P3/2PP4/PP3PPP/RNBQK2R b KQkq - 1 6',
+      sol: ['O-O']
+    },
+    {
+      lineId: 'b-berger', title: '🪤 Pourquoi pas 2…Cf6 ?',
+      hint: '2…Cf6?? a l\'air de développer mais oublie de défendre e5 : 3.Dxe5+! gagne un pion gratuit avec échec. C\'est pour ça qu\'on joue 2…Cc6 d\'abord - il défend e5.'
+    },
+    {
+      lineId: 'b-fou', title: '🪤 S\'il joue 3.Dh5 au lieu de 3.d3',
+      hint: 'Sa dame ET son fou visent tous les deux f7. NE prends PAS 3…Cxe4?? (perd : 4.Dxf7 est ÉCHEC ET MAT, ton roi ne peut pas reprendre à cause du fou en c4). Défends-toi comme contre l\'attaque du Berger : 3…g6! chasse la dame.',
+      fen: 'rnbqkb1r/pppp1ppp/5n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3',
+      sol: ['g6']
+    }
+  ];
+  function trapsFor(lineId) { return TRAPS.filter(t => t.lineId === lineId); }
+
   const RULES = [
     'Un coup d\'ouverture = une pièce NOUVELLE développée (pas deux fois la même).',
     'Roque avant le coup 10.',
@@ -134,12 +169,23 @@ const Repertoire = (() => {
   }
 
   // ───────────────────────── cheat-sheet panel ─────────────────────────
+  function trapCard(t, i) {
+    const btn = t.fen && t.sol
+      ? `<button class="train-btn good rep-trap-drill" data-i="${i}">🎯 Essayer ce coup</button>` : '';
+    return `<div class="rep-trap">
+      <div class="rep-trap-title">${t.title}</div>
+      <div class="rep-trap-hint">${t.hint}</div>
+      ${btn}
+    </div>`;
+  }
   function lineCard(l) {
+    const traps = trapsFor(l.id);
     return `<div class="rep-line">
       <div class="rep-line-head"><b>${l.title}</b><span class="rep-vs">${l.vs}</span></div>
       <button class="rep-moves" data-line="${l.sans.join(' ')}" data-name="${l.title}" title="Rejouer sur l'échiquier">${fmtLine(l.sans)} ▶</button>
       <div class="rep-plan">💡 ${l.plan}</div>
       <div class="rep-warn">⚠ ${l.warn}</div>
+      ${traps.map(t => trapCard(t, TRAPS.indexOf(t))).join('')}
     </div>`;
   }
 
@@ -164,12 +210,19 @@ const Repertoire = (() => {
       );
     }));
     host.querySelectorAll('.rep-drill').forEach(btn => btn.addEventListener('click', () => drill(btn.dataset.color)));
+    host.querySelectorAll('.rep-trap-drill').forEach(btn => btn.addEventListener('click', () => {
+      const t = TRAPS[+btn.dataset.i];
+      if (t && t.fen && t.sol && typeof Tactics !== 'undefined' && Tactics.start) {
+        Tactics.start([{ fen: t.fen, sol: t.sol, hint: t.hint }], t.title.replace(/^🪤\s*/, ''));
+      }
+    }));
   }
 
   // Drill through Tactics' solve-it overlay: even sol index = your move, odd =
   // auto-played reply. Black lines start from the position after White's first move.
   function drill(color) {
     if (typeof Tactics === 'undefined' || !Tactics.start) return;
+    const colorLineIds = new Set(LINES.filter(l => l.color === color).map(l => l.id));
     const puzzles = LINES.filter(l => l.color === color).map(l => {
       let fen = START_FEN, sol = l.sans.slice();
       if (l.color === 'b') {
@@ -180,6 +233,11 @@ const Repertoire = (() => {
       if (sol.length % 2 === 0) sol.pop(); // end on the learner's move
       return { fen, sol, hint: l.plan };
     });
+    // only fold a trap into the bulk drill when it's actually the learner's
+    // move in that color's deck (e.g. the Fried Liver trap is a Black-to-move
+    // bonus tied to the w-2cavaliers line - it stays a standalone button instead).
+    TRAPS.filter(t => t.fen && t.sol && colorLineIds.has(t.lineId) && t.fen.split(' ')[1] === color)
+      .forEach(t => puzzles.push({ fen: t.fen, sol: t.sol, hint: t.hint }));
     Tactics.start(puzzles, color === 'w' ? 'Mon répertoire — Blancs' : 'Mon répertoire — Noirs');
   }
 
