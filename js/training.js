@@ -64,17 +64,21 @@ const Training = (() => {
     } catch (_) { return []; }
   }
 
-  // Parse a SAN that may be French (C/F/T/D/R) or English. Try as-is first
-  // (works for English and for pieceless pawn moves), then a French→English
-  // remap. Returns the chess.js move object, or null.
+  // Parse a SAN that may be French (C/F/T/D/R) or English. The tricky case is
+  // 'R': French roi vs English rook. C/F/T/D are French-only and B/N/Q/K are
+  // English-only, so those disambiguate themselves; a leading 'R' (or a pieceless
+  // pawn/castling move) is ambiguous, and since the deck stores French SAN we try
+  // the French reading (roi) first. Returns the chess.js move object, or null.
   function playMove(g, san) {
     if (!san) return null;
-    let m = null;
-    try { m = g.move(san, { sloppy: true }); } catch (_) {}
-    if (m) return m;
-    const en = san.replace(/[CFTDR]/g, c => ({ C: 'N', F: 'B', T: 'R', D: 'Q', R: 'K' }[c]));
-    if (en !== san) { try { m = g.move(en, { sloppy: true }); } catch (_) {} }
-    return m;
+    const toEnglish = s => s.replace(/[CFTDR]/g, c => ({ C: 'N', F: 'B', T: 'R', D: 'Q', R: 'K' }[c]));
+    const tryMove = s => { try { return g.move(s, { sloppy: true }); } catch (_) { return null; } };
+    const isFrench = /[CFTD]/.test(san);   // French-only piece letters
+    const isEnglish = /[BNQK]/.test(san);  // English-only piece letters
+    if (isFrench && !isEnglish) return tryMove(toEnglish(san));
+    if (isEnglish && !isFrench) return tryMove(san);
+    if (/^R/.test(san)) return tryMove(toEnglish(san)) || tryMove(san);
+    return tryMove(san) || tryMove(toEnglish(san));
   }
 
   // Did your actual move drop material? Look at the opponent's best reply: if
@@ -117,6 +121,10 @@ const Training = (() => {
     const caps = g.moves({ verbose: true }).filter(m => m.captured);
     let best = null;
     for (const cap of caps) {
+      // Skip king captures: they only appear when the side we handed the move to
+      // was actually in check (an illegal position), which otherwise reports the
+      // king itself as "hanging" (king value 100). A king is never a hung piece.
+      if (cap.captured === 'k') continue;
       const gain = PIECE_VALUES[cap.captured] || 0;
       if (gain < 3) continue; // only care about a minor piece or more
       let recapVal = 0;
@@ -325,8 +333,7 @@ const Training = (() => {
   const _cleanCache = new Map();
   function isCleanPuzzle(item) {
     if (!item || !item.fen || !item.bestUci || item.bestUci.length < 4) return false;
-    if ((item.cpLoss || 0) > 2000) return false;
-    const ck = item.fen + '|' + item.bestUci + '|' + item.side;
+    const ck = item.fen + '|' + item.bestUci + '|' + item.side + '|' + (item.cpLoss || 0);
     const hit = _cleanCache.get(ck);
     if (hit !== undefined) return hit;
     const res = _isCleanPuzzle(item);
@@ -340,7 +347,12 @@ const Training = (() => {
       move = g.move({ from: item.bestUci.slice(0, 2), to: item.bestUci.slice(2, 4), promotion: item.bestUci[4] || 'q' });
       if (!move) return false;
     } catch (_) { return false; }
+    // A forced mate is always a clean, instructive puzzle — keep it before the
+    // cpLoss gate, since a missed mate is stored with a mate-scale cpLoss.
     if (move.san.includes('#')) return true;
+    // Otherwise a mate-scale cpLoss means you were being mated / mating, not a
+    // material tactic — not a useful "find the best move" card.
+    if ((item.cpLoss || 0) > 2000) return false;
     return !pieceWinnable(g.fen(), item.bestUci.slice(2, 4), item.side);
   }
 

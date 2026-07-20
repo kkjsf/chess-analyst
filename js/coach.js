@@ -1437,18 +1437,20 @@ const Coach = (() => {
   }
 
   async function onSync() {
-    const btn = $('#coach-sync-btn');
-    btn.disabled = true; btn.textContent = '⟳ …';
+    const btn = $('#coach-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⟳ …'; }
     setProgress(true, 0, 'Synchronisation…');
     try {
       const r = await sync((s) => setProgress(true, 0, s));
+      games = await getAll();
       setProgress(false);
       render();
+      syncToTraining();
       flash(`${r.added} nouvelle(s) partie(s). ${r.total} au total.`);
     } catch (e) {
       setProgress(false);
       flash('Échec de la synchronisation. Vérifiez le pseudo Chess.com.', true);
-      btn.disabled = false; btn.textContent = '⟳ Synchroniser';
+      if (btn) { btn.disabled = false; btn.textContent = '⟳ Actualiser'; }
     }
   }
 

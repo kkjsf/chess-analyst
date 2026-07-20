@@ -1,5 +1,6 @@
 const Analyzer = (() => {
   const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+  const CPLOSS_CAP = 1000; // clamp per-move cp loss for ACPL (mate scores ≈ 30000)
   const PIECE_NAMES_FR = { p: 'pion', n: 'cavalier', b: 'fou', r: 'tour', q: 'dame', k: 'roi' };
   const PIECE_ARTICLE_FR = { p: 'le', n: 'le', b: 'le', r: 'la', q: 'la', k: 'le' };
   const SAN_TO_FR = { N: 'C', B: 'F', R: 'T', Q: 'D', K: 'R' };
@@ -450,7 +451,9 @@ const Analyzer = (() => {
       if (!r.move) continue;
       const side = r.move.color;
       stats[side].moveCount++;
-      stats[side].totalCpLoss += r.cpLoss || 0;
+      // Cap per-move cp loss so a single missed/allowed mate (stored as a
+      // ~30000cp mate score) can't blow up the ACPL average.
+      stats[side].totalCpLoss += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       stats[side].totalWinLoss += r.winPctLoss || 0;
       // Per-move accuracy, Chess.com's formula: 103.1668·e^(−0.04354·Δwin%) − 3.1669
       stats[side].totalAcc += Math.max(0, Math.min(100,
@@ -577,7 +580,7 @@ const Analyzer = (() => {
       const loss = r.winPctLoss || 0;
       phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round(103.1668 * Math.exp(-0.04354 * loss * 100) - 3.1669)));
       phaseAcc[phase].count++;
-      phaseCp[phase].total += r.cpLoss || 0;
+      phaseCp[phase].total += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       phaseCp[phase].count++;
 
       if (loss > 0 && (!turningPoint || loss > turningPoint.winPctLoss)) {

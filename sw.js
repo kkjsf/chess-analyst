@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v98';
+const CACHE_NAME = 'chess-analyst-v99';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './js/guess.js',
   './js/endgame.js',
   './js/tactics.js',
+  './js/repertoire.js',
   './js/coach.js',
   './js/app.js',
   './js/chess.min.js',
@@ -58,10 +59,11 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         return response;
       })
-      .catch(() => {
-        const bareUrl = new URL(e.request.url);
-        bareUrl.search = '';
-        return caches.match(bareUrl.toString()) || caches.match(e.request);
+      .catch(async () => {
+        // Offline: try the exact request first, then ignore the ?v= query so a
+        // versioned asset still resolves to its precached (unversioned) entry.
+        return (await caches.match(e.request))
+          || (await caches.match(e.request, { ignoreSearch: true }));
       })
   );
 });

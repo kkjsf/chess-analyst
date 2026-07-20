@@ -396,6 +396,14 @@ const App = (() => {
     $('#progress-fill').classList.remove('indeterminate');
   }
 
+  // Chess.com's estimated game duration for cadence labelling: base + 40·increment.
+  // 10-min (600+0) → 600 → Rapide, matching chess.com's time_class.
+  function tcSeconds(tc) {
+    const m = /(\d+)(?:\+(\d+))?/.exec(tc || '');
+    if (!m) return 0;
+    return parseInt(m[1], 10) + 40 * (parseInt(m[2], 10) || 0);
+  }
+
   function showAnalysis(header, moves, analysis, summary) {
     currentAnalysis = analysis;
     currentIndex = 0;
@@ -414,9 +422,9 @@ const App = (() => {
     let tcLabel = '';
     if (tc.includes('86400') || tc.includes('172800')) tcLabel = 'Journalier';
     else if (tc.includes('+')) {
-      const secs = parseInt(tc);
-      if (secs < 180) tcLabel = 'Bullet';
-      else if (secs <= 600) tcLabel = 'Blitz';
+      const est = tcSeconds(tc);
+      if (est < 180) tcLabel = 'Bullet';
+      else if (est < 600) tcLabel = 'Blitz';
       else tcLabel = 'Rapide';
     }
 
@@ -708,9 +716,9 @@ const App = (() => {
     let tcLabel = '';
     if (tc.includes('86400') || tc.includes('172800')) tcLabel = 'en partie journalière';
     else if (tc.includes('+')) {
-      const secs = parseInt(tc);
-      if (secs <= 180) tcLabel = 'en Bullet';
-      else if (secs <= 600) tcLabel = 'en Blitz';
+      const est = tcSeconds(tc);
+      if (est < 180) tcLabel = 'en Bullet';
+      else if (est < 600) tcLabel = 'en Blitz';
       else tcLabel = 'en Rapide';
     }
 
@@ -1760,7 +1768,7 @@ const App = (() => {
         <div class="stat-pills">${pillsHtml(s.b)}</div>
       </div>`;
     if (summary.engineUsed) {
-      html += `<div class="engine-badge">Analyse Stockfish · profondeur 18 · 3 variantes</div>`;
+      html += `<div class="engine-badge">Analyse Stockfish · ~1,5 s/coup · 3 variantes</div>`;
     }
 
     if (summary.keyMoment) {
