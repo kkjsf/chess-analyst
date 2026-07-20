@@ -1,4 +1,5 @@
 const StockfishEngine = (() => {
+  const EVAL_TIMEOUT = 8000; // ms — abandon a position the engine stalls on
   let worker = null;
   let resolver = null;
   let currentLines = [];
@@ -28,7 +29,15 @@ const StockfishEngine = (() => {
       worker.onerror = () => {
         clearTimeout(timeout);
         failed = true;
-        reject(new Error('worker_error'));
+        if (!ready) {
+          reject(new Error('worker_error'));
+        } else if (resolver) {
+          // Worker died mid-evaluation: settle the pending eval with null so the
+          // caller falls back to a heuristic instead of hanging forever.
+          const r = resolver;
+          resolver = null;
+          r(null);
+        }
       };
 
       let phase = 'uci';
@@ -89,7 +98,7 @@ const StockfishEngine = (() => {
           const best = lines[0] || { score: 0, move: null, pv: '', mate: null };
           const r = resolver;
           resolver = null;
-          r({
+          if (r) r({
             score: best.score,
             bestMove: best.move,
             pv: best.pv,
@@ -107,7 +116,24 @@ const StockfishEngine = (() => {
     if (!ready) return Promise.reject(new Error('not_ready'));
     return new Promise((resolve) => {
       currentLines = [];
-      resolver = resolve;
+      let settled = false;
+      let to = null;
+      const finish = (val) => {
+        if (settled) return;
+        settled = true;
+        if (to) clearTimeout(to);
+        if (resolver === wrapped) resolver = null;
+        resolve(val);
+      };
+      const wrapped = (r) => finish(r);
+      resolver = wrapped;
+      to = setTimeout(() => {
+        // The engine stalled on this position — stop the search and hand back
+        // null so analyzeGameAsync falls back to a heuristic for this move
+        // instead of freezing the whole analysis at N/total.
+        try { worker.postMessage('stop'); } catch (_) {}
+        finish(null);
+      }, EVAL_TIMEOUT);
       worker.postMessage('position fen ' + fen);
       if (typeof depth === 'string' && depth.startsWith('movetime')) {
         worker.postMessage('go ' + depth);

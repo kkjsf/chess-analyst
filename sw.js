@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v99';
+const CACHE_NAME = 'chess-analyst-v100';
 const ASSETS = [
   './',
   './index.html',
@@ -18,7 +18,9 @@ const ASSETS = [
   './js/stockfish-worker.js',
   './js/vendor/stockfish.js',
   './manifest.json',
-  './icons/icon.svg'
+  './icons/icon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', (e) => {

@@ -8,6 +8,7 @@ const App = (() => {
   let currentUser = null;
   let currentPgn = null;
   let currentClocks = [];
+  let currentIncrement = 0;
   let gameHistory = [];
   let inspectSq = null;
   let lastRenderIndex = -1;
@@ -236,7 +237,7 @@ const App = (() => {
       } catch (_) {}
     }
 
-    const pgn = await fetchFromArchive('nimokaji', id);
+    const pgn = await fetchFromArchive(analyzerUser(), id);
     if (pgn) return pgn;
 
     return null;
@@ -263,7 +264,25 @@ const App = (() => {
     return null;
   }
 
+  // Only one analysis may run at a time: Stockfish lives in a single shared
+  // worker with one result resolver, so a second run started mid-analysis (a
+  // fast second paste, or a drag-drop) would clobber the first's resolver and
+  // corrupt both. Guard the whole flow with a mutex.
+  let analyzing = false;
   async function onAnalyze() {
+    if (analyzing) {
+      showError('Analyse déjà en cours — patientez la fin avant d\'en lancer une autre.');
+      return;
+    }
+    analyzing = true;
+    try {
+      await runAnalyze();
+    } finally {
+      analyzing = false;
+    }
+  }
+
+  async function runAnalyze() {
     let pgnText = $('#pgn-input').value.trim();
     if (!pgnText) {
       showError('Collez un PGN pour commencer.');
@@ -409,6 +428,7 @@ const App = (() => {
     currentIndex = 0;
     currentHeader = header;
     currentUser = detectUser(header);
+    currentIncrement = Analyzer.tcIncrement(header.TimeControl || '');
 
     BoardRenderer.setFlipped(currentUser === 'b');
 
@@ -691,8 +711,19 @@ const App = (() => {
     board.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  // The Chess.com account being analysed. Sourced from the Coach settings
+  // (localStorage `chess-coach-user`, editable in the Coach tab) so changing the
+  // username there also fixes Vous/Adversaire, board flip and archive lookups
+  // here — instead of the old hardcoded 'nimokaji'.
+  function analyzerUser() {
+    try {
+      if (typeof Coach !== 'undefined' && Coach.getUser) return Coach.getUser();
+      return (localStorage.getItem('chess-coach-user') || 'nimokaji').trim();
+    } catch (_) { return 'nimokaji'; }
+  }
+
   function detectUser(header) {
-    const name = 'nimokaji';
+    const name = analyzerUser().toLowerCase();
     const w = (header.White || '').toLowerCase();
     const b = (header.Black || '').toLowerCase();
     if (w === name) return 'w';
@@ -1677,7 +1708,7 @@ const App = (() => {
 
     if (currentPgn) {
       const clocks = currentClocks;
-      const times = Analyzer.clocksToTimePerMove(clocks);
+      const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
       if (times.length >= analysis.length * 0.5) {
         const errorTimes = errors.map(e => times[e.index] || 0).filter(t => t > 0);
         const allUserTimes = [];
@@ -1895,7 +1926,7 @@ const App = (() => {
     if (!user) return;
 
     const clocks = currentClocks;
-    const times = Analyzer.clocksToTimePerMove(clocks);
+    const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
     const tc = header.TimeControl || '';
     if (tc.includes('/')) return; // daily — no pace to manage
     const base = parseInt(tc) || 0;
@@ -1966,7 +1997,7 @@ const App = (() => {
 
     const clocks = currentClocks;
 
-    const times = Analyzer.clocksToTimePerMove(clocks);
+    const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
     const user = detectUser(header);
     if (!user) return;
 
@@ -2549,7 +2580,7 @@ const App = (() => {
 
     const clocks = currentClocks;
 
-    const times = Analyzer.clocksToTimePerMove(clocks);
+    const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
     if (times.length === 0) { card.hidden = true; return; }
 
     const n = Math.min(times.length, analysis.length);

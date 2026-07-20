@@ -93,17 +93,24 @@ const Training = (() => {
       if (!playMove(g, playedSan)) return null;
       const caps = g.moves({ verbose: true }).filter(m => m.captured);
       if (!caps.length) return null;
-      caps.sort((a, b) => (PIECE_VALUES[b.captured] || 0) - (PIECE_VALUES[a.captured] || 0));
-      const cap = caps[0];
-      const gain = PIECE_VALUES[cap.captured] || 0;
-      if (gain < 3) return null; // only flag hanging a minor piece or more
-      const g2 = new Chess(g.fen());
-      const c2 = g2.move(cap.san, { sloppy: true });
-      if (!c2) return null;
-      const recap = g2.moves({ verbose: true }).some(m => m.to === cap.to);
-      const recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
-      if ((gain - recapVal) < 2) return null;
-      return { type: cap.captured, value: gain, square: cap.to };
+      // Check EVERY capture, not just the most valuable victim: a defended queen
+      // (recaptured, net < 2) would otherwise mask a truly hanging rook sitting
+      // right behind it. Keep the most valuable piece that is genuinely hanging.
+      let best = null;
+      for (const cap of caps) {
+        if (cap.captured === 'k') continue; // king "capture" = flipped-turn in-check artefact
+        const gain = PIECE_VALUES[cap.captured] || 0;
+        if (gain < 3) continue; // only flag hanging a minor piece or more
+        let recapVal = 0;
+        const g2 = new Chess(g.fen());
+        const c2 = g2.move(cap.san, { sloppy: true });
+        if (!c2) continue;
+        const recap = g2.moves({ verbose: true }).some(m => m.to === cap.to);
+        recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
+        if ((gain - recapVal) < 2) continue;
+        if (!best || gain > best.value) best = { type: cap.captured, value: gain, square: cap.to };
+      }
+      return best;
     } catch (_) { return null; }
   }
 
@@ -507,10 +514,13 @@ const Training = (() => {
     // grade: 'again' | 'good' | 'easy'
     const now = Date.now();
     if (grade === 'again') {
-      item.reps = 0;
       item.interval = 0;
       item.ease = Math.max(1.7, item.ease - 0.2);
       item.due = now + 10 * 60 * 1000; // 10 min
+      // Don't demote a card that was already in review back to reps=0: the new
+      // pool is sorted by cpLoss and capped, so a low-cpLoss lapse would starve
+      // there forever. Keep it a (short-interval) review so it resurfaces.
+      if ((item.reps || 0) > 0) item.reps = 1;
     } else {
       if (item.reps === 0) item.interval = grade === 'easy' ? 3 : 1;
       else if (item.reps === 1) item.interval = grade === 'easy' ? 6 : 3;
@@ -684,7 +694,17 @@ const Training = (() => {
       <button class="train-btn good" data-g="good">Bon</button>
       <button class="train-btn easy" data-g="easy">Facile</button>`;
     $$('#train-actions .train-btn').forEach(b => {
-      b.onclick = () => { schedule(current, b.dataset.g); qi++; renderPuzzle(); };
+      b.onclick = () => {
+        const g = b.dataset.g;
+        schedule(current, g);
+        if (g === 'again') {
+          // Re-ask this lapsed card later in the SAME session (Anki-style)
+          // rather than freezing the queue at start and never revisiting it.
+          queue.splice(Math.min(queue.length, qi + 3), 0, current);
+        }
+        qi++;
+        renderPuzzle();
+      };
     });
   }
 

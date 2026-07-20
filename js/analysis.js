@@ -73,6 +73,32 @@ const Analyzer = (() => {
     return best;
   }
 
+  // How much net material the side to move in `fen` can win with a single
+  // capture (1-ply static-exchange approximation: victim value minus the value
+  // of whatever recaptures on that square). Used to tell whether the move that
+  // just produced `fen` left a piece en prise — i.e. was a real sacrifice.
+  function opponentCanWin(fen) {
+    let g;
+    try { g = new Chess(fen); } catch (_) { return 0; }
+    const caps = g.moves({ verbose: true }).filter(m => m.captured);
+    let bestNet = 0;
+    for (const cap of caps) {
+      if (cap.captured === 'k') continue;
+      const gain = PIECE_VALUES[cap.captured] || 0;
+      let recapVal = 0;
+      try {
+        const g2 = new Chess(g.fen());
+        const c2 = g2.move(cap.san, { sloppy: true });
+        if (!c2) continue;
+        const recap = g2.moves({ verbose: true }).some(m => m.to === cap.to);
+        recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
+      } catch (_) { continue; }
+      const net = gain - recapVal;
+      if (net > bestNet) bestNet = net;
+    }
+    return bestNet;
+  }
+
   function parseFenBoard(fen) {
     const rows = fen.split(' ')[0].split('/');
     const board = [];
@@ -515,7 +541,7 @@ const Analyzer = (() => {
     if (isDaily || !info.pgn) return { timed: false };
     const clocks = parseClocks(info.pgn);
     if (clocks.length < results.length * 0.5) return { timed: false };
-    const spent = clocksToTimePerMove(clocks);
+    const spent = clocksToTimePerMove(clocks, tcIncrement(info.timeControl));
     const baseSec = parseBaseSeconds(info.timeControl);
     const ttThreshold = Math.max(10, baseSec ? baseSec * 0.1 : 15);
 
@@ -789,10 +815,19 @@ const Analyzer = (() => {
       const wpl = winPctLoss;
       const inBook = bookDepth && i < bookDepth;
       const noEngine = !(evalBefore && evalAfter);
-      // A "good piece sacrifice" for Brilliant: gave up ≥ a minor's worth of
-      // material, the move is still strong (not an error), you don't end up
-      // worse, and you weren't already completely winning without it.
-      const isSacrifice = matChange <= -2;
+      // A "good piece sacrifice" for Brilliant: after the move the opponent can
+      // grab ≥ 2 net material (you left a piece en prise, or gave one up that
+      // isn't immediately regained — matChange only spans your own ply so it can
+      // never go negative, which is why the old `matChange<=-2` never fired).
+      // Combined below with: the move is still strong (wpl<0.05), you stay at
+      // least equal, and you weren't already trivially winning.
+      const isSacrifice = !noEngine && opponentCanWin(newFen) >= 2;
+      // A Miss (rather than a Blunder/Mistake) is failing to punish while
+      // STAYING OK: you were winning and let the big edge slip, but you didn't
+      // hand the game away. If the move leaves you clearly worse (winAfter below
+      // this floor) it is a real Blunder/Mistake, not a Miss.
+      const MISS_FLOOR = 0.45;
+      const stillOk = winAfterPlayed >= MISS_FLOOR;
       let type;
 
       if (noEngine) {
@@ -801,12 +836,11 @@ const Analyzer = (() => {
       } else if (isSacrifice && wpl < 0.05 && winAfterPlayed >= 0.50 && winBefore <= 0.97) {
         type = 'brilliant';
       } else if (wpl >= 0.20) {
-        // Blunder — but if a winning move was on the board and you threw the
-        // win away (rather than a losing position getting worse), Chess.com
-        // shows this as a Miss.
-        type = (winBefore >= 0.70 && winAfterPlayed < 0.55) ? 'miss' : 'blunder';
+        // Blunder — but if a winning move was on the board and you merely let the
+        // win slip while staying OK, Chess.com shows this as a Miss.
+        type = (winBefore >= 0.70 && stillOk) ? 'miss' : 'blunder';
       } else if (wpl >= 0.10) {
-        type = (winBefore >= 0.70 && winAfterPlayed < 0.55) ? 'miss' : 'mistake';
+        type = (winBefore >= 0.70 && stillOk) ? 'miss' : 'mistake';
       } else if (inBook) {
         // Recognised opening theory shows as Book (📖), never a bare inaccuracy —
         // Chess.com trusts its book for any non-error move.
@@ -1026,15 +1060,27 @@ const Analyzer = (() => {
     return clocks;
   }
 
-  function clocksToTimePerMove(clocks) {
+  // Increment (in seconds) from a TimeControl header like "600+5" or "180+2".
+  // Daily ("1/86400") and plain base-only controls have no increment → 0.
+  function tcIncrement(tc) {
+    const m = /^\s*\d+\s*\+\s*(\d+)/.exec(tc || '');
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  function clocksToTimePerMove(clocks, increment) {
     if (clocks.length < 2) return [];
+    const inc = increment || 0;
     const times = [];
     for (let i = 0; i < clocks.length; i++) {
       const prevIdx = i - 2;
       if (prevIdx < 0) {
         times.push(0);
       } else {
-        times.push(Math.max(0, clocks[prevIdx] - clocks[i]));
+        // Time spent = clock before this move − clock after it + the increment
+        // that was credited when the move was made. Without the +inc every
+        // think is understated by one increment (e.g. 5 s on a 600+5 game),
+        // inflating the "played too fast" (<15 s) counts.
+        times.push(Math.max(0, clocks[prevIdx] - clocks[i] + inc));
       }
     }
     return times;
@@ -1051,7 +1097,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, probeTablebase };
+  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, probeTablebase };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

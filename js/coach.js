@@ -543,12 +543,13 @@ const Coach = (() => {
     if (g._pace !== undefined) return g._pace;
     g._pace = null;
     if (!g.pgn || g.timeClass === 'daily') return null;
-    const m = /\[TimeControl "(\d+)(?:\+\d+)?"\]/.exec(g.pgn);
+    const m = /\[TimeControl "(\d+)(?:\+(\d+))?"\]/.exec(g.pgn);
     const base = m ? parseInt(m[1]) : 0;
+    const inc = m && m[2] ? parseInt(m[2]) : 0;
     if (!base || base > 3600) return null;
     const clocks = Analyzer.parseClocks(g.pgn);
     if (clocks.length < 8) return null;
-    const times = Analyzer.clocksToTimePerMove(clocks);
+    const times = Analyzer.clocksToTimePerMove(clocks, inc);
     const off = g.userColor === 'w' ? 0 : 1;
     let moves = 0, spent = 0, last = base;
     for (let i = off; i < clocks.length; i += 2) {
@@ -684,8 +685,10 @@ const Coach = (() => {
       ['opening', 'middle', 'endgame'].forEach(p => { if (g.analysis.phaseAccuracy[p]) { pa[p].t += g.analysis.phaseAccuracy[p].total; pa[p].c += g.analysis.phaseAccuracy[p].count; } });
       bl += g.analysis.blunders || 0; mv += g.analysis.moveCount || 0;
     });
-    const pAcc = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : 0;
-    const phases = [{ k: 'opening', l: "l'ouverture" }, { k: 'middle', l: 'le milieu de jeu' }, { k: 'endgame', l: 'la finale' }].map(p => ({ ...p, a: pAcc(p.k) }));
+    // A phase with no moves must not score 0% and get crowned the "maillon
+    // faible" — drop unmeasured phases before picking best/worst.
+    const pAcc = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : null;
+    const phases = [{ k: 'opening', l: "l'ouverture" }, { k: 'middle', l: 'le milieu de jeu' }, { k: 'endgame', l: 'la finale' }].map(p => ({ ...p, a: pAcc(p.k) })).filter(p => p.a !== null);
     const best = phases.slice().sort((x, y) => y.a - x.a)[0];
     const worst = phases.slice().sort((x, y) => x.a - y.a)[0];
     const blRate = mv ? bl / mv * 100 : 0;
@@ -698,7 +701,8 @@ const Coach = (() => {
     s.push(`Sur vos <b>${total} parties</b> analysées, vous l'emportez dans <b>${winPct}%</b> des cas, avec une précision moyenne de <b>${acc}%</b>.`);
     if (w.length && b.length && Math.abs(wP - bP) >= 12)
       s.push(`Vous êtes nettement plus à l'aise avec les <b>${wP > bP ? 'Blancs' : 'Noirs'}</b> (${Math.max(wP, bP)}% de victoires, contre ${Math.min(wP, bP)}% de l'autre côté) — un répertoire à consolider du côté faible.`);
-    s.push(`Votre point fort est <b>${best.l}</b> (${best.a}% de précision) ; à l'inverse, <b>${worst.l}</b> est votre maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
+    if (best && worst && best.k !== worst.k)
+      s.push(`Votre point fort est <b>${best.l}</b> (${best.a}% de précision) ; à l'inverse, <b>${worst.l}</b> est votre maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
     if (blRate > 0)
       s.push(`Vous lâchez une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
     if (priorWin !== null && Math.abs(recentWin - priorWin) >= 10)
@@ -906,13 +910,14 @@ const Coach = (() => {
       totalMistakes += a.mistakes || 0;
       totalMoves += a.moveCount || 0;
     });
-    const phaseAcc = (p) => pa[p].count ? Math.round(pa[p].total / pa[p].count) : 0;
+    const phaseAcc = (p) => pa[p].count ? Math.round(pa[p].total / pa[p].count) : null;
     const phaseAcplAvg = (p) => pc[p].length ? Math.round(avg(pc[p])) : null;
     const blunderRate = totalMoves ? (totalBlunders / totalMoves * 100) : 0;
     const phases = [
       { k: 'opening', label: 'Ouverture' }, { k: 'middle', label: 'Milieu de jeu' }, { k: 'endgame', label: 'Finale' }
     ].map(p => ({ ...p, errors: pe[p.k], acc: phaseAcc(p.k), acpl: phaseAcplAvg(p.k) }));
-    const worstPhase = phases.slice().sort((a, b) => a.acc - b.acc)[0];
+    // Only rank phases that actually have moves — an unplayed phase isn't a weakness.
+    const worstPhase = phases.filter(p => p.acc !== null).sort((a, b) => a.acc - b.acc)[0];
 
     // prioritized recommendations
     const recs = [];
@@ -924,8 +929,8 @@ const Coach = (() => {
     const phaseRows = phases.map(p => `
       <div class="coach-row">
         <span class="coach-row-label">${p.label}</span>
-        <div class="coach-bar"><span style="width:${p.acc}%;background:${p.acc >= 85 ? '#56b886' : p.acc >= 75 ? '#e2b857' : '#d36b6b'}"></span></div>
-        <span class="coach-row-val" style="width:130px">${p.acc}%${p.acpl != null ? ` · ${p.acpl} ACPL` : ''} · ${p.errors} err.</span>
+        <div class="coach-bar"><span style="width:${p.acc == null ? 0 : p.acc}%;background:${p.acc == null ? '#555' : p.acc >= 85 ? '#56b886' : p.acc >= 75 ? '#e2b857' : '#d36b6b'}"></span></div>
+        <span class="coach-row-val" style="width:130px">${p.acc == null ? 'n/d' : p.acc + '%'}${p.acpl != null ? ` · ${p.acpl} ACPL` : ''} · ${p.errors} err.</span>
       </div>`).join('');
 
     return `<div class="home-card coach-card">
@@ -997,19 +1002,24 @@ const Coach = (() => {
       ['opening', 'middle', 'endgame'].forEach(p => { if (a.phaseAccuracy[p]) { pa[p].t += a.phaseAccuracy[p].total; pa[p].c += a.phaseAccuracy[p].count; } });
       blunders += a.blunders || 0; moves += a.moveCount || 0;
     });
-    const accOf = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : 0;
+    const accOf = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : null;
+    const ad = v => v == null ? 'n/d' : v;
     const blunderRate = moves ? blunders / moves * 100 : 0;
     // 0 gaffes → 100 ; ~25% des coups en gaffe → 0 (échelle adaptée débutant).
     const vigilance = Math.max(0, Math.min(100, Math.round(100 - blunderRate * 4)));
     const winnable = an.filter(g => typeof g.analysis.maxUserEval === 'number' && g.analysis.maxUserEval >= 200);
     const conversion = winnable.length ? pct(winnable.filter(g => g.result === 'win').length, winnable.length) : 50;
-    const axes = [
+    // Drop phase axes with no moves so an unplayed phase doesn't plot at 0 and
+    // get flagged as the weakest point.
+    const phaseAxes = [
       { k: 'Ouverture', v: accOf('opening') },
       { k: 'Milieu', v: accOf('middle') },
-      { k: 'Finale', v: accOf('endgame') },
+      { k: 'Finale', v: accOf('endgame') }
+    ].filter(a => a.v !== null);
+    const axes = phaseAxes.concat([
       { k: 'Vigilance', v: vigilance },
       { k: 'Conversion', v: conversion }
-    ];
+    ]);
     const sorted = axes.slice().sort((a, b) => b.v - a.v);
     const strong = sorted[0], weak = sorted[sorted.length - 1];
     return `<div class="home-card coach-card">
@@ -1020,7 +1030,7 @@ const Coach = (() => {
       <details class="coach-howto">
         <summary>Comment ces notes sont calculées ?</summary>
         <ul>
-          <li><b>Ouverture / Milieu / Finale</b> — ta précision moyenne dans chaque phase : la part de tes coups proches du meilleur coup du moteur. ${accOf('opening')}, ${accOf('middle')} et ${accOf('endgame')} ici.</li>
+          <li><b>Ouverture / Milieu / Finale</b> — ta précision moyenne dans chaque phase : la part de tes coups proches du meilleur coup du moteur. ${ad(accOf('opening'))}, ${ad(accOf('middle'))} et ${ad(accOf('endgame'))} ici.</li>
           <li><b>Vigilance</b> — à quel point tu évites les gaffes. Part de 100 et baisse avec ton taux de gaffes (environ 1 coup sur 4 en gaffe → 0). Tu es à ${blunderRate.toFixed(1)}% de gaffes, soit ${vigilance}/100.</li>
           <li><b>Conversion</b> — quand tu as un avantage nettement gagnant (≈ +2, une pièce de plus), le pourcentage de ces parties que tu gagnes vraiment. ${winnable.length} partie(s) concernée(s) ici.</li>
         </ul>
@@ -1533,5 +1543,5 @@ const Coach = (() => {
     $('#screen-import').classList.add('active');
   }
 
-  return { show, hide };
+  return { show, hide, getUser, setUser };
 })();
