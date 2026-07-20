@@ -869,17 +869,16 @@ const App = (() => {
       const showSide = user ? (userIsWhite ? 'w' : 'b') : null;
       const phaseAccs = phaseRanges.filter(p => p.from < analysis.length).map(p => {
         const sides = showSide ? [showSide] : ['w', 'b'];
-        let totalWinLoss = 0, count = 0;
+        let accSum = 0, count = 0;
         for (let i = p.from; i < p.to; i++) {
           const r = analysis[i];
           if (!r.move) continue;
           if (sides.includes(r.move.color)) {
-            totalWinLoss += r.winPctLoss || 0;
+            accSum += Analyzer.winLossToAccuracy(r.winPctLoss);
             count++;
           }
         }
-        const avg = count > 0 ? totalWinLoss / count : 0;
-        const acc = Math.max(0, Math.min(100, Math.round((1 - avg * 2) * 100)));
+        const acc = count > 0 ? Math.round(accSum / count) : 0;
         return { label: p.label, acc, count };
       }).filter(p => p.count > 0);
 
@@ -1173,16 +1172,16 @@ const App = (() => {
       { name: 'end', label: 'la finale', from: 50, to: N }
     ];
     const phaseData = phases.map(p => {
-      let ub = 0, um = 0, ui = 0, ob = 0, om = 0, uWinLoss = 0, uCount = 0;
+      let ub = 0, um = 0, ui = 0, ob = 0, om = 0, uAcc = 0, uCount = 0;
       for (let i = p.from; i < p.to; i++) {
         const r = analysis[i]; if (!r.move) continue;
         const mine = isUserMove(r);
-        if (mine) { uWinLoss += r.winPctLoss || 0; uCount++; }
+        if (mine) { uAcc += Analyzer.winLossToAccuracy(r.winPctLoss); uCount++; }
         if (r.type === 'blunder') { mine ? ub++ : ob++; }
         else if (r.type === 'mistake') { mine ? um++ : om++; }
         else if (r.type === 'inaccuracy' && mine) ui++;
       }
-      const acc = uCount ? Math.max(0, Math.min(100, Math.round((1 - (uWinLoss / uCount) * 2) * 100))) : null;
+      const acc = uCount ? Math.round(uAcc / uCount) : null;
       return { ...p, ub, um, ui, ob, om, acc, uCount };
     });
     const [op, mid, end] = phaseData;
@@ -1951,7 +1950,7 @@ const App = (() => {
     }
     if (userMoves < 4) return;
 
-    const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     const avgSpent = Math.round(spentTotal / Math.max(1, userMoves - 1));
 
     let verdict, cls;

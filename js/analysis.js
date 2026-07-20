@@ -481,9 +481,7 @@ const Analyzer = (() => {
       // ~30000cp mate score) can't blow up the ACPL average.
       stats[side].totalCpLoss += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       stats[side].totalWinLoss += r.winPctLoss || 0;
-      // Per-move accuracy, Chess.com's formula: 103.1668·e^(−0.04354·Δwin%) − 3.1669
-      stats[side].totalAcc += Math.max(0, Math.min(100,
-        103.1668 * Math.exp(-0.04354 * ((r.winPctLoss || 0) * 100)) - 3.1669));
+      stats[side].totalAcc += winLossToAccuracy(r.winPctLoss);
 
       if (r.type === 'brilliant') stats[side].brilliants++;
       if (r.type === 'best') stats[side].best++;
@@ -603,8 +601,7 @@ const Analyzer = (() => {
         }
       }
 
-      const loss = r.winPctLoss || 0;
-      phaseAcc[phase].total += Math.max(0, Math.min(100, Math.round(103.1668 * Math.exp(-0.04354 * loss * 100) - 3.1669)));
+      phaseAcc[phase].total += winLossToAccuracy(r.winPctLoss);
       phaseAcc[phase].count++;
       phaseCp[phase].total += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       phaseCp[phase].count++;
@@ -1038,6 +1035,16 @@ const Analyzer = (() => {
     return 1 / (1 + Math.exp(-0.00368208 * cp));
   }
 
+  // Chess.com's per-move accuracy from expected-points lost (winPctLoss, 0..1):
+  // 103.1668·e^(−0.04354·Δwin%) − 3.1669, clamped 0..100. The ONE accuracy
+  // curve for the whole app — averaging per-move values of this is how every
+  // accuracy figure must be computed (summary, phases, narrative), so a game
+  // never shows two different numbers.
+  function winLossToAccuracy(winPctLoss) {
+    return Math.max(0, Math.min(100,
+      103.1668 * Math.exp(-0.04354 * ((winPctLoss || 0) * 100)) - 3.1669));
+  }
+
   function describeEval(cpWhite) {
     if (cpWhite >= 29000) return 'Mat forcé pour les Blancs.';
     if (cpWhite <= -29000) return 'Mat forcé pour les Noirs.';
@@ -1097,7 +1104,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, probeTablebase };
+  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

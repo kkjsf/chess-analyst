@@ -571,7 +571,7 @@ const Coach = (() => {
   function renderPace(an) {
     const ps = an.map(g => paceOf(g)).filter(Boolean);
     if (ps.length < 3) return '';
-    const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     const avgSpd = Math.round(avg(ps.map(p => p.spentPerMove)));
     const avgLeft = avg(ps.map(p => p.last));
     const base = ps[0].base;
@@ -1008,7 +1008,9 @@ const Coach = (() => {
     // 0 gaffes → 100 ; ~25% des coups en gaffe → 0 (échelle adaptée débutant).
     const vigilance = Math.max(0, Math.min(100, Math.round(100 - blunderRate * 4)));
     const winnable = an.filter(g => typeof g.analysis.maxUserEval === 'number' && g.analysis.maxUserEval >= 200);
-    const conversion = winnable.length ? pct(winnable.filter(g => g.result === 'win').length, winnable.length) : 50;
+    // No clearly-winning games yet = Conversion is unmeasured; drop the axis
+    // rather than plot a misleading middling 50.
+    const conversion = winnable.length ? pct(winnable.filter(g => g.result === 'win').length, winnable.length) : null;
     // Drop phase axes with no moves so an unplayed phase doesn't plot at 0 and
     // get flagged as the weakest point.
     const phaseAxes = [
@@ -1016,10 +1018,10 @@ const Coach = (() => {
       { k: 'Milieu', v: accOf('middle') },
       { k: 'Finale', v: accOf('endgame') }
     ].filter(a => a.v !== null);
-    const axes = phaseAxes.concat([
-      { k: 'Vigilance', v: vigilance },
-      { k: 'Conversion', v: conversion }
-    ]);
+    const axes = phaseAxes.concat(
+      [{ k: 'Vigilance', v: vigilance }],
+      conversion == null ? [] : [{ k: 'Conversion', v: conversion }]
+    );
     const sorted = axes.slice().sort((a, b) => b.v - a.v);
     const strong = sorted[0], weak = sorted[sorted.length - 1];
     return `<div class="home-card coach-card">
@@ -1093,8 +1095,11 @@ const Coach = (() => {
     for (const u of todo) {
       try {
         const p = await fetchJson(`https://api.chess.com/pub/player/${encodeURIComponent(u)}`);
+        // '??' here = fetch succeeded but the profile has no country (a real,
+        // final answer, so cache it). A network error must NOT be cached as '??'
+        // or it sticks forever — leave it absent so a later run retries.
         countryCache[u] = (p.country && p.country.split('/').pop()) || '??';
-      } catch (_) { countryCache[u] = '??'; }
+      } catch (_) { /* network error: leave uncached to allow a retry */ }
       done++;
       onProg && onProg(done, todo.length);
     }
