@@ -608,7 +608,13 @@ const App = (() => {
       const matDiff = Analyzer.materialCount(fen);
       evalPct = Math.max(5, Math.min(95, 50 + matDiff.diff * 5));
     }
-    $('#eval-bar').style.height = evalPct + '%';
+    const evalFill = $('#eval-bar');
+    evalFill.style.height = evalPct + '%';
+    // The light fill = White's share, anchored to White's side of the board.
+    // When the board is flipped (user plays Black, White is on top), anchor it
+    // to the top so the bar's orientation matches the board.
+    if (BoardRenderer.isFlipped()) { evalFill.style.top = '0'; evalFill.style.bottom = 'auto'; }
+    else { evalFill.style.bottom = '0'; evalFill.style.top = 'auto'; }
 
     const arrowSvg = $('#arrow-overlay');
     BoardRenderer.clearArrows(arrowSvg);

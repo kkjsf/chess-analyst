@@ -350,12 +350,12 @@ const Coach = (() => {
     renderSyncBar();
     const body = $('#coach-dashboard');
     if (!games.length) {
-      body.innerHTML = `<div class="coach-empty">Aucune partie. Lancez une synchronisation pour récupérer vos parties Chess.com.</div>`;
+      body.innerHTML = `<div class="coach-empty">Aucune partie. Lance une synchronisation pour récupérer tes parties Chess.com.</div>`;
       return;
     }
     const anAll = analyzed();
     if (!anAll.length) {
-      body.innerHTML = `<div class="coach-empty">${games.length} parties synchronisées. Lancez l'analyse complète pour générer votre bilan.</div>`;
+      body.innerHTML = `<div class="coach-empty">${games.length} parties synchronisées. Lance l'analyse complète pour générer ton bilan.</div>`;
       return;
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
@@ -377,7 +377,7 @@ const Coach = (() => {
         renderNationality(an) +
         renderGamesDrill(an) +
         renderTrainingCta()
-      : `<div class="coach-empty-mini">Aucune partie « ${tcLabel(filterTc)} » analysée. Choisissez une autre cadence.</div>`;
+      : `<div class="coach-empty-mini">Aucune partie « ${tcLabel(filterTc)} » analysée. Choisis une autre cadence.</div>`;
     body.innerHTML = renderFilterBar(anAll) + cards;
     body.dataset.ready = '1';
     bindFilterBar();
@@ -400,7 +400,7 @@ const Coach = (() => {
     const counts = {};
     anAll.forEach(g => { const k = g.timeClass || 'autre'; counts[k] = (counts[k] || 0) + 1; });
     const order = ['bullet', 'blitz', 'rapid', 'daily', 'autre'].filter(k => counts[k]);
-    const chip = (k, label, n) => `<button class="coach-fchip${filterTc === k ? ' active' : ''}" data-tc="${k}">${label}<b>${n}</b></button>`;
+    const chip = (k, label, n) => `<button class="coach-fchip${filterTc === k ? ' active' : ''}" data-tc="${esc(k)}">${label}<b>${n}</b></button>`;
     return `<div class="coach-filter">${chip('all', 'Toutes', anAll.length)}${order.map(k => chip(k, tcLabel(k), counts[k])).join('')}</div>`;
   }
   function bindFilterBar() {
@@ -698,16 +698,16 @@ const Coach = (() => {
     const priorWin = prior.length ? pct(prior.filter(g => g.result === 'win').length, prior.length) : null;
 
     const s = [];
-    s.push(`Sur vos <b>${total} parties</b> analysées, vous l'emportez dans <b>${winPct}%</b> des cas, avec une précision moyenne de <b>${acc}%</b>.`);
+    s.push(`Sur tes <b>${total} parties</b> analysées, tu l'emportes dans <b>${winPct}%</b> des cas, avec une précision moyenne de <b>${acc}%</b>.`);
     if (w.length && b.length && Math.abs(wP - bP) >= 12)
-      s.push(`Vous êtes nettement plus à l'aise avec les <b>${wP > bP ? 'Blancs' : 'Noirs'}</b> (${Math.max(wP, bP)}% de victoires, contre ${Math.min(wP, bP)}% de l'autre côté) — un répertoire à consolider du côté faible.`);
+      s.push(`Tu es nettement plus à l'aise avec les <b>${wP > bP ? 'Blancs' : 'Noirs'}</b> (${Math.max(wP, bP)}% de victoires, contre ${Math.min(wP, bP)}% de l'autre côté) — un répertoire à consolider du côté faible.`);
     if (best && worst && best.k !== worst.k)
-      s.push(`Votre point fort est <b>${best.l}</b> (${best.a}% de précision) ; à l'inverse, <b>${worst.l}</b> est votre maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
+      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de précision) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
     if (blRate > 0)
-      s.push(`Vous lâchez une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
+      s.push(`Tu lâches une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
     if (priorWin !== null && Math.abs(recentWin - priorWin) >= 10)
-      s.push(`Tendance récente : vous <b>${recentWin > priorWin ? 'progressez' : 'marquez le pas'}</b> (${recentWin}% sur vos 10 dernières parties contre ${priorWin}% auparavant).`);
-    s.push(`Concrètement : ouvrez le <b>Mode entraînement</b> ci-dessous (vos erreurs y deviennent des exercices) et relisez vos parties perdues dans <b>${worst.l}</b>.`);
+      s.push(`Tendance récente : tu <b>${recentWin > priorWin ? 'progresses' : 'marques le pas'}</b> (${recentWin}% sur tes 10 dernières parties contre ${priorWin}% auparavant).`);
+    s.push(`Concrètement : ouvre le <b>Mode entraînement</b> ci-dessous (tes erreurs y deviennent des exercices) et relis tes parties perdues dans <b>${worst.l}</b>.`);
 
     return `<div class="home-card coach-card coach-narrative"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
   }
@@ -846,7 +846,7 @@ const Coach = (() => {
             <td><span class="wdl-w">${r.w}</span>/<span class="wdl-d">${r.d}</span>/<span class="wdl-l">${r.l}</span></td>
             <td>${r.acc}%</td></tr>`).join('')}</tbody>
         </table>
-        ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touchez son nom pour la revoir.</div>` : ''}`;
+        ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touche son nom pour la revoir.</div>` : ''}`;
     }
     // Adherence to the taught repertoire (js/repertoire.js): did you actually
     // play your prepared moves in real games?
@@ -872,7 +872,7 @@ const Coach = (() => {
     return `<div class="home-card coach-card" id="coach-repertoire">
       <h3>📖 Répertoire d'ouvertures</h3>
       ${adh}
-      <p class="coach-sub2">Touchez le nom d'une ouverture pour la rejouer sur l'échiquier, ou ↗ pour l'ouvrir sur Chess.com.</p>
+      <p class="coach-sub2">Touche le nom d'une ouverture pour la rejouer sur l'échiquier, ou ↗ pour l'ouvrir sur Chess.com.</p>
       ${table('w', 'Avec les Blancs')}
       ${table('b', 'Avec les Noirs')}
     </div>`;
@@ -885,7 +885,7 @@ const Coach = (() => {
         if (!line || typeof App === 'undefined' || !App.openOpeningExplorer) return;
         App.openOpeningExplorer(
           { name: b.dataset.name, eco: b.dataset.eco || '', line, moves: line.split(' ').length, showEval: true },
-          [], 'Explorez les premiers coups de cette ouverture.'
+          [], 'Explore les premiers coups de cette ouverture.'
         );
       }));
     const open = $('#coach-repertoire .coach-rep-open');
@@ -921,10 +921,10 @@ const Coach = (() => {
 
     // prioritized recommendations
     const recs = [];
-    if (worstPhase && worstPhase.acc < 80) recs.push(`Votre <b>${worstPhase.label.toLowerCase()}</b> est votre maillon faible (${worstPhase.acc}% de précision, ${worstPhase.errors} erreurs). ${phaseAdvice(worstPhase.k)}`);
-    if (blunderRate > 6) recs.push(`Vous commettez une gaffe tous les ${Math.round(100 / blunderRate)} coups environ. Avant de jouer, appliquez la méthode <b>CCT</b> — passez en revue les <b>Checks</b> (échecs), <b>Captures</b> et <b>Threats</b> (menaces) possibles, pour vous comme pour l'adversaire. C'est le réflexe anti-gaffe n°1.`);
-    if (totalMistakes + totalBlunders > 0) recs.push(`Entraînez-vous sur vos <b>${totalMistakes + totalBlunders} erreurs réelles</b> dans la section ci-dessous — c'est le moyen le plus rapide de progresser.`);
-    if (!recs.length) recs.push('Belle régularité ! Continuez à analyser et visez moins d\'imprécisions.');
+    if (worstPhase && worstPhase.acc < 80) recs.push(`Ton <b>${worstPhase.label.toLowerCase()}</b> est ton maillon faible (${worstPhase.acc}% de précision, ${worstPhase.errors} erreurs). ${phaseAdvice(worstPhase.k)}`);
+    if (blunderRate > 6) recs.push(`Tu commets une gaffe tous les ${Math.round(100 / blunderRate)} coups environ. Avant de jouer, applique la méthode <b>CCT</b> — passe en revue les <b>Checks</b> (échecs), <b>Captures</b> et <b>Threats</b> (menaces) possibles, pour toi comme pour l'adversaire. C'est le réflexe anti-gaffe n°1.`);
+    if (totalMistakes + totalBlunders > 0) recs.push(`Entraîne-toi sur tes <b>${totalMistakes + totalBlunders} erreurs réelles</b> dans la section ci-dessous — c'est le moyen le plus rapide de progresser.`);
+    if (!recs.length) recs.push('Belle régularité ! Continue à analyser et vise moins d\'imprécisions.');
 
     const phaseRows = phases.map(p => `
       <div class="coach-row">
@@ -950,9 +950,9 @@ const Coach = (() => {
 
   function phaseAdvice(k) {
     return {
-      opening: 'Révisez les principes : développez vos pièces, contrôlez le centre, roquez tôt.',
-      middle: 'Travaillez la tactique (puzzles quotidiens) et cherchez un plan à chaque coup.',
-      endgame: 'Apprenez les finales de base : roi+pion, tours, et l\'activité du roi.'
+      opening: 'Révise les principes : développe tes pièces, contrôle le centre, roque tôt.',
+      middle: 'Travaille la tactique (puzzles quotidiens) et cherche un plan à chaque coup.',
+      endgame: 'Apprends les finales de base : roi+pion, tours, et l\'activité du roi.'
     }[k] || '';
   }
 
@@ -1337,7 +1337,7 @@ const Coach = (() => {
       : 'Rien à réviser pour l\'instant — beau travail !';
     return `<div class="home-card coach-card" id="coach-training-cta">
       <h3>🧩 Entraînement</h3>
-      <p class="coach-puz-intro">Toutes vos erreurs alimentent un seul entraînement, en répétition espacée. ${line}</p>
+      <p class="coach-puz-intro">Toutes tes erreurs alimentent un seul entraînement, en répétition espacée. ${line}</p>
       <button class="btn-primary" id="coach-open-training">🎯 Ouvrir le Mode entraînement</button>
     </div>`;
   }
@@ -1464,7 +1464,7 @@ const Coach = (() => {
       flash(`${r.added} nouvelle(s) partie(s). ${r.total} au total.`);
     } catch (e) {
       setProgress(false);
-      flash('Échec de la synchronisation. Vérifiez le pseudo Chess.com.', true);
+      flash('Échec de la synchronisation. Vérifie le pseudo Chess.com.', true);
       if (btn) { btn.disabled = false; btn.textContent = '⟳ Actualiser'; }
     }
   }

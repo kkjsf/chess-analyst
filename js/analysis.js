@@ -652,10 +652,15 @@ const Analyzer = (() => {
   // sloppy mode. So: strip comments first, extract SAN tokens, replay each
   // move strict-first then sloppy.
   function parsePgnMoves(pgn) {
-    const txt = (pgn || '')
+    let txt = (pgn || '')
       .replace(/\{[^}]*\}/g, ' ')
-      .replace(/\[[^\]]*\]/g, ' ')
-      .replace(/\([^)]*\)/g, ' ')
+      .replace(/\[[^\]]*\]/g, ' ');
+    // Strip variations innermost-first so NESTED RAVs like "(a (b) c)" are fully
+    // removed. A single non-recursive pass would stop at the first ')', leaking
+    // the outer variation's tail ("c)") into the move stream.
+    let prev;
+    do { prev = txt; txt = txt.replace(/\([^()]*\)/g, ' '); } while (txt !== prev);
+    txt = txt
       .replace(/\$\d+/g, ' ')
       .replace(/\b\d+\.(\.\.)?/g, ' ')
       .replace(/\b(1-0|0-1|1\/2-1\/2)\b/g, ' ')
@@ -697,7 +702,12 @@ const Analyzer = (() => {
         evals.push(null);
       } else {
         const g = new Chess(positions[i]);
-        if (g.game_over()) {
+        // Only short-circuit when there is genuinely no move to search
+        // (checkmate or stalemate). game_over() also fires on the claimable
+        // 50-move / threefold / insufficient-material draws — but the actual
+        // game kept going past those, so let the engine evaluate them instead
+        // of flatlining the eval to 0 for the rest of the game.
+        if (g.moves().length === 0) {
           evals.push({ score: g.in_checkmate() ? -30000 : 0, bestMove: null, pv: '', mate: g.in_checkmate() ? 0 : null });
         } else {
           evals.push(await StockfishEngine.evaluate(positions[i], depth));
@@ -848,11 +858,11 @@ const Analyzer = (() => {
         type = 'inaccuracy';
       } else if (wpl >= 0.02) {
         type = 'good';
-      } else if ((isBestMove || cpLoss === 0) && onlyMoveGap >= 150 &&
+      } else if (isBestMove && onlyMoveGap >= 150 &&
                  winBefore > 0.15 && winBefore < 0.92) {
         // The only good move in a contested position — a Great Move (!).
         type = 'great';
-      } else if (isBestMove || cpLoss === 0) {
+      } else if (isBestMove) {
         type = 'best';
       } else {
         type = 'excellent';
