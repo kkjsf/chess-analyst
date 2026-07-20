@@ -6,7 +6,9 @@ const Analyzer = (() => {
   const SAN_TO_FR = { N: 'C', B: 'F', R: 'T', Q: 'D', K: 'R' };
 
   function toFrench(san) {
-    return san.replace(/^([NBRQK])/, (_, p) => SAN_TO_FR[p] || p);
+    return san
+      .replace(/^([NBRQK])/, (_, p) => SAN_TO_FR[p] || p)
+      .replace(/=([NBRQK])/, (_, p) => '=' + (SAN_TO_FR[p] || p));
   }
 
   function altSpans(alts, fen) {

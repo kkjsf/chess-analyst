@@ -70,7 +70,7 @@ const GuessMove = (() => {
     if (titleEl) titleEl.textContent = title;
     $('#guess-score').textContent = plies.length ? `${score} / ${gi}` : '';
     if (!plies.length) {
-      stage.innerHTML = `<div class="guess-empty">Aucun coup à deviner.<br><span>Analyse une partie où tu as joués des coups, puis relance.</span></div>`;
+      stage.innerHTML = `<div class="guess-empty">Aucun coup à deviner.<br><span>Analyse une partie où tu as joué des coups, puis relance.</span></div>`;
       return;
     }
     if (gi >= plies.length) {
