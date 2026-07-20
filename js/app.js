@@ -83,6 +83,12 @@ const App = (() => {
 
     document.addEventListener('keydown', (e) => {
       if (!$('#screen-analysis').classList.contains('active')) return;
+      // Don't let arrow keys leak through to the analysis board when a
+      // practice overlay (guess/tactics/endgame → body.guess-open) or a modal
+      // with its own key handling (opening explorer, concept zoom) sits on top.
+      if (document.body.classList.contains('guess-open')) return;
+      const om = $('#opening-modal'), cm = $('#concept-modal');
+      if ((om && om.classList.contains('visible')) || (cm && cm.classList.contains('visible'))) return;
       if (e.key === 'ArrowLeft') { e.preventDefault(); userNav(currentIndex - 1); }
       if (e.key === 'ArrowRight') { e.preventDefault(); userNav(currentIndex + 1); }
       if (e.key === 'Home') { e.preventDefault(); userNav(0); }
@@ -279,6 +285,8 @@ const App = (() => {
       await runAnalyze();
     } finally {
       analyzing = false;
+      // Let a service-worker update that arrived mid-run reload now (deferred).
+      window.dispatchEvent(new Event('analysis-idle'));
     }
   }
 
@@ -312,6 +320,14 @@ const App = (() => {
         showError('Impossible de récupérer la partie. Collez le PGN manuellement.');
         return;
       }
+    }
+
+    // A multi-game PGN would be silently mangled (sanitizePgn keys off the last
+    // ']', so only the final game's moves survive under all games' headers).
+    // Detect it and ask for a single game instead of analyzing garbage.
+    if ((pgnText.match(/\[Event\s/gi) || []).length > 1) {
+      showError('Une seule partie à la fois : ce PGN en contient plusieurs. Collez une seule partie (de ses en-têtes [Event …] jusqu\'au résultat).');
+      return;
     }
 
     currentClocks = extractClocks(pgnText);
@@ -374,11 +390,11 @@ const App = (() => {
 
     try {
       await StockfishEngine.init();
-      engineUsed = true;
       analysis = await Analyzer.analyzeGameAsync(chess, moves, (done, total) => {
         const pct = Math.round(100 * done / total);
         updateProgressBar(pct, `Analyse en cours... ${done}/${total} positions`);
       });
+      engineUsed = true;
     } catch (_) {
       analysis = Analyzer.analyzeGame(chess, moves);
     }
@@ -388,8 +404,13 @@ const App = (() => {
     const summary = Analyzer.generateSummary(analysis, moves);
     summary.engineUsed = engineUsed;
 
-    saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
-    if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, detectUser(header));
+    // Only persist a full engine analysis. A transient engine failure produces
+    // a heuristic fallback; caching it under this key would pin the weaker
+    // result forever, so leave the key empty and let a later run replace it.
+    if (engineUsed) {
+      saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
+      if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, detectUser(header));
+    }
     saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
     showAnalysis(header, moves, analysis, summary);
@@ -2783,21 +2804,26 @@ const App = (() => {
   function hideError() { $('#import-error').hidden = true; }
 
   function saveGame(pgn, header, moveCount) {
-    const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    const entry = {
-      pgn,
-      white: header.White || '?',
-      black: header.Black || '?',
-      result: header.Result || '*',
-      date: header.Date || new Date().toISOString().slice(0, 10),
-      savedAt: Date.now(),
-      moveCount
-    };
-    const dupeIdx = games.findIndex(g => g.white === entry.white && g.black === entry.black && g.date === entry.date);
-    if (dupeIdx >= 0) games.splice(dupeIdx, 1);
-    games.unshift(entry);
-    if (games.length > 20) games.length = 20;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
+    // Recording the game in the recents list must never throw (a full quota
+    // would otherwise bubble up and abort showAnalysis, losing the analysis
+    // the user just waited for).
+    try {
+      const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const entry = {
+        pgn,
+        white: header.White || '?',
+        black: header.Black || '?',
+        result: header.Result || '*',
+        date: header.Date || new Date().toISOString().slice(0, 10),
+        savedAt: Date.now(),
+        moveCount
+      };
+      const dupeIdx = games.findIndex(g => g.white === entry.white && g.black === entry.black && g.date === entry.date);
+      if (dupeIdx >= 0) games.splice(dupeIdx, 1);
+      games.unshift(entry);
+      if (games.length > 20) games.length = 20;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
+    } catch (_) {}
   }
 
   function loadRecent() {
@@ -2921,7 +2947,10 @@ const App = (() => {
     overlay.addEventListener('click', closeAll);
     $$('.panel-close').forEach(btn => btn.addEventListener('click', closeAll));
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeAll();
+      // A concept-zoom modal can layer on top of a panel; when it's open let it
+      // own Escape so a single press doesn't cascade-close both at once.
+      const cm = $('#concept-modal');
+      if (e.key === 'Escape' && !(cm && cm.classList.contains('visible'))) closeAll();
     });
   }
 
@@ -3015,7 +3044,7 @@ const App = (() => {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && overlay.classList.contains('visible')) {
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         close();
       }
     });
@@ -3387,5 +3416,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo, refreshHome, openOpeningExplorer, openPanel: (name) => { if (_openPanel) _openPanel(name); } };
+  return { goTo, refreshHome, openOpeningExplorer, openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing };
 })();

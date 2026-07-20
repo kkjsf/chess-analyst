@@ -194,6 +194,9 @@ const Tactics = (() => {
 
   // ───────────────────────── practice overlay ─────────────────────────
   let list = [], idx = 0, ply = 0, selected = null, locked = false, game = null, motifName = '';
+  // Bumped on every position change / close so a queued reply or solve timer
+  // from the previous puzzle can't mutate the next one after it fires.
+  let token = 0;
 
   function ensureDom() {
     if ($('#tactics-overlay')) return;
@@ -225,12 +228,14 @@ const Tactics = (() => {
   }
 
   function close() {
+    token++;
     const ov = $('#tactics-overlay');
     if (ov) ov.hidden = true;
     document.body.classList.remove('guess-open');
   }
 
   function render() {
+    token++;
     const stage = $('#tac-stage');
     $('#tac-title').textContent = '🎯 ' + motifName;
     $('#tac-score').textContent = list.length ? `${idx + 1} / ${list.length}` : '';
@@ -323,7 +328,9 @@ const Tactics = (() => {
     // opponent's forced reply
     locked = true;
     const reply = expectedMove();
+    const myToken = token;
     setTimeout(() => {
+      if (myToken !== token) return; // moved on to another puzzle meanwhile
       if (reply) {
         game.move({ from: reply.from, to: reply.to, promotion: reply.promotion || 'q' });
         BoardRenderer.render($('#tac-board'), game.fen(), { from: reply.from, to: reply.to });
@@ -358,7 +365,9 @@ const Tactics = (() => {
     // play out the whole remaining line, arrow on the key move
     const exp = expectedMove();
     if (exp) BoardRenderer.drawArrows($('#tac-arrows'), [{ from: exp.from, to: exp.to, color: '#56b886', opacity: 0.9, width: 6 }]);
+    const myToken = token;
     const playRest = () => {
+      if (myToken !== token) return; // moved on to another puzzle meanwhile
       if (ply >= list[idx].sol.length) {
         const fb = $('#tac-feedback');
         fb.className = 'guess-feedback shown';

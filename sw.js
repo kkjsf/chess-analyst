@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-analyst-v102';
+const CACHE_NAME = 'chess-analyst-v103';
 const ASSETS = [
   './',
   './index.html',
@@ -57,8 +57,14 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request)
       .then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+        // Only runtime-cache same-origin successful GETs. Skipping 404s,
+        // opaque cross-origin responses (chess.com API) and non-GET requests
+        // keeps the cache from growing without bound and from pinning errors.
+        if (e.request.method === 'GET' && response.ok && response.type === 'basic'
+            && url.origin === self.location.origin) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+        }
         return response;
       })
       .catch(async () => {

@@ -21,6 +21,9 @@ const Endgame = (() => {
   ];
 
   let chess = null, sc = null, busy = false, selected = null, plies = 0;
+  // Bumped whenever the position is reset (restart / other finale / menu) so a
+  // defender move still thinking in the background can't land on a fresh game.
+  let gen = 0;
 
   const PKEY = 'chess-analyst-endgame';
   function loadProgress() { try { return JSON.parse(localStorage.getItem(PKEY) || '{}'); } catch (_) { return {}; } }
@@ -64,6 +67,7 @@ const Endgame = (() => {
 
   function renderMenu() {
     sc = null;
+    gen++;
     const prog = loadProgress();
     const doneCount = SCENARIOS.filter(s => prog[s.id] && prog[s.id].done).length;
     $('#eg-head-extra').textContent = `${doneCount}/${SCENARIOS.length} maîtrisées`;
@@ -90,6 +94,7 @@ const Endgame = (() => {
     sc = scenario;
     chess = new Chess(scenario.fen);
     plies = 0; selected = null; busy = false;
+    gen++;
     renderBoard('À toi de jouer — les Blancs matent.');
   }
 
@@ -155,18 +160,21 @@ const Endgame = (() => {
     if (finish(false)) return;
     busy = true;
     setStatus('L\'adversaire réfléchit…');
-    await defenderMove();
+    const token = gen;
+    await defenderMove(token);
+    if (token !== gen) return; // restarted / navigated away while thinking
     busy = false;
     finish(true);
   }
 
-  async function defenderMove() {
+  async function defenderMove(token) {
     let uci = null;
     try {
       await StockfishEngine.init();
       const r = await StockfishEngine.evaluate(chess.fen(), 'movetime 300');
       uci = r && r.bestMove;
     } catch (_) {}
+    if (token !== gen) return; // position was reset during the engine think
     const prevFen = chess.fen();
     let m = null;
     if (uci && uci.length >= 4) {

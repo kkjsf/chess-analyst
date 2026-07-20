@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=102">
+<link rel="stylesheet" href="css/style.css?v=103">
 </head>
 <body>
 
@@ -615,24 +615,36 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=102"></script>
-<script src="js/board.js?v=102"></script>
-<script src="js/engine.js?v=102"></script>
-<script src="js/openings.js?v=102"></script>
-<script src="js/analysis.js?v=102"></script>
-<script src="js/training.js?v=102"></script>
-<script src="js/guess.js?v=102"></script>
-<script src="js/endgame.js?v=102"></script>
-<script src="js/tactics.js?v=102"></script>
-<script src="js/repertoire.js?v=102"></script>
-<script src="js/coach.js?v=102"></script>
-<script src="js/app.js?v=102"></script>
+<script src="js/chess.min.js?v=103"></script>
+<script src="js/board.js?v=103"></script>
+<script src="js/engine.js?v=103"></script>
+<script src="js/openings.js?v=103"></script>
+<script src="js/analysis.js?v=103"></script>
+<script src="js/training.js?v=103"></script>
+<script src="js/guess.js?v=103"></script>
+<script src="js/endgame.js?v=103"></script>
+<script src="js/tactics.js?v=103"></script>
+<script src="js/repertoire.js?v=103"></script>
+<script src="js/coach.js?v=103"></script>
+<script src="js/app.js?v=103"></script>
 <script>
 if ('serviceWorker' in navigator) {
+  // Only auto-reload on a genuine UPDATE (there was already a controlling SW),
+  // never on the very first install. And never yank the page out from under a
+  // running analysis — defer the reload until it finishes.
+  var hadController = !!navigator.serviceWorker.controller;
+  var reloadPending = false;
+  var doReload = function () {
+    // App is a top-level lexical const (not a window property) declared by the
+    // preceding app.js script; reference it directly.
+    if (typeof App !== 'undefined' && App.isAnalyzing && App.isAnalyzing()) { reloadPending = true; return; }
+    window.location.reload();
+  };
   navigator.serviceWorker.register('sw.js');
   navigator.serviceWorker.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'SW_UPDATED') window.location.reload();
+    if (e.data && e.data.type === 'SW_UPDATED' && hadController) doReload();
   });
+  window.addEventListener('analysis-idle', () => { if (reloadPending) window.location.reload(); });
 }
 </script>
 </body>
