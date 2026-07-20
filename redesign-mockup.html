@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess Analyst — maquette redesign</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<style>
+  :root{ --bg:#0f1626; --card:#18223a; --gold:#e2b857; --green:#4ade80; --red:#f87171; --muted:#8a93a6; --text:#e9edf5; }
+  *{ box-sizing:border-box; margin:0; }
+  body{ background:#070b14; color:var(--text); font-family:-apple-system,Segoe UI,Roboto,system-ui,sans-serif; display:flex; justify-content:center; flex-wrap:wrap; gap:20px; align-items:flex-start; padding:18px; min-height:100vh; }
+  .fc{ font-size:12px; color:var(--muted); border:1px solid rgba(255,255,255,.14); padding:5px 10px; border-radius:999px; }
+  .fc.on{ color:#0f1626; background:var(--gold); border-color:var(--gold); font-weight:600; }
+  .ccard{ margin:0 16px 12px; background:var(--card); border-radius:16px; padding:14px; }
+  .ctitle{ font-size:14px; font-weight:600; margin-bottom:2px; }
+  .bar{ display:flex; align-items:center; gap:8px; margin:7px 0; }
+  .bar .lab{ font-size:13px; width:118px; }
+  .bar .trk{ flex:1; height:8px; background:rgba(255,255,255,.08); border-radius:4px; overflow:hidden; }
+  .bar .trk i{ display:block; height:100%; border-radius:4px; }
+  .phone{ width:340px; max-width:100%; background:var(--bg); border-radius:30px; border:1px solid rgba(255,255,255,.08); overflow:hidden; }
+  .notch{ height:26px; display:flex; align-items:center; justify-content:center; }
+  .notch span{ width:74px; height:5px; border-radius:3px; background:rgba(255,255,255,.18); }
+  .topbar{ display:flex; align-items:center; gap:10px; padding:6px 16px 12px; }
+  .topbar .who{ flex:1; }
+  .topbar .who b{ font-size:15px; font-weight:600; }
+  .topbar .who small{ display:block; font-size:12px; color:var(--muted); }
+  .chip{ font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px; }
+  .chip.loss{ color:#f3b0b0; background:rgba(248,113,113,.16); }
+  .muted{ color:var(--muted); }
+  i.ti{ line-height:1; }
+  .row2{ display:flex; gap:10px; padding:0 16px 14px; }
+  .acc{ flex:1; background:var(--card); border-radius:14px; padding:12px; display:flex; align-items:center; gap:12px; }
+  .opp{ width:104px; background:var(--card); border-radius:14px; padding:12px; display:flex; flex-direction:column; justify-content:center; }
+  .opp .big{ font-size:22px; font-weight:600; }
+  .boardwrap{ padding:0 16px; position:relative; }
+  #board{ width:100%; aspect-ratio:1; display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); border-radius:10px; overflow:hidden; }
+  .sq{ display:flex; align-items:center; justify-content:center; font-size:26px; line-height:1; position:relative; }
+  .sq.l{ background:#eeeed2; } .sq.d{ background:#769656; }
+  .sq.from::after{ content:""; position:absolute; inset:0; background:rgba(226,184,87,.55); }
+  .sq.to::after{ content:""; position:absolute; inset:0; background:rgba(74,222,128,.45); }
+  .pc{ position:relative; z-index:1; }
+  .pc.w{ color:#fafafa; text-shadow:0 0 1px #000,0 1px 2px rgba(0,0,0,.5); }
+  .pc.b{ color:#272522; text-shadow:0 1px 1px rgba(255,255,255,.25); }
+  #arrow{ position:absolute; inset:0 16px; pointer-events:none; }
+  .tip{ margin:14px 16px 0; background:rgba(226,184,87,.12); border-radius:14px; padding:12px; }
+  .tip .h{ display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:13px; font-weight:600; color:#f0d28a; }
+  .tip p{ font-size:13px; line-height:1.5; color:#d6dcea; }
+  .pill{ display:inline-block; font-size:12px; font-weight:600; padding:6px 12px; border-radius:999px; margin-top:10px; }
+  .pill.gold{ color:#0f1626; background:var(--gold); }
+  .pill.ghost{ color:var(--muted); border:1px solid rgba(255,255,255,.14); margin-left:8px; }
+  .moves{ padding:12px 16px 4px; }
+  .mv{ display:flex; align-items:center; gap:8px; padding:8px 0; }
+  .mv+.mv{ border-top:1px solid rgba(255,255,255,.06); }
+  .dot{ width:8px; height:8px; border-radius:50%; }
+  .mv span.t{ font-size:13px; flex:1; }
+  .mv span.e{ font-size:12px; color:var(--muted); }
+  .nav{ display:flex; margin-top:8px; border-top:1px solid rgba(255,255,255,.08); background:#121a2c; }
+  .nav a{ flex:1; text-align:center; padding:10px 0 14px; text-decoration:none; color:var(--muted); }
+  .nav a i{ font-size:22px; }
+  .nav a div{ font-size:11px; margin-top:2px; }
+  .nav a.active{ color:var(--gold); }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"><span></span></div>
+
+  <div class="topbar">
+    <i class="ti ti-chevron-left" style="font-size:22px;color:var(--muted)"></i>
+    <div class="who"><b>vs slamet13</b><small>Rapide · 10 min · 14 juin</small></div>
+    <span class="chip loss">Défaite</span>
+    <i class="ti ti-rotate-2" style="font-size:19px;color:var(--muted)"></i>
+  </div>
+
+  <div class="row2">
+    <div class="acc">
+      <svg viewBox="0 0 60 60" width="54" height="54">
+        <circle cx="30" cy="30" r="25" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="6"/>
+        <circle cx="30" cy="30" r="25" fill="none" stroke="#e2b857" stroke-width="6" stroke-linecap="round" stroke-dasharray="113 157" transform="rotate(-90 30 30)"/>
+        <text x="30" y="34" text-anchor="middle" font-size="15" font-weight="600" fill="#e9edf5">72</text>
+      </svg>
+      <div><div class="muted" style="font-size:12px">Ta précision</div><div style="font-size:13px">Bon</div></div>
+    </div>
+    <div class="opp">
+      <div class="muted" style="font-size:12px">Adversaire</div>
+      <div class="big">68<span class="muted" style="font-size:12px">%</span></div>
+    </div>
+  </div>
+
+  <div class="boardwrap">
+    <div id="board"></div>
+    <svg id="arrow"><defs><marker id="ah" markerWidth="4" markerHeight="4" refX="2.4" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#4ade80"/></marker></defs><line id="arrowline" stroke="#4ade80" stroke-width="4" marker-end="url(#ah)"/></svg>
+  </div>
+
+  <div class="tip">
+    <div class="h"><i class="ti ti-bulb" style="font-size:18px;color:var(--gold)"></i> Le tournant — coup 14</div>
+    <p>Dh5 laisse ton cavalier en prise. <span style="color:#7fe0a6">Cf3</span> gardait l'égalité.</p>
+    <span class="pill gold">Rejouer ce coup</span><span class="pill ghost">Voir la suite</span>
+  </div>
+
+  <div class="moves">
+    <div class="mv"><span class="dot" style="background:var(--green)"></span><span class="t">12. Cf3 <span class="muted">meilleur</span></span><span class="e">+0.3</span></div>
+    <div class="mv"><span class="dot" style="background:var(--gold)"></span><span class="t">13. Fc4 <span class="muted">imprécision</span></span><span class="e">−0.6</span></div>
+    <div class="mv"><span class="dot" style="background:var(--red)"></span><span class="t">14. Dh5 <span style="color:#f3b0b0">gaffe</span></span><span class="e">−2.4</span></div>
+  </div>
+
+  <nav class="nav">
+    <a class="active"><i class="ti ti-microscope"></i><div>Analyser</div></a>
+    <a><i class="ti ti-chart-radar"></i><div>Coach</div></a>
+    <a><i class="ti ti-target-arrow"></i><div>Entraîner</div></a>
+    <a><i class="ti ti-flag"></i><div>Finales</div></a>
+  </nav>
+</div>
+
+<div class="phone">
+  <div class="notch"><span></span></div>
+  <div class="topbar">
+    <div class="who"><b>Coach</b><small>95 parties · 72% de précision moy.</small></div>
+    <i class="ti ti-refresh" style="font-size:19px;color:var(--muted)"></i>
+  </div>
+  <div style="display:flex;gap:7px;padding:0 16px 12px;flex-wrap:wrap">
+    <span class="fc on">Toutes 95</span><span class="fc">Bullet 18</span><span class="fc">Blitz 31</span><span class="fc">Rapide 46</span>
+  </div>
+
+  <div class="ccard">
+    <div class="ctitle"><i class="ti ti-chart-radar" style="color:var(--gold)"></i> Ton profil de joueur</div>
+    <div class="muted" style="font-size:12px;margin-bottom:4px">Tes 5 forces, notées sur 100</div>
+    <svg viewBox="0 0 150 150" width="100%" style="max-width:220px;display:block;margin:2px auto">
+      <polygon points="75,30 124.5,65.9 105.6,124.1 44.4,124.1 25.5,65.9" fill="none" stroke="#2a3a5c"/>
+      <polygon points="75,56 99.75,73.95 90.3,103.05 59.7,103.05 50.25,73.95" fill="none" stroke="#2a3a5c"/>
+      <polygon points="75,38.3 117.6,68.2 103.5,121.1 68.9,90.4 46.8,72.8" fill="rgba(226,184,87,.25)" stroke="#e2b857" stroke-width="2" stroke-linejoin="round"/>
+      <g fill="#e2b857"><circle cx="75" cy="38.3" r="2.4"/><circle cx="117.6" cy="68.2" r="2.4"/><circle cx="103.5" cy="121.1" r="2.4"/><circle cx="68.9" cy="90.4" r="2.4"/><circle cx="46.8" cy="72.8" r="2.4"/></g>
+    </svg>
+    <div class="muted" style="font-size:11px;text-align:center;line-height:1.6">Ouverture 84 · Milieu 86 · Finale 93 · Vigilance 20 · Conversion 57</div>
+    <div style="font-size:12px;margin-top:8px;color:#d6dcea">Point fort : <b style="color:var(--gold)">Finale</b> · Point faible : <b style="color:var(--gold)">Vigilance</b></div>
+  </div>
+
+  <div class="ccard">
+    <div class="ctitle" style="margin-bottom:8px"><i class="ti ti-target-arrow" style="color:var(--gold)"></i> Tes faiblesses tactiques</div>
+    <div class="bar"><span class="lab">Pièce en prise</span><div class="trk"><i style="width:100%;background:var(--red)"></i></div><span class="muted" style="font-size:12px">167</span></div>
+    <div class="bar"><span class="lab">Gain de matériel</span><div class="trk"><i style="width:75%;background:var(--red)"></i></div><span class="muted" style="font-size:12px">126</span></div>
+    <div class="bar"><span class="lab">Fourchette</span><div class="trk"><i style="width:65%;background:var(--red)"></i></div><span class="muted" style="font-size:12px">109</span></div>
+    <div class="bar"><span class="lab">Mat manqué</span><div class="trk"><i style="width:8%;background:#8a8aa0"></i></div><span class="muted" style="font-size:12px">10</span></div>
+    <span class="pill gold" style="margin-top:12px"><i class="ti ti-target-arrow"></i> M'entraîner</span>
+  </div>
+
+  <nav class="nav">
+    <a><i class="ti ti-microscope"></i><div>Analyser</div></a>
+    <a class="active"><i class="ti ti-chart-radar"></i><div>Coach</div></a>
+    <a><i class="ti ti-target-arrow"></i><div>Entraîner</div></a>
+    <a><i class="ti ti-flag"></i><div>Finales</div></a>
+  </nav>
+</div>
+
+<script>
+  const pos = ["r.bq.rk.","pp...ppp","..np.n..","....p...","..B.P...","..N..N..","PPP..PPP","R.BQ.RK."];
+  const G = {k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
+  const from=[6,7], to=[5,5];
+  const board=document.getElementById("board");
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const d=document.createElement("div");
+    d.className="sq "+((r+c)%2?"d":"l");
+    if(c===from[0]&&r===from[1])d.classList.add("from");
+    if(c===to[0]&&r===to[1])d.classList.add("to");
+    const ch=pos[r][c];
+    if(ch!=="."){const s=document.createElement("span");s.className="pc "+(ch===ch.toUpperCase()?"w":"b");s.textContent=G[ch.toLowerCase()];d.appendChild(s);}
+    board.appendChild(d);
+  }
+  function drawArrow(){
+    const w=board.clientWidth, cell=w/8;
+    const ln=document.getElementById("arrowline");
+    ln.setAttribute("x1",from[0]*cell+cell/2); ln.setAttribute("y1",from[1]*cell+cell/2);
+    ln.setAttribute("x2",to[0]*cell+cell/2);   ln.setAttribute("y2",to[1]*cell+cell/2);
+  }
+  window.addEventListener("resize",drawArrow); requestAnimationFrame(drawArrow);
+</script>
+</body>
+</html>

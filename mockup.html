@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Analyst — Maquette</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-elevated: #1c2a4a;
+    --accent: #e2b857;
+    --accent-dim: #c9982e;
+    --text: #e8e8e8;
+    --text-dim: #8892a4;
+    --success: #4ade80;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    --square-light: #b7c0d8;
+    --square-dark: #4a6fa1;
+    --highlight-from: rgba(226, 184, 87, 0.45);
+    --highlight-to: rgba(226, 184, 87, 0.65);
+    --radius: 12px;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCREEN SWITCHER ── */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── SCREEN 1 : IMPORT ── */
+  .import-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 32px;
+  }
+
+  .logo-section {
+    text-align: center;
+  }
+  .logo-section .icon {
+    font-size: 64px;
+    margin-bottom: 8px;
+  }
+  .logo-section h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .logo-section p {
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-size: 14px;
+  }
+
+  .import-zone {
+    width: 100%;
+    max-width: 440px;
+    border: 2px dashed var(--square-dark);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align: center;
+    transition: border-color 0.2s;
+    background: var(--bg-card);
+  }
+  .import-zone:hover, .import-zone.dragover {
+    border-color: var(--accent);
+  }
+  .import-zone textarea {
+    width: 100%;
+    height: 120px;
+    background: var(--bg);
+    border: 1px solid #2a3a5c;
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    padding: 12px;
+    resize: none;
+    margin-bottom: 12px;
+  }
+  .import-zone textarea::placeholder { color: var(--text-dim); }
+  .import-zone .hint {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .import-zone .hint .file-icon { margin-right: 4px; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #1a1a2e;
+    border: none;
+    padding: 14px 40px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .btn-primary:hover { background: var(--accent-dim); }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .recent-section {
+    width: 100%;
+    max-width: 440px;
+  }
+  .recent-section h3 {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .recent-item {
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .recent-item:hover { background: var(--bg-elevated); }
+  .recent-item .result {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .recent-item .result.loss { background: #3b1a1a; color: var(--danger); }
+  .recent-item .result.win { background: #1a3b2a; color: var(--success); }
+  .recent-item .players { font-size: 14px; flex: 1; }
+  .recent-item .date { font-size: 12px; color: var(--text-dim); }
+
+  /* ── SCREEN 2 : ANALYSIS ── */
+  .analysis-screen {
+    padding: 0;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border-bottom: 1px solid #2a3a5c;
+    gap: 12px;
+  }
+  .top-bar .back-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+  .top-bar .match-info {
+    flex: 1;
+  }
+  .top-bar .match-info .players-line {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .top-bar .match-info .elo-line {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .top-bar .result-badge {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #3b1a1a;
+    color: var(--danger);
+  }
+
+  .analysis-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Board */
+  .board-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .player-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+    font-size: 14px;
+  }
+  .player-bar .piece-icon { font-size: 20px; }
+  .player-bar .name { font-weight: 600; flex: 1; }
+  .player-bar .elo { color: var(--text-dim); font-size: 12px; }
+  .player-bar .captured {
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+  }
+
+  .board-container {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 1;
+  }
+  .board-svg {
+    width: 100%;
+    height: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  /* Move navigation */
+  .nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .nav-btn {
+    background: var(--bg-elevated);
+    border: 1px solid #2a3a5c;
+    color: var(--text);
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  .nav-btn:hover { background: var(--square-dark); }
+  .move-slider {
+    flex: 1;
+    max-width: 140px;
+    accent-color: var(--accent);
+    height: 6px;
+  }
+  .move-counter {
+    font-size: 13px;
+    color: var(--text-dim);
+    min-width: 55px;
+    text-align: center;
+  }
+
+  /* Tip card */
+  .tip-card {
+    background: var(--bg-card);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 16px;
+  }
+  .tip-card .tip-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .tip-card .tip-header .bulb { font-size: 20px; }
+  .tip-card .tip-header .label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent);
+  }
+  .tip-card .tip-header .eval-badge {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .eval-badge.blunder { background: #3b1a1a; color: var(--danger); }
+  .eval-badge.good { background: #1a3b2a; color: var(--success); }
+  .eval-badge.book { background: #2a2a1a; color: var(--warning); }
+  .eval-badge.neutral { background: #2a2a3a; color: var(--text-dim); }
+  .tip-card .tip-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  /* Move list */
+  .moves-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .moves-card h3 {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  .moves-grid {
+    display: grid;
+    grid-template-columns: 32px 1fr 1fr;
+    gap: 2px 0;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+  }
+  .move-num {
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 4px 4px;
+    text-align: right;
+  }
+  .move-cell {
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .move-cell:hover { background: var(--bg-elevated); }
+  .move-cell.active {
+    background: var(--accent);
+    color: #1a1a2e;
+    font-weight: 600;
+  }
+  .move-cell.blunder-move { border-bottom: 2px solid var(--danger); }
+  .move-cell.mistake-move { border-bottom: 2px solid var(--warning); }
+
+  /* Summary */
+  .summary-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .summary-card h3 {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  .summary-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .summary-row .side-label {
+    font-size: 14px;
+    font-weight: 600;
+    min-width: 40px;
+  }
+  .stat-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .stat-pill {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .stat-pill.blunders { background: #3b1a1a; color: var(--danger); }
+  .stat-pill.mistakes { background: #3b2e1a; color: var(--warning); }
+  .stat-pill.good-moves { background: #1a3b2a; color: var(--success); }
+
+  .key-moment {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 8px;
+    font-size: 13px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .key-moment .km-icon { font-size: 18px; }
+  .key-moment .km-text { line-height: 1.5; }
+  .key-moment .km-move {
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* Eval bar */
+  .eval-bar-container {
+    position: absolute;
+    left: -24px;
+    top: 0;
+    bottom: 0;
+    width: 16px;
+    background: #333;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .eval-bar-fill {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    background: white;
+    transition: height 0.5s ease;
+  }
+
+  /* Arrow overlay */
+  .arrow-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* Mockup label */
+  .mockup-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--accent);
+    color: #1a1a2e;
+    text-align: center;
+    padding: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 100;
+    letter-spacing: 1px;
+  }
+  body { padding-top: 30px; }
+
+  /* Responsive */
+  @media (min-width: 600px) {
+    .analysis-body {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">MAQUETTE INTERACTIVE — CHESS ANALYST</div>
+
+<!-- ════════════════ SCREEN 1: IMPORT ════════════════ -->
+<div id="screen-import" class="screen import-screen active">
+  <div class="logo-section">
+    <div class="icon">♟</div>
+    <h1>Chess Analyst</h1>
+    <p>Analysez vos parties, progressez à chaque coup</p>
+  </div>
+
+  <div class="import-zone" id="drop-zone">
+    <textarea id="pgn-input" placeholder="Collez votre PGN ici...&#10;&#10;Exemple :&#10;1. e4 e5 2. Nf3 Nc6 3. Bb5 a6..."></textarea>
+    <div class="hint">
+      <span class="file-icon">📎</span> ou glissez un fichier .pgn ici
+    </div>
+    <button class="btn-primary" onclick="showAnalysis()">Analyser la partie</button>
+  </div>
+
+  <div class="recent-section">
+    <h3>Parties récentes</h3>
+    <div class="recent-item" onclick="showAnalysis()">
+      <span class="result loss">Défaite</span>
+      <span class="players">alisF3146 vs <b>Nimokaji</b></span>
+      <span class="date">22 mai</span>
+    </div>
+    <div class="recent-item">
+      <span class="result win">Victoire</span>
+      <span class="players"><b>Nimokaji</b> vs GrandPat42</span>
+      <span class="date">20 mai</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ SCREEN 2: ANALYSIS ════════════════ -->
+<div id="screen-analysis" class="screen analysis-screen">
+  <div class="top-bar">
+    <button class="back-btn" onclick="showImport()">←</button>
+    <div class="match-info">
+      <div class="players-line">alisF3146 vs Nimokaji</div>
+      <div class="elo-line">Élo 504 · Élo 602 · Journalier</div>
+    </div>
+    <span class="result-badge">0-1</span>
+  </div>
+
+  <div class="analysis-body">
+    <!-- Board -->
+    <div class="board-wrapper">
+      <div class="player-bar">
+        <span class="piece-icon">⚫</span>
+        <span class="name">Nimokaji</span>
+        <span class="elo">602</span>
+        <span class="captured">♙</span>
+      </div>
+
+      <div class="board-container">
+        <div class="eval-bar-container">
+          <div class="eval-bar-fill" style="height: 65%;"></div>
+        </div>
+        <svg class="board-svg" viewBox="0 0 360 360" id="board-svg"></svg>
+        <svg class="arrow-overlay" viewBox="0 0 360 360" id="arrow-overlay">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#e2b857" opacity="0.8"/>
+            </marker>
+          </defs>
+          <!-- Arrow: f5 → d3 (Bishop captures Queen) -->
+          <line x1="247" y1="157" x2="157" y2="247" stroke="#e2b857" stroke-width="5" opacity="0.6" marker-end="url(#arrowhead)"/>
+        </svg>
+      </div>
+
+      <div class="player-bar">
+        <span class="piece-icon">⚪</span>
+        <span class="name">alisF3146</span>
+        <span class="elo">504</span>
+        <span class="captured">♟♟</span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-bar">
+      <button class="nav-btn" title="Premier coup">⏮</button>
+      <button class="nav-btn" title="Coup précédent">◀</button>
+      <input type="range" class="move-slider" min="0" max="26" value="18">
+      <span class="move-counter">Coup 18/26</span>
+      <button class="nav-btn" title="Coup suivant">▶</button>
+      <button class="nav-btn" title="Dernier coup">⏭</button>
+    </div>
+
+    <!-- Tip -->
+    <div class="tip-card">
+      <div class="tip-header">
+        <span class="bulb">💡</span>
+        <span class="label">Conseil</span>
+        <span class="eval-badge blunder">Gaffe !</span>
+      </div>
+      <div class="tip-text">
+        <b>9. Na3?</b> — Le cavalier se retrouve dans un coin, loin de l'action.
+        Pendant ce temps, les Noirs en profitent : <b>Fxd3</b> capture la dame blanche !
+        La dame était sans protection depuis qu'elle s'est posée en d3 au coup précédent.
+        <br><br>
+        <b>Alternative :</b> 9. Fd2 aurait protégé le centre et gardé la dame en sécurité.
+      </div>
+    </div>
+
+    <!-- Move list -->
+    <div class="moves-card">
+      <h3>Liste des coups</h3>
+      <div class="moves-grid">
+        <span class="move-num">1.</span><span class="move-cell">d4</span><span class="move-cell">d5</span>
+        <span class="move-num">2.</span><span class="move-cell">f4</span><span class="move-cell">Ff5</span>
+        <span class="move-num">3.</span><span class="move-cell">b3</span><span class="move-cell">e6</span>
+        <span class="move-num">4.</span><span class="move-cell">Fe3</span><span class="move-cell">Cc6</span>
+        <span class="move-num">5.</span><span class="move-cell">c3</span><span class="move-cell">Cf6</span>
+        <span class="move-num">6.</span><span class="move-cell mistake-move">h4</span><span class="move-cell">Ca5</span>
+        <span class="move-num">7.</span><span class="move-cell mistake-move">Th3</span><span class="move-cell">Ce4</span>
+        <span class="move-num">8.</span><span class="move-cell blunder-move">Dd3</span><span class="move-cell">Cd6</span>
+        <span class="move-num">9.</span><span class="move-cell blunder-move active">Ca3</span><span class="move-cell active">Fxd3</span>
+        <span class="move-num">10.</span><span class="move-cell">Td1</span><span class="move-cell">Ff5</span>
+        <span class="move-num">11.</span><span class="move-cell">Tg3</span><span class="move-cell">Ce4</span>
+        <span class="move-num">12.</span><span class="move-cell mistake-move">Tg5</span><span class="move-cell">f6</span>
+        <span class="move-num">13.</span><span class="move-cell">Cb5</span><span class="move-cell">fxg5</span>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-card">
+      <h3>Résumé de la partie</h3>
+      <div class="summary-row">
+        <span class="side-label">⚪</span>
+        <div class="stat-pills">
+          <span class="stat-pill blunders">2 gaffes</span>
+          <span class="stat-pill mistakes">3 imprécisions</span>
+          <span class="stat-pill good-moves">4 bons coups</span>
+        </div>
+      </div>
+      <div class="summary-row">
+        <span class="side-label">⚫</span>
+        <div class="stat-pills">
+          <span class="stat-pill blunders">0 gaffe</span>
+          <span class="stat-pill mistakes">1 imprécision</span>
+          <span class="stat-pill good-moves">8 bons coups</span>
+        </div>
+      </div>
+      <div class="key-moment">
+        <span class="km-icon">⚡</span>
+        <div class="km-text">
+          <b>Moment clé :</b> <span class="km-move">Coup 8 (Dd3??)</span><br>
+          Les Blancs placent leur dame sur une case non protégée, directement dans la ligne de mire du fou adverse.
+          La partie bascule définitivement.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Board rendering
+const pieces = {
+  'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
+  'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
+};
+
+// Position after 9. Na3 Bxd3
+const position = [
+  ['r', '.', 'b', 'q', 'k', 'b', '.', 'r'],
+  ['p', 'p', 'p', '.', '.', '.', 'p', 'p'],
+  ['n', '.', '.', '.', 'p', '.', '.', '.'],
+  ['.', '.', '.', 'b', '.', '.', '.', '.'],
+  ['.', '.', '.', 'P', '.', 'P', '.', 'P'],
+  ['N', 'P', 'P', '.', '.', 'B', '.', '.'],
+  ['P', '.', '.', '.', '.', '.', 'P', '.'],
+  ['R', '.', '.', 'R', '.', '.', '.', 'K'],
+];
+
+function drawBoard() {
+  const svg = document.getElementById('board-svg');
+  const sq = 45;
+  let html = '';
+
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const isLight = (row + col) % 2 === 0;
+      const x = col * sq;
+      const y = row * sq;
+      let fill = isLight ? 'var(--square-light)' : 'var(--square-dark)';
+
+      // Highlight last move: Na3 (b1→a3) and Bxd3 (f5→d3)
+      if ((row === 5 && col === 0) || (row === 2 && col === 1)) {
+        // Na3 highlight
+      }
+      if ((row === 3 && col === 3) || (row === 2 && col === 5)) {
+        // Bxd3 highlight
+      }
+      // Highlight from/to squares
+      if ((row === 5 && col === 0) || (row === 3 && col === 3)) {
+        fill = 'var(--highlight-to)';
+      }
+
+      html += `<rect x="${x}" y="${y}" width="${sq}" height="${sq}" fill="${fill}"/>`;
+
+      // Coordinate labels
+      if (col === 0) {
+        html += `<text x="${x+3}" y="${y+12}" fill="${isLight ? 'var(--square-dark)' : 'var(--square-light)'}" font-size="10" font-weight="600">${8-row}</text>`;
+      }
+      if (row === 7) {
+        html += `<text x="${x+sq-9}" y="${y+sq-3}" fill="${isLight ? 'var(--square-dark)' : 'var(--square-light)'}" font-size="10" font-weight="600">${'abcdefgh'[col]}</text>`;
+      }
+
+      const piece = position[row][col];
+      if (piece !== '.') {
+        html += `<text x="${x + sq/2}" y="${y + sq/2 + 12}" text-anchor="middle" font-size="34">${pieces[piece]}</text>`;
+      }
+    }
+  }
+  svg.innerHTML = html;
+}
+
+function showAnalysis() {
+  document.getElementById('screen-import').classList.remove('active');
+  document.getElementById('screen-analysis').classList.add('active');
+}
+
+function showImport() {
+  document.getElementById('screen-analysis').classList.remove('active');
+  document.getElementById('screen-import').classList.add('active');
+}
+
+drawBoard();
+</script>
+</body>
+</html>
