@@ -56,8 +56,10 @@ const Training = (() => {
   function movesFrom(fen, square, color) {
     // Force side-to-move to `color` so we can ask "what can this piece do".
     const parts = fen.split(' ');
-    parts[1] = color;
-    parts[3] = '-'; // clear en-passant to avoid illegal-fen edge cases
+    // The en-passant square is only valid for the side genuinely to move; keep it
+    // when `color` already has the move (so en-passant captures are seen), but
+    // clear it when we flip sides to avoid an illegal FEN throwing.
+    if (parts[1] !== color) { parts[1] = color; parts[3] = '-'; }
     try {
       const g = new Chess(parts.join(' '));
       return g.moves({ square, verbose: true }) || [];
@@ -647,15 +649,18 @@ const Training = (() => {
   function attemptMove(from, to) {
     if (solved) return;
     const want = current.bestUci;
-    if (from === want.slice(0, 2) && to === want.slice(2, 4)) {
+    // Try the played move so we can accept equally-winning alternatives: a move
+    // that delivers checkmate is objectively best (mate can't be beaten), so any
+    // legal mating move counts even when it isn't the exact engine line stored.
+    let played = null;
+    try {
+      const g = new Chess(current.fen);
+      played = g.move({ from, to, promotion: 'q' });
+    } catch (_) {}
+    const legal = !!played;
+    if ((from === want.slice(0, 2) && to === want.slice(2, 4)) || (played && played.san.includes('#'))) {
       revealSolution(true);
     } else {
-      // legal but not best
-      let legal = false;
-      try {
-        const g = new Chess(current.fen);
-        legal = !!g.move({ from, to, promotion: 'q' });
-      } catch (_) {}
       const fb = $('#train-feedback');
       fb.className = 'train-feedback wrong';
       fb.innerHTML = legal

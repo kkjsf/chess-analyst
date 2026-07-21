@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '106';
+window.APP_VERSION = '107';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -251,7 +251,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
 <!-- ═══════ CONCEPT ZOOM MODAL ═══════ -->
 <div class="concept-modal-overlay" id="concept-modal">
-  <div class="concept-modal">
+  <div class="concept-modal" role="dialog" aria-modal="true" aria-labelledby="concept-modal-title">
     <div class="concept-modal-header">
       <h3 id="concept-modal-title"></h3>
       <button class="concept-modal-close" id="concept-modal-close" aria-label="Fermer">&times;</button>
@@ -267,7 +267,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
 <!-- ═══════ OPENING EXPLORER MODAL ═══════ -->
 <div class="opening-modal-overlay" id="opening-modal">
-  <div class="opening-modal">
+  <div class="opening-modal" role="dialog" aria-modal="true" aria-labelledby="opening-modal-title">
     <div class="opening-modal-header">
       <h3 id="opening-modal-title"></h3>
       <span class="opening-modal-eco" id="opening-modal-eco"></span>
@@ -367,13 +367,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
           <div class="eval-bar-fill" id="eval-bar"></div>
         </div>
         <svg class="board-svg" viewBox="0 0 360 360" id="board-svg"></svg>
-        <svg class="arrow-overlay" viewBox="0 0 360 360" id="arrow-overlay">
-          <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="#e2b857" opacity="0.8"/>
-            </marker>
-          </defs>
-        </svg>
+        <svg class="arrow-overlay" viewBox="0 0 360 360" id="arrow-overlay"></svg>
         <svg class="arrow-overlay inspect-overlay" viewBox="0 0 360 360" id="inspect-overlay"></svg>
         <div class="inspect-popup" id="inspect-popup" hidden></div>
       </div>

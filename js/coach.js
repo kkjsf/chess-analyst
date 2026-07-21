@@ -6,6 +6,9 @@ const Coach = (() => {
   const META = 'meta';
   const USER_KEY = 'chess-coach-user';
   const HOSTED_URL = './coach-data.json';
+  // The hosted server analysis (coach-data.json) is one account's games — the
+  // repo owner's. It must not be imported into any other account's local DB.
+  const HOSTED_USER = 'nimokaji';
   const ACTIONS_URL = 'https://github.com/kkjsf/chess-analyst/actions/workflows/analyze.yml';
   const BULK_MOVETIME = 'movetime 600';
   const DRAW_RESULTS = new Set(['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient']);
@@ -104,6 +107,37 @@ const Coach = (() => {
   // ─────────────── Username ───────────────
   function getUser() { return (localStorage.getItem(USER_KEY) || 'nimokaji').trim(); }
   function setUser(u) { localStorage.setItem(USER_KEY, u.trim()); }
+
+  // Wipe every game + sync bookkeeping. Used when the analysed account changes,
+  // so one account's games never mix with another's in the shared IndexedDB.
+  function clearStore() {
+    return new Promise((res) => {
+      const tx = db.transaction([STORE, META], 'readwrite');
+      tx.objectStore(STORE).clear();
+      ['doneMonths', 'lastSync', 'oppCountry', 'hostedGeneratedAt'].forEach(k => tx.objectStore(META).delete(k));
+      tx.oncomplete = () => res();
+      tx.onerror = () => res();
+    });
+  }
+
+  // Guard against two Chess.com accounts sharing one IndexedDB: the store holds
+  // exactly one account's games (keyed by uuid, fetched from that user's
+  // archive). If the configured username changed since the last sync, the cached
+  // games belong to the wrong account — wipe them so a fresh sync is clean.
+  // Returns true if a wipe happened. First run (no owner recorded) never wipes:
+  // the existing games belong to the current default account.
+  async function ensureOwner() {
+    const user = getUser().toLowerCase();
+    const owner = ((await getMeta('owner')) || '').toLowerCase();
+    let wiped = false;
+    if (owner && owner !== user) {
+      await clearStore();
+      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null;
+      wiped = true;
+    }
+    await setMeta('owner', user);
+    return wiped;
+  }
 
   // ─────────────── Chess.com sync ───────────────
   async function fetchJson(url) {
@@ -259,6 +293,7 @@ const Coach = (() => {
   // Server-computed analysis is authoritative. Falls back gracefully if the
   // file doesn't exist yet (app then works fully in local-engine mode).
   async function loadHosted() {
+    if (getUser().toLowerCase() !== HOSTED_USER) return null; // hosted set is one account's games
     let data;
     try {
       const r = await fetch(HOSTED_URL, { cache: 'no-store' });
@@ -437,7 +472,20 @@ const Coach = (() => {
     const ab = $('#coach-analyze-btn');
     if (ab) ab.addEventListener('click', onAnalyzeAll);
     $('#coach-stop-btn').addEventListener('click', () => { stop(); });
-    $('#coach-user-input').addEventListener('change', (e) => setUser(e.target.value));
+    $('#coach-user-input').addEventListener('change', async (e) => {
+      const next = e.target.value.trim().toLowerCase();
+      const prev = getUser().toLowerCase();
+      setUser(e.target.value);
+      if (next && next !== prev && db) {
+        // Switching accounts mid-session: wipe the previous account's games so
+        // the two never mix, then pull the new account's games.
+        await clearStore();
+        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null;
+        await setMeta('owner', next);
+        render();
+        onRefresh();
+      }
+    });
   }
 
   function donut(parts, total) {
@@ -1091,17 +1139,27 @@ const Coach = (() => {
   }
   async function fetchCountries(an, onProg) {
     const todo = oppKeys(an).filter(u => !(u in countryCache));
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
     let done = 0;
     for (const u of todo) {
       try {
-        const p = await fetchJson(`https://api.chess.com/pub/player/${encodeURIComponent(u)}`);
-        // '??' here = fetch succeeded but the profile has no country (a real,
-        // final answer, so cache it). A network error must NOT be cached as '??'
-        // or it sticks forever — leave it absent so a later run retries.
-        countryCache[u] = (p.country && p.country.split('/').pop()) || '??';
+        const url = `https://api.chess.com/pub/player/${encodeURIComponent(u)}`;
+        let r = await fetch(url);
+        if (r.status === 429) { // rate-limited: honour Retry-After, back off once
+          await sleep((parseInt(r.headers.get('Retry-After'), 10) || 2) * 1000);
+          r = await fetch(url);
+        }
+        if (r.ok) {
+          const p = await r.json();
+          // '??' here = fetch succeeded but the profile has no country (a real,
+          // final answer, so cache it). A network error / 429 must NOT be cached
+          // as '??' or it sticks forever — leave it absent so a later run retries.
+          countryCache[u] = (p.country && p.country.split('/').pop()) || '??';
+        }
       } catch (_) { /* network error: leave uncached to allow a retry */ }
       done++;
       onProg && onProg(done, todo.length);
+      if (done < todo.length) await sleep(120); // gentle pace across ~60 profiles
     }
     await setMeta('oppCountry', countryCache);
   }
@@ -1523,7 +1581,9 @@ const Coach = (() => {
     if (body && !body.dataset.ready) body.innerHTML = skeleton();
     if (!db) {
       try {
-        db = await openDB(); games = await getAll();
+        db = await openDB();
+        await ensureOwner(); // clears the DB if the analysed account changed
+        games = await getAll();
         countryCache = (await getMeta('oppCountry')) || {};
       } catch (_) { games = []; }
     }

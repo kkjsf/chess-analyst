@@ -676,11 +676,7 @@ html, body {
   padding: 2px 8px;
   border-radius: 4px;
 }
-.eval-badge.blunder { background: #3b1a1a; color: var(--danger); }
-.eval-badge.mistake { background: #3b2e1a; color: var(--warning); }
-.eval-badge.good { background: #1a3b2a; color: var(--success); }
-.eval-badge.book { background: #2a2a1a; color: var(--warning); }
-.eval-badge.neutral { background: #2a2a3a; color: var(--text-dim); }
+/* eval-badge category colours live in the canonical 10-category block below */
 .tip-card .tip-text { font-size: 14px; line-height: 1.6; }
 .tip-card .tip-text b { color: var(--accent); }
 
@@ -724,9 +720,7 @@ html, body {
   color: #1a1a2e;
   font-weight: 600;
 }
-.move-cell.blunder-move { border-bottom: 2px solid var(--danger); }
-.move-cell.mistake-move { border-bottom: 2px solid var(--warning); }
-.move-cell.good-move { border-bottom: 2px solid var(--success); }
+/* move-cell category borders live in the canonical 10-category block below */
 
 /* Summary */
 .summary-card {
@@ -756,9 +750,7 @@ html, body {
   border-radius: 20px;
   font-weight: 500;
 }
-.stat-pill.blunders { background: #3b1a1a; color: var(--danger); }
-.stat-pill.mistakes { background: #3b2e1a; color: var(--warning); }
-.stat-pill.good-moves { background: #1a3b2a; color: var(--success); }
+/* stat-pill category colours live in the canonical 10-category block below */
 
 .key-moment {
   background: var(--bg);

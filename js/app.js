@@ -16,6 +16,32 @@ const App = (() => {
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
+  // Focus trap for modal dialogs: keeps Tab/Shift+Tab within `dialog`, focuses
+  // its first control on open, and restores focus to the opener on release.
+  // Returns a release function (call it when the dialog closes).
+  function trapFocus(dialog) {
+    if (!dialog) return () => {};
+    const prev = document.activeElement;
+    const sel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusables = () => Array.from(dialog.querySelectorAll(sel))
+      .filter(el => !el.disabled && !el.hidden && el.offsetParent !== null);
+    const onKey = (e) => {
+      if (e.key !== 'Tab') return;
+      const f = focusables();
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    dialog.addEventListener('keydown', onKey);
+    const f = focusables();
+    if (f.length) f[0].focus();
+    return () => {
+      dialog.removeEventListener('keydown', onKey);
+      try { if (prev && prev.focus) prev.focus(); } catch (_) {}
+    };
+  }
+
   // Canonical move-classification taxonomy, mirroring Chess.com's Game Review.
   // label = French name shown to the user, cls = CSS modifier (badge + move cell
   // share the same suffix), mark = the classical annotation glyph.
@@ -177,7 +203,17 @@ const App = (() => {
   }
 
   function cacheKey(header, moveCount) {
-    return `${(header.White||'?')}|${(header.Black||'?')}|${(header.Date||'')}|${moveCount}`;
+    // Chess.com PGNs carry a unique game URL (Link/Site) — use it when present so
+    // two games can never collide. Otherwise fall back to a richer composite that
+    // adds the exact start time, cadence and result, since White|Black|Date alone
+    // collides for a same-day rematch of identical length.
+    const link = header.Link || (/\/game\/\d+/.test(header.Site || '') ? header.Site : '');
+    if (link) return `L:${link}`;
+    return [
+      header.White || '?', header.Black || '?',
+      header.Date || '', header.UTCTime || header.Time || '',
+      header.TimeControl || '', header.Result || '', moveCount
+    ].join('|');
   }
 
   function getCachedAnalysis(key) {
@@ -1152,6 +1188,7 @@ const App = (() => {
     function cleanup() {
       modal.classList.remove('visible');
       document.removeEventListener('keydown', onKey);
+      if (modal._release) { modal._release(); modal._release = null; }
       if (flip !== undefined) BoardRenderer.setFlipped(prevFlip);
     }
 
@@ -1169,6 +1206,7 @@ const App = (() => {
 
     idx = 0;
     modal.classList.add('visible');
+    modal._release = trapFocus(modal.querySelector('.opening-modal'));
     renderStep(false);
   }
 
@@ -3033,6 +3071,7 @@ const App = (() => {
         actions.innerHTML = `<button class="concept-train-btn" id="concept-train-btn">🎯 S'entraîner — ${n} position${n > 1 ? 's' : ''}</button>`;
         $('#concept-train-btn').onclick = () => {
           overlay.classList.remove('visible'); // close the zoom modal so practice isn't behind it
+          if (overlay._release) { overlay._release(); overlay._release = null; }
           Tactics.start(c.puzzles, c.name);
         };
       } else {
@@ -3041,11 +3080,15 @@ const App = (() => {
       }
     }
     overlay.classList.add('visible');
+    overlay._release = trapFocus(overlay.querySelector('.concept-modal'));
   }
 
   function initConceptModal() {
     const overlay = $('#concept-modal');
-    const close = () => overlay.classList.remove('visible');
+    const close = () => {
+      overlay.classList.remove('visible');
+      if (overlay._release) { overlay._release(); overlay._release = null; }
+    };
     $('#concept-modal-close').addEventListener('click', close);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     document.addEventListener('keydown', (e) => {
