@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '105';
+window.APP_VERSION = '106';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -50,13 +50,13 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <h3>Comprendre les couleurs</h3>
       <ul class="guide-badges">
         <li><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span> Un sacrifice de pièce gagnant</li>
-        <li><span class="info-badge great"><i class="mv-mark mv-great">!</i> Formidable</span> Le seul bon coup de la position</li>
+        <li><span class="info-badge great"><i class="mv-mark mv-great">!</i> Très bon</span> Le seul bon coup de la position</li>
         <li><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span> Le coup #1 du moteur</li>
         <li><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span> Presque aussi bon que le meilleur coup</li>
         <li><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span> Un bon coup, sans être optimal</li>
         <li><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span> Coup d'ouverture reconnu</li>
         <li><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span> Petit écart, avantage grignoté</li>
-        <li><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Occasion manquée</span> Un gain laissé passer</li>
+        <li><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Coup manqué</span> Un gain laissé passer</li>
         <li><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span> Coup coûteux, avantage perdu</li>
         <li><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span> Erreur grave, la position bascule</li>
       </ul>
@@ -160,13 +160,13 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
         <thead><tr><th>Type</th><th>Critère</th><th>Définition</th></tr></thead>
         <tbody>
           <tr><td><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span></td><td>&lt; 0,05 pp + sacrifice</td><td>Un sacrifice de pièce gagnant (≥ une mineure donnée), qui reste fort, sans être perdant après ni déjà totalement gagnant avant.</td></tr>
-          <tr><td><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Occasion manquée</span></td><td>≥ 0,10 pp + gain lâché</td><td>Tu étais gagnant (≥ 70 % de chances) et tu retombes sous 55 %. Remplace Erreur/Gaffe quand c'est un gain raté.</td></tr>
+          <tr><td><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Coup manqué</span></td><td>≥ 0,10 pp + gain lâché</td><td>Tu étais gagnant (≥ 70 % de chances) et tu retombes sous 55 %. Remplace Erreur/Gaffe quand c'est un gain raté.</td></tr>
           <tr><td><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span></td><td>≥ 0,20 pp</td><td>Erreur grave, la position bascule.</td></tr>
           <tr><td><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span></td><td>0,10 – 0,20 pp</td><td>Coup coûteux, l'avantage change de camp.</td></tr>
           <tr><td><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span></td><td>ouverture connue, &lt; 0,10 pp</td><td>Coup d'ouverture reconnu ; prioritaire sur « Imprécision » dans la théorie connue.</td></tr>
           <tr><td><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span></td><td>0,05 – 0,10 pp</td><td>Petit écart, l'avantage se grignote.</td></tr>
           <tr><td><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span></td><td>0,02 – 0,05 pp</td><td>Un bon coup, sans être optimal.</td></tr>
-          <tr><td><span class="info-badge great"><i class="mv-mark mv-great">!</i> Formidable</span></td><td>&lt; 0,02 pp + seul coup</td><td>Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée.</td></tr>
+          <tr><td><span class="info-badge great"><i class="mv-mark mv-great">!</i> Très bon</span></td><td>&lt; 0,02 pp + seul coup</td><td>Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée.</td></tr>
           <tr><td><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span></td><td>&lt; 0,02 pp, coup n°1</td><td>Le coup n°1 du moteur (perte quasi nulle). Le mat est toujours classé ici.</td></tr>
           <tr><td><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span></td><td>&lt; 0,02 pp</td><td>Presque optimal, sans être exactement le coup n°1.</td></tr>
         </tbody>

@@ -880,8 +880,8 @@ const Analyzer = (() => {
         const bestSpan = bestMoveSanFr ? `<span class="alt-move" data-uci="${bestMoveUci}" data-fen="${positions[i]}">${bestMoveSanFr}</span>` : null;
         const whyBad = explainBadMove(newFen, madeMove, evalAfter && evalAfter.lines);
         tipFr = bestSpan
-          ? `Occasion manquée ! Vous étiez en position de gagner — il fallait jouer ${bestSpan}.${whyBad ? ' ' + whyBad : ''}`
-          : `Occasion manquée ! Vous laissez filer un avantage gagnant.${whyBad ? ' ' + whyBad : ''}`;
+          ? `Coup manqué ! Vous étiez en position de gagner — il fallait jouer ${bestSpan}.${whyBad ? ' ' + whyBad : ''}`
+          : `Coup manqué ! Vous laissez filer un avantage gagnant.${whyBad ? ' ' + whyBad : ''}`;
         if (alternatives.length > 0) tipFr += ` Aussi possible : ${altSpans(alternatives, positions[i])}.`;
         tipFr += ed;
       } else if (type === 'blunder') {
@@ -911,8 +911,8 @@ const Analyzer = (() => {
       } else if (type === 'great') {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched
-          ? `Formidable ! Le seul bon coup de la position. ${enriched}${ed}`
-          : `Formidable ! C'était le seul bon coup de la position.${ed}`;
+          ? `Très bon ! Le seul bon coup de la position. ${enriched}${ed}`
+          : `Très bon ! C'était le seul bon coup de la position.${ed}`;
       } else if (type === 'best') {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched

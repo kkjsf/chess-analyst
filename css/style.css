@@ -815,7 +815,7 @@ html, body {
 /* ── Move classification colours (Chess.com's 10 categories) ──
    One palette shared by the move badge, the stat pills and the move-list cells.
    brilliant=cyan · formidable=blue · best/excellent=green · good=olive ·
-   théorique=tan · imprécision=jaune · occasion manquée=orange-rouge ·
+   théorique=tan · imprécision=jaune · coup manqué=rouge ·
    erreur=orange · gaffe=rouge. */
 .eval-badge.brilliant  { background: #16303b; color: #67d4e8; }
 .eval-badge.great      { background: #1a2740; color: #86b3e6; }
@@ -824,7 +824,7 @@ html, body {
 .eval-badge.good       { background: #262f18; color: #c2d69a; }
 .eval-badge.book       { background: #2f2717; color: #d4b177; }
 .eval-badge.inaccuracy { background: #3b2e1a; color: var(--warning); }
-.eval-badge.miss       { background: #38221a; color: #f0956e; }
+.eval-badge.miss       { background: #3b1a1a; color: #e0574a; }
 .eval-badge.mistake    { background: #3b2a1a; color: #f0a050; }
 .eval-badge.blunder    { background: #3b1a1a; color: var(--danger); }
 .eval-badge.neutral    { background: #2a2a3a; color: var(--text-dim); }
@@ -836,7 +836,7 @@ html, body {
 .stat-pill.good       { background: #262f18; color: #c2d69a; }
 .stat-pill.book       { background: #2f2717; color: #d4b177; }
 .stat-pill.inaccuracy { background: #3b2e1a; color: var(--warning); }
-.stat-pill.miss       { background: #38221a; color: #f0956e; }
+.stat-pill.miss       { background: #3b1a1a; color: #e0574a; }
 .stat-pill.mistake    { background: #3b2a1a; color: #f0a050; }
 .stat-pill.blunder    { background: #3b1a1a; color: var(--danger); }
 
@@ -847,12 +847,12 @@ html, body {
 .move-cell.good-move       { border-bottom: 2px solid #c2d69a; }
 .move-cell.book-move       { border-bottom: 2px solid #d4b177; }
 .move-cell.inaccuracy-move { border-bottom: 2px solid var(--warning); }
-.move-cell.miss-move       { border-bottom: 2px solid #f0956e; }
+.move-cell.miss-move       { border-bottom: 2px solid #e0574a; }
 .move-cell.mistake-move    { border-bottom: 2px solid #f0a050; }
 .move-cell.blunder-move    { border-bottom: 2px solid var(--danger); }
 
-.gm-chip.miss .gm-dot { background: #f0956e; }
-.gm-chip.miss .gm-label { color: #f0b79e; }
+.gm-chip.miss .gm-dot { background: #e0574a; }
+.gm-chip.miss .gm-label { color: #f0a49a; }
 
 .highlight-badge.brillant { background: #16303b; color: #67d4e8; }
 .highlight-badge.best { background: #14331f; color: #4ade80; }
@@ -883,7 +883,7 @@ html, body {
 .mv-mark.mv-good       { background: #c2d69a; }
 .mv-mark.mv-book       { background: none; margin-left: 2px; }
 .mv-mark.mv-inaccuracy { background: #f7c631; }
-.mv-mark.mv-miss       { background: #f0956e; }
+.mv-mark.mv-miss       { background: #e0574a; }
 .mv-mark.mv-mistake    { background: #f0a050; }
 .mv-mark.mv-blunder    { background: #e86a6a; color: #fff; }
 /* Inside the guide legend pills, the glyph sits before the name */
@@ -1575,7 +1575,7 @@ html, body {
 .info-badge.book       { background: #2f2717; color: #d4b177; }
 .info-badge.neutre     { background: #2a2a3a; color: var(--text-dim); }
 .info-badge.inaccuracy { background: #3b2e1a; color: var(--warning); }
-.info-badge.miss       { background: #38221a; color: #f0956e; }
+.info-badge.miss       { background: #3b1a1a; color: #e0574a; }
 .info-badge.mistake    { background: #3b2a1a; color: #f0a050; }
 .info-badge.blunder    { background: #3b1a1a; color: var(--danger); }
 

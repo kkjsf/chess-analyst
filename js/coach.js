@@ -1174,14 +1174,14 @@ const Coach = (() => {
     if (!q.moveCount) return '';
     const order = [
       { k: 'brilliant', l: 'Brillant', c: '#67d4e8' },
-      { k: 'great', l: 'Formidable', c: '#7ba7d6' },
+      { k: 'great', l: 'Très bon', c: '#7ba7d6' },
       { k: 'best', l: 'Meilleur', c: '#56b886' },
       { k: 'excellent', l: 'Excellent', c: '#86d99a' },
       { k: 'good', l: 'Bon', c: '#b9cf8f' },
       { k: 'book', l: 'Théorique', c: '#cdab72' },
       { k: 'ok', l: 'Correct', c: '#8a8aa0' },
       { k: 'inaccuracy', l: 'Imprécision', c: '#e2b857' },
-      { k: 'miss', l: 'Occasion manquée', c: '#ef7c6a' },
+      { k: 'miss', l: 'Coup manqué', c: '#e0574a' },
       { k: 'mistake', l: 'Erreur', c: '#e08a4b' },
       { k: 'blunder', l: 'Gaffe', c: '#d36b6b' }
     ];

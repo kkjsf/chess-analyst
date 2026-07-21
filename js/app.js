@@ -24,13 +24,13 @@ const App = (() => {
   // ?! Inaccuracy · ✗ Miss · ? Mistake · ?? Blunder.
   const MOVE_CLASS = {
     brilliant:  { label: 'Brillant',          cls: 'brilliant',  mark: '!!' },
-    great:      { label: 'Formidable',        cls: 'great',      mark: '!' },
+    great:      { label: 'Très bon',          cls: 'great',      mark: '!' },
     best:       { label: 'Meilleur',          cls: 'best',       mark: '★' },
     excellent:  { label: 'Excellent',         cls: 'excellent',  mark: '✔' },
     good:       { label: 'Bon',               cls: 'good',       mark: '✓' },
     book:       { label: 'Théorique',         cls: 'book',       mark: '📖' },
     inaccuracy: { label: 'Imprécision',       cls: 'inaccuracy', mark: '?!' },
-    miss:       { label: 'Occasion manquée',  cls: 'miss',       mark: '✗' },
+    miss:       { label: 'Coup manqué',       cls: 'miss',       mark: '✗' },
     mistake:    { label: 'Erreur',            cls: 'mistake',    mark: '?' },
     blunder:    { label: 'Gaffe',             cls: 'blunder',    mark: '??' }
   };
@@ -1547,7 +1547,7 @@ const App = (() => {
       if (r.type === 'miss') {
         let desc = truncateText(r.tipFr.replace(/<[^>]*>/g, ''), 200);
         if (isUserMove) desc += ' Un gain à ne pas laisser passer.';
-        candidates.push({ index: i, label, score: 11, desc, badge: 'Occasion manquée' + badgeSuffix, badgeClass: 'miss', isUserMove, user, isWhite });
+        candidates.push({ index: i, label, score: 11, desc, badge: 'Coup manqué' + badgeSuffix, badgeClass: 'miss', isUserMove, user, isWhite });
       }
 
       if (r.type === 'inaccuracy') {
@@ -1804,13 +1804,13 @@ const App = (() => {
     const pillsHtml = (side) => {
       let pills = '';
       if (side.brilliants) pills += `<span class="stat-pill brilliant">${side.brilliants} brillant${side.brilliants !== 1 ? 's' : ''}</span>`;
-      if (side.great) pills += `<span class="stat-pill great">${side.great} formidable${side.great !== 1 ? 's' : ''}</span>`;
+      if (side.great) pills += `<span class="stat-pill great">${side.great} très bon${side.great !== 1 ? 's' : ''}</span>`;
       if (side.best) pills += `<span class="stat-pill best">${side.best} meilleur${side.best !== 1 ? 's' : ''}</span>`;
       if (side.excellent) pills += `<span class="stat-pill excellent">${side.excellent} excellent${side.excellent !== 1 ? 's' : ''}</span>`;
       if (side.good) pills += `<span class="stat-pill good">${side.good} bon${side.good !== 1 ? 's' : ''}</span>`;
       if (side.book) pills += `<span class="stat-pill book">${side.book} théorique${side.book !== 1 ? 's' : ''}</span>`;
       if (side.inaccuracies) pills += `<span class="stat-pill inaccuracy">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
-      if (side.misses) pills += `<span class="stat-pill miss">${side.misses} occasion${side.misses !== 1 ? 's' : ''} manquée${side.misses !== 1 ? 's' : ''}</span>`;
+      if (side.misses) pills += `<span class="stat-pill miss">${side.misses} coup${side.misses !== 1 ? 's' : ''} manqué${side.misses !== 1 ? 's' : ''}</span>`;
       pills += `<span class="stat-pill mistake">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
       pills += `<span class="stat-pill blunder">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
       return pills;
