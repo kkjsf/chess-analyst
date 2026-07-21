@@ -1,8 +1,13 @@
-const CACHE_NAME = 'chess-analyst-v104';
-const ASSETS = [
-  './',
-  './index.html',
+// The cache name derives from the ?v= this worker was registered with (see
+// index.html APP_VERSION) — one version source drives the whole app.
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE_NAME = 'chess-analyst-v' + VERSION;
+
+// Assets the page requests WITH ?v= (stylesheet + the app scripts) — precache
+// them at the exact versioned URL so the cache-first path hits on first load.
+const VERSIONED = [
   './css/style.css',
+  './js/chess.min.js',
   './js/board.js',
   './js/engine.js',
   './js/openings.js',
@@ -13,8 +18,13 @@ const ASSETS = [
   './js/tactics.js',
   './js/repertoire.js',
   './js/coach.js',
-  './js/app.js',
-  './js/chess.min.js',
+  './js/app.js'
+];
+// Assets requested WITHOUT ?v= (navigation, the Stockfish worker + its build,
+// manifest, icons).
+const BARE = [
+  './',
+  './index.html',
   './js/stockfish-worker.js',
   './js/vendor/stockfish.js',
   './manifest.json',
@@ -22,6 +32,7 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
+const ASSETS = BARE.concat(VERSIONED.map(p => p + '?v=' + VERSION));
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -54,6 +65,28 @@ self.addEventListener('fetch', (e) => {
     })());
     return;
   }
+  // Versioned assets (?v=) are immutable — the query IS the cache-bust. Serve
+  // them cache-first so we don't re-download ~1.5 MB of scripts on every load;
+  // a new deploy bumps ?v=, misses the cache, and fetches fresh under the new
+  // version (the stale-version cache is dropped on activate).
+  if (e.request.method === 'GET' && url.origin === self.location.origin && url.searchParams.has('v')) {
+    e.respondWith((async () => {
+      const cached = await caches.match(e.request);
+      if (cached) return cached;
+      try {
+        const resp = await fetch(e.request);
+        if (resp && resp.ok && resp.type === 'basic') {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      } catch (_) {
+        return (await caches.match(e.request, { ignoreSearch: true })) || Response.error();
+      }
+    })());
+    return;
+  }
+
   e.respondWith(
     fetch(e.request)
       .then(response => {

@@ -13,7 +13,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=104">
+<script>
+// Single source of truth for the cache-busting version. Bump ONLY this line on
+// deploy — it versions the stylesheet, every app script (below), and the
+// service-worker registration (which derives its cache name from the ?v= query).
+window.APP_VERSION = '105';
+document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
+</script>
 </head>
 <body>
 
@@ -615,18 +621,15 @@
   </button>
 </nav>
 
-<script src="js/chess.min.js?v=104"></script>
-<script src="js/board.js?v=104"></script>
-<script src="js/engine.js?v=104"></script>
-<script src="js/openings.js?v=104"></script>
-<script src="js/analysis.js?v=104"></script>
-<script src="js/training.js?v=104"></script>
-<script src="js/guess.js?v=104"></script>
-<script src="js/endgame.js?v=104"></script>
-<script src="js/tactics.js?v=104"></script>
-<script src="js/repertoire.js?v=104"></script>
-<script src="js/coach.js?v=104"></script>
-<script src="js/app.js?v=104"></script>
+<script>
+// Load every app script in order, versioned by the single APP_VERSION constant.
+// document.write during initial parse keeps the exact synchronous, in-order,
+// blocking semantics of static <script> tags.
+['js/chess.min.js', 'js/board.js', 'js/engine.js', 'js/openings.js',
+ 'js/analysis.js', 'js/training.js', 'js/guess.js', 'js/endgame.js',
+ 'js/tactics.js', 'js/repertoire.js', 'js/coach.js', 'js/app.js']
+  .forEach(function (src) { document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>'); });
+</script>
 <script>
 if ('serviceWorker' in navigator) {
   // Only auto-reload on a genuine UPDATE (there was already a controlling SW),
@@ -640,7 +643,7 @@ if ('serviceWorker' in navigator) {
     if (typeof App !== 'undefined' && App.isAnalyzing && App.isAnalyzing()) { reloadPending = true; return; }
     window.location.reload();
   };
-  navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.register('sw.js?v=' + APP_VERSION);
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (e.data && e.data.type === 'SW_UPDATED' && hadController) doReload();
   });

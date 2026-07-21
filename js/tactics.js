@@ -138,7 +138,7 @@ const Tactics = (() => {
       desc: `Un sacrifice de dame en ouverture exploitant un cavalier cloué : on « ignore » le clouage pour mater avec les pièces mineures (1.e4 e5 2.Cf3 d6 3.Fc4 Fg4 4.Cc3 g6?? 5.Cxe5! Fxd1 6.Fxf7+ Re7 7.Cd5#). Piège célèbre de l'Italienne.` },
     { cat: '♚ Mats classiques', name: 'Sacrifice grec (fou h7)', en: 'Greek gift',
       desc: `Le <b>sacrifice grec</b> Fxh7+ : on offre le fou pour arracher le roque adverse. Après Rxh7, Cg5+ ramène la dame (Dh5) et l'attaque déferle. Schéma type quand le roi noir a roqué et que f6/h6 sont fragiles.`,
-      fen: 'r1bq1rk1/pppp1ppp/2n2n2/2b5/3PP3/5N2/PPP2PPP/RNBQ1RK1', arrows: [{ from: 'd3', to: 'h7', color: R }] },
+      fen: 'r1bq1rk1/pp3ppp/2n1pn2/2pp4/3P4/3B1N2/PPP2PPP/RNBQ1RK1', arrows: [{ from: 'd3', to: 'h7', color: R }, { from: 'f3', to: 'g5', color: G }] },
 
     // ════════ 🧠 Méthode & calcul ════════
     { cat: '🧠 Méthode & calcul', name: 'Méthode CCT (É-C-M)', en: 'Checks, Captures, Threats',
