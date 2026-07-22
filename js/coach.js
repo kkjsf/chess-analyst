@@ -859,6 +859,71 @@ const Coach = (() => {
     return { bullet: '🔥 Bullet', blitz: '⚡ Blitz', rapid: '🕐 Rapide', daily: '📅 Journalier', autre: 'Autre' }[k] || k;
   }
 
+  // Map a Chess.com opening slug (English) to one of our families, so a link
+  // can be checked against the row it sits under. Our detector and Chess.com
+  // occasionally disagree on a transposition (e.g. a Giuoco game we filed as
+  // Petrov); a mismatched link is exactly what this catches. Keys are matched
+  // as substrings of the raw slug; more specific keys come first.
+  const CC_FAMILY = [
+    ['Russian-Game', 'Petrov'], ['Petrov', 'Petrov'], ['Petroff', 'Petrov'],
+    ['Ruy-Lopez', 'Espagnole (Ruy Lopez)'], ['Spanish', 'Espagnole (Ruy Lopez)'],
+    ['Sicilian', 'Sicilienne'],
+    ['French', 'Française'],
+    ['Caro-Kann', 'Caro-Kann'],
+    ['Scandinavian', 'Scandinave'],
+    ['Two-Knights', 'Italienne'], ['Giuoco', 'Italienne'], ['Italian', 'Italienne'], ['Evans', 'Italienne'],
+    ['Hungarian', 'Hongroise'],
+    ['Scotch', 'Écossaise'],
+    ['Philidor', 'Philidor'],
+    ['Vienna', 'Viennoise'],
+    ['Kings-Gambit', 'Gambit du Roi'],
+    ['Danish', 'Gambit du Centre'], ['Center-Game', 'Gambit du Centre'],
+    ['Bishops-Opening', "Ouverture de l'Évêque"],
+    ['Pirc', 'Pirc'], ['Alekhine', 'Alekhine'], ['Modern-Defense', 'Défense Moderne'],
+    ['Owen', 'Défense Owen'], ['Nimzowitsch-Defense', 'Défense Nimzowitsch'],
+    ['Three-Knights', 'Trois/Quatre Cavaliers'], ['Four-Knights', 'Trois/Quatre Cavaliers'],
+    ['Nimzo-Larsen', 'Larsen'], ['Nimzo-Indian', 'Nimzo-Indienne'],
+    ['Kings-Indian', 'Est-Indienne'], ['Queens-Indian', 'Ouest-Indienne'],
+    ['Gruenfeld', 'Grünfeld'], ['Grunfeld', 'Grünfeld'], ['Benoni', 'Benoni'], ['Benko', 'Benko'], ['Budapest', 'Budapest'],
+    ['Catalan', 'Catalane'], ['Slav', 'Slave'],
+    ['Blackmar', 'Gambit Dame'], ['Queens-Gambit', 'Gambit Dame'], ['Tarrasch', 'Gambit Dame'],
+    ['London', 'Système de Londres'], ['Colle', 'Système Colle'],
+    ['Trompowsky', 'Trompowsky'], ['Torre', 'Attaque Torre'], ['Veresov', 'Veresov'], ['Old-Indian', 'Old Indian'],
+    ['Dutch', 'Hollandaise'],
+    ['English-Opening', 'Anglaise'], ['Reti', 'Réti'], ['Larsen', 'Larsen'], ['Bird', 'Bird'],
+    ['Wayward-Queen', 'Attaque Scholar'], ['Parham', 'Attaque Scholar'], ['Scholar', 'Attaque Scholar'],
+    ['Kings-Pawn', 'Ouverture Pion Roi'], ['Queens-Pawn', 'Ouverture Pion Dame']
+  ];
+  const CC_FAMS = new Set(CC_FAMILY.map(e => e[1]));
+  function openingSlug(u) {
+    const s = (u.split('/openings/')[1] || u.split('/').pop() || '');
+    return decodeURIComponent(s).split(/[?#]/)[0];
+  }
+  function ccFamily(slug) {
+    for (const [kw, fam] of CC_FAMILY) if (slug.indexOf(kw) >= 0) return fam;
+    return null;
+  }
+  // Most representative url among a set: majority base opening (first two slug
+  // tokens), then most frequent full url within it.
+  function majorityUrl(urls) {
+    const byBase = {};
+    urls.forEach(u => { const b = openingSlug(u).split('-').slice(0, 2).join('-').toLowerCase(); (byBase[b] = byBase[b] || []).push(u); });
+    const group = byBase[Object.keys(byBase).sort((a, b) => byBase[b].length - byBase[a].length)[0]];
+    const cnt = {};
+    group.forEach(u => { cnt[u] = (cnt[u] || 0) + 1; });
+    return group.slice().sort((a, b) => cnt[b] - cnt[a])[0];
+  }
+  // Pick the Chess.com link for a family row. Prefer links whose own Chess.com
+  // family matches the row; if none match AND we can recognise this family on
+  // Chess.com's side, show nothing (a missing link beats a wrong one); for a
+  // family we can't classify, fall back to the plain majority (no regression).
+  function pickOpeningUrl(urls, family) {
+    if (!urls.length) return null;
+    const consistent = urls.filter(u => ccFamily(openingSlug(u)) === family);
+    if (consistent.length) return majorityUrl(consistent);
+    return CC_FAMS.has(family) ? null : majorityUrl(urls);
+  }
+
   function renderRepertoire(an) {
     function table(colorKey, label) {
       const gs = an.filter(g => g.userColor === colorKey);
@@ -875,13 +940,18 @@ const Coach = (() => {
         const l = list.filter(x => x.g.result === 'loss').length;
         const acc = Math.round(avg(list.map(x => x.g.analysis.accuracy)));
         const score = (w + d * 0.5) / list.length;
-        // Representative line for the explorer = the deepest detected line; URL = first available.
-        let rep = null, url = null;
+        // Representative line for the explorer = the deepest detected line.
+        // Chess.com link = the family's MAJORITY opening (see pickOpeningUrl):
+        // our detector and Chess.com sometimes disagree on a transposition
+        // (e.g. a Giuoco game we filed under Petrov), and trusting the first
+        // url would then mislink the whole row.
+        let rep = null;
+        const urls = [];
         list.forEach(x => {
           if (x.fr.line && (!rep || x.fr.line.split(' ').length > rep.line.split(' ').length)) rep = x.fr;
-          if (!url && x.fr.url) url = x.fr.url;
+          if (x.fr.url) urls.push(x.fr.url);
         });
-        return { name, n: list.length, w, d, l, acc, score, rep, url };
+        return { name, n: list.length, w, d, l, acc, score, rep, url: pickOpeningUrl(urls, name) };
       }).filter(r => r.n >= 1).sort((a, b) => b.n - a.n);
       if (!rows.length) return '';
       const worst = rows.filter(r => r.n >= 2).sort((a, b) => a.score - b.score)[0];
