@@ -1039,14 +1039,22 @@ const App = (() => {
     const prevBtn = $('#opening-modal-prev');
     const nextBtn = $('#opening-modal-next');
 
-    const tokens = opening.line.split(' ');
-    const game = new Chess();
-    const positions = [{ fen: game.fen(), move: null, san: null, color: null, num: 0 }];
-    for (let i = 0; i < tokens.length; i++) {
-      const made = game.move(tokens[i], { sloppy: true });
-      if (!made) break;
-      positions.push({ fen: game.fen(), move: made, san: tokens[i], color: made.color, num: i + 1 });
+    function buildPositions(lineStr) {
+      const tokens = lineStr.split(' ');
+      const g = new Chess();
+      const pos = [{ fen: g.fen(), move: null, san: null, color: null, num: 0 }];
+      for (let i = 0; i < tokens.length; i++) {
+        const made = g.move(tokens[i], { sloppy: true });
+        if (!made) break;
+        pos.push({ fen: g.fen(), move: made, san: tokens[i], color: made.color, num: i + 1 });
+      }
+      return pos;
     }
+    let positions = buildPositions(opening.line);
+    // In lesson mode, the active line's per-move notes (parallel to its SANs);
+    // used by renderStep for opening-specific explanations instead of the
+    // generic heuristic. null = legacy / no course.
+    let activeNotes = null;
 
     const halfMoves = opening.moves || 0;
     let deviationSan = '';
@@ -1160,6 +1168,7 @@ const App = (() => {
     }
 
     let idx = 0;
+    let boardActive = true; // false in lesson sections that hide the board (keyboard nav off)
     const ANIM_MS = 250;
 
     function renderStep(animate) {
@@ -1179,10 +1188,22 @@ const App = (() => {
       } else {
         const moveNum = Math.ceil(idx / 2);
         const prefix = idx % 2 === 1 ? `${moveNum}.` : `${moveNum}...`;
-        labelEl.textContent = `${prefix} ${pos.san}`;
-        explEl.textContent = explainMove(pos.san, pos.color, moveNum, pos.fen);
+        const sanFr = (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(pos.san) : pos.san;
+        labelEl.textContent = `${prefix} ${sanFr}`;
+        const note = activeNotes && activeNotes[idx - 1];
+        if (note) explEl.innerHTML = note;
+        else explEl.textContent = explainMove(pos.san, pos.color, moveNum, pos.fen);
       }
       requestEval();
+    }
+
+    // Swap the board's active line (lesson mode): rebuild positions from a new
+    // SAN string, attach its notes, and rewind to the start.
+    function loadLine(lineStr, notes) {
+      positions = buildPositions(lineStr);
+      activeNotes = notes || null;
+      idx = 0;
+      renderStep(false);
     }
 
     function cleanup() {
@@ -1193,7 +1214,8 @@ const App = (() => {
     }
 
     function onKey(e) {
-      if (e.key === 'Escape') cleanup();
+      if (e.key === 'Escape') { cleanup(); return; }
+      if (!boardActive) return;
       if (e.key === 'ArrowLeft' && idx > 0) { idx--; renderStep(false); }
       if (e.key === 'ArrowRight' && idx < positions.length - 1) { idx++; renderStep(true); }
     }
@@ -1204,10 +1226,192 @@ const App = (() => {
     modal.onclick = e => { if (e.target === modal) cleanup(); };
     document.addEventListener('keydown', onKey);
 
+    // ───────────────────── Lesson mode (catalog courses) ─────────────────────
+    // When the opening carries a `course` (js/courses.js), wrap the explorer in a
+    // sectioned lesson: Présentation → Lignes → Plans → Pièges → Transpositions →
+    // Quiz. Openings without a course keep the flat single-line view above.
+    function setupLesson(course) {
+      const navEl = $('#opening-lesson-nav');
+      const progEl = $('#opening-lesson-progress');
+      const pickerEl = $('#opening-lesson-picker');
+      const bodyEl = $('#opening-lesson-body');
+      const boardEl = modal.querySelector('.opening-modal-board');
+      const controlsEl = modal.querySelector('.opening-modal-controls');
+      const doneKey = 'ca_lessons_done';
+
+      detailsEl.hidden = true; detailsEl.innerHTML = '';
+
+      const has = (a) => Array.isArray(a) && a.length;
+      const sections = [];
+      sections.push({ key: 'presentation', label: '📖 Présentation' });
+      if (has(course.lines)) sections.push({ key: 'lignes', label: '♟ Lignes' });
+      if (opening.plans || opening.structure) sections.push({ key: 'plans', label: '🎯 Plans' });
+      if (has(course.traps) || opening.mistakes) sections.push({ key: 'pieges', label: '🪤 Pièges' });
+      if (has(course.transpositions) || has(opening.deviations)) sections.push({ key: 'transpo', label: '🔀 Transpositions' });
+      if (has(course.quiz)) sections.push({ key: 'quiz', label: '✅ Quiz' });
+
+      const visited = new Set();
+      let current = null;
+
+      navEl.hidden = false; progEl.hidden = false;
+      navEl.innerHTML = sections.map(s =>
+        `<button class="ol-tab" data-key="${s.key}">${s.label}</button>`).join('');
+      navEl.querySelectorAll('.ol-tab').forEach(btn =>
+        btn.addEventListener('click', () => showSection(btn.dataset.key)));
+
+      function markDone() {
+        let set = [];
+        try { set = JSON.parse(localStorage.getItem(doneKey) || '[]'); } catch (_) {}
+        if (!set.includes(opening.line)) { set.push(opening.line); try { localStorage.setItem(doneKey, JSON.stringify(set)); } catch (_) {} }
+      }
+      function updateProgress() {
+        const pct = Math.round((visited.size / sections.length) * 100);
+        const all = visited.size >= sections.length;
+        progEl.querySelector('span').style.width = pct + '%';
+        progEl.classList.toggle('ol-complete', all);
+        if (all) markDone();
+      }
+
+      function setBoardVisible(v) {
+        boardActive = v;
+        boardEl.hidden = !v;
+        controlsEl.hidden = !v;
+        evalEl.hidden = !v || !(rich || opening.showEval);
+        explEl.hidden = !v;
+      }
+
+      // Section renderers ------------------------------------------------------
+      const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+      function renderPresentation() {
+        setBoardVisible(true);
+        pickerEl.hidden = true; bodyEl.hidden = true;
+        loadLine(opening.line, null);
+        idx = positions.length - 1; renderStep(false); // freeze on the tabiya
+        controlsEl.hidden = true; boardActive = false;
+        explEl.hidden = false;
+        explEl.innerHTML = `<b>Idée maîtresse.</b> ${course.intro || opening.idea || ''}`;
+      }
+
+      function renderLignes() {
+        setBoardVisible(true);
+        bodyEl.hidden = true;
+        const lines = course.lines;
+        pickerEl.hidden = lines.length < 2;
+        if (lines.length >= 2) {
+          pickerEl.innerHTML = lines.map((l, i) =>
+            `<button class="ol-line-btn" data-i="${i}">${esc(l.name)}</button>`).join('');
+          pickerEl.querySelectorAll('.ol-line-btn').forEach(btn =>
+            btn.addEventListener('click', () => selectLine(+btn.dataset.i)));
+        }
+        selectLine(0);
+      }
+      function selectLine(i) {
+        const l = course.lines[i];
+        pickerEl.querySelectorAll('.ol-line-btn').forEach((b, j) => b.classList.toggle('active', j === i));
+        loadLine(l.sans.join(' '), l.notes);
+      }
+
+      function renderPlans() {
+        setBoardVisible(false);
+        pickerEl.hidden = true; bodyEl.hidden = false;
+        let h = '';
+        if (opening.plans) h += `<div class="ol-section"><h5>🎯 Plans typiques</h5><p><b>Blancs :</b> ${opening.plans.w}</p><p><b>Noirs :</b> ${opening.plans.b}</p></div>`;
+        if (opening.structure) h += `<div class="ol-section"><h5>🧱 Structure de pions</h5><p>${opening.structure}</p></div>`;
+        bodyEl.innerHTML = h;
+      }
+
+      function renderPieges() {
+        setBoardVisible(false);
+        pickerEl.hidden = true; bodyEl.hidden = false;
+        let h = '';
+        if (opening.mistakes) h += `<div class="ol-section ol-warn"><h5>⚠️ Erreur fréquente</h5><p>${opening.mistakes}</p></div>`;
+        (course.traps || []).forEach((t, i) => {
+          const btn = has(t.sol) && t.fen
+            ? `<button class="train-btn good ol-trap-drill" data-i="${i}">🎯 Essayer ce coup</button>` : '';
+          h += `<div class="ol-trap"><div class="ol-trap-title">${esc(t.title)}</div><div class="ol-trap-hint">${t.hint}</div>${btn}</div>`;
+        });
+        bodyEl.innerHTML = h;
+        bodyEl.querySelectorAll('.ol-trap-drill').forEach(btn => btn.addEventListener('click', () => {
+          const t = course.traps[+btn.dataset.i];
+          if (t && t.fen && has(t.sol) && typeof Tactics !== 'undefined' && Tactics.start) {
+            Tactics.start([{ fen: t.fen, sol: t.sol, hint: t.hint }], t.title.replace(/^[^\wÀ-ÿ]+\s*/, ''));
+          }
+        }));
+      }
+
+      function renderTranspo() {
+        setBoardVisible(false);
+        pickerEl.hidden = true; bodyEl.hidden = false;
+        const items = has(course.transpositions) ? course.transpositions : opening.deviations;
+        bodyEl.innerHTML = `<div class="ol-section"><h5>🔀 Si l'adversaire ne suit pas la ligne</h5>` +
+          items.map(d => `<p><b>${esc(d.label)} :</b> ${d.note}</p>`).join('') + `</div>`;
+      }
+
+      function renderQuiz() {
+        setBoardVisible(false);
+        pickerEl.hidden = true; bodyEl.hidden = false;
+        const qs = course.quiz;
+        let cur = 0, score = 0;
+        function draw() {
+          if (cur >= qs.length) {
+            bodyEl.innerHTML = `<div class="ol-quiz-result"><span class="ol-quiz-icon">${score === qs.length ? '🎉' : score >= qs.length / 2 ? '👍' : '📖'}</span><p><b>${score} / ${qs.length}</b></p><button class="train-btn good ol-quiz-retry">Recommencer</button></div>`;
+            bodyEl.querySelector('.ol-quiz-retry').addEventListener('click', () => { cur = 0; score = 0; draw(); });
+            markDone(); updateProgress();
+            return;
+          }
+          const q = qs[cur];
+          bodyEl.innerHTML = `<div class="ol-quiz"><div class="ol-quiz-prog">${cur + 1} / ${qs.length}</div><p class="ol-quiz-q">${q.q}</p><div class="ol-quiz-opts">${q.opts.map((o, i) => `<button class="quiz-opt" data-i="${i}">${esc(o)}</button>`).join('')}</div><div class="ol-quiz-fb" hidden></div></div>`;
+          bodyEl.querySelectorAll('.quiz-opt').forEach(b => b.addEventListener('click', () => answer(+b.dataset.i)));
+        }
+        function answer(i) {
+          const q = qs[cur];
+          const ok = i === q.answer;
+          if (ok) score++;
+          const fb = bodyEl.querySelector('.ol-quiz-fb');
+          fb.hidden = false;
+          fb.className = 'ol-quiz-fb ' + (ok ? 'correct' : 'wrong');
+          fb.innerHTML = `<b>${ok ? 'Correct !' : 'Raté !'}</b> ${q.explain}`;
+          bodyEl.querySelectorAll('.quiz-opt').forEach(b => {
+            b.disabled = true;
+            if (+b.dataset.i === q.answer) b.classList.add('correct');
+            if (+b.dataset.i === i && !ok) b.classList.add('wrong');
+          });
+          setTimeout(() => { cur++; draw(); }, 2000);
+        }
+        draw();
+      }
+
+      const RENDERERS = {
+        presentation: renderPresentation, lignes: renderLignes, plans: renderPlans,
+        pieges: renderPieges, transpo: renderTranspo, quiz: renderQuiz
+      };
+
+      function showSection(key) {
+        current = key;
+        visited.add(key);
+        navEl.querySelectorAll('.ol-tab').forEach(b =>
+          b.classList.toggle('active', b.dataset.key === key));
+        (RENDERERS[key] || renderPresentation)();
+        updateProgress();
+      }
+
+      showSection('presentation');
+    }
+
     idx = 0;
     modal.classList.add('visible');
     modal._release = trapFocus(modal.querySelector('.opening-modal'));
+    // Reset lesson chrome (hidden for flat/legacy openings).
+    $('#opening-lesson-nav').hidden = true;
+    $('#opening-lesson-progress').hidden = true;
+    $('#opening-lesson-picker').hidden = true;
+    $('#opening-lesson-body').hidden = true;
+    modal.querySelector('.opening-modal-board').hidden = false;
+    modal.querySelector('.opening-modal-controls').hidden = false;
+    explEl.hidden = false;
     renderStep(false);
+    if (opening.course) setupLesson(opening.course);
   }
 
   function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening, engineUsed) {
@@ -3367,8 +3571,10 @@ const App = (() => {
       const eco = o.eco ? ` <span class="concept-en">${o.eco}</span>` : '';
       const sideLabel = o.side === 'b' ? 'Noirs' : 'Blancs';
       const sideTag = `<span class="opening-side opening-side-${o.side}">${sideLabel}</span>`;
-      const level = o.level ? `<p class="opening-level">${sideTag}${o.level}</p>` : '';
-      html += `<div class="concept"><div class="concept-diagram"><svg class="cd-board" viewBox="0 0 360 360"></svg></div><div class="concept-body"><span class="concept-name">${o.name}${en}${eco}</span>${level}<p>${o.desc}</p></div></div>`;
+      const hasCourse = (typeof Courses !== 'undefined') && Courses.has(o.line);
+      const courseBadge = hasCourse ? ` <span class="opening-course-badge">🎓 Cours</span>` : '';
+      const level = o.level ? `<p class="opening-level">${sideTag}${o.level}${courseBadge}</p>` : (hasCourse ? `<p class="opening-level">${courseBadge}</p>` : '');
+      html += `<div class="concept${hasCourse ? ' has-course' : ''}"><div class="concept-diagram"><svg class="cd-board" viewBox="0 0 360 360"></svg></div><div class="concept-body"><span class="concept-name">${o.name}${en}${eco}</span>${level}<p>${o.desc}</p></div></div>`;
     }
     host.innerHTML = html;
 
@@ -3382,11 +3588,12 @@ const App = (() => {
       BoardRenderer.render(cards[i].querySelector('.cd-board'), game.fen());
       const moves = o.line.split(' ').length;
       const title = o.en && o.en !== o.name ? `${o.name} · ${o.en}` : o.name;
+      const course = (typeof Courses !== 'undefined') ? Courses.get(o.line) : null;
       cards[i].addEventListener('click', () =>
         openOpeningExplorer({
           name: title, eco: o.eco, line: o.line, moves,
           idea: o.idea, plans: o.plans, structure: o.structure,
-          mistakes: o.mistakes, deviations: o.deviations
+          mistakes: o.mistakes, deviations: o.deviations, course
         }, [], o.level || '', flip));
     });
     BoardRenderer.setFlipped(prevFlip);
