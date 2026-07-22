@@ -1024,6 +1024,25 @@ const App = (() => {
   function openOpeningExplorer(opening, analysis, footerOverride, flip) {
     if (!opening || !opening.line) return;
 
+    // Self-enrich: if opened without a course (e.g. from the Coach, which passes
+    // the deepest played line), find the matching course by prefix and pull the
+    // catalog prose so the full lesson is available from anywhere.
+    if (!opening.course && typeof Courses !== 'undefined' && Courses.match) {
+      const m = Courses.match(opening.line);
+      if (m) {
+        opening.course = m.course;
+        opening.courseLine = m.key;
+        const cat = OPENINGS.find(o => o.line === m.key);
+        if (cat) {
+          if (opening.idea === undefined) opening.idea = cat.idea;
+          if (opening.plans === undefined) opening.plans = cat.plans;
+          if (opening.structure === undefined) opening.structure = cat.structure;
+          if (opening.mistakes === undefined) opening.mistakes = cat.mistakes;
+          if (opening.deviations === undefined) opening.deviations = cat.deviations;
+        }
+      }
+    }
+
     const prevFlip = BoardRenderer.isFlipped();
     if (flip !== undefined) BoardRenderer.setFlipped(flip);
 
@@ -1286,7 +1305,7 @@ const App = (() => {
       function renderPresentation() {
         setBoardVisible(true);
         pickerEl.hidden = true; bodyEl.hidden = true;
-        loadLine(opening.line, null);
+        loadLine(opening.courseLine || opening.line, null);
         idx = positions.length - 1; renderStep(false); // freeze on the tabiya
         controlsEl.hidden = true; boardActive = false;
         explEl.hidden = false;
