@@ -411,6 +411,7 @@ const Coach = (() => {
         renderMoveQuality(an) +
         renderErrorDetail(an) +
         renderErrorEvolution(an) +
+        renderProgressStory(an) +
         renderTacticalWeakness(an) +
         renderRepeated(an) +
         renderConversion(an) +
@@ -1609,6 +1610,50 @@ const Coach = (() => {
       bt.addEventListener('click', () => { evoMetric = bt.dataset.metric; rerender(); }));
     card.querySelectorAll('.coach-evo-mode').forEach(bt =>
       bt.addEventListener('click', () => { evoMode = bt.dataset.mode; rerender(); }));
+  }
+
+  // ── Ta trajectoire: prose synthesis of the before/after signals ──
+  // Reads the same recent-half vs earlier-half comparison as the evolution
+  // chart and says, in plain French, where you're gaining and where you slip.
+  function renderProgressStory(an) {
+    const { early, late } = splitHalves(an);
+    if (early.length < 4 || late.length < 4) return '';
+    const subj = { accuracy: 'ta précision', blunder: 'tes gaffes', mistake: 'tes erreurs', miss: 'tes coups manqués', strong: 'tes coups très bons' };
+    const unit = k => EVO_META[k].kind === 'pct' ? '' : ' pour 100 coups';
+    const fmt = (v, k) => EVO_META[k].kind === 'pct' ? Math.round(v) + '%' : v.toFixed(1);
+    const rows = ['accuracy', 'blunder', 'mistake', 'miss', 'strong'].map(k => {
+      const m = EVO_META[k];
+      const a = metricValue(early, k, 'per100'), b = metricValue(late, k, 'per100'), diff = b - a;
+      const improved = m.better === 'down' ? diff < 0 : diff > 0;
+      const sig = m.kind === 'pct' ? Math.abs(diff) >= 1.5 : Math.abs(diff) >= 0.4;
+      const rel = a > 0.01 ? Math.abs(diff) / a : (Math.abs(diff) > 0.01 ? 1 : 0);
+      return { k, a, b, diff, improved, sig, rel };
+    });
+    const acc = rows[0];
+    const changed = rows.filter(r => r.sig && r.k !== 'accuracy');
+    const gains = changed.filter(r => r.improved).sort((x, y) => y.rel - x.rel);
+    const regr = changed.filter(r => !r.improved).sort((x, y) => y.rel - x.rel);
+    const winE = pct(early.filter(g => g.result === 'win').length, early.length);
+    const winL = pct(late.filter(g => g.result === 'win').length, late.length);
+
+    const s = [];
+    const accWord = Math.abs(acc.diff) < 1.5 ? 'est restée stable' : (acc.improved ? 'a progressé' : 'a reculé');
+    s.push(`En comparant tes <b>${late.length}</b> parties les plus récentes aux <b>${early.length}</b> d'avant, ta précision moyenne <b>${accWord}</b> (${fmt(acc.a, 'accuracy')} → ${fmt(acc.b, 'accuracy')}) et ton taux de victoire est passé de <b>${winE}%</b> à <b>${winL}%</b>.`);
+    if (gains.length) {
+      const g = gains[0];
+      s.push(`Ta plus belle progression, c'est <b>${subj[g.k]}</b> : ${fmt(g.a, g.k)} → ${fmt(g.b, g.k)}${unit(g.k)}. Continue comme ça.`);
+    }
+    if (regr.length) {
+      const r = regr[0];
+      s.push(`Le point qui régresse, c'est <b>${subj[r.k]}</b> : ${fmt(r.a, r.k)} → ${fmt(r.b, r.k)}${unit(r.k)} - c'est là qu'il faut remettre de l'attention.`);
+    }
+    if (!gains.length && !regr.length) {
+      s.push(`Pour le reste, ton jeu est stable sur la période : pas de bascule nette dans tes gaffes, erreurs ou coups manqués.`);
+    }
+    const focus = regr.length ? subj[regr[0].k] : 'tes erreurs les plus fréquentes';
+    s.push(`Le <b>Mode entraînement</b> ci-dessous rejoue précisément ${focus} pour en faire des réflexes.`);
+
+    return `<div class="home-card coach-card coach-narrative" id="coach-story"><h3>🧭 Ta trajectoire</h3><p>${s.join(' ')}</p></div>`;
   }
 
   // ── Conversion des avantages & moments charnières ──
