@@ -41,8 +41,8 @@ const Coach = (() => {
   // interactive evolution chart can re-render on chip clicks without rebuilding
   // the whole dashboard.
   let curAn = [];
-  let evoMetric = 'blunder'; // 'blunder' | 'mistake' | 'miss'
-  let evoMode = 'perGame';   // 'perGame' | 'total'
+  let evoMetric = 'blunder'; // key in EVO_META
+  let evoMode = 'per100';    // 'per100' | 'perGame' (ignored for the accuracy metric)
 
   let regionNames = null;
   try { regionNames = new Intl.DisplayNames(['fr'], { type: 'region' }); } catch (_) {}
@@ -1414,24 +1414,55 @@ const Coach = (() => {
     return out;
   }
 
-  function evoChart(series, valFn, color) {
+  // Metrics the evolution chart can plot. `better: 'down'` = fewer is progress
+  // (errors), `'up'` = more is progress (strong moves, accuracy). `kind: 'count'`
+  // metrics honour the per-100-coups / par-partie toggle; `'pct'` (accuracy) is
+  // a per-game percentage averaged over the bucket — no denominator.
+  const EVO_ORDER = ['blunder', 'mistake', 'miss', 'strong', 'accuracy'];
+  const EVO_META = {
+    blunder:  { label: 'Gaffes', plural: 'gaffes', glyph: '??', color: '#d36b6b', better: 'down', kind: 'count' },
+    mistake:  { label: 'Erreurs', plural: 'erreurs', glyph: '?', color: '#e08a4b', better: 'down', kind: 'count' },
+    miss:     { label: 'Coups manqués', plural: 'coups manqués', glyph: '✗', color: '#e0574a', better: 'down', kind: 'count' },
+    strong:   { label: 'Très bons', plural: 'coups très bons', glyph: '!', color: '#56b886', better: 'up', kind: 'count' },
+    accuracy: { label: 'Précision', plural: 'précision', glyph: '✓', color: '#67d4e8', better: 'up', kind: 'pct' }
+  };
+  // Per-game count for a count-metric. 'strong' = the standout moves only —
+  // brillant (!!) + très bon (!) — kept distinct from overall precision.
+  function metricCount(g, key) {
+    if (key === 'strong') { const q = g.analysis.moveQuality || {}; return (q.brilliant || 0) + (q.great || 0); }
+    return errCounts(g)[key] || 0;
+  }
+  // Aggregate value of one metric over a set of games, in the current mode.
+  function metricValue(gamesArr, key, mode) {
+    const m = EVO_META[key];
+    if (m.kind === 'pct') {
+      const v = gamesArr.map(g => g.analysis.accuracy).filter(x => typeof x === 'number');
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+    }
+    let sum = 0, moves = 0;
+    gamesArr.forEach(g => { sum += metricCount(g, key); moves += (g.analysis.moveCount || 0); });
+    return mode === 'per100' ? (moves ? sum / moves * 100 : 0) : (gamesArr.length ? sum / gamesArr.length : 0);
+  }
+  function fmtEvo(v, key) { return EVO_META[key].kind === 'pct' ? Math.round(v) + '%' : v.toFixed(1); }
+
+  function evoChart(series, valFn, color, lo, hi, key) {
     const W = 320, H = 118, padL = 8, padR = 8, padT = 12, padB = 20;
     const n = series.length;
-    const max = Math.max(1, ...series.map(valFn));
+    const span = Math.max(1e-6, hi - lo);
     const x = i => padL + (n === 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR));
-    const y = v => (H - padB) - (v / max) * (H - padT - padB);
-    const pathAt = (cmd) => series.map((s, i) => `${cmd(i)}${x(i).toFixed(1)},${y(valFn(s)).toFixed(1)}`).join(' ');
-    const line = pathAt(i => i ? 'L' : 'M');
+    const y = v => (H - padB) - ((v - lo) / span) * (H - padT - padB);
+    const line = series.map((s, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(valFn(s)).toFixed(1)}`).join(' ');
     const area = `M${x(0).toFixed(1)},${(H - padB).toFixed(1)} ` +
       series.map((s, i) => `L${x(i).toFixed(1)},${y(valFn(s)).toFixed(1)}`).join(' ') +
       ` L${x(n - 1).toFixed(1)},${(H - padB).toFixed(1)} Z`;
     const dots = series.map((s, i) =>
-      `<circle cx="${x(i).toFixed(1)}" cy="${y(valFn(s)).toFixed(1)}" r="2.6" fill="${color}"><title>${esc(s.label)} : ${fmtEvo(valFn(s))} (${s.n} p.)</title></circle>`).join('');
+      `<circle cx="${x(i).toFixed(1)}" cy="${y(valFn(s)).toFixed(1)}" r="2.6" fill="${color}"><title>${esc(s.label)} : ${fmtEvo(valFn(s), key)} (${s.n} p.)</title></circle>`).join('');
     const idxs = n <= 5 ? series.map((_, i) => i) : [0, Math.floor((n - 1) / 2), n - 1];
     const xlabels = idxs.map(i => {
       const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
       return `<text x="${x(i).toFixed(1)}" y="${H - 5}" class="coach-evo-xlab" text-anchor="${anchor}">${esc(series[i].label)}</text>`;
     }).join('');
+    const loLabel = lo > 0 ? `<text x="${padL}" y="${(H - padB - 1).toFixed(1)}" class="coach-evo-max">${fmtEvo(lo, key)}</text>` : '';
     const gid = 'evoGrad';
     return `<svg viewBox="0 0 ${W} ${H}" class="coach-evo-svg" preserveAspectRatio="none">
       <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
@@ -1439,44 +1470,61 @@ const Coach = (() => {
         <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
       </linearGradient></defs>
       <line x1="${padL}" y1="${(H - padB).toFixed(1)}" x2="${W - padR}" y2="${(H - padB).toFixed(1)}" class="coach-evo-axis"/>
-      <text x="${padL}" y="${padT}" class="coach-evo-max">${fmtEvo(max)}</text>
+      <text x="${padL}" y="${padT}" class="coach-evo-max">${fmtEvo(hi, key)}</text>
+      ${loLabel}
       <path d="${area}" fill="url(#${gid})"/>
       <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
       ${dots}${xlabels}
     </svg>`;
   }
-  function fmtEvo(v) { return evoMode === 'total' ? String(Math.round(v)) : v.toFixed(1); }
 
   function evoCardInner(an) {
     const buckets = timeBuckets(an);
     if (!buckets) return '<h3>📉 Ton évolution</h3><p class="coach-sub2">Pas encore assez de parties datées pour tracer une tendance. Reviens après quelques parties de plus.</p>';
-    const m = ERR_META[evoMetric];
-    const series = buckets.map(b => {
-      let sum = 0; b.games.forEach(g => sum += errCounts(g)[evoMetric]);
-      return { label: b.label, n: b.games.length, sum, perGame: b.games.length ? sum / b.games.length : 0 };
-    });
-    const valFn = evoMode === 'total' ? (s => s.sum) : (s => s.perGame);
+    const m = EVO_META[evoMetric];
+    const isPct = m.kind === 'pct';
+    const mode = evoMode;
+    const series = buckets.map(b => ({ label: b.label, n: b.games.length, v: metricValue(b.games, evoMetric, mode) }));
+    const valFn = s => s.v;
+    // y-range: errors/strong anchored at 0; accuracy zooms on its own band so
+    // small swings stay readable.
+    const vals = series.map(valFn);
+    let lo = 0, hi = Math.max(m.kind === 'pct' ? 1 : (mode === 'per100' ? 5 : 1), ...vals);
+    if (isPct) { lo = Math.max(0, Math.floor(Math.min(...vals) - 3)); hi = Math.min(100, Math.ceil(Math.max(...vals) + 3)); }
+
     const { early, late } = splitHalves(an);
-    const a = errRate(early, evoMetric), b = errRate(late, evoMetric);
-    const diff = b - a, eps = 0.03;
+    const a = metricValue(early, evoMetric, mode), b = metricValue(late, evoMetric, mode);
+    const diff = b - a;
+    const eps = isPct ? 0.5 : (mode === 'per100' ? 0.15 : 0.03);
+    const improved = m.better === 'down' ? diff < -eps : diff > eps;
+    const worsened = m.better === 'down' ? diff > eps : diff < -eps;
+    const dir = improved ? 'good' : worsened ? 'bad' : 'flat';
+    const arrow = diff > eps ? '↑' : diff < -eps ? '↓' : '→';
+    const word = improved ? (isPct ? 'en progrès' : m.better === 'up' ? 'en progrès' : 'en amélioration')
+      : worsened ? (m.better === 'up' ? 'en recul' : 'en dégradation') : 'stable';
+    const fa = fmtEvo(a, evoMetric), fb = fmtEvo(b, evoMetric);
+    const magTxt = isPct
+      ? ` ${Math.abs(Math.round(diff))} pts`
+      : (a > 0.01 ? ` ${Math.round(Math.abs(diff) / a * 100)}%` : '');
+    const subject = isPct ? 'Ta précision moyenne est passée' : `Tes <b>${m.plural}</b> ${mode === 'per100' ? '(pour 100 coups)' : '(par partie)'} sont passés`;
     let verdict;
-    if (a < 0.01 && b < 0.01) verdict = `Zéro ${m.plural} sur toute la période — impeccable. 🎉`;
-    else {
-      const dir = diff < -eps ? 'good' : diff > eps ? 'bad' : 'flat';
-      const word = diff < -eps ? 'en amélioration' : diff > eps ? 'en dégradation' : 'stable';
-      const arrow = diff < -eps ? '↓' : diff > eps ? '↑' : '→';
-      const pctTxt = a > 0.01 ? ` ${Math.round(Math.abs(diff) / a * 100)}%` : '';
-      verdict = `Tu es passé de <b>${a.toFixed(1)}</b> à <b>${b.toFixed(1)}</b> ${m.plural} par partie — <span class="coach-trend ${dir}">${arrow}${pctTxt} ${word}</span>.`;
-    }
-    const metricChips = Object.keys(ERR_META).map(k =>
-      `<button class="coach-evo-chip${evoMetric === k ? ' active' : ''}" data-metric="${k}" style="--err-c:${ERR_META[k].color}">${ERR_META[k].glyph} ${ERR_META[k].label}</button>`).join('');
-    const modeChips = [['perGame', 'Par partie'], ['total', 'Total']].map(([k, l]) =>
-      `<button class="coach-evo-mode${evoMode === k ? ' active' : ''}" data-mode="${k}">${l}</button>`).join('');
+    if (!isPct && a < 0.01 && b < 0.01) verdict = `Zéro ${m.plural} sur toute la période — impeccable. 🎉`;
+    else verdict = `${subject} de <b>${fa}</b> à <b>${fb}</b> — <span class="coach-trend ${dir}">${arrow}${magTxt} ${word}</span>.`;
+
+    const metricChips = EVO_ORDER.map(k =>
+      `<button class="coach-evo-chip${evoMetric === k ? ' active' : ''}" data-metric="${k}" style="--err-c:${EVO_META[k].color}">${EVO_META[k].glyph} ${EVO_META[k].label}</button>`).join('');
+    const modeChips = isPct ? '' :
+      `<div class="coach-evo-modes">` + [['per100', 'Pour 100 coups'], ['perGame', 'Par partie']].map(([k, l]) =>
+        `<button class="coach-evo-mode${evoMode === k ? ' active' : ''}" data-mode="${k}">${l}</button>`).join('') + `</div>`;
+    const dirTip = m.better === 'up' ? 'monte' : 'descend';
+    const intro = isPct
+      ? `Ta <b>précision moyenne</b> par période, dans le temps. Plus la courbe monte, mieux c'est.`
+      : `Tes <b>${m.plural}</b> ${mode === 'per100' ? 'pour 100 coups' : 'par partie'}, dans le temps. Plus la courbe ${dirTip}, mieux c'est.`;
     return `<h3>📉 Ton évolution — ${m.plural}</h3>
-      <p class="coach-sub2">Nombre de <b>${m.plural}</b> ${evoMode === 'total' ? 'au total par période' : 'par partie'}, dans le temps. Plus la courbe descend, mieux c'est.</p>
+      <p class="coach-sub2">${intro}</p>
       <div class="coach-evo-chips">${metricChips}</div>
-      <div class="coach-evo-modes">${modeChips}</div>
-      ${evoChart(series, valFn, m.color)}
+      ${modeChips}
+      ${evoChart(series, valFn, m.color, lo, hi, evoMetric)}
       <p class="coach-evo-verdict">${verdict}</p>`;
   }
   function renderErrorEvolution(an) {
