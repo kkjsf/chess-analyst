@@ -2115,9 +2115,12 @@ body.guess-open { overflow: hidden; }
   .coach-filter,
   #coach-dashboard > .coach-empty,
   #coach-dashboard > .coach-empty-mini,
+  #coach-dashboard > #coach-word,
   #coach-dashboard > .coach-hero-row {
     column-span: all; -webkit-column-span: all;
   }
+  /* Keep the coach's word as a full-width opening banner above the masonry. */
+  #coach-dashboard > #coach-word { margin: 0 0 22px; }
   .coach-filter { margin-bottom: 22px; }
   /* Hero header: the two most actionable cards (Vigilance + Rythme) sit
      side-by-side above the masonry to establish clear priority. */
@@ -2237,6 +2240,21 @@ body.guess-open { overflow: hidden; }
 
 .coach-narrative p { font-size: 14px; line-height: 1.6; color: var(--text); margin: 0; }
 .coach-narrative b { color: var(--accent); font-weight: 600; }
+
+/* "Le mot du coach" — the headline read of your play. Highlighted and pinned
+   to the top so it's the first thing you see. */
+#coach-word {
+  background: linear-gradient(135deg, rgba(226, 184, 87, 0.16), rgba(226, 184, 87, 0.05));
+  border: 1px solid rgba(226, 184, 87, 0.35);
+  border-left: 4px solid var(--accent);
+}
+#coach-word h3 {
+  color: var(--accent);
+  font-size: 16px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#coach-word p { font-size: 15px; line-height: 1.65; }
 .coach-puz-intro { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 12px; }
 
 .coach-drill-row {

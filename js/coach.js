@@ -402,10 +402,10 @@ const Coach = (() => {
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     curAn = an;
     const cards = an.length
-      ? `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>` +
+      ? renderNarrative(an) +
+        `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>` +
         renderFocus(an) +
         renderMissed(an) +
-        renderNarrative(an) +
         renderTrends(an) +
         renderProfile(an) +
         renderMoveQuality(an) +
@@ -768,7 +768,7 @@ const Coach = (() => {
       s.push(`Tendance récente : tu <b>${recentWin > priorWin ? 'progresses' : 'marques le pas'}</b> (${recentWin}% sur tes 10 dernières parties contre ${priorWin}% auparavant).`);
     s.push(`Concrètement : ouvre le <b>Mode entraînement</b> ci-dessous (tes erreurs y deviennent des exercices) et relis tes parties perdues dans <b>${worst.l}</b>.`);
 
-    return `<div class="home-card coach-card coach-narrative"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
+    return `<div class="home-card coach-card coach-narrative" id="coach-word"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
   }
 
   function renderTrends(an) {
