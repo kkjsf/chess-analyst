@@ -37,6 +37,12 @@ const Coach = (() => {
   const COACH_SKIP_TC = new Set(['bullet', 'blitz']);
   const skipCadence = tc => COACH_SKIP_TC.has(tc);
   let countryCache = {}; // { lowercaseUsername: ISO-code | '??' }, persisted in IndexedDB meta
+  // Currently displayed analyzed set (after the cadence filter). Kept so the
+  // interactive evolution chart can re-render on chip clicks without rebuilding
+  // the whole dashboard.
+  let curAn = [];
+  let evoMetric = 'blunder'; // 'blunder' | 'mistake' | 'miss'
+  let evoMode = 'perGame';   // 'perGame' | 'total'
 
   let regionNames = null;
   try { regionNames = new Intl.DisplayNames(['fr'], { type: 'region' }); } catch (_) {}
@@ -394,6 +400,7 @@ const Coach = (() => {
       return;
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
+    curAn = an;
     const cards = an.length
       ? `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>` +
         renderFocus(an) +
@@ -402,6 +409,8 @@ const Coach = (() => {
         renderTrends(an) +
         renderProfile(an) +
         renderMoveQuality(an) +
+        renderErrorDetail(an) +
+        renderErrorEvolution(an) +
         renderTacticalWeakness(an) +
         renderRepeated(an) +
         renderConversion(an) +
@@ -421,6 +430,7 @@ const Coach = (() => {
       bindFocus();
       bindMissed();
       bindRepeated();
+      bindEvolution();
       bindTrainingCta();
       bindGamesDrill();
       bindRepertoire();
@@ -1267,6 +1277,220 @@ const Coach = (() => {
       ${bar}
       <div class="mq-rows">${rows}</div>
     </div>`;
+  }
+
+  // ─────────────── Gaffes / erreurs / coups manqués — détail + évolution ────
+  // The three costly move types, in severity order.
+  const ERR_META = {
+    blunder: { label: 'Gaffe', plural: 'gaffes', glyph: '??', color: '#d36b6b' },
+    mistake: { label: 'Erreur', plural: 'erreurs', glyph: '?', color: '#e08a4b' },
+    miss:    { label: 'Coup manqué', plural: 'coups manqués', glyph: '✗', color: '#e0574a' }
+  };
+  const PHASE_FR = { opening: 'Ouv.', middle: 'Milieu', endgame: 'Finale' };
+  const PHASE_COLOR = { opening: '#7ba7d6', middle: '#b9cf8f', endgame: '#cdab72' };
+
+  // Per-game count of each costly type. Totals come from the authoritative
+  // aggregate counts (blunderList only holds entries that carry a best-move,
+  // so it can under-count); phase breakdown uses blunderList since only it
+  // records where each error happened.
+  function errCounts(g) {
+    const a = g.analysis || {};
+    const mq = a.moveQuality || {};
+    return {
+      blunder: a.blunders != null ? a.blunders : (mq.blunder || 0),
+      mistake: a.mistakes != null ? a.mistakes : (mq.mistake || 0),
+      miss: mq.miss || 0
+    };
+  }
+  // Average per-game rate of one error type over a set of games.
+  function errRate(arr, type) {
+    if (!arr.length) return 0;
+    let s = 0; arr.forEach(g => s += errCounts(g)[type]);
+    return s / arr.length;
+  }
+  // First half vs second half of the timeline — used for "mieux / pire qu'avant".
+  function splitHalves(an) {
+    const g = an.filter(x => x.endTime).slice().sort((a, b) => a.endTime - b.endTime);
+    const half = Math.floor(g.length / 2);
+    return { early: g.slice(0, half), late: g.slice(half), all: g };
+  }
+  // Improvement badge for one error type (fewer = better → green ↓).
+  function trendBadge(early, late, type) {
+    if (early.length < 3 || late.length < 3) return '';
+    const a = errRate(early, type), b = errRate(late, type);
+    const diff = b - a;
+    const eps = 0.03;
+    const cls = diff < -eps ? 'good' : diff > eps ? 'bad' : 'flat';
+    const arrow = diff < -eps ? '↓' : diff > eps ? '↑' : '→';
+    const word = diff < -eps ? 'mieux qu\'avant' : diff > eps ? 'pire qu\'avant' : 'stable';
+    const pctTxt = a > 0.01 ? ' ' + Math.round(Math.abs(diff) / a * 100) + '%' : '';
+    return `<span class="coach-trend ${cls}">${arrow}${pctTxt} ${word}</span>`;
+  }
+
+  // ── Détail des gaffes, erreurs & coups manqués ──
+  function renderErrorDetail(an) {
+    if (!an.length) return '';
+    const totalMoves = an.reduce((s, g) => s + (g.analysis.moveCount || 0), 0);
+    const { early, late } = splitHalves(an);
+    const phase = {
+      blunder: { opening: 0, middle: 0, endgame: 0 },
+      mistake: { opening: 0, middle: 0, endgame: 0 },
+      miss: { opening: 0, middle: 0, endgame: 0 }
+    };
+    an.forEach(g => (g.analysis.blunderList || []).forEach(b => {
+      if (phase[b.type] && phase[b.type][b.phase] != null) phase[b.type][b.phase]++;
+    }));
+
+    const totalErr = ['blunder', 'mistake', 'miss'].reduce((s, t) => {
+      let c = 0; an.forEach(g => c += errCounts(g)[t]); return s + c;
+    }, 0);
+
+    const blocks = ['blunder', 'mistake', 'miss'].map(type => {
+      const m = ERR_META[type];
+      let total = 0; an.forEach(g => total += errCounts(g)[type]);
+      const perGame = an.length ? total / an.length : 0;
+      const per100 = totalMoves ? total / totalMoves * 100 : 0;
+      const everyN = total ? an.length / total : 0;
+      const ph = phase[type];
+      const phSum = ph.opening + ph.middle + ph.endgame;
+      const phBar = phSum
+        ? `<div class="coach-bar coach-err-phbar">` +
+            ['opening', 'middle', 'endgame'].map(p =>
+              ph[p] ? `<span style="width:${pct(ph[p], phSum)}%;background:${PHASE_COLOR[p]}" title="${PHASE_FR[p]} : ${ph[p]}"></span>` : '').join('') +
+          `</div>
+          <div class="coach-err-phleg">` +
+            ['opening', 'middle', 'endgame'].filter(p => ph[p]).map(p =>
+              `<span><i style="background:${PHASE_COLOR[p]}"></i>${PHASE_FR[p]} ${ph[p]}</span>`).join('') +
+          `</div>`
+        : '';
+      const freq = total
+        ? (perGame >= 1
+            ? `<b>${perGame.toFixed(1)}</b> par partie`
+            : `1 toutes les <b>${everyN.toFixed(1)}</b> parties`)
+        : '<b>aucune</b> 🎉';
+      return `<div class="coach-err-block" style="--err-c:${m.color}">
+        <div class="coach-err-head">
+          <span class="coach-err-glyph">${m.glyph}</span>
+          <span class="coach-err-name">${m.label}</span>
+          <span class="coach-err-total">${total}</span>
+          ${trendBadge(early, late, type)}
+        </div>
+        <div class="coach-err-stats">
+          <span>${freq}</span>
+          <span><b>${per100.toFixed(1)}</b> / 100 coups</span>
+        </div>
+        ${phBar}
+      </div>`;
+    }).join('');
+
+    return `<div class="home-card coach-card" id="coach-err-detail">
+      <h3>🔎 Gaffes, erreurs & coups manqués</h3>
+      <p class="coach-sub2">Tes <b>${totalErr}</b> coups coûteux sur ${an.length} parties, du plus grave au moins grave — avec la phase où ils arrivent et l'évolution récente.</p>
+      ${blocks}
+      <p class="coach-cap">« Mieux / pire qu'avant » compare la 2ᵉ moitié de tes parties à la 1ʳᵉ (à taux par partie égal). La <b>gaffe</b> (??) perd ≥ une pièce ; l'<b>erreur</b> (?) gâche l'avantage ; le <b>coup manqué</b> (✗) laisse filer un gain tactique.</p>
+    </div>`;
+  }
+
+  // ── Évolution dans le temps (graphique interactif) ──
+  // Group games into ordered time buckets: calendar months when the archive
+  // spans enough of them, otherwise equal consecutive batches so the chart
+  // always has enough points to read a trend.
+  function monthKey(ts) { const d = new Date(ts * 1000); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+  function monthLabel(key) { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }); }
+  function timeBuckets(an) {
+    const g = an.filter(x => x.endTime).slice().sort((a, b) => a.endTime - b.endTime);
+    if (g.length < 6) return null;
+    const months = {};
+    g.forEach(x => { const k = monthKey(x.endTime); (months[k] = months[k] || []).push(x); });
+    const keys = Object.keys(months).sort();
+    if (keys.length >= 4) return keys.map(k => ({ label: monthLabel(k), games: months[k] }));
+    const n = Math.min(8, Math.max(4, Math.floor(g.length / 4)));
+    const size = Math.ceil(g.length / n);
+    const out = [];
+    for (let i = 0; i < g.length; i += size) {
+      const chunk = g.slice(i, i + size);
+      out.push({ label: fmtDate(chunk[chunk.length - 1].endTime), games: chunk });
+    }
+    return out;
+  }
+
+  function evoChart(series, valFn, color) {
+    const W = 320, H = 118, padL = 8, padR = 8, padT = 12, padB = 20;
+    const n = series.length;
+    const max = Math.max(1, ...series.map(valFn));
+    const x = i => padL + (n === 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR));
+    const y = v => (H - padB) - (v / max) * (H - padT - padB);
+    const pathAt = (cmd) => series.map((s, i) => `${cmd(i)}${x(i).toFixed(1)},${y(valFn(s)).toFixed(1)}`).join(' ');
+    const line = pathAt(i => i ? 'L' : 'M');
+    const area = `M${x(0).toFixed(1)},${(H - padB).toFixed(1)} ` +
+      series.map((s, i) => `L${x(i).toFixed(1)},${y(valFn(s)).toFixed(1)}`).join(' ') +
+      ` L${x(n - 1).toFixed(1)},${(H - padB).toFixed(1)} Z`;
+    const dots = series.map((s, i) =>
+      `<circle cx="${x(i).toFixed(1)}" cy="${y(valFn(s)).toFixed(1)}" r="2.6" fill="${color}"><title>${esc(s.label)} : ${fmtEvo(valFn(s))} (${s.n} p.)</title></circle>`).join('');
+    const idxs = n <= 5 ? series.map((_, i) => i) : [0, Math.floor((n - 1) / 2), n - 1];
+    const xlabels = idxs.map(i => {
+      const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+      return `<text x="${x(i).toFixed(1)}" y="${H - 5}" class="coach-evo-xlab" text-anchor="${anchor}">${esc(series[i].label)}</text>`;
+    }).join('');
+    const gid = 'evoGrad';
+    return `<svg viewBox="0 0 ${W} ${H}" class="coach-evo-svg" preserveAspectRatio="none">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <line x1="${padL}" y1="${(H - padB).toFixed(1)}" x2="${W - padR}" y2="${(H - padB).toFixed(1)}" class="coach-evo-axis"/>
+      <text x="${padL}" y="${padT}" class="coach-evo-max">${fmtEvo(max)}</text>
+      <path d="${area}" fill="url(#${gid})"/>
+      <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}${xlabels}
+    </svg>`;
+  }
+  function fmtEvo(v) { return evoMode === 'total' ? String(Math.round(v)) : v.toFixed(1); }
+
+  function evoCardInner(an) {
+    const buckets = timeBuckets(an);
+    if (!buckets) return '<h3>📉 Ton évolution</h3><p class="coach-sub2">Pas encore assez de parties datées pour tracer une tendance. Reviens après quelques parties de plus.</p>';
+    const m = ERR_META[evoMetric];
+    const series = buckets.map(b => {
+      let sum = 0; b.games.forEach(g => sum += errCounts(g)[evoMetric]);
+      return { label: b.label, n: b.games.length, sum, perGame: b.games.length ? sum / b.games.length : 0 };
+    });
+    const valFn = evoMode === 'total' ? (s => s.sum) : (s => s.perGame);
+    const { early, late } = splitHalves(an);
+    const a = errRate(early, evoMetric), b = errRate(late, evoMetric);
+    const diff = b - a, eps = 0.03;
+    let verdict;
+    if (a < 0.01 && b < 0.01) verdict = `Zéro ${m.plural} sur toute la période — impeccable. 🎉`;
+    else {
+      const dir = diff < -eps ? 'good' : diff > eps ? 'bad' : 'flat';
+      const word = diff < -eps ? 'en amélioration' : diff > eps ? 'en dégradation' : 'stable';
+      const arrow = diff < -eps ? '↓' : diff > eps ? '↑' : '→';
+      const pctTxt = a > 0.01 ? ` ${Math.round(Math.abs(diff) / a * 100)}%` : '';
+      verdict = `Tu es passé de <b>${a.toFixed(1)}</b> à <b>${b.toFixed(1)}</b> ${m.plural} par partie — <span class="coach-trend ${dir}">${arrow}${pctTxt} ${word}</span>.`;
+    }
+    const metricChips = Object.keys(ERR_META).map(k =>
+      `<button class="coach-evo-chip${evoMetric === k ? ' active' : ''}" data-metric="${k}" style="--err-c:${ERR_META[k].color}">${ERR_META[k].glyph} ${ERR_META[k].label}</button>`).join('');
+    const modeChips = [['perGame', 'Par partie'], ['total', 'Total']].map(([k, l]) =>
+      `<button class="coach-evo-mode${evoMode === k ? ' active' : ''}" data-mode="${k}">${l}</button>`).join('');
+    return `<h3>📉 Ton évolution — ${m.plural}</h3>
+      <p class="coach-sub2">Nombre de <b>${m.plural}</b> ${evoMode === 'total' ? 'au total par période' : 'par partie'}, dans le temps. Plus la courbe descend, mieux c'est.</p>
+      <div class="coach-evo-chips">${metricChips}</div>
+      <div class="coach-evo-modes">${modeChips}</div>
+      ${evoChart(series, valFn, m.color)}
+      <p class="coach-evo-verdict">${verdict}</p>`;
+  }
+  function renderErrorEvolution(an) {
+    if (!timeBuckets(an)) return '';
+    return `<div class="home-card coach-card" id="coach-evo">${evoCardInner(an)}</div>`;
+  }
+  function bindEvolution() {
+    const card = $('#coach-evo');
+    if (!card) return;
+    const rerender = () => { card.innerHTML = evoCardInner(curAn); bindEvolution(); };
+    card.querySelectorAll('.coach-evo-chip').forEach(bt =>
+      bt.addEventListener('click', () => { evoMetric = bt.dataset.metric; rerender(); }));
+    card.querySelectorAll('.coach-evo-mode').forEach(bt =>
+      bt.addEventListener('click', () => { evoMode = bt.dataset.mode; rerender(); }));
   }
 
   // ── Conversion des avantages & moments charnières ──
