@@ -148,16 +148,6 @@ const App = (() => {
         else userNav(currentIndex + 1);
       }
     }, { passive: true });
-
-    // Release the pin as soon as the reader scrolls to read the cards below.
-    // A horizontal swipe on the board is navigation, not reading — keep it pinned.
-    const abody = $('#screen-analysis .analysis-body');
-    if (abody) {
-      abody.addEventListener('wheel', unpinBoard, { passive: true });
-      abody.addEventListener('touchmove', (e) => {
-        if (!boardEl.contains(e.target)) unpinBoard();
-      }, { passive: true });
-    }
   }
 
   function handleShareTarget() {
@@ -748,30 +738,18 @@ const App = (() => {
     });
   }
 
-  function pinBoard() {
-    const bs = document.querySelector('#screen-analysis .board-sticky');
-    if (bs) bs.classList.add('pinned');
-  }
-  function unpinBoard() {
-    const bs = document.querySelector('#screen-analysis .board-sticky');
-    if (bs) bs.classList.remove('pinned');
-  }
+  // Kept as no-ops: the board is now a permanent sticky header (see CSS
+  // .board-sticky), so there's nothing to pin/unpin at runtime. Callers remain
+  // for clarity of intent.
+  function pinBoard() {}
+  function unpinBoard() {}
 
-  // Single entry point for every user-initiated move navigation: pin the board
-  // so it stays in view while stepping, jump to the move, and bring the board
-  // on screen if it had scrolled out of view.
+  // Single entry point for every user-initiated move navigation. The board is a
+  // sticky header that's always in view, so we just jump to the move — no forced
+  // scroll. This lets you tap through the move list (or graph, or key moments)
+  // without the view yanking back to re-centre the board each time.
   function userNav(index) {
-    pinBoard();
     goTo(index);
-    scrollToBoard();
-  }
-
-  function scrollToBoard() {
-    const board = $('#board-container');
-    const boardRect = board.getBoundingClientRect();
-    const viewH = window.innerHeight;
-    if (boardRect.top >= -boardRect.height * 0.5 && boardRect.bottom <= viewH + boardRect.height * 0.5) return;
-    board.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   // The Chess.com account being analysed. Sourced from the Coach settings

@@ -2629,12 +2629,13 @@ body.guess-open { overflow: hidden; }
 .rep-trap-drill { padding: 6px 12px; font-size: 12px; }
 
 /* ── Analysis screen: board + segmented content ──
-   The board flows with the page by default (so reading the cards below gets
-   the full screen). It only pins to the top — via the .pinned class, toggled
-   in JS — while you're actively stepping through moves, then releases as soon
-   as you scroll to read again. */
+   The board is a stable sticky header: it stays pinned to the top of the
+   scrolling analysis body so the move list / cards scroll freely underneath it
+   while the board (and the move you're on) stays in view — like the mobile
+   analysis boards on Lichess / Chess.com. */
 .board-sticky {
-  position: static;
+  position: sticky;
+  top: 0;
   z-index: 8;
   background: var(--bg);
   margin: 0 -16px;
@@ -2643,12 +2644,7 @@ body.guess-open { overflow: hidden; }
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  transition: box-shadow 0.2s ease;
-}
-.board-sticky.pinned {
-  position: sticky;
-  top: 0;
-  box-shadow: 0 8px 16px -10px rgba(0,0,0,0.7);
+  box-shadow: 0 8px 16px -12px rgba(0,0,0,0.7);
 }
 
 .analysis-segmented {

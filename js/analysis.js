@@ -608,6 +608,7 @@ const Analyzer = (() => {
       phaseCp[phase].total += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       phaseCp[phase].count++;
 
+      const loss = r.winPctLoss || 0;
       if (loss > 0 && (!turningPoint || loss > turningPoint.winPctLoss)) {
         turningPoint = {
           ply: i, type: r.type, winPctLoss: loss, cpLoss: r.cpLoss || 0,

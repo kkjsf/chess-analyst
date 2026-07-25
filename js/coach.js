@@ -339,22 +339,34 @@ const Coach = (() => {
   async function analyzePending(onProg) {
     if (busy) return;
     busy = true; stopFlag = false;
-    const pending = games.filter(g => !g.analysis && !skipCadence(g.timeClass));
-    let engineOk = true;
-    try { await StockfishEngine.init(); } catch (_) { engineOk = false; }
-    if (!engineOk) { busy = false; return { engineFailed: true }; }
-    let done = 0;
-    for (let i = 0; i < pending.length; i++) {
-      if (stopFlag) break;
-      const g = pending[i];
-      onProg && onProg(done, pending.length, 0, 1, g);
-      const an = await analyzeOne(g, (m, t) => onProg && onProg(done, pending.length, m, t, g));
-      g.analysis = an;
-      await put(g);
-      done++;
+    try {
+      const pending = games.filter(g => !g.analysis && !skipCadence(g.timeClass));
+      let engineOk = true;
+      try { await StockfishEngine.init(); } catch (_) { engineOk = false; }
+      if (!engineOk) return { engineFailed: true };
+      let done = 0, failed = 0;
+      for (let i = 0; i < pending.length; i++) {
+        if (stopFlag) break;
+        const g = pending[i];
+        onProg && onProg(done, pending.length, 0, 1, g);
+        // Isolate each game: one bad PGN or analysis error marks that game and
+        // moves on, instead of aborting the whole batch (and, before the
+        // try/finally below, leaving `busy` stuck true and bricking the button).
+        let an;
+        try {
+          an = await analyzeOne(g, (m, t) => onProg && onProg(done, pending.length, m, t, g));
+        } catch (e) {
+          an = { error: String((e && e.message) || e) };
+          failed++;
+        }
+        g.analysis = an;
+        try { await put(g); } catch (_) {}
+        done++;
+      }
+      return { done, total: pending.length, stopped: stopFlag, failed };
+    } finally {
+      busy = false;
     }
-    busy = false;
-    return { done, total: pending.length, stopped: stopFlag };
   }
 
   function stop() { stopFlag = true; }
@@ -1917,20 +1929,30 @@ const Coach = (() => {
   async function onAnalyzeAll() {
     const aBtn = $('#coach-analyze-btn');
     const sBtn = $('#coach-stop-btn');
-    aBtn.disabled = true; sBtn.hidden = false;
-    const r = await analyzePending((gi, gtotal, mi, mtotal, g) => {
-      const ratio = gtotal ? (gi + (mtotal ? mi / mtotal : 0)) / gtotal : 0;
-      setProgress(true, ratio, `Partie ${gi + 1}/${gtotal} · coup ${mi}/${mtotal} · vs ${g ? g.oppName : ''}`);
-      // live count refresh
-      const line = $('#coach-stat-line');
-      if (line) line.textContent = `${games.length} parties · ${analyzed().length} analysées`;
-    });
-    setProgress(false);
-    sBtn.hidden = true;
-    if (r && r.engineFailed) { flash('Moteur Stockfish indisponible sur ce navigateur.', true); aBtn.disabled = false; return; }
+    if (aBtn) aBtn.disabled = true;
+    if (sBtn) sBtn.hidden = false;
+    let r;
+    try {
+      r = await analyzePending((gi, gtotal, mi, mtotal, g) => {
+        const ratio = gtotal ? (gi + (mtotal ? mi / mtotal : 0)) / gtotal : 0;
+        setProgress(true, ratio, `Partie ${gi + 1}/${gtotal} · coup ${mi}/${mtotal} · vs ${g ? g.oppName : ''}`);
+        // live count refresh
+        const line = $('#coach-stat-line');
+        if (line) line.textContent = `${games.length} parties · ${analyzed().length} analysées`;
+      });
+    } catch (e) {
+      flash('Erreur pendant l\'analyse locale. Réessaie.', true);
+    } finally {
+      setProgress(false);
+      if (sBtn) sBtn.hidden = true;
+      if (aBtn) aBtn.disabled = false;
+    }
+    if (r && r.engineFailed) { flash('Moteur Stockfish indisponible sur ce navigateur.', true); return; }
     render();
     syncToTraining();
-    flash(r && r.stopped ? `Analyse interrompue (${r.done} faites).` : `Analyse terminée (${r ? r.done : 0} parties).`);
+    if (r && r.stopped) flash(`Analyse interrompue (${r.done} faites).`);
+    else if (r && r.failed) flash(`Analyse terminée : ${r.done - r.failed}/${r.done} intégrées, ${r.failed} en échec.`, true);
+    else flash(`Analyse terminée (${r ? r.done : 0} parties).`);
   }
 
   let flashTimer = null;
