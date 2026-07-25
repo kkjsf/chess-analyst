@@ -17,7 +17,7 @@
 ### Carburant
 - Conso réelle Jogger full hybrid sur long trajet autoroutier : **~5,7 à 6,5 L/100 km** (retenu : 6,0)
 - 1 370 km × 6,0 L/100 = **~82 L**
-- SP95-E10 ~1,80 €/L → **~148 €**
+- SP95-E10 ~1,90 €/L → **~156 €**
 
 ### Péages (classe 1)
 - Itinéraire **A20** (en grande partie gratuite) : ~40–48 €/trajet → **~90 € A/R**
@@ -26,9 +26,9 @@
 ### Total voiture
 | Poste | Montant |
 |---|---|
-| Carburant | ~148 € |
+| Carburant (82 L × 1,90 €/L) | ~156 € |
 | Péages (via A20) | ~90 € |
-| **Total** | **~235–240 €** |
+| **Total** | **~245–250 €** |
 
 ➡️ **Coût FIXE** : identique que vous soyez 1 ou 4 personnes.
 Non compté : stationnement éventuel à destination, usure/amortissement (~+0,10–0,25 €/km si intégré).
@@ -69,9 +69,9 @@ Non compté : stationnement éventuel à destination, usure/amortissement (~+0,1
 
 | Critère | 🚗 Voiture (Jogger hybride) | 🚆 OUIGO (réservé tôt) | 🚆 TGV INOUI |
 |---|---|---|---|
-| Coût trajet | **~235–240 €** (fixe, 4 pers.) | ~130–180 € | ~300–450 € |
+| Coût trajet | **~245–250 €** (fixe, 4 pers.) | ~130–180 € | ~300–450 € |
 | + transferts locaux | inclus (porte-à-porte) | +~25 € | +~25 € |
-| **Total estimé** | **~235–240 €** | **~155–205 €** | **~325–475 €** |
+| **Total estimé** | **~245–250 €** | **~155–205 €** | **~325–475 €** |
 | Durée porte-à-porte | ~7h30–8h | ~4h30 + transferts | ~4h30 + transferts |
 | Bagages | illimités | limités | limités |
 | Sur place | voiture dispo | à louer / transports | à louer / transports |
@@ -85,7 +85,7 @@ Non compté : stationnement éventuel à destination, usure/amortissement (~+0,1
   C'est probablement **le moins cher (~155–205 € tout compris) ET le plus rapide** (~4h30),
   grâce notamment aux billets enfants à 8 €.
 
-- **La voiture (~235–240 €) reste très compétitive** parce que son coût **ne dépend pas du nombre de passagers** :
+- **La voiture (~245–250 €) reste très compétitive** parce que son coût **ne dépend pas du nombre de passagers** :
   à 4 personnes, l'écart avec OUIGO est faible. Elle gagne sur les **bagages**, la **flexibilité**
   (Balma → Vincennes porte-à-porte) et le fait d'**avoir un véhicule sur place**.
 
@@ -94,7 +94,7 @@ Non compté : stationnement éventuel à destination, usure/amortissement (~+0,1
   nettement plus cher que la voiture).
 
 > **En bref :** côté portefeuille pur, OUIGO réservé maintenant est en tête ; mais à 4 avec
-> enfants et bagages, la voiture n'est qu'à ~40–80 € de plus et offre bien plus de confort logistique.
+> enfants et bagages, la voiture n'est qu'à ~45–90 € de plus et offre bien plus de confort logistique.
 
 ---
 
