@@ -1,0 +1,324 @@
+<title>CoRHIZE — Extraction des données d'irrigation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --ground:#EEF2EC; --surface:#FBFCFA; --surface-2:#F3F6F1;
+    --ink:#16211E; --ink-soft:#42544C; --ink-faint:#7A897F;
+    --line:#D8E0D6; --line-soft:#E6EBE2;
+    --irr:#0E7C86; --irr-soft:#0e7c8620;
+    --rain:#345FA8; --rain-soft:#345fa820;
+    --crop:#5E8C3C;
+    --warn:#B26B12; --warn-bg:#B26B1214;
+    --ok:#2F7D4F;
+    --shadow:0 1px 2px #16211e0c, 0 8px 24px -12px #16211e18;
+    --maxw:880px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#0C1211; --surface:#131C1A; --surface-2:#17211E;
+      --ink:#E7EEE9; --ink-soft:#A6B4AC; --ink-faint:#74847B;
+      --line:#25322E; --line-soft:#1D2825;
+      --irr:#2FB3BD; --irr-soft:#2fb3bd22;
+      --rain:#7CA6E8; --rain-soft:#7ca6e822;
+      --crop:#8FBE63;
+      --warn:#E0A252; --warn-bg:#e0a25218;
+      --ok:#6DBF92;
+      --shadow:0 1px 2px #0006, 0 10px 30px -14px #000a;
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#EEF2EC; --surface:#FBFCFA; --surface-2:#F3F6F1;
+    --ink:#16211E; --ink-soft:#42544C; --ink-faint:#7A897F;
+    --line:#D8E0D6; --line-soft:#E6EBE2;
+    --irr:#0E7C86; --rain:#345FA8; --crop:#5E8C3C;
+    --warn:#B26B12; --warn-bg:#B26B1214; --ok:#2F7D4F;
+    --irr-soft:#0e7c8620; --rain-soft:#345fa820;
+    --shadow:0 1px 2px #16211e0c, 0 8px 24px -12px #16211e18;
+  }
+  :root[data-theme="dark"]{
+    --ground:#0C1211; --surface:#131C1A; --surface-2:#17211E;
+    --ink:#E7EEE9; --ink-soft:#A6B4AC; --ink-faint:#74847B;
+    --line:#25322E; --line-soft:#1D2825;
+    --irr:#2FB3BD; --rain:#7CA6E8; --crop:#8FBE63;
+    --warn:#E0A252; --warn-bg:#e0a25218; --ok:#6DBF92;
+    --irr-soft:#2fb3bd22; --rain-soft:#7ca6e822;
+    --shadow:0 1px 2px #0006, 0 10px 30px -14px #000a;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:17px; line-height:1.62; letter-spacing:-0.003em;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+  h1,h2,h3{font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif; font-weight:600; text-wrap:balance; letter-spacing:-0.01em; line-height:1.15}
+  .mono{font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace}
+  .num{font-variant-numeric:tabular-nums}
+  a{color:var(--irr); text-decoration-thickness:1px; text-underline-offset:2px}
+
+  /* ---- Masthead ---- */
+  header.mast{padding:64px 0 30px; border-bottom:1px solid var(--line)}
+  .eyebrow{font-size:12.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--irr); font-weight:600; display:flex; gap:10px; align-items:center}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--irr); display:inline-block}
+  header.mast h1{font-size:clamp(30px,5.4vw,46px); margin:18px 0 12px}
+  header.mast p.lede{font-size:19px; color:var(--ink-soft); margin:0; max-width:62ch}
+  .meta{margin-top:22px; display:flex; flex-wrap:wrap; gap:8px 22px; font-size:13.5px; color:var(--ink-faint)}
+  .meta b{color:var(--ink-soft); font-weight:600}
+
+  section{padding:46px 0; border-bottom:1px solid var(--line-soft)}
+  section > .wrap > h2{font-size:26px; margin:0 0 6px; display:flex; align-items:baseline; gap:12px}
+  .sec-n{font-family:ui-monospace,monospace; font-size:14px; color:var(--irr); font-weight:600}
+  .sec-sub{color:var(--ink-faint); margin:0 0 26px; font-size:15px}
+  p{max-width:68ch}
+
+  /* ---- KPI grid ---- */
+  .kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+  .kpi{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 18px 16px; box-shadow:var(--shadow); position:relative; overflow:hidden}
+  .kpi::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--irr)}
+  .kpi.rain::before{background:var(--rain)} .kpi.crop::before{background:var(--crop)} .kpi.neutral::before{background:var(--ink-faint)}
+  .kpi .v{font-family:"Iowan Old Style",Palatino,Georgia,serif; font-size:30px; font-weight:600; line-height:1; margin:2px 0 6px; font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:12.5px; color:var(--ink-faint); letter-spacing:.02em}
+  .kpi .u{font-size:14px; color:var(--ink-soft); font-weight:400}
+
+  /* ---- Callout panels ---- */
+  .panel{background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:18px 0}
+  .panel.warn{background:var(--warn-bg); border-color:var(--warn)}
+  .panel.warn .ptitle{color:var(--warn)}
+  .panel .ptitle{font-weight:700; font-size:13px; letter-spacing:.04em; text-transform:uppercase; margin:0 0 8px; display:flex; align-items:center; gap:8px}
+  .panel p{margin:6px 0; font-size:15px; color:var(--ink-soft); max-width:none}
+  .panel ul{margin:6px 0; padding-left:20px; font-size:15px; color:var(--ink-soft)}
+  .panel li{margin:4px 0}
+
+  /* ---- Tables ---- */
+  .tw{overflow-x:auto; margin:6px 0 2px}
+  table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px}
+  th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+  thead th{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); font-weight:600; border-bottom:1.5px solid var(--line)}
+  tbody tr:hover{background:var(--surface-2)}
+  td.mono,th.mono{font-family:ui-monospace,monospace; font-size:13px}
+  td .tag{display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; letter-spacing:.03em}
+  .tag.get{background:var(--irr-soft); color:var(--irr)}
+  .tag.post{background:var(--rain-soft); color:var(--rain)}
+  .tag.man{background:var(--crop);color:#fff}
+  .right{text-align:right; font-variant-numeric:tabular-nums}
+
+  /* ---- Bars ---- */
+  .bars{display:flex; flex-direction:column; gap:14px; margin:8px 0}
+  .bar-row{display:grid; grid-template-columns:130px 1fr auto; align-items:center; gap:14px}
+  .bar-lab{font-size:14px; color:var(--ink-soft)}
+  .bar-track{background:var(--surface-2); border-radius:7px; height:26px; overflow:hidden; border:1px solid var(--line-soft)}
+  .bar-fill{height:100%; border-radius:6px 0 0 6px; display:block}
+  .bar-val{font-size:14px; font-variant-numeric:tabular-nums; color:var(--ink); font-weight:600; min-width:74px; text-align:right}
+  .legend{display:flex; gap:18px; font-size:13px; color:var(--ink-soft); margin:14px 0 0; flex-wrap:wrap}
+  .dot{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle}
+
+  /* ---- Steps ---- */
+  ol.steps{counter-reset:s; list-style:none; padding:0; margin:8px 0; display:flex; flex-direction:column; gap:2px}
+  ol.steps li{position:relative; padding:14px 0 14px 52px; border-bottom:1px solid var(--line-soft)}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{counter-increment:s; content:counter(s); position:absolute; left:0; top:12px; width:32px; height:32px; border-radius:9px; background:var(--irr-soft); color:var(--irr); font-family:ui-monospace,monospace; font-weight:700; font-size:14px; display:grid; place-items:center}
+  ol.steps b{display:block; font-size:16px; margin-bottom:2px}
+  ol.steps span{color:var(--ink-soft); font-size:14.5px}
+  ol.steps code{font-family:ui-monospace,monospace; font-size:12.5px; background:var(--surface-2); padding:1px 6px; border-radius:5px; color:var(--ink)}
+
+  .filelist code{font-family:ui-monospace,monospace; font-size:13px; color:var(--irr); font-weight:600}
+  footer{padding:34px 0 60px; color:var(--ink-faint); font-size:13px}
+  footer .wrap{display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px}
+
+  @media (max-width:680px){
+    body{font-size:16px}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .bar-row{grid-template-columns:96px 1fr; }
+    .bar-val{grid-column:2; text-align:left; min-width:0}
+  }
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow">EarthDaily · EDAGRO · Data extract</div>
+    <h1>CoRHIZE — Extraction des données d'irrigation</h1>
+    <p class="lede">Exploration de l'API CoRHIZE v2, cartographie des données disponibles et extraction d'un dataset agronomique (parcelles, cultures, irrigation, précipitations) conforme aux exigences Confluence.</p>
+    <div class="meta">
+      <span><b>Source</b> · portail.corhize.com/api/v2</span>
+      <span><b>Parcelles</b> · 243</span>
+      <span><b>Période observée</b> · 2023‑05‑11 → 2026‑07‑27</span>
+      <span><b>Statut</b> · extraction complète ✓</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ EN BREF ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">01</span> En bref</h2>
+    <p class="sec-sub">Le dataset extrait en un coup d'œil.</p>
+    <div class="kpis">
+      <div class="kpi neutral"><div class="l">Parcelles extraites</div><div class="v num">243</div><div class="u">241 avec polygone exploitable</div></div>
+      <div class="kpi crop"><div class="l">Surface cumulée</div><div class="v num">2 329<span class="u"> ha</span></div><div class="u">1 client · 4 libellés de culture</div></div>
+      <div class="kpi neutral"><div class="l">Points de données</div><div class="v num">25 319</div><div class="u">séries temporelles date + valeur</div></div>
+      <div class="kpi"><div class="l">Irrigation cumulée</div><div class="v num">21 619<span class="u"> mm</span></div><div class="u">153 parcelles · 2 840 apports</div></div>
+      <div class="kpi rain"><div class="l">Précipitations cumulées</div><div class="v num">65 248<span class="u"> mm</span></div><div class="u">239 parcelles · 22 479 relevés</div></div>
+      <div class="kpi neutral"><div class="l">Livrables produits</div><div class="v num">9</div><div class="u">CSV / texte + GeoPackage + Shapefile</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTEXTE ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">02</span> Contexte &amp; objectifs</h2>
+    <p class="sec-sub">Cadré par la page Confluence « Requirements for Dataset extract – Irrigation coRHYZE » (espace PROD / EDAGRO).</p>
+    <p>CoRHIZE est un outil de pilotage de l'irrigation. L'objectif est de rendre exploitables les données de sa base pour l'analyse agronomique interne, à partir de la collection Postman fournie par Mathieu A. Trois livrables étaient demandés :</p>
+    <div class="tw">
+    <table>
+      <thead><tr><th>#</th><th>Objectif</th><th>Contenu attendu</th><th>Statut</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">a</td><td>Liste des parcelles</td><td>Toutes les parcelles, du 01/01/2017 à aujourd'hui, dans un fichier.</td><td><span class="tag man" style="background:var(--ok)">Livré</span></td></tr>
+        <tr><td class="mono">b</td><td>Détails des parcelles</td><td><b>Mandatory :</b> cultures + dates de semis + surface. Fichier texte <em>et</em> fichier géospatial (gpkg/shp). <b>Should have :</b> tout autre insight.</td><td><span class="tag man" style="background:var(--ok)">Livré</span></td></tr>
+        <tr><td class="mono">c</td><td>Données des parcelles</td><td><b>Mandatory :</b> date + quantité d'eau (irrigation) et date + quantité de précipitations. Fichier texte <em>et</em> géospatial. <b>Should have :</b> toute donnée fournie par l'API.</td><td><span class="tag man" style="background:var(--ok)">Livré</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ API ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">03</span> L'API CoRHIZE v2</h2>
+    <p class="sec-sub">API REST, authentification par token Bearer. Base : <span class="mono">https://portail.corhize.com/api/v2/</span></p>
+    <div class="tw">
+    <table>
+      <thead><tr><th>Endpoint</th><th>Méthode</th><th>Rôle</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">/token</td><td><span class="tag post">POST</span></td><td>Authentification Basic (user + password) → renvoie <span class="mono">token</span> (~24 h) + <span class="mono">refresh_token</span>.</td></tr>
+        <tr><td class="mono">/plots</td><td><span class="tag get">GET</span></td><td>Liste des parcelles. Chaque parcelle : code, client, lat/long, surface, date de semis, culture.</td></tr>
+        <tr><td class="mono">/plots/{code}</td><td><span class="tag get">GET</span></td><td>Détail d'une parcelle + <span class="mono">geometry</span> (WKT ou GeoJSON via <span class="mono">?geometry=</span>).</td></tr>
+        <tr><td class="mono">/plots/{code}/data</td><td><span class="tag get">GET</span></td><td>Séries temporelles par <span class="mono">data_types</span> (+ bornes <span class="mono">from</span> / <span class="mono">to</span>).</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="panel warn">
+      <p class="ptitle">⚠ Piège rencontré — WAF sur /token</p>
+      <p>Un <span class="mono">POST /token</span> <b>sans corps de requête</b> est rejeté par le pare-feu applicatif (nginx) avec un <span class="mono">403 Forbidden</span> trompeur — qui ressemble à un refus d'authentification alors que les identifiants sont valides. La parade : envoyer un corps de requête (même vide, <span class="mono">Content-Length: 0</span>) et un <span class="mono">User-Agent</span> classique. Le script gère ça automatiquement.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DONNÉES ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">04</span> Les données disponibles</h2>
+    <p class="sec-sub">Ce que l'API renvoie réellement pour ce compte, après balayage des 243 parcelles.</p>
+
+    <p>Chaque type de donnée est une série temporelle <span class="mono">{ type, unit, values:[{date, value}] }</span>. J'ai sondé six types (<span class="mono">irrigation, rainfalls, ndvi, pet, weather, soilmoisture</span>) ; <b>seuls deux sont peuplés</b> pour ce compte :</p>
+    <div class="tw">
+    <table>
+      <thead><tr><th>data_type</th><th>Unité</th><th class="right">Parcelles</th><th class="right">Points</th><th class="right">Cumul</th><th>Statut</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">rainfalls</td><td>mm</td><td class="right">239</td><td class="right">22 479</td><td class="right">65 248</td><td><span class="tag" style="background:var(--rain-soft);color:var(--rain)">peuplé</span></td></tr>
+        <tr><td class="mono">irrigation</td><td>mm</td><td class="right">153</td><td class="right">2 840</td><td class="right">21 619</td><td><span class="tag" style="background:var(--irr-soft);color:var(--irr)">peuplé</span></td></tr>
+        <tr><td class="mono">ndvi · pet · weather · soilmoisture</td><td>—</td><td class="right">0</td><td class="right">0</td><td class="right">—</td><td><span class="tag" style="background:var(--warn-bg);color:var(--warn)">vide</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 style="font-size:18px;margin:30px 0 4px">Irrigation vs précipitations</h3>
+    <p class="sec-sub" style="margin-bottom:14px">Cumuls sur toute la période observée (mm, toutes parcelles confondues).</p>
+    <div class="bars">
+      <div class="bar-row">
+        <span class="bar-lab">Précipitations</span>
+        <span class="bar-track"><span class="bar-fill" style="width:100%;background:var(--rain)"></span></span>
+        <span class="bar-val">65 248 mm</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-lab">Irrigation</span>
+        <span class="bar-track"><span class="bar-fill" style="width:33.1%;background:var(--irr)"></span></span>
+        <span class="bar-val">21 619 mm</span>
+      </div>
+    </div>
+    <p style="font-size:14px;color:var(--ink-faint);margin-top:10px">Moyenne par parcelle concernée : <b>141 mm</b> d'irrigation (≈ 19 apports) · <b>273 mm</b> de pluie.</p>
+
+    <h3 style="font-size:18px;margin:34px 0 4px">Répartition des cultures</h3>
+    <p class="sec-sub" style="margin-bottom:14px">Sur les 243 parcelles.</p>
+    <div class="bars">
+      <div class="bar-row"><span class="bar-lab">Maïs semence</span><span class="bar-track"><span class="bar-fill" style="width:100%;background:var(--crop)"></span></span><span class="bar-val">233</span></div>
+      <div class="bar-row"><span class="bar-lab">Maïs grain *</span><span class="bar-track"><span class="bar-fill" style="width:3.4%;background:var(--crop)"></span></span><span class="bar-val">8</span></div>
+      <div class="bar-row"><span class="bar-lab">Soja *</span><span class="bar-track"><span class="bar-fill" style="width:1.2%;background:var(--crop)"></span></span><span class="bar-val">1</span></div>
+      <div class="bar-row"><span class="bar-lab" title="MAIS_SEMENCE">MAIS_SEMENCE</span><span class="bar-track"><span class="bar-fill" style="width:1.2%;background:var(--warn)"></span></span><span class="bar-val">1</span></div>
+    </div>
+
+    <div class="panel warn">
+      <p class="ptitle">⚠ Qualité des données à noter</p>
+      <ul>
+        <li><b>Jeu de démonstration / anonymisé</b> : un seul client (<span class="mono">CLIENT00308</span>), codes parcelles <span class="mono">PLOT000xx</span>, dates de semis en 2026. La profondeur historique réelle observée démarre en <b>2023</b>, pas 2017.</li>
+        <li><b>Libellés de culture incohérents</b> : « Maïs semence » coexiste avec « MAIS_SEMENCE », et certains portent un suffixe « * ». Un nettoyage/normalisation est à prévoir avant analyse.</li>
+        <li><b>2 géométries invalides</b> sur 243 (WKT non exploitable) — exclues des fichiers géospatiaux, présentes dans les fichiers texte.</li>
+        <li><b>Should-have absents</b> : ndvi, ET (pet), météo et humidité du sol ne renvoient rien pour ce compte — probablement liés à l'équipement/abonnement des parcelles.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CE QUE J'AI FAIT ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">05</span> Ce que j'ai fait</h2>
+    <p class="sec-sub">Un script Python unique, reproductible, qui produit les trois livrables en une passe.</p>
+    <ol class="steps">
+      <li><b>Authentification</b><span>Token Bearer via <code>POST /token</code> (avec contournement WAF), rafraîchi automatiquement en cas d'expiration.</span></li>
+      <li><b>Objectif a — parcelles</b><span>Récupération des 243 parcelles via <code>GET /plots</code> → <code>plots.csv</code>.</span></li>
+      <li><b>Objectif b — détails + géométrie</b><span>Pour chaque parcelle, <code>GET /plots/{code}?geometry=wkt</code> → fichier texte <code>plot_details.csv</code> + conversion WKT → <code>plots.gpkg</code> et <code>plots.shp</code> (EPSG:4326).</span></li>
+      <li><b>Objectif c — séries temporelles</b><span>Pour chaque parcelle, <code>GET /plots/{code}/data</code> (tous data_types) → format long <code>plot_data_long.csv</code>, résumé <code>plot_data_summary.csv</code>, et <code>plot_data.gpkg</code> (polygones + cumuls irrigation/pluie).</span></li>
+      <li><b>Robustesse</b><span>Gestion des géométries invalides, des types de données absents, retries réseau, et identifiants lus depuis l'environnement (aucun secret en dur dans le dépôt).</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ LIVRABLES ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">06</span> Les livrables</h2>
+    <p class="sec-sub">Dossier <span class="mono">CORHYZE/</span> — script + données dans <span class="mono">data/</span>.</p>
+    <div class="tw filelist">
+    <table>
+      <thead><tr><th>Fichier</th><th>Obj.</th><th>Format</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>corhize_extract.py</code></td><td>—</td><td>Python</td><td>Script d'extraction paramétrable (<span class="mono">--from / --to / --outdir</span>).</td></tr>
+        <tr><td><code>plots.csv</code></td><td class="mono">a</td><td>CSV</td><td>Les 243 parcelles : code, client, lat/long, surface, semis, culture.</td></tr>
+        <tr><td><code>plot_details.csv</code></td><td class="mono">b</td><td>texte</td><td>Détails complets + géométrie WKT.</td></tr>
+        <tr><td><code>plots.gpkg</code> · <code>plots.shp</code></td><td class="mono">b</td><td>géospatial</td><td>241 polygones de parcelles + attributs (culture, semis, surface).</td></tr>
+        <tr><td><code>plot_data_long.csv</code></td><td class="mono">c</td><td>texte</td><td>25 319 points au format long : code, culture, type, unité, date, valeur.</td></tr>
+        <tr><td><code>plot_data_summary.csv</code></td><td class="mono">c</td><td>CSV</td><td>Résumé par parcelle × type : nb points, cumul, première/dernière date.</td></tr>
+        <tr><td><code>plot_data.gpkg</code></td><td class="mono">c</td><td>géospatial</td><td>Polygones + cumuls d'irrigation et de pluie par parcelle.</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SUITE ============ -->
+<section>
+  <div class="wrap">
+    <h2><span class="sec-n">07</span> Limites &amp; pistes</h2>
+    <div class="panel">
+      <p class="ptitle" style="color:var(--irr)">→ Recommandations</p>
+      <ul>
+        <li><b>Rejouer sur un compte de production</b> pour couvrir l'historique 2017 et un parc de parcelles multi-clients réel.</li>
+        <li><b>Normaliser les cultures</b> (table de correspondance) et clarifier la sémantique du suffixe « * » avec CoRHIZE.</li>
+        <li><b>Confirmer les should-have</b> (ndvi, ET, météo, humidité sol) : disponibles sur d'autres comptes/parcelles ? Le script les captera automatiquement dès qu'ils sont peuplés.</li>
+        <li><b>Cadence d'irrigation</b> : la granularité est l'apport (événement), idéale pour analyser le pilotage ; on peut dériver des bilans hydriques (irrigation + pluie vs ET) une fois l'ET disponible.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>CoRHIZE data extract · établi le 27 juillet 2026</span>
+    <span>EarthDaily — EDAGRO Solutions</span>
+  </div>
+</footer>

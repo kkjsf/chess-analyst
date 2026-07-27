@@ -1,0 +1,57 @@
+{
+  "n_plots": 243,
+  "n_clients": 1,
+  "n_crops": 4,
+  "n_with_geometry": 242,
+  "surface_total_ha": 2329.3,
+  "date_min": "2023-05-11",
+  "date_max": "2026-07-27",
+  "n_data_points": 25319,
+  "data_types": [
+    {
+      "type": "rainfalls",
+      "unit": "mm",
+      "n_points": 22479,
+      "n_plots": 239,
+      "total": 65247.8
+    },
+    {
+      "type": "irrigation",
+      "unit": "mm",
+      "n_points": 2840,
+      "n_plots": 153,
+      "total": 21618.9
+    }
+  ],
+  "irrigation": {
+    "n_plots": 153,
+    "n_events": 2840,
+    "total_mm": 21618.9,
+    "mean_mm_per_plot": 141.3,
+    "mean_events_per_plot": 18.6
+  },
+  "rainfalls": {
+    "n_plots": 239,
+    "n_events": 22479,
+    "total_mm": 65247.8,
+    "mean_mm_per_plot": 273.0
+  },
+  "crops": [
+    {
+      "name": "Maïs semence",
+      "n": 233
+    },
+    {
+      "name": "Maïs grain *",
+      "n": 8
+    },
+    {
+      "name": "Soja *",
+      "n": 1
+    },
+    {
+      "name": "MAIS_SEMENCE",
+      "n": 1
+    }
+  ]
+}
