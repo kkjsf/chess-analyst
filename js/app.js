@@ -999,6 +999,23 @@ const App = (() => {
     return `${side} avancent un pion.`;
   }
 
+  // Open the internal opening explorer for an exact OPENINGS line (as used by the
+  // openings tree). Falls back to the "Ouvertures" browse panel when the line has
+  // no dedicated catalog entry (structural / family-head nodes).
+  function openOpeningByLine(line) {
+    const o = line ? OPENINGS.find(x => x.line === line) : null;
+    if (!o) { if (_openPanel) _openPanel('openings'); return; }
+    const flip = o.side === 'b';
+    const moves = o.line.split(' ').length;
+    const title = o.en && o.en !== o.name ? `${o.name} · ${o.en}` : o.name;
+    const course = (typeof Courses !== 'undefined') ? Courses.get(o.line) : null;
+    openOpeningExplorer({
+      name: title, eco: o.eco, line: o.line, moves,
+      idea: o.idea, plans: o.plans, structure: o.structure,
+      mistakes: o.mistakes, deviations: o.deviations, course
+    }, [], o.level || '', flip);
+  }
+
   function openOpeningExplorer(opening, analysis, footerOverride, flip) {
     if (!opening || !opening.line) return;
 
@@ -3162,7 +3179,7 @@ const App = (() => {
 
   function initPanels() {
     const overlay = $('#panel-overlay');
-    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), repertoire: $('#panel-repertoire'), technical: $('#panel-technical') };
+    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), tree: $('#panel-tree'), repertoire: $('#panel-repertoire'), technical: $('#panel-technical') };
     const btns = { guide: $('#btn-guide'), notation: $('#btn-notation'), concepts: $('#btn-concepts'), openings: $('#btn-openings'), technical: $('#btn-technical') };
 
     function openPanel(name) {
@@ -3172,7 +3189,10 @@ const App = (() => {
       requestAnimationFrame(() => {
         overlay.classList.add('visible');
         panels[name].hidden = false;
-        requestAnimationFrame(() => panels[name].classList.add('open'));
+        requestAnimationFrame(() => {
+          panels[name].classList.add('open');
+          if (name === 'tree' && typeof OpeningTree !== 'undefined') OpeningTree.render();
+        });
       });
     }
 
@@ -3669,5 +3689,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo, refreshHome, openOpeningExplorer, openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing };
+  return { goTo, refreshHome, openOpeningExplorer, openOpeningByLine, openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing };
 })();

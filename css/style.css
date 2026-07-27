@@ -2708,3 +2708,191 @@ body.guess-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .screen.active, .seg-panel.active { animation: none; }
 }
+
+/* ═══════ Openings tree (panel-tree) ═══════ */
+.panel-body.ot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px;
+  overflow: hidden;
+}
+.ot-body .concepts-intro { margin-bottom: 0; max-width: 900px; }
+
+.ot-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ot-legend { display: flex; gap: 7px; flex-wrap: wrap; }
+.ot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid #2a3a5c;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, opacity 0.15s;
+}
+.ot-chip:hover { color: var(--text); }
+.ot-chip.off { opacity: 0.3; }
+.ot-dot { width: 9px; height: 9px; border-radius: 50%; }
+.ot-toolbar-btns { margin-left: auto; display: flex; gap: 8px; }
+.ot-btn {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid #2a3a5c;
+  padding: 7px 13px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ot-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.ot-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #2a3a5c;
+  border-radius: 14px;
+  background:
+    radial-gradient(900px 500px at 20% -10%, #1e2b52 0%, var(--bg) 60%);
+  cursor: grab;
+}
+.ot-canvas.grabbing { cursor: grabbing; }
+.ot-content { position: relative; display: inline-block; min-width: 100%; padding: 34px 54px; }
+.ot-links { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; overflow: visible; }
+
+.ot-subtree { display: flex; align-items: center; }
+.ot-kids { display: flex; flex-direction: column; gap: 16px; margin-left: 72px; padding: 8px 0; }
+.ot-subtree.collapsed > .ot-kids { display: none; }
+
+.ot-card {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: linear-gradient(180deg, var(--bg-card), #182543);
+  border: 1px solid #2a3a5c;
+  border-left: 5px solid var(--ot-fam, #6b7a99);
+  border-radius: 13px;
+  padding: 11px 14px;
+  min-width: 178px;
+  max-width: 250px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
+  animation: otPop 0.25s ease both;
+}
+@keyframes otPop { from { opacity: 0; transform: translateX(-8px) scale(0.96); } to { opacity: 1; } }
+.ot-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); }
+.ot-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset, 0 10px 26px rgba(0,0,0,0.5); }
+.ot-card.root { --ot-fam: var(--accent); }
+.ot-card.ot-hidden { display: none; }
+
+.ot-ic {
+  font-size: 26px;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
+.ot-body-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ot-tt { font-weight: 700; font-size: 14px; line-height: 1.18; }
+.ot-sub { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ot-mv {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--accent);
+  background: rgba(226,184,87,0.12);
+  padding: 1px 7px;
+  border-radius: 5px;
+}
+.ot-card-eco { font-size: 10.5px; color: var(--text-dim); border: 1px solid #2a3a5c; border-radius: 4px; padding: 0 5px; }
+.ot-chev {
+  position: absolute;
+  right: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid #2a3a5c;
+  border-radius: 50%;
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ot-chev:hover { background: var(--accent); color: #14142a; }
+.ot-subtree.collapsed > .ot-card .ot-chev { transform: translateY(-50%) rotate(180deg); }
+
+.ot-detail {
+  flex: none;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid #2a3a5c;
+  border-radius: 14px;
+  min-height: 150px;
+}
+.ot-detail .ot-dboard {
+  width: 128px;
+  height: 128px;
+  flex: none;
+  border-radius: 7px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+.ot-txt { flex: 1; min-width: 0; }
+.ot-txt h3 { font-size: 17px; display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: var(--text); }
+.ot-metarow { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.ot-path { font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ot-path b { color: var(--accent); font-weight: 600; }
+.ot-eco { font-size: 11px; color: var(--text-dim); border: 1px solid #2a3a5c; border-radius: 4px; padding: 1px 6px; }
+.ot-idea { font-size: 13px; line-height: 1.5; color: var(--text); max-width: 760px; margin-bottom: 10px; }
+.ot-idea .k { color: var(--accent); font-weight: 600; }
+.ot-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.ot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ot-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 13px;
+  border-radius: 9px;
+  cursor: pointer;
+  border: 1px solid #2a3a5c;
+  text-decoration: none;
+  transition: transform 0.1s, border-color 0.15s, background 0.15s;
+}
+.ot-link:active { transform: scale(0.98); }
+.ot-link-app { background: var(--accent); color: #14142a; border-color: var(--accent); }
+.ot-link-app:hover { background: var(--accent-dim); }
+.ot-link-cc { background: var(--bg-elevated); color: var(--text); }
+.ot-link-cc:hover { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 720px) {
+  .ot-detail { flex-direction: column; align-items: stretch; }
+  .ot-detail .ot-dboard { width: 104px; height: 104px; align-self: center; }
+}

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arbre des Ouvertures — maquette</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #1a1a2e;
+  --bg-card: #16213e;
+  --bg-elevated: #1c2a4a;
+  --accent: #e2b857;
+  --accent-dim: #c9982e;
+  --text: #e8e8e8;
+  --text-dim: #8892a4;
+  --line: #2a3a5c;
+  --square-light: #ebd7b2;
+  --square-dark: #ae8a68;
+  --hl: rgba(226,184,87,0.45);
+  --radius: 14px;
+  /* familles */
+  --fam-open: #4ade80;
+  --fam-semiopen: #60a5fa;
+  --fam-closed: #c084fc;
+  --fam-semiclosed: #22d3ee;
+  --fam-flank: #fb923c;
+}
+html, body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: linear-gradient(180deg, #1c2a4a 0%, var(--bg) 100%);
+}
+header .icon { font-size: 30px; }
+header h1 { font-size: 21px; font-weight: 700; color: var(--accent); }
+header p { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+.badge-mockup {
+  margin-left: auto;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--accent-dim); border: 1px solid var(--accent-dim);
+  padding: 4px 10px; border-radius: 999px;
+}
+
+.legend {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 14px 24px 4px;
+}
+.legend .chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--text-dim);
+  background: var(--bg-card); border: 1px solid var(--line);
+  padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.legend .chip:hover { color: var(--text); }
+.legend .chip.off { opacity: .32; }
+.legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+.wrap {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 20px;
+  padding: 12px 24px 40px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .wrap { grid-template-columns: 1fr; }
+  .side { order: -1; position: static !important; }
+}
+
+/* ── TREE ── */
+.tree { font-size: 14px; }
+.node { position: relative; }
+.node-children {
+  margin-left: 18px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+.node.collapsed > .node-children { display: none; }
+
+.row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; margin: 3px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--fam, var(--line));
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .08s;
+}
+.row:hover { background: var(--bg-elevated); }
+.row.selected { border-color: var(--accent); background: var(--bg-elevated); box-shadow: 0 0 0 1px var(--accent) inset; }
+.row.hidden-fam { display: none; }
+
+.twist {
+  width: 16px; text-align: center; color: var(--text-dim);
+  transition: transform .18s; flex: none; font-size: 11px;
+}
+.node.collapsed > .row .twist { transform: rotate(-90deg); }
+.twist.leaf { visibility: hidden; }
+
+.mv {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700; color: var(--accent);
+  background: rgba(226,184,87,0.08);
+  padding: 2px 8px; border-radius: 6px; flex: none;
+  min-width: 62px; text-align: center; font-size: 13px;
+}
+.lbl { font-weight: 500; }
+.eco {
+  margin-left: auto; flex: none;
+  font-size: 11px; color: var(--text-dim);
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 1px 6px; letter-spacing: .04em;
+}
+.fam-tag {
+  flex: none; font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+}
+
+/* ── SIDE PANEL ── */
+.side { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.card {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 16px;
+}
+.board-card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+.board {
+  width: 100%; max-width: 320px; aspect-ratio: 1;
+  display: grid; grid-template-columns: repeat(8,1fr);
+  border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.sq { display: flex; align-items: center; justify-content: center; position: relative; }
+.sq.light { background: var(--square-light); }
+.sq.dark  { background: var(--square-dark); }
+.sq.hl::after {
+  content: ''; position: absolute; inset: 0; background: var(--hl);
+}
+.sq span {
+  font-size: clamp(20px, 5.4vw, 34px); line-height: 1; position: relative; z-index: 1;
+  user-select: none;
+}
+.sq .w { color: #fbfbf7; text-shadow: 0 1px 1px rgba(0,0,0,.55), 0 0 2px rgba(0,0,0,.4); }
+.sq .b { color: #26324a; text-shadow: 0 1px 0 rgba(255,255,255,.25); }
+
+.movepath {
+  font-size: 13px; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; text-align: center;
+  line-height: 1.5; word-spacing: 2px;
+}
+.movepath b { color: var(--accent); font-weight: 600; }
+
+.info h2 { font-size: 17px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.info .meta { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.info .idea { font-size: 13.5px; line-height: 1.55; color: var(--text); }
+.info .idea .k { color: var(--accent); font-weight: 600; }
+.info .hint-empty { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+.pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+
+.foot { padding: 4px 24px 30px; color: var(--text-dim); font-size: 12px; line-height: 1.6; max-width: 760px; }
+.foot code { background: var(--bg-card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <div class="icon">♟️</div>
+  <div>
+    <h1>Arbre des Ouvertures</h1>
+    <p>Maquette · déplie les branches, clique une ligne pour voir la position et l'idée</p>
+  </div>
+  <div class="badge-mockup">maquette</div>
+</header>
+
+<div class="legend" id="legend"></div>
+
+<div class="wrap">
+  <div class="tree" id="tree"></div>
+  <div class="side">
+    <div class="card board-card">
+      <div class="board" id="board"></div>
+      <div class="movepath" id="movepath"></div>
+    </div>
+    <div class="card info" id="info"></div>
+  </div>
+</div>
+
+<div class="foot">
+  Maquette statique — quelques dizaines de nœuds codés à la main pour montrer le principe.
+  La version complète pourrait&nbsp;: charger tout l'arbre ECO (A–E), afficher les stats de fréquence par coup (comme Lichess),
+  relier chaque ligne à tes propres parties analysées dans Chess Analyst («&nbsp;tu joues souvent la Sicilienne, voici où tu perds le fil&nbsp;»),
+  et proposer un mode révision. Familles&nbsp;: <code>ouvertes</code> · <code>semi-ouvertes</code> · <code>fermées</code> · <code>semi-fermées</code> · <code>flanc</code>.
+</div>
+
+<script>
+const FAMILIES = {
+  open:       { name: 'Ouvertes',      color: 'var(--fam-open)' },
+  semiopen:   { name: 'Semi-ouvertes', color: 'var(--fam-semiopen)' },
+  closed:     { name: 'Fermées',       color: 'var(--fam-closed)' },
+  semiclosed: { name: 'Semi-fermées',  color: 'var(--fam-semiclosed)' },
+  flank:      { name: 'Flanc',         color: 'var(--fam-flank)' },
+};
+
+const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+
+// Arbre. mv = coup menant au nœud (SAN), lbl = nom, eco, fam, idea, fen, kids.
+const TREE = {
+  mv: null, lbl: 'Position initiale', fen: START,
+  idea: "Tout commence ici. Le premier coup des Blancs oriente déjà la partie : <span class='k'>1.e4</span> ouvre les lignes et vise le jeu rapide, <span class='k'>1.d4</span> construit un centre plus solide, les coups de flanc (<span class='k'>1.c4</span>, <span class='k'>1.Cf3</span>) attaquent le centre à distance.",
+  kids: [
+    { mv: '1.e4', lbl: 'Ouverture du pion roi', fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR',
+      idea: "Libère le fou-roi et la dame, occupe le centre. Le pion e4 n'est pas défendu — d'où un jeu souvent plus vif et tactique.",
+      kids: [
+        { mv: '1...e5', lbl: 'Jeux ouverts', fam: 'open', fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR',
+          idea: "La réponse symétrique. Les deux camps se disputent le centre frontalement → <span class='k'>jeux ouverts</span>, riches en tactique et en développement rapide.",
+          kids: [
+            { mv: '2.Cf3', lbl: 'Attaque du cavalier roi', fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R',
+              idea: "Menace immédiatement e5. Le coup le plus naturel et le plus joué.",
+              kids: [
+                { mv: '2...Cc6', lbl: 'Défense du pion e5', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R',
+                  idea: "Les Noirs défendent e5 et développent. Carrefour des grandes ouvertes.",
+                  kids: [
+                    { mv: '3.Fb5', lbl: 'Partie espagnole (Ruy Lopez)', eco: 'C60–C99', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R',
+                      idea: "Le fou cloue indirectement le défenseur de e5. L'ouverture la plus profonde du répertoire classique — pression durable, jeu positionnel." },
+                    { mv: '3.Fc4', lbl: 'Partie italienne', eco: 'C50–C54', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R',
+                      idea: "Le fou vise f7, le point faible. Développement rapide, idéal pour apprendre les principes d'ouverture." },
+                    { mv: '3.d4', lbl: 'Partie écossaise', eco: 'C44–C45', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R',
+                      idea: "Ouvre le centre tout de suite. Jeu clair et actif, moins de théorie que l'espagnole." },
+                  ]},
+              ]},
+            { mv: '2.f4', lbl: 'Gambit du Roi', eco: 'C30–C39', fen: 'rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PPP/RNBQKBNR',
+              idea: "Sacrifice d'un pion pour un développement fulgurant et l'ouverture de la colonne f. Romantique et tranchant." },
+          ]},
+        { mv: '1...c5', lbl: 'Défense sicilienne', fam: 'semiopen', eco: 'B20–B99', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR',
+          idea: "La réponse la plus combative à 1.e4. Les Noirs jouent asymétrique → <span class='k'>jeux semi-ouverts</span>. Déséquilibre et contre-jeu sur l'aile dame.",
+          kids: [
+            { mv: '2.Cf3 d6 3.d4', lbl: 'Sicilienne ouverte', eco: 'B30–B99', fen: 'rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R',
+              idea: "Les Blancs ouvrent le centre. Position déséquilibrée typique : Najdorf, Dragon, Scheveningen en découlent." },
+          ]},
+        { mv: '1...e6', lbl: 'Défense française', fam: 'semiopen', eco: 'C00–C19', fen: 'rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR',
+          idea: "Solide mais un peu passive : le fou de cases blanches reste enfermé. Prépare d5 pour défier le centre. Jeu de structures fermées." },
+        { mv: '1...c6', lbl: 'Défense Caro-Kann', fam: 'semiopen', eco: 'B10–B19', fen: 'rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR',
+          idea: "Comme la française mais sans enfermer le fou. Très solide, appréciée des joueurs positionnels." },
+        { mv: '1...d5', lbl: 'Défense scandinave', fam: 'semiopen', eco: 'B01', fen: 'rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',
+          idea: "Défie e4 immédiatement. Après 2.exd5 Dxd5, la dame noire sort tôt — simple à jouer, peu de théorie." },
+      ]},
+    { mv: '1.d4', lbl: 'Ouverture du pion dame', fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR',
+      idea: "Le pion d4 est défendu par la dame. Centre plus stable, jeu souvent plus lent et stratégique que 1.e4.",
+      kids: [
+        { mv: '1...d5', lbl: 'Jeux fermés', fam: 'closed', fen: 'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR',
+          idea: "Réponse symétrique. Centre verrouillé, manœuvres lentes → <span class='k'>jeux fermés</span>, la stratégie prime sur la tactique.",
+          kids: [
+            { mv: '2.c4', lbl: 'Gambit dame', eco: 'D06–D69', fen: 'rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR',
+              idea: "Offre le pion c pour dévier le pion d et dominer le centre. Ce n'est pas un vrai sacrifice : le pion se récupère.",
+              kids: [
+                { mv: '2...dxc4', lbl: 'Gambit dame accepté', eco: 'D20–D29', fen: 'rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR',
+                  idea: "Les Noirs prennent, mais rendront le pion. Les Blancs obtiennent un centre mobile." },
+                { mv: '2...e6', lbl: 'Gambit dame refusé', eco: 'D30–D69', fen: 'rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR',
+                  idea: "Solide et classique. Structure de pions rigide, plan clair : minorité contre centre." },
+                { mv: '2...c6', lbl: 'Défense slave', eco: 'D10–D19', fen: 'rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR',
+                  idea: "Renforce d5 sans enfermer le fou de cases blanches. Réputée très fiable au plus haut niveau." },
+              ]},
+          ]},
+        { mv: '1...Cf6', lbl: 'Jeux semi-fermés', fam: 'semiclosed', fen: 'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR',
+          idea: "Les Noirs refusent la symétrie et laissent les Blancs occuper le centre… pour mieux l'attaquer ensuite (esprit hypermoderne) → <span class='k'>jeux semi-fermés</span>.",
+          kids: [
+            { mv: '2.c4 e6 3.Cc3 Fb4', lbl: 'Nimzo-indienne', eco: 'E20–E59', fen: 'rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR',
+              idea: "Le fou cloue le cavalier c3 et vise à doubler les pions blancs. Équilibre entre solidité et jeu de pièces." },
+            { mv: '2.c4 g6 3.Cc3 Fg7', lbl: 'Est-indienne / Grünfeld', eco: 'E60–E99', fen: 'rnbqk2r/ppppppbp/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR',
+              idea: "Fianchetto : les Noirs laissent un gros centre blanc puis le bombardent. Contre-attaque tranchante, très populaire." },
+          ]},
+        { mv: '1...f5', lbl: 'Défense hollandaise', fam: 'semiclosed', eco: 'A80–A99', fen: 'rnbqkbnr/ppppp1pp/8/5p2/3P4/8/PPP1PPPP/RNBQKBNR',
+          idea: "Vise l'attaque sur l'aile roi (case e4). Ambitieuse mais affaiblit un peu le roque noir." },
+      ]},
+    { mv: '1.c4', lbl: 'Ouverture anglaise', fam: 'flank', eco: 'A10–A39', fen: 'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR',
+      idea: "Ouverture de <span class='k'>flanc</span> : contrôle d5 à distance sans avancer le pion central. Souvent transpose vers d'autres systèmes." },
+    { mv: '1.Cf3', lbl: 'Ouverture Réti', fam: 'flank', eco: 'A04–A09', fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKBNR',
+      idea: "Flexible et hypermoderne : développe avant de fixer la structure. Peut transposer dans presque tout." },
+  ]
+};
+
+// ── FEN → board ──
+const GLYPH = { k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
+function squaresFromFen(fen) {
+  const rows = fen.split(' ')[0].split('/');
+  const out = [];
+  for (let r = 0; r < 8; r++) {
+    for (const ch of rows[r]) {
+      if (/\d/.test(ch)) { for (let i=0;i<+ch;i++) out.push(null); }
+      else out.push(ch);
+    }
+  }
+  return out; // 64, index 0 = a8
+}
+// diff two fens -> set of changed square indices (for last-move highlight)
+function changed(a, b) {
+  const A = squaresFromFen(a), B = squaresFromFen(b);
+  const s = new Set();
+  for (let i=0;i<64;i++) if (A[i] !== B[i]) s.add(i);
+  return s;
+}
+function renderBoard(fen, prevFen) {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  const sq = squaresFromFen(fen);
+  const hl = prevFen ? changed(prevFen, fen) : new Set();
+  for (let i=0;i<64;i++) {
+    const r = Math.floor(i/8), c = i%8;
+    const d = document.createElement('div');
+    d.className = 'sq ' + (((r+c)%2===0) ? 'light' : 'dark') + (hl.has(i) ? ' hl' : '');
+    const p = sq[i];
+    if (p) {
+      const isWhite = p === p.toUpperCase();
+      d.innerHTML = `<span class="${isWhite?'w':'b'}">${GLYPH[p.toLowerCase()]}</span>`;
+    }
+    board.appendChild(d);
+  }
+}
+
+// ── build tree DOM ──
+let selectedRow = null;
+function famColor(f){ return f ? FAMILIES[f].color : 'var(--line)'; }
+
+function buildNode(node, parentFam) {
+  const fam = node.fam || parentFam || null;
+  const wrap = document.createElement('div');
+  wrap.className = 'node' + (node.mv && node.kids ? ' collapsed' : '');
+  // keep first two levels open
+  if (node.mv === null || node.depth1) wrap.classList.remove('collapsed');
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.style.setProperty('--fam', famColor(fam));
+
+  const hasKids = node.kids && node.kids.length;
+  const twist = `<span class="twist ${hasKids?'':'leaf'}">▼</span>`;
+  const mv = node.mv ? `<span class="mv">${node.mv}</span>` : `<span class="mv">start</span>`;
+  const famTag = node.fam ? `<span class="fam-tag" style="background:${famColor(node.fam)}22;color:${famColor(node.fam)}">${FAMILIES[node.fam].name}</span>` : '';
+  const eco = node.eco ? `<span class="eco">${node.eco}</span>` : '';
+  row.innerHTML = `${twist}${mv}<span class="lbl">${node.lbl}</span>${famTag}${eco}`;
+  row.dataset.fam = fam || '';
+
+  row.addEventListener('click', (e) => {
+    if (hasKids && e.target.classList.contains('twist')) {
+      wrap.classList.toggle('collapsed'); return;
+    }
+    if (hasKids) wrap.classList.toggle('collapsed');
+    select(node, fam, row);
+  });
+
+  wrap.appendChild(row);
+
+  if (hasKids) {
+    const kidsWrap = document.createElement('div');
+    kidsWrap.className = 'node-children';
+    node.kids.forEach(k => kidsWrap.appendChild(buildNode(k, fam)));
+    wrap.appendChild(kidsWrap);
+  }
+  return wrap;
+}
+
+// path of moves from root to node (for movepath display + prev fen)
+function findPath(node, target, acc=[]) {
+  const here = [...acc, node];
+  if (node === target) return here;
+  if (node.kids) for (const k of node.kids) {
+    const r = findPath(k, target, here);
+    if (r) return r;
+  }
+  return null;
+}
+
+function select(node, fam, row) {
+  if (selectedRow) selectedRow.classList.remove('selected');
+  row.classList.add('selected');
+  selectedRow = row;
+
+  const path = findPath(TREE, node) || [node];
+  const prevFen = path.length >= 2 ? path[path.length-2].fen : null;
+  renderBoard(node.fen, prevFen);
+
+  // move path text
+  const moves = path.filter(n => n.mv).map(n => n.mv).join('  ');
+  document.getElementById('movepath').innerHTML = moves
+    ? moves.replace(/(\d+\.(?:\.\.)?)/g, '<b>$1</b>')
+    : '<i>position de départ</i>';
+
+  const info = document.getElementById('info');
+  const famTag = fam ? `<span class="pill" style="background:${famColor(fam)}22;color:${famColor(fam)}">${FAMILIES[fam].name}</span>` : '';
+  const eco = node.eco ? `<span class="eco">${node.eco}</span>` : '';
+  info.innerHTML = `
+    <h2>${node.lbl}</h2>
+    <div class="meta">${famTag}${eco}</div>
+    <div class="idea">${node.idea || ''}</div>`;
+}
+
+// ── legend / family filter ──
+const activeFams = new Set(Object.keys(FAMILIES));
+function buildLegend() {
+  const el = document.getElementById('legend');
+  Object.entries(FAMILIES).forEach(([key, f]) => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.innerHTML = `<span class="dot" style="background:${f.color}"></span>${f.name}`;
+    chip.addEventListener('click', () => {
+      if (activeFams.has(key)) { activeFams.delete(key); chip.classList.add('off'); }
+      else { activeFams.add(key); chip.classList.remove('off'); }
+      applyFilter();
+    });
+    el.appendChild(chip);
+  });
+}
+function applyFilter() {
+  document.querySelectorAll('.row').forEach(r => {
+    const f = r.dataset.fam;
+    if (!f) { r.classList.remove('hidden-fam'); return; } // structural nodes always visible
+    r.classList.toggle('hidden-fam', !activeFams.has(f));
+  });
+}
+
+// ── init ──
+// mark depth-1 nodes to stay open
+TREE.kids.forEach(k => k.depth1 = true);
+document.getElementById('tree').appendChild(buildNode(TREE));
+buildLegend();
+// default selection
+renderBoard(START, null);
+document.getElementById('movepath').innerHTML = '<i>position de départ</i>';
+document.getElementById('info').innerHTML = `<h2>Position initiale</h2><div class="meta"></div><div class="idea">${TREE.idea}</div>`;
+document.querySelector('.row').classList.add('selected');
+selectedRow = document.querySelector('.row');
+</script>
+</body>
+</html>

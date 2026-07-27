@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '120';
+window.APP_VERSION = '121';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -236,6 +236,30 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   <div class="panel-body">
     <p class="concepts-intro">Tour d'horizon des grandes ouvertures, classées du plus simple au plus exigeant. Une ouverture, ce sont les premiers coups : on cherche à <b>contrôler le centre</b>, <b>développer ses pièces</b> et <b>mettre son roi en sécurité</b>. Cliquez sur une ouverture pour parcourir ses coups un par un sur l'échiquier.</p>
     <div class="concepts-grid" id="openings-list"></div>
+  </div>
+</div>
+
+<div class="panel panel-wide" id="panel-tree" hidden>
+  <div class="panel-header">
+    <h2>🌳 Arbre des ouvertures</h2>
+    <button class="panel-close" aria-label="Fermer">&times;</button>
+  </div>
+  <div class="panel-body ot-body">
+    <p class="concepts-intro">Explore les ouvertures en arbre : chaque premier coup ouvre une branche, colorée par famille. Clique une carte pour voir la position, l'idée, et l'ouvrir dans l'explorateur de l'app ou sur Chess.com. Le chevron ◀ déplie/replie une branche ; glisse le fond pour te déplacer.</p>
+    <div class="ot-toolbar">
+      <div class="ot-legend" id="ot-legend"></div>
+      <div class="ot-toolbar-btns">
+        <button class="ot-btn" id="ot-expand" type="button">Tout déplier</button>
+        <button class="ot-btn" id="ot-collapse" type="button">Replier</button>
+      </div>
+    </div>
+    <div class="ot-canvas" id="ot-canvas">
+      <div class="ot-content" id="ot-content">
+        <svg class="ot-links" id="ot-links"></svg>
+        <div id="ot-tree"></div>
+      </div>
+    </div>
+    <div class="ot-detail" id="ot-detail"></div>
   </div>
 </div>
 
@@ -567,6 +591,14 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
+    <button class="learn-tile" data-panel="tree">
+      <div class="learn-tile-icon">🌳</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Arbre des ouvertures</span>
+        <span class="learn-tile-sub">Toutes les familles en un coup d'œil, en arbre : pion roi, pion dame, flanc… et un lien direct vers chaque ouverture.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
     <button class="learn-tile" data-panel="notation">
       <div class="learn-tile-icon">♟</div>
       <div class="learn-tile-txt">
@@ -625,7 +657,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 // blocking semantics of static <script> tags.
 ['js/chess.min.js', 'js/board.js', 'js/engine.js', 'js/openings.js',
  'js/analysis.js', 'js/training.js', 'js/guess.js', 'js/endgame.js',
- 'js/tactics.js', 'js/repertoire.js', 'js/courses.js', 'js/coach.js', 'js/app.js']
+ 'js/tactics.js', 'js/repertoire.js', 'js/courses.js', 'js/opening-tree.js', 'js/coach.js', 'js/app.js']
   .forEach(function (src) { document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>'); });
 </script>
 <script>
