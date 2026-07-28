@@ -2964,7 +2964,7 @@ body.guess-open { overflow: hidden; }
 /* Paysage sur petit écran : la hauteur est rare mais la largeur abonde.
    On bascule en grille — toolbar en haut, ARBRE à gauche (pleine hauteur),
    DÉTAIL en colonne à droite — pour ne pas gâcher la hauteur avec le détail. */
-@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+@media (orientation: landscape) and (max-height: 600px) {
   .ot-body .concepts-intro, .ot-rotate-hint { display: none; }
   .panel-body.ot-body {
     display: grid;
@@ -2975,6 +2975,7 @@ body.guess-open { overflow: hidden; }
   }
   .ot-toolbar { grid-column: 1 / -1; grid-row: 1; }
   .ot-canvas { grid-column: 1; grid-row: 2; min-height: 0; }
+  .ot-subtree { align-items: flex-start; }
   .ot-detail {
     grid-column: 2; grid-row: 2;
     flex-direction: column;
