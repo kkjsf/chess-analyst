@@ -108,9 +108,51 @@ const OpeningTree = (() => {
     ]
   };
 
-  let built = false, selectedCard = null;
+  let built = false, selectedCard = null, landscapeLocked = false;
   const active = new Set(Object.keys(FAM));
   const famColor = f => f ? FAM[f].color : '#6b7a99';
+
+  // ── Forçage du paysage (Android PWA installée : contourne le WebAPK figé) ──
+  async function lockLandscape() {
+    const so = screen.orientation;
+    if (!so || !so.lock) return false;
+    try { await so.lock('landscape'); return true; }
+    catch (_) {
+      // Certains navigateurs exigent le plein écran avant de verrouiller.
+      try {
+        const el = document.documentElement;
+        if (el.requestFullscreen) { await el.requestFullscreen(); await so.lock('landscape'); return true; }
+      } catch (_) {}
+    }
+    return false;
+  }
+  function unlockOrientation() {
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (_) {}
+    if (document.fullscreenElement && document.exitFullscreen) { try { document.exitFullscreen(); } catch (_) {} }
+  }
+  async function toggleLandscape() {
+    const btn = document.getElementById('ot-landscape');
+    if (!landscapeLocked) {
+      const ok = await lockLandscape();
+      if (ok) { landscapeLocked = true; if (btn) btn.textContent = '⟳ Portrait'; setTimeout(draw, 350); }
+      else if (btn) { btn.textContent = 'Rotation indispo'; setTimeout(() => { btn.textContent = '⟳ Paysage'; }, 1900); }
+    } else {
+      unlockOrientation(); landscapeLocked = false; if (btn) { btn.textContent = '⟳ Paysage'; } setTimeout(draw, 350);
+    }
+  }
+  // Déverrouille l'orientation quand le panneau se ferme (ne pas piéger le reste de l'app en paysage).
+  function observePanelClose() {
+    const p = document.getElementById('panel-tree');
+    if (!p || p._otObs) return;
+    const obs = new MutationObserver(() => {
+      if (!p.classList.contains('open') && landscapeLocked) {
+        unlockOrientation(); landscapeLocked = false;
+        const b = document.getElementById('ot-landscape'); if (b) b.textContent = '⟳ Paysage';
+      }
+    });
+    obs.observe(p, { attributes: true, attributeFilter: ['class'] });
+    p._otObs = true;
+  }
 
   function findPath(node, target, acc = []) {
     const here = [...acc, node];
@@ -259,6 +301,9 @@ const OpeningTree = (() => {
     };
     const rotClose = document.getElementById('ot-rotate-close');
     if (rotClose) rotClose.onclick = () => { const h = document.getElementById('ot-rotate-hint'); if (h) h.classList.add('dismissed'); };
+    const lsBtn = document.getElementById('ot-landscape');
+    if (lsBtn) lsBtn.onclick = toggleLandscape;
+    observePanelClose();
     window.addEventListener('resize', draw);
     // orientationchange fires before the viewport settles — redraw once it has.
     window.addEventListener('orientationchange', () => setTimeout(draw, 320));

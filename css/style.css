@@ -2896,10 +2896,15 @@ body.guess-open { overflow: hidden; }
 .ot-rotate-hint { display: none; }
 .ot-rotate-hint.dismissed { display: none !important; }
 
-/* Cibles tactiles plus larges (chevrons) */
+/* Bouton "Paysage" : seulement pertinent sur tactile (force la rotation) */
+.ot-btn-rotate { display: none; background: var(--accent); color: #14142a; border-color: var(--accent); font-weight: 700; }
+.ot-btn-rotate:hover { border-color: var(--accent); color: #14142a; }
+
+/* Cibles tactiles plus larges (chevrons) + bouton rotation visible */
 @media (pointer: coarse) {
   .ot-chev { width: 30px; height: 30px; right: -16px; font-size: 13px; }
   .ot-canvas { -webkit-overflow-scrolling: touch; }
+  .ot-btn-rotate { display: inline-flex; align-items: center; }
 }
 
 /* ── Mobile (téléphones) ── */

@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '124';
+window.APP_VERSION = '125';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -253,6 +253,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     <div class="ot-toolbar">
       <div class="ot-legend" id="ot-legend"></div>
       <div class="ot-toolbar-btns">
+        <button class="ot-btn ot-btn-rotate" id="ot-landscape" type="button">⟳ Paysage</button>
         <button class="ot-btn" id="ot-expand" type="button">Tout déplier</button>
         <button class="ot-btn" id="ot-collapse" type="button">Replier</button>
       </div>
