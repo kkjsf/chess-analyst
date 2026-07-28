@@ -257,7 +257,11 @@ const OpeningTree = (() => {
       document.querySelectorAll('.ot-subtree').forEach(s => { if (s._node && s._node !== TREE && s.querySelector(':scope > .ot-kids')) s.classList.add('collapsed'); });
       draw();
     };
+    const rotClose = document.getElementById('ot-rotate-close');
+    if (rotClose) rotClose.onclick = () => { const h = document.getElementById('ot-rotate-hint'); if (h) h.classList.add('dismissed'); };
     window.addEventListener('resize', draw);
+    // orientationchange fires before the viewport settles — redraw once it has.
+    window.addEventListener('orientationchange', () => setTimeout(draw, 320));
     built = true;
   }
 
@@ -268,6 +272,8 @@ const OpeningTree = (() => {
       draw();
       if (!selectedCard) select(TREE, null, document.querySelector('.ot-card.root'));
       draw();
+      const cv = document.getElementById('ot-canvas'); // démarrer sur la racine (haut-gauche)
+      if (cv) { cv.scrollTop = 0; cv.scrollLeft = 0; }
     });
   }
 

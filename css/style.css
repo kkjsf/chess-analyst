@@ -2892,7 +2892,108 @@ body.guess-open { overflow: hidden; }
 .ot-link-cc { background: var(--bg-elevated); color: var(--text); }
 .ot-link-cc:hover { border-color: var(--accent); color: var(--accent); }
 
+/* Bandeau "passe en paysage" — visible seulement sur mobile portrait */
+.ot-rotate-hint { display: none; }
+.ot-rotate-hint.dismissed { display: none !important; }
+
+/* Cibles tactiles plus larges (chevrons) */
+@media (pointer: coarse) {
+  .ot-chev { width: 30px; height: 30px; right: -16px; font-size: 13px; }
+  .ot-canvas { -webkit-overflow-scrolling: touch; }
+}
+
+/* ── Mobile (téléphones) ── */
 @media (max-width: 720px) {
-  .ot-detail { flex-direction: column; align-items: stretch; }
+  .panel-body.ot-body { padding: 10px 12px; gap: 9px; }
+  /* L'intro explicative prend trop de hauteur sur petit écran : le bandeau
+     paysage + les cartes se comprennent seuls. On la masque au profit de l'arbre. */
+  .ot-body .concepts-intro { display: none; }
+
+  .ot-toolbar { gap: 7px; }
+  .ot-legend { gap: 5px; }
+  .ot-chip { font-size: 11px; padding: 4px 8px; }
+  .ot-toolbar-btns { margin-left: 0; }
+  .ot-btn { font-size: 11.5px; padding: 6px 10px; }
+
+  /* Arbre plus compact : cartes et espacements réduits.
+     align-items:flex-start → la racine se cale en haut-gauche (point d'entrée
+     naturel dans un petit canvas scrollable) au lieu d'être centrée en bas. */
+  .ot-subtree { align-items: flex-start; }
+  .ot-content { padding: 18px 22px; }
+  .ot-kids { gap: 11px; margin-left: 46px; }
+  .ot-card { min-width: 140px; max-width: 200px; padding: 8px 10px; gap: 8px; border-radius: 11px; }
+  .ot-ic { font-size: 21px; width: 32px; height: 32px; border-radius: 8px; }
+  .ot-tt { font-size: 12.5px; }
+  .ot-mv { font-size: 10.5px; }
+
+  /* Détail empilé et compact */
+  .ot-detail { flex-direction: column; align-items: stretch; gap: 9px; min-height: 0; padding: 11px 12px; max-height: 36vh; overflow-y: auto; }
   .ot-detail .ot-dboard { width: 104px; height: 104px; align-self: center; }
+  .ot-txt h3 { font-size: 15px; }
+  .ot-idea { font-size: 12.5px; }
+  .ot-actions { flex-direction: column; }
+  .ot-link { justify-content: center; padding: 10px 13px; }
+
+  /* Bandeau paysage visible en portrait uniquement */
+  .ot-rotate-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--text);
+    background: rgba(226,184,87,0.1);
+    border: 1px solid var(--accent-dim);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .ot-rotate-hint b { color: var(--accent); }
+  .ot-rotate-close {
+    margin-left: auto;
+    flex: none;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+  }
+}
+
+/* Paysage sur petit écran : la hauteur est rare mais la largeur abonde.
+   On bascule en grille — toolbar en haut, ARBRE à gauche (pleine hauteur),
+   DÉTAIL en colonne à droite — pour ne pas gâcher la hauteur avec le détail. */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  .ot-body .concepts-intro, .ot-rotate-hint { display: none; }
+  .panel-body.ot-body {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .ot-toolbar { grid-column: 1 / -1; grid-row: 1; }
+  .ot-canvas { grid-column: 1; grid-row: 2; min-height: 0; }
+  .ot-detail {
+    grid-column: 2; grid-row: 2;
+    flex-direction: column;
+    align-items: stretch;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow-y: auto;
+    gap: 8px;
+    padding: 10px;
+  }
+  .ot-detail .ot-dboard { width: 108px; height: 108px; align-self: center; }
+  .ot-txt h3 { font-size: 15px; }
+  .ot-idea { font-size: 12.5px; }
+  .ot-actions { flex-direction: column; }
+  .ot-link { justify-content: center; }
+  /* cartes un peu réduites (la règle ≤720px ne s'applique pas à 812px de large) */
+  .ot-card { min-width: 150px; max-width: 210px; padding: 9px 11px; }
+  .ot-ic { font-size: 22px; width: 34px; height: 34px; }
+  .ot-tt { font-size: 13px; }
+  .ot-kids { gap: 12px; margin-left: 52px; }
 }
