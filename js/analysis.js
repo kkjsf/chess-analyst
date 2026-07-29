@@ -79,13 +79,17 @@ const Analyzer = (() => {
   // capture (1-ply static-exchange approximation: victim value minus the value
   // of whatever recaptures on that square). Used to tell whether the move that
   // just produced `fen` left a piece en prise — i.e. was a real sacrifice.
-  function opponentCanWin(fen) {
+  // After the mover has played, it is the opponent to move. Return the best net
+  // material the opponent can win by immediately capturing the piece the mover
+  // just moved to (a 1-ply SEE approximation). Tying the sacrifice to the moved
+  // piece is what separates a genuine offer from an unrelated piece that was
+  // already hanging — only the former can be a brilliancy.
+  function sacrificedOnMove(fen, movedTo) {
     let g;
     try { g = new Chess(fen); } catch (_) { return 0; }
-    const caps = g.moves({ verbose: true }).filter(m => m.captured);
-    let bestNet = 0;
-    for (const cap of caps) {
-      if (cap.captured === 'k') continue;
+    let best = 0;
+    for (const cap of g.moves({ verbose: true })) {
+      if (!cap.captured || cap.captured === 'k' || cap.to !== movedTo) continue;
       const gain = PIECE_VALUES[cap.captured] || 0;
       let recapVal = 0;
       try {
@@ -96,9 +100,9 @@ const Analyzer = (() => {
         recapVal = recap ? (PIECE_VALUES[c2.piece] || 0) : 0;
       } catch (_) { continue; }
       const net = gain - recapVal;
-      if (net > bestNet) bestNet = net;
+      if (net > best) best = net;
     }
-    return bestNet;
+    return best;
   }
 
   function parseFenBoard(fen) {
@@ -469,8 +473,8 @@ const Analyzer = (() => {
 
   function generateSummary(results, moves) {
     const stats = {
-      w: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 },
-      b: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 }
+      w: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, forced: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 },
+      b: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, forced: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 }
     };
     let keyMoment = null;
 
@@ -491,6 +495,7 @@ const Analyzer = (() => {
       if (r.type === 'excellent') stats[side].excellent++;
       if (r.type === 'good') stats[side].good++;
       if (r.type === 'book') stats[side].book++;
+      if (r.type === 'forced') stats[side].forced++;
       if (r.type === 'inaccuracy') stats[side].inaccuracies++;
       if (r.type === 'miss') stats[side].misses++;
       if (r.type === 'mistake') stats[side].mistakes++;
@@ -621,11 +626,11 @@ const Analyzer = (() => {
     const acplOf = (k) => phaseCp[k].count ? Math.round(phaseCp[k].total / phaseCp[k].count) : 0;
     const mq = {
       brilliant: us.brilliants || 0, best: us.best || 0, great: us.great || 0,
-      excellent: us.excellent || 0, good: us.good || 0, book: us.book || 0,
+      excellent: us.excellent || 0, good: us.good || 0, book: us.book || 0, forced: us.forced || 0,
       inaccuracy: us.inaccuracies || 0, miss: us.misses || 0, mistake: us.mistakes || 0, blunder: us.blunders || 0,
       moveCount: us.moveCount || 0
     };
-    mq.ok = Math.max(0, mq.moveCount - (mq.brilliant + mq.best + mq.great + mq.excellent + mq.good + mq.book + mq.inaccuracy + mq.miss + mq.mistake + mq.blunder));
+    mq.ok = Math.max(0, mq.moveCount - (mq.brilliant + mq.best + mq.great + mq.excellent + mq.good + mq.book + mq.forced + mq.inaccuracy + mq.miss + mq.mistake + mq.blunder));
 
     const time = computeTimeStats(results, info, side, blunders.map(b => b.ply));
 
@@ -741,6 +746,7 @@ const Analyzer = (() => {
       let cpLoss = 0;
       let bestMoveSanFr = null;
       let bestMoveUci = null;
+      let bestMovePv = null;
       let evalForWhite = null;
       let winPctLoss = 0;
       let winBefore = 0.5, winAfterPlayed = 0.5, onlyMoveGap = 0;
@@ -751,6 +757,7 @@ const Analyzer = (() => {
 
         if (evalBefore.bestMove) {
           bestMoveUci = evalBefore.bestMove;
+          bestMovePv = evalBefore.pv || null;
           const sanRaw = uciToSan(positions[i], bestMoveUci);
           if (sanRaw) bestMoveSanFr = toFrench(sanRaw);
         }
@@ -825,13 +832,19 @@ const Analyzer = (() => {
       const wpl = winPctLoss;
       const inBook = bookDepth && i < bookDepth;
       const noEngine = !(evalBefore && evalAfter);
-      // A "good piece sacrifice" for Brilliant: after the move the opponent can
-      // grab ≥ 2 net material (you left a piece en prise, or gave one up that
-      // isn't immediately regained — matChange only spans your own ply so it can
-      // never go negative, which is why the old `matChange<=-2` never fired).
-      // Combined below with: the move is still strong (wpl<0.05), you stay at
-      // least equal, and you weren't already trivially winning.
-      const isSacrifice = !noEngine && opponentCanWin(newFen) >= 2;
+      // A "good piece sacrifice" for Brilliant, tied to the move just played:
+      // the piece that moved is left en prise for net ≥ 2. Requiring the offer
+      // to be the moved piece stops an unrelated piece that was already hanging
+      // from being mistaken for a brilliancy. Combined below with soundness: the
+      // sac must be best/near-best, keep you at least equal, and you must not
+      // have been winning easily already — otherwise giving up material is a
+      // blunder, not a brilliant (the line between the two is thin).
+      const isSacrifice = !noEngine && sacrificedOnMove(newFen, madeMove.to) >= 2;
+      // Chess.com greys out a move as "Forced" (□) when the mover had only one
+      // legal move — it is neither skilful nor a blunder, so it must not be
+      // graded Best/Excellent (which would inflate accuracy).
+      let legalBefore = 0;
+      try { legalBefore = new Chess(positions[i]).moves().length; } catch (_) {}
       // A Miss (rather than a Blunder/Mistake) is failing to punish while
       // STAYING OK: you were winning and let the big edge slip, but you didn't
       // hand the game away. If the move leaves you clearly worse (winAfter below
@@ -843,7 +856,15 @@ const Analyzer = (() => {
       if (noEngine) {
         // Heuristic fallback path (no Stockfish) — keep it simple.
         type = madeMove.san.includes('#') ? 'best' : 'neutral';
-      } else if (isSacrifice && wpl < 0.05 && winAfterPlayed >= 0.50 && winBefore <= 0.97) {
+      } else if (legalBefore === 1) {
+        // Only one legal move — forced, regardless of how good the position is.
+        type = 'forced';
+      } else if (isSacrifice && !inBook && (isBestMove || wpl < 0.02) &&
+                 winAfterPlayed >= 0.50 && winBefore <= 0.85) {
+        // Sound sacrifice: objectively the best (or all-but-best) move, still at
+        // least equal afterwards, and not from an already-winning position — the
+        // sac has to be the point (winning material back, an attack, or mate),
+        // not a giveaway the engine merely tolerates.
         type = 'brilliant';
       } else if (wpl >= 0.20) {
         // Blunder — but if a winning move was on the board and you merely let the
@@ -875,6 +896,8 @@ const Analyzer = (() => {
       let tipFr;
       if (madeMove.san.includes('#')) {
         tipFr = `Échec et mat ! Les ${side} remportent la partie.`;
+      } else if (type === 'forced') {
+        tipFr = `Coup forcé — c'était le seul coup légal.${ed}`;
       } else if (type === 'brilliant') {
         tipFr = `Brillant ! Un sacrifice de matériel gagnant — le meilleur coup, et difficile à trouver.${ed}`;
       } else if (type === 'miss') {
@@ -987,7 +1010,7 @@ const Analyzer = (() => {
         move: madeMove, fen: newFen,
         materialDiff: newMaterial.diff, arrows,
         eval: evalForWhite, cpLoss, winPctLoss: winPctLoss || 0, alternatives, fenBefore: positions[i],
-        bestUci: bestMoveUci, bestSan: bestMoveSanFr
+        bestUci: bestMoveUci, bestSan: bestMoveSanFr, bestPv: bestMovePv
       });
     }
 

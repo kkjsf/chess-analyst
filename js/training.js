@@ -2,8 +2,9 @@ const Training = (() => {
   const KEY = 'chess-analyst-training';
   // Bump when detectMotif's logic changes so the stored deck is re-tagged on
   // next load (see retagDeck). v2: fork-with-check is now verified past the
-  // opponent's parry instead of on the in-check position.
-  const CLASSIFIER_VERSION = 2;
+  // opponent's parry instead of on the in-check position. v3: pin/skewer/
+  // discovered-attack detection added (clouage / enfilade / découverte).
+  const CLASSIFIER_VERSION = 3;
   const MAX_ITEMS = 500;
   const NEW_PER_SESSION = 15;
   const DAY = 86400000;
@@ -16,13 +17,16 @@ const Training = (() => {
     prise: 'Pièce en prise',
     defense: 'Défense / parade',
     fourchette: 'Fourchette / double attaque',
+    clouage: 'Clouage',
+    enfilade: 'Enfilade',
+    decouverte: 'Attaque à la découverte',
     gain: 'Gain de matériel',
     attaque: 'Attaque / échec',
     positionnel: 'Jeu positionnel',
     manoeuvre: 'Jeu positionnel', // legacy alias for decks built before v50
   };
-  const MOTIF_ORDER = ['mat', 'prise', 'defense', 'fourchette', 'gain', 'attaque', 'positionnel'];
-  const TACTICAL = ['mat', 'prise', 'defense', 'fourchette', 'gain', 'attaque'];
+  const MOTIF_ORDER = ['mat', 'prise', 'defense', 'fourchette', 'clouage', 'enfilade', 'decouverte', 'gain', 'attaque', 'positionnel'];
+  const TACTICAL = ['mat', 'prise', 'defense', 'fourchette', 'clouage', 'enfilade', 'decouverte', 'gain', 'attaque'];
 
   // ───────────────────────── storage ─────────────────────────
   function load() {
@@ -30,6 +34,61 @@ const Training = (() => {
   }
   function save(items) {
     try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (_) {}
+  }
+
+  // ───────────────────────── randomisation ─────────────────────────
+  // Fisher-Yates in-place shuffle. Used to vary the puzzle order every session
+  // so you don't keep replaying the same old mistakes in the same sequence.
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  // Pick n items from pool, biased toward bigger mistakes (weight) but not
+  // deterministic — so the important errors stay likely without the session
+  // being the exact same top-cpLoss cards in the same order every time.
+  function weightedSample(pool, n, weightFn) {
+    const items = pool.slice();
+    const picked = [];
+    while (picked.length < n && items.length) {
+      let total = 0;
+      for (const it of items) total += Math.max(1, weightFn(it));
+      let r = Math.random() * total, idx = 0;
+      for (; idx < items.length - 1; idx++) {
+        r -= Math.max(1, weightFn(items[idx]));
+        if (r <= 0) break;
+      }
+      picked.push(items.splice(idx, 1)[0]);
+    }
+    return picked;
+  }
+
+  // ─────────────────── relevance weighting ───────────────────
+  // A card matters more when (a) it cost a lot (cpLoss), (b) it's a mistake you
+  // make OFTEN — a recurring leak, not a one-off — and (c) it's recent. We fold
+  // all three into the sampling weight so the session leans on your real
+  // weaknesses without ever going fully deterministic.
+  function cardTime(it) {
+    const d = it.date ? Date.parse(String(it.date).replace(/\./g, '-')) : NaN;
+    return isNaN(d) ? (it.savedAt || 0) : d;
+  }
+  function weightContext(pool) {
+    const total = pool.length || 1;
+    const share = {};
+    for (const it of pool) share[it.motif] = (share[it.motif] || 0) + 1;
+    for (const k in share) share[k] /= total;
+    let tmin = Infinity, tmax = -Infinity;
+    for (const it of pool) { const t = cardTime(it); if (t < tmin) tmin = t; if (t > tmax) tmax = t; }
+    return { share, tmin, tmax };
+  }
+  function cardWeight(it, ctx) {
+    const base = (it.cpLoss || 0) + 50;
+    const motifFactor = 1 + 2 * (ctx.share[it.motif] || 0);          // recurring leak → heavier
+    let recency = 1;
+    if (ctx.tmax > ctx.tmin) recency = 1 + 2 * ((cardTime(it) - ctx.tmin) / (ctx.tmax - ctx.tmin)); // newest ~3×
+    return base * motifFactor * recency;
   }
 
   // Re-tag every stored card with the current classifier, once per version bump.
@@ -185,6 +244,65 @@ const Training = (() => {
     return false;
   }
 
+  // ── pin / skewer / discovered geometry (board-scan, chess.js .board()) ──
+  const SLIDER_DIRS = {
+    b: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
+    r: [[-1, 0], [1, 0], [0, -1], [0, 1]],
+    q: [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]],
+  };
+  function sqToRC(sq) { return [8 - parseInt(sq[1], 10), sq.charCodeAt(0) - 97]; }
+  function firstAlong(board, r, c, dr, dc) {
+    let rr = r + dr, cc = c + dc;
+    while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8) {
+      if (board[rr][cc]) return { p: board[rr][cc], r: rr, c: cc };
+      rr += dr; cc += dc;
+    }
+    return null;
+  }
+  // Does the slider `side` just moved to `toSq` pin or skewer two enemy pieces
+  // on the same line? Pin = the back piece is worth more (or is the king);
+  // skewer = the front piece is worth more. Returns 'clouage'|'enfilade'|null.
+  function pinOrSkewerByMove(afterFen, toSq, side) {
+    let g; try { g = new Chess(afterFen); } catch (_) { return null; }
+    const board = g.board();
+    const [r, c] = sqToRC(toSq);
+    const piece = board[r][c];
+    if (!piece || piece.color !== side) return null;
+    const dirs = SLIDER_DIRS[piece.type];
+    if (!dirs) return null;
+    const opp = side === 'w' ? 'b' : 'w';
+    for (const [dr, dc] of dirs) {
+      const first = firstAlong(board, r, c, dr, dc);
+      if (!first || first.p.color !== opp) continue;
+      const second = firstAlong(board, first.r, first.c, dr, dc);
+      if (!second || second.p.color !== opp) continue;
+      const v1 = PIECE_VALUES[first.p.type] || 0;
+      const v2 = second.p.type === 'k' ? 1000 : (PIECE_VALUES[second.p.type] || 0);
+      if (v2 > v1 && v1 >= 3) return 'clouage';   // front piece pinned to a bigger one / king
+      if (v1 > v2 && v1 >= 5) return 'enfilade';  // front piece forced to move, loses the one behind
+    }
+    return null;
+  }
+  // Moving off `fromSq` unveils a friendly slider onto a heavy enemy piece or
+  // the king sitting on the opposite side of that square — a discovered attack.
+  function discoveredByMove(fromSq, afterFen, side) {
+    let g; try { g = new Chess(afterFen); } catch (_) { return null; }
+    const board = g.board();
+    const [r, c] = sqToRC(fromSq);
+    const opp = side === 'w' ? 'b' : 'w';
+    const rays = [[-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dr, dc] of rays) {
+      const diagonal = dr !== 0 && dc !== 0;
+      const slideType = diagonal ? ['b', 'q'] : ['r', 'q'];
+      const a = firstAlong(board, r, c, dr, dc);
+      const b = firstAlong(board, r, c, -dr, -dc);
+      const chk = (s, t) => s && t && s.p.color === side && slideType.includes(s.p.type) &&
+        t.p.color === opp && (t.p.type === 'k' || (PIECE_VALUES[t.p.type] || 0) >= 5);
+      if (chk(a, b) || chk(b, a)) return 'decouverte';
+    }
+    return null;
+  }
+
   // A CHECKING move only forks if the target survives the parry. The old test
   // judged "is the target defended?" on the position that is still IN CHECK,
   // where chess.js only yields check-parrying moves — so real defenders were
@@ -324,6 +442,16 @@ const Training = (() => {
       }
     }
 
+    // Pin / skewer created by the moved slider (tied to the move, and only if
+    // the slider isn't simply hanging — same guard as the fork test).
+    if (!pieceWinnable(after, forkSq, side)) {
+      const ps = pinOrSkewerByMove(after, forkSq, side);
+      if (ps) return ps;
+    }
+    // Discovered attack: vacating move.from unveils a friendly slider onto a
+    // heavy enemy piece or the king.
+    if (discoveredByMove(move.from, after, side)) return 'decouverte';
+
     if (move.captured && PIECE_VALUES[move.captured] >= 3) return 'gain';
     if (givesCheck) return 'attaque';
     if (move.captured) return 'gain';
@@ -432,7 +560,7 @@ const Training = (() => {
         bestUci: r.bestUci, bestSan: r.bestSan || '',
         playedSan: r.sanFr || r.san, type: r.type, cpLoss: r.cpLoss || 0,
         motif: detectMotif(r.fenBefore, r.bestUci, user, r.sanFr || r.san),
-        moveNo: Math.floor(i / 2) + 1, white, black, date,
+        moveNo: Math.floor(i / 2) + 1, white, black, date, pv: r.bestPv || '',
       });
     }
     mergeItems(base);
@@ -454,7 +582,7 @@ const Training = (() => {
         playedSan: b.playedSan || '', type: b.type, cpLoss: b.cpLoss || 0,
         motif: detectMotif(b.fenBefore, b.bestUci, meta.side, b.playedSan),
         moveNo: Math.floor(b.ply / 2) + 1,
-        white: meta.white || '?', black: meta.black || '?', date: meta.date || '',
+        white: meta.white || '?', black: meta.black || '?', date: meta.date || '', pv: b.bestPv || '',
       });
     }
     return mergeItems(base);
@@ -464,7 +592,7 @@ const Training = (() => {
   // by id and by position signature (so the same mistake seen via the single
   // analyzer and via Coach doesn't become two cards), and never evicts cards
   // already in review when capping.
-  const MUTABLE = ['bestSan', 'playedSan', 'type', 'cpLoss', 'motif', 'moveNo', 'white', 'black', 'date'];
+  const MUTABLE = ['bestSan', 'playedSan', 'type', 'cpLoss', 'motif', 'moveNo', 'white', 'black', 'date', 'pv'];
   function mergeItems(base) {
     base = base.filter(isCleanPuzzle);
     if (!base.length) return 0;
@@ -499,12 +627,15 @@ const Training = (() => {
   function buildSession() {
     const now = Date.now();
     const all = load().filter(isCleanPuzzle);
-    const reviews = all.filter(it => (it.reps || 0) > 0 && (it.due || 0) <= now)
-      .sort((a, b) => (a.due || 0) - (b.due || 0));
-    const fresh = all.filter(it => (it.reps || 0) === 0 && (it.due || 0) <= now)
-      .sort((a, b) => (b.cpLoss || 0) - (a.cpLoss || 0))
-      .slice(0, NEW_PER_SESSION);
-    return reviews.concat(fresh);
+    const reviews = all.filter(it => (it.reps || 0) > 0 && (it.due || 0) <= now);
+    const freshPool = all.filter(it => (it.reps || 0) === 0 && (it.due || 0) <= now);
+    // Weighted-random draw of new cards — leaning on costly, RECURRING and
+    // RECENT mistakes (see cardWeight) rather than always the same biggest
+    // cpLoss cards. Both groups shuffled so the sequence differs every session;
+    // reviews stay ahead of new cards, only their internal order is randomised.
+    const ctx = weightContext(freshPool);
+    const fresh = weightedSample(freshPool, NEW_PER_SESSION, it => cardWeight(it, ctx));
+    return shuffle(reviews).concat(shuffle(fresh));
   }
 
   function dueCount() {
@@ -561,9 +692,54 @@ const Training = (() => {
 
   // ───────────────────────── PUZZLES tab ─────────────────────────
   let queue = [], qi = 0, current = null, solved = false, motifFilter = null;
+  // Multi-move solution state: the line to play, which step we're on, and the
+  // live position after the steps already solved.
+  let solLine = [], solStep = 0, liveFen = null, checking = false;
   // Bumped on every puzzle render; a late engine continuation checks it so its
   // text never lands on the next puzzle the user has already moved to.
   let explainToken = 0;
+
+  // Turn a stored PV (UCI plies, mover to move first) into a drill line: each of
+  // the mover's moves paired with the opponent's forced reply from the PV. Caps
+  // at 3 mover moves so a puzzle stays a puzzle, and stops at a mate. Falls back
+  // to the single best move when there's no usable PV — which is every card
+  // built before PVs were stored, so those behave exactly as before.
+  function buildSolutionLine(item) {
+    const single = [{ moverUci: item.bestUci, replyUci: null }];
+    if (!item.pv) return single;
+    const plies = String(item.pv).trim().split(/\s+/).filter(Boolean);
+    if (plies.length < 3) return single;
+    const out = [];
+    try {
+      const g = new Chess(item.fen);
+      let pending = null;
+      for (let k = 0; k < plies.length && out.length < 3; k++) {
+        const u = plies[k];
+        const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] || 'q' });
+        if (!m) break;
+        if (k % 2 === 0) { pending = { moverUci: u, replyUci: null }; out.push(pending); if (m.san.includes('#')) break; }
+        else if (pending) pending.replyUci = u;
+      }
+    } catch (_) { return single; }
+    if (!out.length || out[0].moverUci !== item.bestUci) return single;
+    return out.length >= 2 ? out : single;
+  }
+
+  // Is `played` as good as the intended move `wantUci` in `fen`? Asks Stockfish
+  // (already warm) for the top lines and accepts the played move when it's within
+  // a hair of the best — so a second, equally-winning move isn't marked wrong.
+  // Returns false (fall back to exact-match) when the engine isn't ready.
+  async function moveIsEquivalent(fen, played, wantUci) {
+    if (typeof StockfishEngine === 'undefined' || !StockfishEngine.isReady()) return false;
+    let res;
+    try { res = await StockfishEngine.evaluate(fen, 'movetime 300'); } catch (_) { return false; }
+    if (!res || !res.lines || !res.lines.length) return false;
+    const playedUci = played.from + played.to + (played.promotion || '');
+    if (playedUci === wantUci) return true;
+    const line = res.lines.find(l => l && l.move === playedUci);
+    if (!line) return false;
+    return (res.lines[0].score - line.score) <= 30; // within ~0.3 pawn of the best line
+  }
 
   function startPuzzles() {
     queue = motifFilter ? motifQueue(motifFilter) : buildSession();
@@ -574,10 +750,15 @@ const Training = (() => {
   // Drill one motif: due cards of that motif first, then biggest mistakes.
   function motifQueue(m) {
     const now = Date.now();
-    return load().filter(it => it.motif === m && isCleanPuzzle(it))
-      .sort((a, b) => (((a.due || 0) <= now ? 0 : 1) - ((b.due || 0) <= now ? 0 : 1))
-        || ((b.cpLoss || 0) - (a.cpLoss || 0)))
-      .slice(0, 20);
+    const pool = load().filter(it => it.motif === m && isCleanPuzzle(it));
+    // Due cards first (shuffled), then fill up to 20 with a weighted-random draw
+    // of the rest — so drilling a motif varies each time rather than always the
+    // same 20 in the same cpLoss order.
+    const due = shuffle(pool.filter(it => (it.due || 0) <= now));
+    const rest = pool.filter(it => (it.due || 0) > now);
+    const ctx = weightContext(rest);
+    const fill = weightedSample(rest, Math.max(0, 20 - due.length), it => cardWeight(it, ctx));
+    return due.concat(shuffle(fill)).slice(0, 20);
   }
 
   function drillMotif(m) {
@@ -618,10 +799,15 @@ const Training = (() => {
     solved = false;
     explainToken++;
     warmEngine();
+    solLine = buildSolutionLine(current);
+    solStep = 0;
+    liveFen = current.fen;
+    checking = false;
+    const multi = solLine.length >= 2;
     const flip = current.side === 'b';
     host.innerHTML = bannerHtml() + `
       <div class="train-progress">Puzzle ${qi + 1} / ${queue.length}</div>
-      <div class="train-prompt">Trait aux <b>${current.side === 'w' ? 'Blancs' : 'Noirs'}</b> — trouve le meilleur coup.</div>
+      <div class="train-prompt">Trait aux <b>${current.side === 'w' ? 'Blancs' : 'Noirs'}</b> — trouve ${multi ? `la combinaison (${solLine.length} coups)` : 'le meilleur coup'}.</div>
       <div class="train-board-wrap">
         <svg class="train-board" viewBox="0 0 360 360" id="train-board"></svg>
         <svg class="train-board" viewBox="0 0 360 360" id="train-arrows"></svg>
@@ -640,59 +826,118 @@ const Training = (() => {
     attachBoardClicks();
 
     $('#puz-hint').onclick = () => {
-      BoardRenderer.highlightSquares(arrows, [current.bestUci.slice(0, 2)], '#5b8fb9');
+      const u = (solLine[solStep] || {}).moverUci || current.bestUci;
+      BoardRenderer.highlightSquares(arrows, [u.slice(0, 2)], '#5b8fb9');
     };
     $('#puz-reveal').onclick = () => revealSolution(false);
     bindBanner();
   }
 
-  function attemptMove(from, to) {
-    if (solved) return;
-    const want = current.bestUci;
-    // Try the played move so we can accept equally-winning alternatives: a move
-    // that delivers checkmate is objectively best (mate can't be beaten), so any
-    // legal mating move counts even when it isn't the exact engine line stored.
+  function setFeedback(cls, html) {
+    const fb = $('#train-feedback');
+    if (fb) { fb.className = 'train-feedback ' + cls; fb.innerHTML = html; }
+  }
+
+  async function attemptMove(from, to) {
+    if (solved || checking) return;
+    const step = solLine[solStep] || { moverUci: current.bestUci, replyUci: null };
+    const want = step.moverUci;
     let played = null;
     try {
-      const g = new Chess(current.fen);
+      const g = new Chess(liveFen);
       played = g.move({ from, to, promotion: 'q' });
     } catch (_) {}
     const legal = !!played;
-    if ((from === want.slice(0, 2) && to === want.slice(2, 4)) || (played && played.san.includes('#'))) {
-      revealSolution(true);
-    } else {
-      const fb = $('#train-feedback');
-      fb.className = 'train-feedback wrong';
-      fb.innerHTML = legal
-        ? `❌ Pas le meilleur coup. Réessaie, ou demande un indice.`
-        : `⚠️ Coup illégal — clique la pièce puis sa case d'arrivée.`;
+    const exact = (from === want.slice(0, 2) && to === want.slice(2, 4));
+    const isLast = solStep >= solLine.length - 1;
+
+    // Exact intended move: finish (last step) or play on down the stored line.
+    if (exact) {
+      if (isLast) revealSolution(true);
+      else advanceStep();
+      return;
     }
+    // Any legal mate is objectively best — accept it whatever the stored line is.
+    if (played && played.san.includes('#')) { revealSolution(true, played); return; }
+    if (!legal) { setFeedback('wrong', `⚠️ Coup illégal — clique la pièce puis sa case d'arrivée.`); return; }
+
+    // Accept an equally-good alternative if the engine agrees it's within a hair
+    // of the intended move. For a multi-move line we can't keep the stored
+    // continuation after a divergence, so an accepted alternative just solves it.
+    setFeedback('', '⏳ Vérification…');
+    checking = true;
+    let ok = false;
+    try { ok = await moveIsEquivalent(liveFen, played, want); } finally { checking = false; }
+    if (solved) return; // user revealed / moved on while the engine thought
+    if (ok) revealSolution(true, played);
+    else setFeedback('wrong', `❌ Pas le meilleur coup. Réessaie, ou demande un indice.`);
   }
 
-  function revealSolution(correct) {
+  // Play the current step's mover move + the opponent's forced reply, advance to
+  // the next step, and prompt the user to continue the combination.
+  function advanceStep() {
+    const step = solLine[solStep];
+    try {
+      const g = new Chess(liveFen);
+      g.move({ from: step.moverUci.slice(0, 2), to: step.moverUci.slice(2, 4), promotion: step.moverUci[4] || 'q' });
+      let replySan = null;
+      if (step.replyUci) {
+        const rm = g.move({ from: step.replyUci.slice(0, 2), to: step.replyUci.slice(2, 4), promotion: step.replyUci[4] || 'q' });
+        replySan = rm ? enToFr(rm.san) : null;
+      }
+      liveFen = g.fen();
+      solStep++;
+      selected = null;
+      BoardRenderer.render(board, liveFen);
+      BoardRenderer.clearArrows(arrows);
+      setFeedback('right', `✔ Bien vu !${replySan ? ` L'adversaire répond <b>${replySan}</b>.` : ''} Continue — coup ${solStep + 1} sur ${solLine.length}.`);
+    } catch (_) { revealSolution(true); }
+  }
+
+  // `altMove` (optional) = an equally-good move the user played instead of the
+  // stored line; shown as also-correct.
+  function revealSolution(correct, altMove) {
     solved = true;
     onMove = null;
-    let move, afterFen = null;
+    // Play the whole solution line from the original puzzle position, collecting
+    // the SANs, the first move (for the board arrow) and the position right after
+    // it (what explainPuzzle reasons about — unchanged single-move behaviour).
+    let firstMove = null, afterFirstFen = null;
+    const lineSans = [];
     try {
       const g = new Chess(current.fen);
-      move = g.move({ from: current.bestUci.slice(0, 2), to: current.bestUci.slice(2, 4), promotion: current.bestUci[4] || 'q' });
-      afterFen = g.fen();
-      BoardRenderer.render(board, g.fen(), move);
+      for (let s = 0; s < solLine.length; s++) {
+        const mu = solLine[s].moverUci;
+        const m = g.move({ from: mu.slice(0, 2), to: mu.slice(2, 4), promotion: mu[4] || 'q' });
+        if (!m) break;
+        if (s === 0) { firstMove = m; afterFirstFen = g.fen(); }
+        lineSans.push(enToFr(m.san));
+        if (m.san.includes('#')) break;
+        const ru = solLine[s].replyUci;
+        if (ru) { const rm = g.move({ from: ru.slice(0, 2), to: ru.slice(2, 4), promotion: ru[4] || 'q' }); if (rm) lineSans.push(enToFr(rm.san)); }
+      }
+      if (afterFirstFen) BoardRenderer.render(board, afterFirstFen, firstMove);
     } catch (_) {}
     BoardRenderer.drawArrows(arrows, [{ from: current.bestUci.slice(0, 2), to: current.bestUci.slice(2, 4), color: '#56b886', opacity: 0.9, width: 7 }]);
 
     const fb = $('#train-feedback');
     fb.className = 'train-feedback ' + (correct ? 'right' : 'shown');
     const motif = MOTIF_LABELS[current.motif] || 'Tactique';
-    const bestFr = current.bestSan || (move ? enToFr(move.san) : '');
-    const head = correct
-      ? `✅ Bravo ! <b>${bestFr}</b> — motif : ${motif}.`
-      : `Solution : <b>${bestFr}</b> — motif : ${motif}.`;
-    const prose = explainPuzzle(current, move, afterFen);
+    const bestFr = current.bestSan || (firstMove ? enToFr(firstMove.san) : '');
+    const multi = solLine.length >= 2;
+    const altFr = altMove ? enToFr(altMove.san) : null;
+    let head;
+    if (correct && altFr && altFr !== bestFr) head = `✅ Bravo ! <b>${altFr}</b> marche aussi bien — motif : ${motif}.`;
+    else if (correct) head = `✅ Bravo ! <b>${bestFr}</b> — motif : ${motif}.`;
+    else head = `Solution : <b>${bestFr}</b> — motif : ${motif}.`;
+    if (multi && lineSans.length > 1) head += `<div class="train-line">Ligne : <b>${lineSans.join(' ')}</b></div>`;
+    const prose = explainPuzzle(current, firstMove, afterFirstFen);
     fb.innerHTML = head + (prose
       ? `<div class="train-explain">${prose}<span id="train-explain-line"></span></div>`
       : '');
-    if (afterFen) maybeContinuation(afterFen, bestFr, explainToken);
+    // The extra engine continuation only helps single-move cards; a multi-move
+    // card already shows its full line.
+    if (!multi && afterFirstFen) maybeContinuation(afterFirstFen, bestFr, explainToken);
 
     $('#train-actions').innerHTML = `
       <button class="train-btn again" data-g="again">À revoir</button>
@@ -771,6 +1016,12 @@ const Training = (() => {
         parts.push(`<b>${bs}</b> donne un échec qui reprend l'initiative.`);
       } else if (item.motif === 'mat') {
         parts.push(`<b>${bs}</b> lance un mat forcé.`);
+      } else if (item.motif === 'clouage') {
+        parts.push(`<b>${bs}</b> cloue une pièce adverse : elle ne peut plus bouger sans exposer une pièce plus importante (ou le roi) — tu la gagnes ensuite.`);
+      } else if (item.motif === 'enfilade') {
+        parts.push(`<b>${bs}</b> enfile deux pièces alignées : la plus importante doit bouger et laisse tomber celle de derrière.`);
+      } else if (item.motif === 'decouverte') {
+        parts.push(`<b>${bs}</b> découvre l'attaque d'une pièce placée derrière — deux menaces d'un coup.`);
       } else if (move.captured) {
         parts.push(`<b>${bs}</b> gagne ${OPP_PIECE_FR[move.captured] || 'du matériel'}.`);
       } else {

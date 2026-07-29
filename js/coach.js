@@ -1320,7 +1320,7 @@ const Coach = (() => {
 
   // ── Qualité des coups (répartition meilleur → gaffe) ──
   function renderMoveQuality(an) {
-    const q = { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, ok: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0, moveCount: 0 };
+    const q = { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, forced: 0, ok: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0, moveCount: 0 };
     an.forEach(g => { const m = g.analysis.moveQuality; if (!m) return; for (const k in q) q[k] += m[k] || 0; });
     if (!q.moveCount) return '';
     const order = [
@@ -1330,13 +1330,14 @@ const Coach = (() => {
       { k: 'excellent', l: 'Excellent', c: '#86d99a' },
       { k: 'good', l: 'Bon', c: '#b9cf8f' },
       { k: 'book', l: 'Théorique', c: '#cdab72' },
+      { k: 'forced', l: 'Forcé', c: '#8a8aa0' },
       { k: 'ok', l: 'Correct', c: '#8a8aa0' },
       { k: 'inaccuracy', l: 'Imprécision', c: '#e2b857' },
       { k: 'miss', l: 'Coup manqué', c: '#e0574a' },
       { k: 'mistake', l: 'Erreur', c: '#e08a4b' },
       { k: 'blunder', l: 'Gaffe', c: '#d36b6b' }
     ];
-    const GLYPH = { brilliant: '!!', great: '!', best: '★', excellent: '✔', good: '✓', book: '📖', ok: '·', inaccuracy: '?!', miss: '✗', mistake: '?', blunder: '??' };
+    const GLYPH = { brilliant: '!!', great: '!', best: '★', excellent: '✔', good: '✓', book: '📖', forced: '□', ok: '·', inaccuracy: '?!', miss: '✗', mistake: '?', blunder: '??' };
     const total = q.moveCount;
     // Stacked overview bar (true proportions).
     const bar = `<div class="coach-bar coach-bar-tall">` + order.map(o =>

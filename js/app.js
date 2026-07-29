@@ -47,7 +47,7 @@ const App = (() => {
   // share the same suffix), mark = the classical annotation glyph.
   // mark = the glyph shown on the move, matching Chess.com's Game Review icons:
   // !! Brilliant · ! Great · ★ Best · ✔ Excellent · ✓ Good · 📖 Book ·
-  // ?! Inaccuracy · ✗ Miss · ? Mistake · ?? Blunder.
+  // □ Forced · ?! Inaccuracy · ✗ Miss · ? Mistake · ?? Blunder.
   const MOVE_CLASS = {
     brilliant:  { label: 'Brillant',          cls: 'brilliant',  mark: '!!' },
     great:      { label: 'Très bon',          cls: 'great',      mark: '!' },
@@ -55,6 +55,7 @@ const App = (() => {
     excellent:  { label: 'Excellent',         cls: 'excellent',  mark: '✔' },
     good:       { label: 'Bon',               cls: 'good',       mark: '✓' },
     book:       { label: 'Théorique',         cls: 'book',       mark: '📖' },
+    forced:     { label: 'Forcé',             cls: 'forced',     mark: '□' },
     inaccuracy: { label: 'Imprécision',       cls: 'inaccuracy', mark: '?!' },
     miss:       { label: 'Coup manqué',       cls: 'miss',       mark: '✗' },
     mistake:    { label: 'Erreur',            cls: 'mistake',    mark: '?' },
