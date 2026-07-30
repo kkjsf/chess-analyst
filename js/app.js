@@ -149,6 +149,19 @@ const App = (() => {
         else userNav(currentIndex + 1);
       }
     }, { passive: true });
+
+    // Release the board pin on the first real scroll gesture (a vertical drag
+    // or wheel) — that's the signal the user has stopped stepping and wants to
+    // read. A horizontal swipe on the board (move nav) is ignored.
+    const body = $('.analysis-body');
+    body.addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > 0) unpinBoard(); }, { passive: true });
+    let scrollY = 0, scrollX = 0;
+    body.addEventListener('touchstart', (e) => { scrollY = e.touches[0].clientY; scrollX = e.touches[0].clientX; }, { passive: true });
+    body.addEventListener('touchmove', (e) => {
+      if (!boardPinned) return;
+      const dy = e.touches[0].clientY - scrollY, dx = e.touches[0].clientX - scrollX;
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) unpinBoard();
+    }, { passive: true });
   }
 
   function handleShareTarget() {
@@ -751,6 +764,34 @@ const App = (() => {
   // without the view yanking back to re-centre the board each time.
   function userNav(index) {
     goTo(index);
+    pinBoard();
+  }
+
+  // The board is only fixed while you go move-to-move. pinBoard() engages the
+  // sticky pin (and brings the board into view if it had scrolled off); the
+  // first scroll gesture calls unpinBoard() to release it so the cards read
+  // freely underneath.
+  let boardPinned = false;
+  function pinBoard() {
+    const body = $('.analysis-body');
+    const board = $('.board-sticky');
+    if (!body || !board) return;
+    if (!boardPinned) { body.classList.add('board-pinned'); boardPinned = true; }
+    // 'nearest' is a no-op when the board is already visible, so stepping
+    // through moves never jolts the view.
+    board.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
+  function unpinBoard() {
+    if (!boardPinned) return;
+    const body = $('.analysis-body');
+    const board = $('.board-sticky');
+    // Keep the board visually still while it switches sticky → static, so
+    // releasing it doesn't jump the page.
+    const before = board.getBoundingClientRect().top;
+    body.classList.remove('board-pinned');
+    boardPinned = false;
+    const after = board.getBoundingClientRect().top;
+    body.scrollTop += (after - before);
   }
 
   // The Chess.com account being analysed. Sourced from the Coach settings
