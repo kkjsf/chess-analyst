@@ -49,6 +49,10 @@ const OpeningTree = (() => {
                     appLine: 'e4 e5 Nf3 Nf6', cc: 'Petrovs-Defense',
                     idea: "Au lieu de défendre e5, les Noirs contre-attaquent e4 par symétrie. Très solide et réputée pour annuler. Piège classique : après <span class='k'>3.Cxe5</span> il faut jouer <span class='k'>3...d6</span> d'abord, pas <span class='k'>3...Cxe4?</span> (4.De2 gagne).",
                     plans: { w: "Profiter de l'initiative : d4, Fd3, roque, occuper le centre pendant que le Cf6 s'est avancé.", b: "Neutraliser par symétrie, échanger les pièces et viser une finale égale et sûre." } },
+                  { mv: '2...d6', icon: '🐢', lbl: 'Philidor', fam: 'open', eco: 'C41', fen: 'rnbqkbnr/ppp2ppp/3p4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3',
+                    appLine: 'e4 e5 Nf3 d6', cc: 'Philidor-Defense',
+                    idea: "Défend e5 par le pion d6 plutôt que par un cavalier. Très solide mais passive : peu d'espace. Attention au piège de Légal si les pièces sortent mal.",
+                    plans: { w: "Prendre l'espace par d4, développer naturellement et exploiter le manque d'activité noire.", b: "Rester compact (...Cf6, ...Fe7, ...O-O) puis chercher ...c6/...d5 ou ...exd4 pour respirer." } },
                 ]},
               { mv: '2.f4', icon: '🔥', lbl: 'Gambit du Roi', eco: 'C30–C39', fen: 'rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PPP/RNBQKBNR b KQkq f3 0 2',
                 appLine: 'e4 e5 f4', cc: 'Kings-Gambit',
@@ -77,6 +81,18 @@ const OpeningTree = (() => {
             appLine: 'e4 d5 exd5 Qxd5', cc: 'Scandinavian-Defense',
             idea: "Défie e4 tout de suite. Après 2.exd5 Dxd5, la dame sort tôt : simple, peu de théorie.",
             plans: { w: "Gagner du temps en attaquant la dame noire (Cc3), développer vite avec l'avantage d'espace.", b: "Mettre la dame en sécurité (...Da5 ou ...Dd6), structure solide ...c6, développement simple." } },
+          { mv: '1...d6', icon: '🏕️', lbl: 'Pirc', fam: 'semiopen', eco: 'B07–B09', fen: 'rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+            appLine: 'e4 d6 d4 Nf6 Nc3 g6', cc: 'Pirc-Defense',
+            idea: "Hypermoderne : les Noirs laissent les Blancs bâtir un gros centre pour le contre-attaquer ensuite par ...g6, ...Fg7 et ...e5/...c5.",
+            plans: { w: "Occuper le centre (e4-d4), développer et viser l'attaque à l'aile roi (Attaque autrichienne f4).", b: "Fianchetto ...g6/...Fg7, roquer, puis frapper le centre par ...e5 ou ...c5." } },
+          { mv: '1...g6', icon: '🏔️', lbl: 'Moderne', fam: 'semiopen', eco: 'B06', fen: 'rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+            appLine: 'e4 g6 d4 Bg7', cc: 'Modern-Defense',
+            idea: "Cousine de la Pirc : fianchetto immédiat ...g6/...Fg7 en retardant ...Cf6, très flexible pour dérouter l'adversaire.",
+            plans: { w: "Prendre tout le centre (c3/Cc3, e4-d4), l'espace, et punir la lenteur noire.", b: "Pression sur le centre depuis les ailes (...Fg7, ...d6, ...c5/...e5), garder la souplesse." } },
+          { mv: '1...Cf6', icon: '🪃', lbl: 'Alekhine', fam: 'semiopen', eco: 'B02–B05', fen: 'rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2',
+            appLine: 'e4 Nf6 e5 Nd5', cc: 'Alekhine-Defense',
+            idea: "Provocante : le cavalier attaque e4 et invite les pions blancs à avancer (2.e5) pour en faire des cibles ensuite.",
+            plans: { w: "Accepter le gros centre (e5, d4, c4) pour étouffer — mais gare à la surextension.", b: "Harceler les pions avancés (...d6, ...c5) pour les faire tomber ou les bloquer." } },
         ]},
       { mv: '1.d4', icon: '🏛️', lbl: 'Pion dame', fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1', appLine: null, cc: null,
         idea: "Le pion d4 est défendu par la dame : centre plus stable, jeu plus lent et stratégique.",
@@ -101,6 +117,10 @@ const OpeningTree = (() => {
                     idea: "Renforce d5 sans enfermer le fou de cases blanches. Très fiable au plus haut niveau.",
                     plans: { w: "Garder la tension au centre, développer les fous activement avant de jouer e3.", b: "Renforcer d5 par ...c6 sans enfermer le fou dames, puis le sortir en ...Ff5 / ...Fg4." } },
                 ]},
+              { mv: '2.Ff4', icon: '🏙️', lbl: 'Système Londres', eco: 'D02', fen: 'rnbqkbnr/ppp1pppp/8/3p4/3P1B2/8/PPP1PPPP/RN1QKBNR b KQkq - 1 2',
+                appLine: 'd4 d5 Bf4', cc: 'London-System',
+                idea: "Système facile : les Blancs posent toujours le même dispositif (Ff4, e3, Fd3, c3, Cbd2) quel que soit le jeu noir. Solide et peu théorique — parfait pour débuter avec 1.d4.",
+                plans: { w: "Poser le triangle c3-d4-e3 + Ff4/Fd3, roquer, viser Ce5 et l'attaque à l'aile roi.", b: "Contester tôt : ...c5 et ...Db6 pressent b2/d4, ou ...Ff5 pour sortir le fou avant ...e6." } },
             ]},
           { mv: '1...Cf6', icon: '🧩', lbl: 'Jeux semi-fermés', fam: 'semiclosed', fen: 'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2', appLine: null, cc: null,
             idea: "Les Noirs refusent la symétrie, laissent le centre aux Blancs pour l'attaquer ensuite (hypermoderne) → <span class='k'>semi-fermés</span>.",
@@ -113,6 +133,14 @@ const OpeningTree = (() => {
                 appLine: 'd4 Nf6 c4 g6 Nc3 Bg7', cc: 'Kings-Indian-Defense',
                 idea: "Fianchetto : on laisse un gros centre blanc… pour le bombarder. Contre-attaque tranchante.",
                 plans: { w: "Bâtir un gros centre de pions et viser l'espace ou l'attaque.", b: "Laisser le centre… pour le bombarder par ...e5 (Est-indienne) ou ...d5/...c5 (Grünfeld)." } },
+              { mv: '2.c4 c5 3.d5 e6', icon: '🌶️', lbl: 'Benoni moderne', eco: 'A60–A79', fen: 'rnbqkb1r/pp1p1ppp/4pn2/2pP4/2P5/8/PP2PPPP/RNBQKBNR w KQkq - 0 4',
+                appLine: 'd4 Nf6 c4 c5 d5', cc: 'Benoni-Defense',
+                idea: "Déséquilibre assumé : les Noirs cèdent de l'espace au centre contre une majorité de pions à l'aile dame et le fianchetto tranchant ...g6/...Fg7.",
+                plans: { w: "Exploiter l'espace et le centre, pousser e4-e5 et jouer sur l'aile roi.", b: "Contre-jeu dynamique : ...g6/...Fg7, ...a6/...b5 à l'aile dame, pression sur e4." } },
+              { mv: '2.c4 e6 3.Cf3 b6', icon: '🌊', lbl: 'Ouest-indienne', eco: 'E12–E19', fen: 'rnbqkb1r/p1pp1ppp/1p2pn2/8/2PP4/5N2/PP2PPPP/RNBQKB1R w KQkq - 0 4',
+                appLine: 'd4 Nf6 c4 e6 Nf3 b6', cc: 'Queens-Indian-Defense',
+                idea: "Solide et positionnelle : le fianchetto ...b6/...Fb7 dispute la case e4 à distance. Réputée très sûre, chère aux stratèges.",
+                plans: { w: "Prendre l'espace, neutraliser le Fb7 (Fg2, Cc3/Cbd2) et jouer sur le centre / l'aile dame.", b: "Contrôler e4 par ...Fb7 (+ ...Fb4 ou ...d5), structure saine, viser l'égalité confortable." } },
             ]},
           { mv: '1...f5', icon: '🌷', lbl: 'Hollandaise', fam: 'semiclosed', eco: 'A80–A99', fen: 'rnbqkbnr/ppppp1pp/8/5p2/3P4/8/PPP1PPPP/RNBQKBNR w KQkq f6 0 2',
             appLine: null, cc: 'Dutch-Defense',
@@ -141,16 +169,19 @@ const OpeningTree = (() => {
   function applyFocus(node) {
     const tree = document.getElementById('ot-tree'); if (!tree) return;
     const all = tree.querySelectorAll('.ot-subtree');
-    if (!focusMode || !node) { all.forEach(st => st.classList.remove('ot-anc', 'ot-cur', 'ot-next', 'ot-dim')); return; }
+    const CLS = ['ot-anc', 'ot-cur', 'ot-next', 'ot-deep', 'ot-dim'];
+    if (!focusMode || !node) { all.forEach(st => st.classList.remove(...CLS)); return; }
     const path = new Set(findPath(TREE, node) || [node]);
     const desc = new Set(); collectDesc(node, desc);
+    const kids = new Set(node.kids || []);           // choix immédiats = niveau courant
     all.forEach(st => {
       const n = st._node;
-      st.classList.remove('ot-anc', 'ot-cur', 'ot-next', 'ot-dim');
-      if (n === node) st.classList.add('ot-cur');
-      else if (path.has(n)) st.classList.add('ot-anc');
-      else if (desc.has(n)) st.classList.add('ot-next');
-      else st.classList.add('ot-dim');
+      st.classList.remove(...CLS);
+      if (n === node) st.classList.add('ot-cur');          // la position en cours
+      else if (kids.has(n)) st.classList.add('ot-next');   // ses suites directes (pleine taille)
+      else if (path.has(n)) st.classList.add('ot-anc');    // le chemin parcouru (mini)
+      else if (desc.has(n)) st.classList.add('ot-deep');   // suites lointaines (mini)
+      else st.classList.add('ot-dim');                     // hors-ligne (mini + estompé)
     });
   }
 

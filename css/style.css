@@ -2963,23 +2963,54 @@ body.guess-open { overflow: hidden; }
   transition: transform 0.12s, box-shadow 0.15s, border-color 0.15s;
   animation: otPop 0.25s ease both;
 }
-@keyframes otPop { from { opacity: 0; transform: translateX(-8px) scale(0.96); } to { opacity: 1; } }
+@keyframes otPop { from { transform: translateX(-8px) scale(0.96); } to { transform: none; } }
 .ot-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,0.45); }
 .ot-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset, 0 10px 26px rgba(0,0,0,0.5); }
 .ot-card.root { --ot-fam: var(--accent); }
 .ot-card.ot-hidden { display: none; }
 
-/* ── Mode Focus : comprime les branches parcourues, spotlight la ligne en cours ── */
+/* ── Mode Focus : le niveau courant (position + choix immédiats) reste grand ;
+   tout le reste (chemin parcouru, suites lointaines, branches hors-ligne) passe
+   en mini-cartes estompées. ── */
 .ot-btn-focus.active { background: var(--accent); color: #14142a; border-color: var(--accent); font-weight: 700; }
 .ot-btn-focus.active:hover { color: #14142a; }
-.ot-focus-on .ot-card { transition: transform 0.14s, box-shadow 0.15s, border-color 0.15s, opacity 0.2s, filter 0.2s, min-width 0.2s, padding 0.2s; }
-.ot-focus-on .ot-anc > .ot-kids { margin-left: 42px; }
-.ot-focus-on .ot-anc > .ot-card { min-width: 148px; padding: 8px 11px; opacity: 0.82; }
-.ot-focus-on .ot-anc > .ot-card .ot-ic { font-size: 20px; width: 30px; height: 30px; }
-.ot-focus-on .ot-anc > .ot-card .ot-tt { font-size: 12.5px; }
-.ot-focus-on .ot-dim > .ot-card { opacity: 0.34; filter: grayscale(0.55); }
-.ot-focus-on .ot-dim > .ot-card:hover { opacity: 0.9; filter: none; }
+/* on ne transitionne QUE l'opacité/le filtre : la taille change instantanément
+   pour que les connecteurs SVG (recalculés au frame suivant) restent alignés. */
+.ot-focus-on .ot-card { transition: opacity 0.18s, filter 0.18s, box-shadow 0.15s, border-color 0.15s; }
+
+/* mini-cartes : tout ce qui n'est PAS le niveau courant */
+.ot-focus-on .ot-anc > .ot-card,
+.ot-focus-on .ot-deep > .ot-card,
+.ot-focus-on .ot-dim > .ot-card {
+  min-width: 0; max-width: 210px; padding: 4px 9px; gap: 7px;
+  border-left-width: 3px; border-radius: 9px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+}
+.ot-focus-on .ot-anc > .ot-card .ot-ic,
+.ot-focus-on .ot-deep > .ot-card .ot-ic,
+.ot-focus-on .ot-dim > .ot-card .ot-ic { font-size: 14px; width: 22px; height: 22px; border-radius: 6px; }
+.ot-focus-on .ot-anc > .ot-card .ot-tt,
+.ot-focus-on .ot-deep > .ot-card .ot-tt,
+.ot-focus-on .ot-dim > .ot-card .ot-tt { font-size: 11px; font-weight: 600; line-height: 1.1; }
+.ot-focus-on .ot-anc > .ot-card .ot-sub,
+.ot-focus-on .ot-deep > .ot-card .ot-sub,
+.ot-focus-on .ot-dim > .ot-card .ot-sub { display: none; }
+
+/* connecteurs plus courts + interlignes serrés pour les niveaux compressés */
+.ot-focus-on .ot-anc > .ot-kids,
+.ot-focus-on .ot-deep > .ot-kids,
+.ot-focus-on .ot-dim > .ot-kids { margin-left: 30px; gap: 8px; }
+
+/* dégradé d'importance par estompage */
+.ot-focus-on .ot-anc > .ot-card { opacity: 0.72; }
+.ot-focus-on .ot-deep > .ot-card { opacity: 0.5; }
+.ot-focus-on .ot-dim > .ot-card { opacity: 0.36; filter: grayscale(0.55); }
+.ot-focus-on .ot-anc > .ot-card:hover,
+.ot-focus-on .ot-deep > .ot-card:hover,
+.ot-focus-on .ot-dim > .ot-card:hover { opacity: 1; filter: none; }
+
+/* niveau courant : la position en cours + ses choix immédiats restent pleine taille */
 .ot-focus-on .ot-cur > .ot-card { box-shadow: 0 0 0 2px var(--accent) inset, 0 12px 30px rgba(0,0,0,0.55); }
+.ot-focus-on .ot-next > .ot-card { border-left-width: 6px; }
 
 .ot-ic {
   font-size: 26px;
