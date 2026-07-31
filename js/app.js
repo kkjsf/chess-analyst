@@ -93,11 +93,8 @@ const App = (() => {
     const coachBack = $('#btn-coach-back');
     if (coachBack) coachBack.addEventListener('click', () => Coach.hide());
     $('#btn-back').addEventListener('click', showImport);
-    $('#btn-first').addEventListener('click', () => userNav(0));
     $('#btn-prev').addEventListener('click', () => userNav(currentIndex - 1));
     $('#btn-next').addEventListener('click', () => userNav(currentIndex + 1));
-    $('#btn-last').addEventListener('click', () => userNav(currentAnalysis.length));
-    $('#move-slider').addEventListener('input', (e) => userNav(+e.target.value));
 
     $$('.tabbar .tab').forEach(t => t.addEventListener('click', () => navTo(t.dataset.tab)));
 
@@ -527,8 +524,7 @@ const App = (() => {
     $('#top-player .piece-icon').textContent = isFlipped ? '⚪' : '⚫';
     $('#bottom-player .piece-icon').textContent = isFlipped ? '⚫' : '⚪';
 
-    $('#move-slider').max = analysis.length;
-    $('#move-slider').value = 0;
+    buildMoveStrip(analysis);
 
     buildIntro(header, analysis, summary);
     buildAccuracyHero(header, summary);
@@ -667,20 +663,32 @@ const App = (() => {
       }
     }
 
+    const bubble = $('#coach-bubble');
+    const glyph = $('#cb-glyph');
+    const verdict = $('#cb-verdict');
+    const badge = $('#tip-badge');
+    const sideTag = $('#tip-side');
+
     if (index === 0) {
-      $('#tip-badge').textContent = '';
-      $('#tip-badge').className = 'eval-badge';
-      $('#tip-text').innerHTML = 'Position de départ. Utilisez les boutons ou le curseur pour naviguer dans la partie.';
-      const sideTag = $('#tip-side');
+      bubble.className = 'coach-bubble';
+      glyph.style.display = 'none';
+      verdict.textContent = 'Position de départ';
+      $('#tip-text').innerHTML = 'Parcours la partie coup par coup avec ‹ › ou la barre de coups ci-dessous.';
+      badge.textContent = ''; badge.hidden = true; badge.className = 'eval-badge';
       if (sideTag) sideTag.hidden = true;
     } else {
       const r = currentAnalysis[index - 1];
       const moveNum = Math.floor((index - 1) / 2) + 1;
       const dot = (index - 1) % 2 === 0 ? '.' : '...';
-      $('#tip-text').innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b> — ${r.tipFr}`;
+      const meta = MOVE_CLASS[r.type];
+
+      bubble.className = 'coach-bubble' + (meta ? ' ' + meta.cls : '');
+      glyph.style.display = '';
+      glyph.textContent = meta && meta.mark ? meta.mark : '•';
+      verdict.innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b>${meta ? ' — ' + meta.label : ''}`;
+      $('#tip-text').innerHTML = r.tipFr;
       bindAltMoves();
 
-      const sideTag = $('#tip-side');
       if (sideTag && currentUser && r.move) {
         const isUserMove = (currentUser === 'w' && r.move.color === 'w') || (currentUser === 'b' && r.move.color === 'b');
         sideTag.hidden = false;
@@ -690,16 +698,14 @@ const App = (() => {
         sideTag.hidden = true;
       }
 
-      const badge = $('#tip-badge');
+      // Numeric engine eval (White's perspective) as a neutral pill.
       badge.className = 'eval-badge';
-      const meta = MOVE_CLASS[r.type];
-      if (meta) { badge.textContent = (meta.mark ? meta.mark + ' ' : '') + meta.label; badge.classList.add(meta.cls); }
-      else { badge.textContent = ''; }
+      const evalTxt = formatEval(r);
+      if (evalTxt) { badge.textContent = evalTxt; badge.hidden = false; }
+      else { badge.textContent = ''; badge.hidden = true; }
     }
 
-    $('#move-slider').value = index;
-    const total = currentAnalysis.length;
-    $('#move-counter').textContent = `Coup ${index}/${total}`;
+    updateMoveStripActive(index);
 
     updateWinGraphCursor(index);
     updateMatGraphCursor(index);
@@ -744,7 +750,7 @@ const App = (() => {
               altPreview = false;
               goTo(currentIndex);
             });
-            $('#tip-card').appendChild(back);
+            $('#coach-bubble').appendChild(back);
           }
           back.hidden = false;
         } catch(_) {}
@@ -752,16 +758,7 @@ const App = (() => {
     });
   }
 
-  // Kept as no-ops: the board is now a permanent sticky header (see CSS
-  // .board-sticky), so there's nothing to pin/unpin at runtime. Callers remain
-  // for clarity of intent.
-  function pinBoard() {}
-  function unpinBoard() {}
-
-  // Single entry point for every user-initiated move navigation. The board is a
-  // sticky header that's always in view, so we just jump to the move — no forced
-  // scroll. This lets you tap through the move list (or graph, or key moments)
-  // without the view yanking back to re-centre the board each time.
+  // Single entry point for every user-initiated move navigation.
   function userNav(index) {
     goTo(index);
     pinBoard();
@@ -2095,6 +2092,46 @@ const App = (() => {
     if (meta) cell.classList.add(meta.cls + '-move');
     cell.addEventListener('click', () => userNav(index + 1));
     return cell;
+  }
+
+  // Engine eval from White's perspective, shown as a compact signed pill.
+  function formatEval(r) {
+    if (r.mate !== undefined && r.mate !== null) return 'M' + Math.abs(r.mate);
+    if (r.eval === undefined || r.eval === null) return '';
+    const p = r.eval / 100;
+    return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1);
+  }
+
+  // Horizontal move strip under the board — one pill per ply, coloured mark by
+  // classification, current ply highlighted (replaces the old slider + counter).
+  function buildMoveStrip(analysis) {
+    const track = $('#ms-track');
+    if (!track) return;
+    track.innerHTML = '';
+    analysis.forEach((r, i) => {
+      const pill = document.createElement('button');
+      pill.className = 'ms-move';
+      pill.dataset.index = i;
+      const num = i % 2 === 0 ? `<span class="msn">${Math.floor(i / 2) + 1}.</span>` : '';
+      pill.innerHTML = num + r.sanFr + markSpan(r.type);
+      pill.addEventListener('click', () => userNav(i + 1));
+      track.appendChild(pill);
+    });
+  }
+
+  function updateMoveStripActive(index) {
+    const track = $('#ms-track');
+    if (!track) return;
+    track.querySelectorAll('.ms-move').forEach(p => p.classList.remove('active'));
+    if (index > 0) {
+      const pill = track.querySelector(`.ms-move[data-index="${index - 1}"]`);
+      if (pill) {
+        pill.classList.add('active');
+        pill.scrollIntoView({ inline: 'center', block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      }
+    } else {
+      track.scrollTo({ left: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    }
   }
 
   function buildSummary(summary, analysis) {

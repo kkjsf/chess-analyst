@@ -2656,6 +2656,160 @@ body.guess-open { overflow: hidden; }
   box-shadow: 0 8px 16px -12px rgba(0,0,0,0.7);
 }
 
+/* ── Coach bubble — per-move verdict above the board (Chess.com-style review) ── */
+.coach-review {
+  display: flex;
+  gap: 9px;
+  align-items: flex-end;
+  width: 100%;
+  max-width: 400px;
+}
+.coach-avatar {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2a3a63, #141d33);
+  border: 2px solid var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 21px;
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.coach-bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-card);
+  border: 1px solid #2a3a5c;
+  border-radius: 14px;
+  padding: 9px 12px;
+  box-shadow: 0 6px 18px -12px rgba(0,0,0,0.7);
+}
+.coach-bubble::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  bottom: 12px;
+  width: 13px;
+  height: 13px;
+  background: var(--bg-card);
+  border-left: 1px solid #2a3a5c;
+  border-bottom: 1px solid #2a3a5c;
+  transform: rotate(45deg);
+}
+.cb-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.cb-glyph {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+}
+.cb-verdict {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+}
+.cb-verdict b { font-weight: 700; }
+.coach-bubble .tip-text { font-size: 13px; line-height: 1.5; }
+.coach-bubble .eval-badge {
+  margin-left: 0;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* verdict + glyph tint by move classification */
+.coach-bubble.brilliant  .cb-verdict, .coach-bubble.brilliant  .cb-glyph { color: #67d4e8; }
+.coach-bubble.great      .cb-verdict, .coach-bubble.great      .cb-glyph { color: #86b3e6; }
+.coach-bubble.best       .cb-verdict, .coach-bubble.best       .cb-glyph { color: #4ade80; }
+.coach-bubble.excellent  .cb-verdict, .coach-bubble.excellent  .cb-glyph { color: #86d99a; }
+.coach-bubble.good       .cb-verdict, .coach-bubble.good       .cb-glyph { color: #c2d69a; }
+.coach-bubble.book       .cb-verdict, .coach-bubble.book       .cb-glyph { color: #d4b177; }
+.coach-bubble.forced     .cb-verdict, .coach-bubble.forced     .cb-glyph { color: var(--text-dim); }
+.coach-bubble.inaccuracy .cb-verdict, .coach-bubble.inaccuracy .cb-glyph { color: var(--warning); }
+.coach-bubble.miss       .cb-verdict, .coach-bubble.miss       .cb-glyph { color: #e0574a; }
+.coach-bubble.mistake    .cb-verdict, .coach-bubble.mistake    .cb-glyph { color: #f0a050; }
+.coach-bubble.blunder    .cb-verdict, .coach-bubble.blunder    .cb-glyph { color: var(--danger); }
+.coach-bubble.brilliant  .cb-glyph { background: #16303b; }
+.coach-bubble.great      .cb-glyph { background: #1a2740; }
+.coach-bubble.best       .cb-glyph { background: #14331f; }
+.coach-bubble.excellent  .cb-glyph { background: #17321f; }
+.coach-bubble.good       .cb-glyph { background: #262f18; }
+.coach-bubble.book       .cb-glyph { background: #2f2717; }
+.coach-bubble.forced     .cb-glyph { background: #2a2a3a; }
+.coach-bubble.inaccuracy .cb-glyph { background: #3b2e1a; }
+.coach-bubble.miss       .cb-glyph { background: #3b1a1a; }
+.coach-bubble.mistake    .cb-glyph { background: #3b2a1a; }
+.coach-bubble.blunder    .cb-glyph { background: #3b1a1a; }
+
+/* ── Compact move strip — replaces the slider/counter nav ── */
+.move-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 400px;
+}
+.move-strip .ms-nav {
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 9px;
+}
+.move-strip .ms-next {
+  background: var(--success);
+  border-color: var(--success);
+  color: #08210d;
+  font-weight: 800;
+}
+.move-strip .ms-next:hover { background: #3fce74; }
+.ms-track {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 3px 2px;
+  scrollbar-width: none;
+}
+.ms-track::-webkit-scrollbar { display: none; }
+.ms-move {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 1px solid #2a3a5c;
+  padding: 5px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ms-move .msn { color: var(--text-dim); font-size: 11px; margin-right: 1px; }
+.ms-move.active { background: var(--accent); color: #1a1a2e; border-color: var(--accent); }
+.ms-move.active .msn { color: #5a4a1c; }
+
 .analysis-segmented {
   display: flex;
   gap: 4px;

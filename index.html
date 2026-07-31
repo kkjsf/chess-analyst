@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '128';
+window.APP_VERSION = '129';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -360,33 +360,22 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
 
   <div class="analysis-body">
-    <div class="accuracy-hero" id="accuracy-hero" hidden>
-      <div class="acc-gauge">
-        <svg class="acc-ring-svg" viewBox="0 0 60 60" aria-hidden="true">
-          <circle class="acc-track" cx="30" cy="30" r="25"/>
-          <circle class="acc-fill" id="acc-fill-ring" cx="30" cy="30" r="25" transform="rotate(-90 30 30)"/>
-          <text class="acc-num" id="acc-hero-num" x="30" y="34" text-anchor="middle">–</text>
-        </svg>
-        <div class="acc-meta">
-          <div class="acc-label" id="acc-hero-label">Ta précision</div>
-          <div class="acc-grade" id="acc-hero-grade"></div>
-        </div>
-      </div>
-      <div class="acc-opp">
-        <div class="acc-opp-label" id="acc-opp-label">Adversaire</div>
-        <div class="acc-opp-val"><span id="acc-opp-num">–</span><span class="acc-opp-pct">%</span></div>
-      </div>
-    </div>
-
-    <div class="intro-card" id="intro-card" hidden>
-      <div class="intro-header">
-        <span class="intro-icon">📋</span>
-        <span class="intro-label">Résumé</span>
-      </div>
-      <div class="intro-text" id="intro-text"></div>
-    </div>
 
     <div class="board-sticky">
+
+    <div class="coach-review">
+      <div class="coach-avatar" aria-hidden="true">♞</div>
+      <div class="coach-bubble" id="coach-bubble">
+        <div class="cb-head">
+          <span class="cb-glyph" id="cb-glyph"></span>
+          <span class="cb-verdict" id="cb-verdict"></span>
+          <span class="tip-side-tag" id="tip-side" hidden></span>
+          <span class="eval-badge" id="tip-badge"></span>
+        </div>
+        <div class="tip-text" id="tip-text"></div>
+      </div>
+    </div>
+
     <div class="board-wrapper">
       <div class="player-bar" id="top-player">
         <span class="piece-icon">⚫</span>
@@ -413,13 +402,10 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       </div>
     </div>
 
-    <div class="nav-bar">
-      <button class="nav-btn" id="btn-first" title="Premier coup">⏮</button>
-      <button class="nav-btn" id="btn-prev" title="Coup précédent">◀</button>
-      <input type="range" class="move-slider" id="move-slider" min="0" value="0">
-      <span class="move-counter" id="move-counter">Coup 0</span>
-      <button class="nav-btn" id="btn-next" title="Coup suivant">▶</button>
-      <button class="nav-btn" id="btn-last" title="Dernier coup">⏭</button>
+    <div class="move-strip">
+      <button class="nav-btn ms-nav" id="btn-prev" title="Coup précédent">‹</button>
+      <div class="ms-track" id="ms-track"></div>
+      <button class="nav-btn ms-nav ms-next" id="btn-next" title="Coup suivant">›</button>
     </div>
 
     </div><!-- /board-sticky -->
@@ -446,16 +432,6 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <div id="pace-content"></div>
     </div>
 
-    <div class="tip-card" id="tip-card">
-      <div class="tip-header">
-        <span class="bulb">💡</span>
-        <span class="label">Conseil</span>
-        <span class="tip-side-tag" id="tip-side" hidden></span>
-        <span class="eval-badge" id="tip-badge"></span>
-      </div>
-      <div class="tip-text" id="tip-text"></div>
-    </div>
-
     <button class="guess-launch" id="btn-guess">🎯 Devine le coup — rejoue cette partie</button>
 
     </div><!-- /seg-panel conseil -->
@@ -480,6 +456,32 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     </div><!-- /seg-panel coups -->
 
     <div class="seg-panel" data-panel="analyse">
+
+    <div class="accuracy-hero" id="accuracy-hero" hidden>
+      <div class="acc-gauge">
+        <svg class="acc-ring-svg" viewBox="0 0 60 60" aria-hidden="true">
+          <circle class="acc-track" cx="30" cy="30" r="25"/>
+          <circle class="acc-fill" id="acc-fill-ring" cx="30" cy="30" r="25" transform="rotate(-90 30 30)"/>
+          <text class="acc-num" id="acc-hero-num" x="30" y="34" text-anchor="middle">–</text>
+        </svg>
+        <div class="acc-meta">
+          <div class="acc-label" id="acc-hero-label">Ta précision</div>
+          <div class="acc-grade" id="acc-hero-grade"></div>
+        </div>
+      </div>
+      <div class="acc-opp">
+        <div class="acc-opp-label" id="acc-opp-label">Adversaire</div>
+        <div class="acc-opp-val"><span id="acc-opp-num">–</span><span class="acc-opp-pct">%</span></div>
+      </div>
+    </div>
+
+    <div class="intro-card" id="intro-card" hidden>
+      <div class="intro-header">
+        <span class="intro-icon">📋</span>
+        <span class="intro-label">Résumé</span>
+      </div>
+      <div class="intro-text" id="intro-text"></div>
+    </div>
 
       <div class="win-graph-card" id="win-graph-card" hidden>
         <h3>Chances de gain</h3>
