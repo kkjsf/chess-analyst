@@ -265,6 +265,7 @@ html, body {
 .acc-meta { min-width: 0; }
 .acc-label { font-size: 12px; color: var(--text-dim); }
 .acc-grade { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.acc-elo { font-size: 11.5px; color: var(--accent); font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .acc-opp {
   width: 104px;
   background: var(--bg-card);
@@ -2705,6 +2706,8 @@ body.guess-open { overflow: hidden; }
   gap: 8px;
   margin-bottom: 3px;
 }
+/* Side-to-move knight: white or black piece on a neutral disc, so you can see
+   at a glance whose move each verdict describes. */
 .cb-glyph {
   width: 22px;
   height: 22px;
@@ -2712,11 +2715,12 @@ body.guess-open { overflow: hidden; }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 12px;
-  font-weight: 800;
-  background: var(--bg-elevated);
-  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  background: #8a92a6;
 }
+.cb-glyph.white { color: #fbfbfb; text-shadow: 0 0 1px rgba(0,0,0,0.5); }
+.cb-glyph.black { color: #14161c; text-shadow: 0 0 1px rgba(255,255,255,0.35); }
 .cb-verdict {
   flex: 1;
   min-width: 0;
@@ -2724,9 +2728,20 @@ body.guess-open { overflow: hidden; }
   font-weight: 700;
   line-height: 1.25;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cb-verdict b { font-weight: 700; }
-.coach-bubble .tip-text { font-size: 13px; line-height: 1.5; }
+/* Fixed text height keeps the board from shifting as the tip length changes
+   between moves (longer tips scroll inside the bubble instead of growing it). */
+.coach-bubble .tip-text {
+  font-size: 13px;
+  line-height: 1.5;
+  height: 4.5em;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
 .coach-bubble .eval-badge {
   margin-left: 0;
   background: var(--bg-elevated);
@@ -2734,29 +2749,18 @@ body.guess-open { overflow: hidden; }
   font-variant-numeric: tabular-nums;
 }
 
-/* verdict + glyph tint by move classification */
-.coach-bubble.brilliant  .cb-verdict, .coach-bubble.brilliant  .cb-glyph { color: #67d4e8; }
-.coach-bubble.great      .cb-verdict, .coach-bubble.great      .cb-glyph { color: #86b3e6; }
-.coach-bubble.best       .cb-verdict, .coach-bubble.best       .cb-glyph { color: #4ade80; }
-.coach-bubble.excellent  .cb-verdict, .coach-bubble.excellent  .cb-glyph { color: #86d99a; }
-.coach-bubble.good       .cb-verdict, .coach-bubble.good       .cb-glyph { color: #c2d69a; }
-.coach-bubble.book       .cb-verdict, .coach-bubble.book       .cb-glyph { color: #d4b177; }
-.coach-bubble.forced     .cb-verdict, .coach-bubble.forced     .cb-glyph { color: var(--text-dim); }
-.coach-bubble.inaccuracy .cb-verdict, .coach-bubble.inaccuracy .cb-glyph { color: var(--warning); }
-.coach-bubble.miss       .cb-verdict, .coach-bubble.miss       .cb-glyph { color: #e0574a; }
-.coach-bubble.mistake    .cb-verdict, .coach-bubble.mistake    .cb-glyph { color: #f0a050; }
-.coach-bubble.blunder    .cb-verdict, .coach-bubble.blunder    .cb-glyph { color: var(--danger); }
-.coach-bubble.brilliant  .cb-glyph { background: #16303b; }
-.coach-bubble.great      .cb-glyph { background: #1a2740; }
-.coach-bubble.best       .cb-glyph { background: #14331f; }
-.coach-bubble.excellent  .cb-glyph { background: #17321f; }
-.coach-bubble.good       .cb-glyph { background: #262f18; }
-.coach-bubble.book       .cb-glyph { background: #2f2717; }
-.coach-bubble.forced     .cb-glyph { background: #2a2a3a; }
-.coach-bubble.inaccuracy .cb-glyph { background: #3b2e1a; }
-.coach-bubble.miss       .cb-glyph { background: #3b1a1a; }
-.coach-bubble.mistake    .cb-glyph { background: #3b2a1a; }
-.coach-bubble.blunder    .cb-glyph { background: #3b1a1a; }
+/* verdict tint by move classification */
+.coach-bubble.brilliant  .cb-verdict { color: #67d4e8; }
+.coach-bubble.great      .cb-verdict { color: #86b3e6; }
+.coach-bubble.best       .cb-verdict { color: #4ade80; }
+.coach-bubble.excellent  .cb-verdict { color: #86d99a; }
+.coach-bubble.good       .cb-verdict { color: #c2d69a; }
+.coach-bubble.book       .cb-verdict { color: #d4b177; }
+.coach-bubble.forced     .cb-verdict { color: var(--text-dim); }
+.coach-bubble.inaccuracy .cb-verdict { color: var(--warning); }
+.coach-bubble.miss       .cb-verdict { color: #e0574a; }
+.coach-bubble.mistake    .cb-verdict { color: #f0a050; }
+.coach-bubble.blunder    .cb-verdict { color: var(--danger); }
 
 /* ── Compact move strip — replaces the slider/counter nav ── */
 .move-strip {

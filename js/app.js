@@ -533,7 +533,6 @@ const App = (() => {
     buildWinGraph(analysis);
     buildHighlights(header, analysis);
     buildMistakeProfile(header, analysis);
-    buildMoveList(analysis);
     buildTimeTrouble(header, analysis);
     buildMaterialGraph(analysis);
     buildPlanRecognition(header, analysis);
@@ -672,6 +671,7 @@ const App = (() => {
     if (index === 0) {
       bubble.className = 'coach-bubble';
       glyph.style.display = 'none';
+      glyph.className = 'cb-glyph';
       verdict.textContent = 'Position de départ';
       $('#tip-text').innerHTML = 'Parcours la partie coup par coup avec ‹ › ou la barre de coups ci-dessous.';
       badge.textContent = ''; badge.hidden = true; badge.className = 'eval-badge';
@@ -684,7 +684,9 @@ const App = (() => {
 
       bubble.className = 'coach-bubble' + (meta ? ' ' + meta.cls : '');
       glyph.style.display = '';
-      glyph.textContent = meta && meta.mark ? meta.mark : '•';
+      glyph.textContent = '♞';
+      glyph.className = 'cb-glyph ' + (r.move && r.move.color === 'b' ? 'black' : 'white');
+      glyph.title = (r.move && r.move.color === 'b') ? 'Trait aux Noirs' : 'Trait aux Blancs';
       verdict.innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b>${meta ? ' — ' + meta.label : ''}`;
       $('#tip-text').innerHTML = r.tipFr;
       bindAltMoves();
@@ -710,17 +712,6 @@ const App = (() => {
     updateWinGraphCursor(index);
     updateMatGraphCursor(index);
 
-    $$('.move-cell').forEach(cell => cell.classList.remove('active'));
-    if (index > 0) {
-      const cell = $(`.move-cell[data-index="${index - 1}"]`);
-      if (cell) {
-        cell.classList.add('active');
-        const grid = $('#moves-grid');
-        const cellTop = cell.offsetTop - grid.offsetTop;
-        if (cellTop < grid.scrollTop) grid.scrollTop = cellTop;
-        else if (cellTop + cell.offsetHeight > grid.scrollTop + grid.clientHeight) grid.scrollTop = cellTop + cell.offsetHeight - grid.clientHeight;
-      }
-    }
   }
 
   let altPreview = false;
@@ -1695,6 +1686,15 @@ const App = (() => {
     return a >= 90 ? 'Excellent' : a >= 80 ? 'Très bon' : a >= 70 ? 'Bon' : a >= 55 ? 'Correct' : a >= 40 ? 'Fragile' : 'Difficile';
   }
 
+  // Rough per-game strength estimate from accuracy, à la Chess.com's estimated
+  // rating. A monotonic mapping rounded to the nearest 50 — clearly an estimate,
+  // not a real rating.
+  function estimateElo(accuracy) {
+    if (accuracy === undefined || accuracy === null) return null;
+    const raw = (accuracy - 40) * 33;
+    return Math.max(100, Math.min(2900, Math.round(raw / 50) * 50));
+  }
+
   function buildAccuracyHero(header, summary) {
     const hero = $('#accuracy-hero');
     if (!summary || !summary.engineUsed) { hero.hidden = true; return; }
@@ -1709,6 +1709,9 @@ const App = (() => {
       myAcc = s.w.accuracy; oppAcc = s.b.accuracy;
       myLabel = 'Blancs'; oppLabel = 'Noirs';
     }
+    const myElo = estimateElo(myAcc), oppElo = estimateElo(oppAcc);
+    $('#acc-hero-elo').textContent = myElo ? `Niveau estimé ≈ ${myElo}` : '';
+    $('#acc-opp-elo').textContent = oppElo ? `≈ ${oppElo}` : '';
 
     const C = 2 * Math.PI * 25; // ring circumference (r=25)
     const ring = $('#acc-fill-ring');
@@ -2058,40 +2061,6 @@ const App = (() => {
 
     content.innerHTML = html;
     card.hidden = false;
-  }
-
-  function buildMoveList(analysis) {
-    const grid = $('#moves-grid');
-    grid.innerHTML = '';
-
-    for (let i = 0; i < analysis.length; i += 2) {
-      const moveNum = Math.floor(i / 2) + 1;
-      const numEl = document.createElement('span');
-      numEl.className = 'move-num';
-      numEl.textContent = moveNum + '.';
-      grid.appendChild(numEl);
-
-      const whiteCell = createMoveCell(analysis[i], i);
-      grid.appendChild(whiteCell);
-
-      if (i + 1 < analysis.length) {
-        const blackCell = createMoveCell(analysis[i + 1], i + 1);
-        grid.appendChild(blackCell);
-      } else {
-        grid.appendChild(document.createElement('span'));
-      }
-    }
-  }
-
-  function createMoveCell(result, index) {
-    const cell = document.createElement('span');
-    cell.className = 'move-cell';
-    cell.dataset.index = index;
-    const meta = MOVE_CLASS[result.type];
-    cell.innerHTML = result.sanFr + markSpan(result.type);
-    if (meta) cell.classList.add(meta.cls + '-move');
-    cell.addEventListener('click', () => userNav(index + 1));
-    return cell;
   }
 
   // Engine eval from White's perspective, shown as a compact signed pill.

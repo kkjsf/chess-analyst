@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '129';
+window.APP_VERSION = '130';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -412,7 +412,6 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
     <div class="analysis-segmented" id="analysis-segmented">
       <button class="seg-btn active" data-seg="conseil">💡 Conseil</button>
-      <button class="seg-btn" data-seg="coups">♟ Coups</button>
       <button class="seg-btn" data-seg="analyse">📊 Analyse</button>
     </div>
 
@@ -436,25 +435,6 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
     </div><!-- /seg-panel conseil -->
 
-    <div class="seg-panel" data-panel="coups">
-
-    <div class="highlights-card" id="highlights-card" hidden>
-      <h3>Moments clés</h3>
-      <div class="highlights-list" id="highlights-list"></div>
-    </div>
-
-    <div class="moves-card">
-      <h3>Liste des coups</h3>
-      <div class="moves-legend">
-        <span><i style="background:var(--danger)"></i>Gaffe</span>
-        <span><i style="background:var(--warning)"></i>Erreur</span>
-        <span><i style="background:var(--success)"></i>Bon coup</span>
-      </div>
-      <div class="moves-grid" id="moves-grid"></div>
-    </div>
-
-    </div><!-- /seg-panel coups -->
-
     <div class="seg-panel" data-panel="analyse">
 
     <div class="accuracy-hero" id="accuracy-hero" hidden>
@@ -467,11 +447,13 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
         <div class="acc-meta">
           <div class="acc-label" id="acc-hero-label">Ta précision</div>
           <div class="acc-grade" id="acc-hero-grade"></div>
+          <div class="acc-elo" id="acc-hero-elo"></div>
         </div>
       </div>
       <div class="acc-opp">
         <div class="acc-opp-label" id="acc-opp-label">Adversaire</div>
         <div class="acc-opp-val"><span id="acc-opp-num">–</span><span class="acc-opp-pct">%</span></div>
+        <div class="acc-elo" id="acc-opp-elo"></div>
       </div>
     </div>
 
@@ -481,6 +463,11 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
         <span class="intro-label">Résumé</span>
       </div>
       <div class="intro-text" id="intro-text"></div>
+    </div>
+
+    <div class="highlights-card" id="highlights-card" hidden>
+      <h3>Moments clés</h3>
+      <div class="highlights-list" id="highlights-list"></div>
     </div>
 
       <div class="win-graph-card" id="win-graph-card" hidden>
