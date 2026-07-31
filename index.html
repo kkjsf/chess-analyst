@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '131';
+window.APP_VERSION = '132';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -245,7 +245,6 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     <button class="panel-close" aria-label="Fermer">&times;</button>
   </div>
   <div class="panel-body ot-body">
-    <p class="concepts-intro">Explore les ouvertures en arbre : chaque premier coup ouvre une branche, colorée par famille. Clique une carte pour voir la position, l'idée, et l'ouvrir dans l'explorateur de l'app ou sur Chess.com. Le chevron ◀ déplie/replie une branche ; glisse le fond pour te déplacer.</p>
     <div class="ot-rotate-hint" id="ot-rotate-hint">
       <span>📱↔️ Tourne ton téléphone en <b>paysage</b> pour explorer l'arbre plus à l'aise.</span>
       <button class="ot-rotate-close" id="ot-rotate-close" type="button" aria-label="Ignorer">&times;</button>
@@ -254,6 +253,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <div class="ot-legend" id="ot-legend"></div>
       <div class="ot-toolbar-btns">
         <button class="ot-btn ot-btn-rotate" id="ot-landscape" type="button">⟳ Paysage</button>
+        <button class="ot-btn ot-btn-focus active" id="ot-focus" type="button" title="Compresse les branches déjà parcourues pour se concentrer sur la ligne en cours">🔎 Focus</button>
         <button class="ot-btn" id="ot-expand" type="button">Tout déplier</button>
         <button class="ot-btn" id="ot-collapse" type="button">Replier</button>
       </div>

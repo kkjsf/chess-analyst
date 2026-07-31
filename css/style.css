@@ -2969,6 +2969,18 @@ body.guess-open { overflow: hidden; }
 .ot-card.root { --ot-fam: var(--accent); }
 .ot-card.ot-hidden { display: none; }
 
+/* ── Mode Focus : comprime les branches parcourues, spotlight la ligne en cours ── */
+.ot-btn-focus.active { background: var(--accent); color: #14142a; border-color: var(--accent); font-weight: 700; }
+.ot-btn-focus.active:hover { color: #14142a; }
+.ot-focus-on .ot-card { transition: transform 0.14s, box-shadow 0.15s, border-color 0.15s, opacity 0.2s, filter 0.2s, min-width 0.2s, padding 0.2s; }
+.ot-focus-on .ot-anc > .ot-kids { margin-left: 42px; }
+.ot-focus-on .ot-anc > .ot-card { min-width: 148px; padding: 8px 11px; opacity: 0.82; }
+.ot-focus-on .ot-anc > .ot-card .ot-ic { font-size: 20px; width: 30px; height: 30px; }
+.ot-focus-on .ot-anc > .ot-card .ot-tt { font-size: 12.5px; }
+.ot-focus-on .ot-dim > .ot-card { opacity: 0.34; filter: grayscale(0.55); }
+.ot-focus-on .ot-dim > .ot-card:hover { opacity: 0.9; filter: none; }
+.ot-focus-on .ot-cur > .ot-card { box-shadow: 0 0 0 2px var(--accent) inset, 0 12px 30px rgba(0,0,0,0.55); }
+
 .ot-ic {
   font-size: 26px;
   width: 40px;
@@ -3042,6 +3054,13 @@ body.guess-open { overflow: hidden; }
 .ot-eco { font-size: 11px; color: var(--text-dim); border: 1px solid #2a3a5c; border-radius: 4px; padding: 1px 6px; }
 .ot-idea { font-size: 13px; line-height: 1.5; color: var(--text); max-width: 760px; margin-bottom: 10px; }
 .ot-idea .k { color: var(--accent); font-weight: 600; }
+.ot-plans { display: flex; flex-direction: column; gap: 6px; max-width: 760px; margin-bottom: 12px; }
+.ot-plan { font-size: 12.5px; line-height: 1.45; color: var(--text); padding: 7px 11px; border-radius: 8px; border-left: 3px solid; }
+.ot-plan-side { display: block; font-size: 11px; font-weight: 700; letter-spacing: .2px; margin-bottom: 2px; }
+.ot-plan-w { background: #f4f6fb0d; border-left-color: #e7ecf5; }
+.ot-plan-w .ot-plan-side { color: #dfe6f2; }
+.ot-plan-b { background: #0a0f1a4d; border-left-color: #43526f; }
+.ot-plan-b .ot-plan-side { color: #9fb0cc; }
 .ot-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
 .ot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .ot-link {

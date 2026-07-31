@@ -34,36 +34,49 @@ const OpeningTree = (() => {
                     kids: [
                       { mv: '3.Fb5', icon: '🇪🇸', lbl: 'Espagnole (Ruy Lopez)', eco: 'C60–C99', fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
                         appLine: 'e4 e5 Nf3 Nc6 Bb5', cc: 'Ruy-Lopez-Opening',
-                        idea: "Le fou attaque le défenseur de e5. L'ouverture la plus profonde du répertoire classique : pression durable, jeu positionnel." },
+                        idea: "Le fou attaque le défenseur de e5. L'ouverture la plus profonde du répertoire classique : pression durable, jeu positionnel.",
+                        plans: { w: "Presser e5 via Fb5, roquer, puis c3-d4 pour bâtir un gros centre et étouffer les Noirs.", b: "Chasser le fou par ...a6/...b5, tenir e5 et développer ...Fe7, ...O-O, ...d6, viser une contre-poussée ...d5." } },
                       { mv: '3.Fc4', icon: '🇮🇹', lbl: 'Italienne', eco: 'C50–C54', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
                         appLine: 'e4 e5 Nf3 Nc6 Bc4', cc: 'Italian-Game',
-                        idea: "Le fou vise f7, le point faible. Développement rapide, parfaite pour apprendre les principes d'ouverture." },
+                        idea: "Le fou vise f7, le point faible. Développement rapide, parfaite pour apprendre les principes d'ouverture.",
+                        plans: { w: "Développement rapide, viser f7 avec Fc4, roquer puis c3-d4 pour prendre le centre.", b: "Copier le développement (...Fc5 ou ...Cf6), contrôler d4 et garder f7 solide." } },
                       { mv: '3.d4', icon: '🏴', lbl: 'Écossaise', eco: 'C44–C45', fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq d3 0 3',
                         appLine: 'e4 e5 Nf3 Nc6 d4 exd4 Nxd4', cc: 'Scotch-Game',
-                        idea: "Ouvre le centre tout de suite : jeu clair et actif, peu de théorie." },
+                        idea: "Ouvre le centre tout de suite : jeu clair et actif, peu de théorie.",
+                        plans: { w: "Ouvrir le centre par d4, développer librement et occuper l'espace.", b: "Rendre le jeu clair : ...Fc5 ou ...Cf6, développement sain, viser l'égalité." } },
                     ]},
+                  { mv: '2...Cf6', icon: '🪞', lbl: 'Défense russe (Petroff)', fam: 'open', eco: 'C42–C43', fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+                    appLine: 'e4 e5 Nf3 Nf6', cc: 'Petrovs-Defense',
+                    idea: "Au lieu de défendre e5, les Noirs contre-attaquent e4 par symétrie. Très solide et réputée pour annuler. Piège classique : après <span class='k'>3.Cxe5</span> il faut jouer <span class='k'>3...d6</span> d'abord, pas <span class='k'>3...Cxe4?</span> (4.De2 gagne).",
+                    plans: { w: "Profiter de l'initiative : d4, Fd3, roque, occuper le centre pendant que le Cf6 s'est avancé.", b: "Neutraliser par symétrie, échanger les pièces et viser une finale égale et sûre." } },
                 ]},
               { mv: '2.f4', icon: '🔥', lbl: 'Gambit du Roi', eco: 'C30–C39', fen: 'rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PPP/RNBQKBNR b KQkq f3 0 2',
                 appLine: 'e4 e5 f4', cc: 'Kings-Gambit',
-                idea: "Sacrifie un pion pour un développement fulgurant et l'ouverture de la colonne f. Romantique et tranchant." },
+                idea: "Sacrifie un pion pour un développement fulgurant et l'ouverture de la colonne f. Romantique et tranchant.",
+                plans: { w: "Rendre un pion contre un développement fulgurant et la colonne f ouverte pour attaquer f7.", b: "Rendre le pion au bon moment, jouer ...d5 pour libérer le jeu et sortir les pièces." } },
             ]},
           { mv: '1...c5', icon: '🌋', lbl: 'Sicilienne', fam: 'semiopen', eco: 'B20–B99', fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
             appLine: 'e4 c5', cc: 'Sicilian-Defense',
             idea: "La réponse la plus combative à 1.e4. Jeu asymétrique → <span class='k'>semi-ouvert</span>, contre-jeu sur l'aile dame.",
+            plans: { w: "Ouvrir le centre (d4), attaquer sur l'aile roi, souvent roque long et poussée de pions.", b: "Contre-jeu sur l'aile dame via la colonne c semi-ouverte (...a6, ...b5), viser le centre." },
             kids: [
               { mv: '2.Cf3 d6 3.d4', icon: '🗡️', lbl: 'Sicilienne ouverte', eco: 'B30–B99', fen: 'rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq - 1 5',
                 appLine: 'e4 c5', cc: 'Sicilian-Defense',
-                idea: "Les Blancs ouvrent le centre. Najdorf, Dragon, Scheveningen en découlent." },
+                idea: "Les Blancs ouvrent le centre. Najdorf, Dragon, Scheveningen en découlent.",
+                plans: { w: "Développer vite, roquer, choisir un plan d'attaque (colonne f, poussée f4-g4 sur le roi).", b: "Structure flexible (Najdorf, Dragon), pression sur e4 et jeu actif sur l'aile dame." } },
             ]},
           { mv: '1...e6', icon: '🇫🇷', lbl: 'Française', fam: 'semiopen', eco: 'C00–C19', fen: 'rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
             appLine: 'e4 e6 d4 d5', cc: 'French-Defense',
-            idea: "Solide mais un peu passive : le fou de cases blanches reste enfermé. Prépare d5, structures fermées." },
+            idea: "Solide mais un peu passive : le fou de cases blanches reste enfermé. Prépare d5, structures fermées.",
+            plans: { w: "Prendre l'espace au centre (e5), attaquer sur l'aile roi, exploiter le fou noir enfermé.", b: "Frapper le centre par ...c5 et ...f6, activer les pièces et résoudre le mauvais fou." } },
           { mv: '1...c6', icon: '🧱', lbl: 'Caro-Kann', fam: 'semiopen', eco: 'B10–B19', fen: 'rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
             appLine: 'e4 c6 d4 d5', cc: 'Caro-Kann-Defense',
-            idea: "Comme la française mais sans enfermer le fou. Très solide, chère aux joueurs positionnels." },
+            idea: "Comme la française mais sans enfermer le fou. Très solide, chère aux joueurs positionnels.",
+            plans: { w: "Occuper le centre, développer confortablement et jouer contre la structure solide mais passive.", b: "Sortir le fou de cases blanches AVANT ...e6, garder une structure saine, viser la finale." } },
           { mv: '1...d5', icon: '❄️', lbl: 'Scandinave', fam: 'semiopen', eco: 'B01', fen: 'rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2',
             appLine: 'e4 d5 exd5 Qxd5', cc: 'Scandinavian-Defense',
-            idea: "Défie e4 tout de suite. Après 2.exd5 Dxd5, la dame sort tôt : simple, peu de théorie." },
+            idea: "Défie e4 tout de suite. Après 2.exd5 Dxd5, la dame sort tôt : simple, peu de théorie.",
+            plans: { w: "Gagner du temps en attaquant la dame noire (Cc3), développer vite avec l'avantage d'espace.", b: "Mettre la dame en sécurité (...Da5 ou ...Dd6), structure solide ...c6, développement simple." } },
         ]},
       { mv: '1.d4', icon: '🏛️', lbl: 'Pion dame', fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1', appLine: null, cc: null,
         idea: "Le pion d4 est défendu par la dame : centre plus stable, jeu plus lent et stratégique.",
@@ -73,16 +86,20 @@ const OpeningTree = (() => {
             kids: [
               { mv: '2.c4', icon: '💎', lbl: 'Gambit dame', eco: 'D06–D69', fen: 'rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq c3 0 2', appLine: null, cc: 'Queens-Gambit',
                 idea: "Offre le pion c pour dévier d5 et dominer le centre. Faux sacrifice : le pion se récupère.",
+                plans: { w: "Dévier d5 pour dominer le centre ; récupérer c4, viser l'attaque de minorité.", b: "Choisir sa structure : rendre le pion, ou tenir d5 par ...c6 (Slave) ou ...e6 (refusé)." },
                 kids: [
                   { mv: '2...dxc4', icon: '🤝', lbl: 'GD accepté', eco: 'D20–D29', fen: 'rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
                     appLine: 'd4 d5 c4 dxc4', cc: 'Queens-Gambit-Accepted',
-                    idea: "Les Noirs prennent mais rendront le pion ; les Blancs obtiennent un centre mobile." },
+                    idea: "Les Noirs prennent mais rendront le pion ; les Blancs obtiennent un centre mobile.",
+                    plans: { w: "Récupérer c4, bâtir un centre mobile e4-d4 et jouer avec l'espace.", b: "Rendre le pion sans problème, viser ...c5 ou ...e5 pour libérer le jeu." } },
                   { mv: '2...e6', icon: '🚫', lbl: 'GD refusé', eco: 'D30–D69', fen: 'rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
                     appLine: 'd4 d5 c4 e6', cc: 'Queens-Gambit-Declined',
-                    idea: "Solide et classique : structure rigide, plan clair (attaque de minorité)." },
+                    idea: "Solide et classique : structure rigide, plan clair (attaque de minorité).",
+                    plans: { w: "Structure rigide mais plan clair : attaque de minorité (b4-b5) sur l'aile dame.", b: "Tenir d5, développer solidement, chercher ...c5 ou ...e5 comme rupture libératrice." } },
                   { mv: '2...c6', icon: '🐻', lbl: 'Défense slave', eco: 'D10–D19', fen: 'rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
                     appLine: 'd4 d5 c4 c6', cc: 'Slav-Defense',
-                    idea: "Renforce d5 sans enfermer le fou de cases blanches. Très fiable au plus haut niveau." },
+                    idea: "Renforce d5 sans enfermer le fou de cases blanches. Très fiable au plus haut niveau.",
+                    plans: { w: "Garder la tension au centre, développer les fous activement avant de jouer e3.", b: "Renforcer d5 par ...c6 sans enfermer le fou dames, puis le sortir en ...Ff5 / ...Fg4." } },
                 ]},
             ]},
           { mv: '1...Cf6', icon: '🧩', lbl: 'Jeux semi-fermés', fam: 'semiclosed', fen: 'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2', appLine: null, cc: null,
@@ -90,27 +107,52 @@ const OpeningTree = (() => {
             kids: [
               { mv: '2.c4 e6 3.Cc3 Fb4', icon: '📌', lbl: 'Nimzo-indienne', eco: 'E20–E59', fen: 'rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4',
                 appLine: 'd4 Nf6 c4 e6 Nc3 Bb4', cc: 'Nimzo-Indian-Defense',
-                idea: "Le fou cloue Cc3 et vise à doubler les pions blancs. Équilibre solidité / jeu de pièces." },
+                idea: "Le fou cloue Cc3 et vise à doubler les pions blancs. Équilibre solidité / jeu de pièces.",
+                plans: { w: "Accepter les pions doublés contre la paire de fous et un gros centre à exploiter.", b: "Clouer Cc3, doubler les pions blancs et jouer contre les cases faibles." } },
               { mv: '2.c4 g6 3.Cc3 Fg7', icon: '🏹', lbl: 'Est-indienne / Grünfeld', eco: 'E60–E99', fen: 'rnbqk2r/ppppppbp/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4',
                 appLine: 'd4 Nf6 c4 g6 Nc3 Bg7', cc: 'Kings-Indian-Defense',
-                idea: "Fianchetto : on laisse un gros centre blanc… pour le bombarder. Contre-attaque tranchante." },
+                idea: "Fianchetto : on laisse un gros centre blanc… pour le bombarder. Contre-attaque tranchante.",
+                plans: { w: "Bâtir un gros centre de pions et viser l'espace ou l'attaque.", b: "Laisser le centre… pour le bombarder par ...e5 (Est-indienne) ou ...d5/...c5 (Grünfeld)." } },
             ]},
           { mv: '1...f5', icon: '🌷', lbl: 'Hollandaise', fam: 'semiclosed', eco: 'A80–A99', fen: 'rnbqkbnr/ppppp1pp/8/5p2/3P4/8/PPP1PPPP/RNBQKBNR w KQkq f6 0 2',
             appLine: null, cc: 'Dutch-Defense',
-            idea: "Vise l'attaque sur l'aile roi (case e4). Ambitieuse, mais affaiblit un peu le roque." },
+            idea: "Vise l'attaque sur l'aile roi (case e4). Ambitieuse, mais affaiblit un peu le roque.",
+            plans: { w: "Exploiter l'affaiblissement de l'aile roi, souvent fianchetto g3 et jeu au centre.", b: "Contrôler e4, monter une attaque sur l'aile roi (Stonewall ou Leningrad)." } },
         ]},
       { mv: '1.c4', icon: '🇬🇧', lbl: 'Anglaise', fam: 'flank', eco: 'A10–A39', fen: 'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1',
         appLine: 'c4', cc: 'English-Opening',
-        idea: "Ouverture de <span class='k'>flanc</span> : contrôle d5 à distance sans avancer de pion central. Transpose souvent." },
+        idea: "Ouverture de <span class='k'>flanc</span> : contrôle d5 à distance sans avancer de pion central. Transpose souvent.",
+        plans: { w: "Contrôler d5 à distance, jeu flexible sur l'aile dame, transposer au bon moment.", b: "Répondre au centre (...e5, Sicilienne inversée) ou ...c5/...Cf6, garder la symétrie." } },
       { mv: '1.Cf3', icon: '🐎', lbl: 'Réti', fam: 'flank', eco: 'A04–A09', fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKBNR b KQkq - 1 1',
         appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
-        idea: "Flexible et hypermoderne : développe avant de fixer la structure. Peut transposer partout." },
+        idea: "Flexible et hypermoderne : développe avant de fixer la structure. Peut transposer partout.",
+        plans: { w: "Développer avant de fixer la structure, pression hypermoderne sur d5, fianchetto.", b: "Occuper le centre (...d5, ...e6/...c6) et le tenir, ou copier le plan de flanc." } },
     ]
   };
 
-  let built = false, selectedCard = null, landscapeLocked = false;
+  let built = false, selectedCard = null, currentNode = null, landscapeLocked = false, focusMode = true;
   const active = new Set(Object.keys(FAM));
   const famColor = f => f ? FAM[f].color : '#6b7a99';
+
+  // ── Mode Focus : comprime les branches déjà parcourues (la « colonne
+  // vertébrale » du chemin) et estompe les branches hors ligne, pour se
+  // concentrer sur la position en cours et ses suites. ──
+  function collectDesc(node, set) { (node.kids || []).forEach(k => { set.add(k); collectDesc(k, set); }); }
+  function applyFocus(node) {
+    const tree = document.getElementById('ot-tree'); if (!tree) return;
+    const all = tree.querySelectorAll('.ot-subtree');
+    if (!focusMode || !node) { all.forEach(st => st.classList.remove('ot-anc', 'ot-cur', 'ot-next', 'ot-dim')); return; }
+    const path = new Set(findPath(TREE, node) || [node]);
+    const desc = new Set(); collectDesc(node, desc);
+    all.forEach(st => {
+      const n = st._node;
+      st.classList.remove('ot-anc', 'ot-cur', 'ot-next', 'ot-dim');
+      if (n === node) st.classList.add('ot-cur');
+      else if (path.has(n)) st.classList.add('ot-anc');
+      else if (desc.has(n)) st.classList.add('ot-next');
+      else st.classList.add('ot-dim');
+    });
+  }
 
   // ── Forçage du paysage (Android PWA installée : contourne le WebAPK figé) ──
   async function lockLandscape() {
@@ -173,6 +215,9 @@ const OpeningTree = (() => {
   function select(node, fam, card) {
     if (selectedCard) selectedCard.classList.remove('selected');
     if (card) { card.classList.add('selected'); selectedCard = card; }
+    currentNode = node;
+    applyFocus(node);
+    requestAnimationFrame(draw);
     const path = findPath(TREE, node) || [node];
     const moves = path.filter(n => n.mv).map(n => n.mv).join('  ');
     const famTag = fam ? `<span class="ot-pill" style="background:${famColor(fam)}22;color:${famColor(fam)}">${FAM[fam].name}</span>` : '';
@@ -185,6 +230,10 @@ const OpeningTree = (() => {
         <h3>${node.icon || ''} ${node.lbl}</h3>
         <div class="ot-metarow">${famTag}${eco}<span class="ot-path">${moves ? moves.replace(/(\d+\.(?:\.\.)?)/g, '<b>$1</b>') : 'position de départ'}</span></div>
         <div class="ot-idea">${node.idea || ''}</div>
+        ${node.plans ? `<div class="ot-plans">
+          <div class="ot-plan ot-plan-w"><span class="ot-plan-side">♔ Plan des Blancs</span>${node.plans.w}</div>
+          <div class="ot-plan ot-plan-b"><span class="ot-plan-side">♚ Plan des Noirs</span>${node.plans.b}</div>
+        </div>` : ''}
         <div class="ot-actions">
           <button class="ot-link ot-link-app" id="ot-open-app">♟ Ouvrir dans Chess Analyst</button>
           <a class="ot-link ot-link-cc" id="ot-open-cc" href="${ccUrl}" target="_blank" rel="noopener">↗ Voir sur Chess.com</a>
@@ -246,7 +295,9 @@ const OpeningTree = (() => {
         const cx = kr.left - base.left, cy = kr.top - base.top + kr.height / 2;
         const dx = Math.max(24, (cx - px) / 2);
         const col = famColor(kc.dataset.fam || null);
-        d += `<path d="M ${px} ${py} C ${px + dx} ${py}, ${cx - dx} ${cy}, ${cx} ${cy}" fill="none" stroke="${col}" stroke-width="2.5" stroke-opacity="0.55"/>`;
+        const childSt = kc.closest('.ot-subtree');
+        const dim = childSt && childSt.classList.contains('ot-dim');
+        d += `<path d="M ${px} ${py} C ${px + dx} ${py}, ${cx - dx} ${cy}, ${cx} ${cy}" fill="none" stroke="${col}" stroke-width="2.5" stroke-opacity="${dim ? 0.13 : 0.55}"/>`;
       });
     });
     svg.innerHTML = d;
@@ -291,6 +342,7 @@ const OpeningTree = (() => {
     const tree = document.getElementById('ot-tree'); if (!tree) return;
     tree.innerHTML = '';
     tree.appendChild(buildNode(TREE, null, 0));
+    tree.classList.toggle('ot-focus-on', focusMode);
     buildLegend();
     enablePan();
     const expand = document.getElementById('ot-expand'), collapse = document.getElementById('ot-collapse');
@@ -303,6 +355,14 @@ const OpeningTree = (() => {
     if (rotClose) rotClose.onclick = () => { const h = document.getElementById('ot-rotate-hint'); if (h) h.classList.add('dismissed'); };
     const lsBtn = document.getElementById('ot-landscape');
     if (lsBtn) lsBtn.onclick = toggleLandscape;
+    const focusBtn = document.getElementById('ot-focus');
+    if (focusBtn) focusBtn.onclick = () => {
+      focusMode = !focusMode;
+      focusBtn.classList.toggle('active', focusMode);
+      tree.classList.toggle('ot-focus-on', focusMode);
+      applyFocus(currentNode || TREE);
+      requestAnimationFrame(draw);
+    };
     observePanelClose();
     window.addEventListener('resize', draw);
     // orientationchange fires before the viewport settles — redraw once it has.
