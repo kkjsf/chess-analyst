@@ -1686,13 +1686,43 @@ const App = (() => {
     return a >= 90 ? 'Excellent' : a >= 80 ? 'Très bon' : a >= 70 ? 'Bon' : a >= 55 ? 'Correct' : a >= 40 ? 'Fragile' : 'Difficile';
   }
 
-  // Rough per-game strength estimate from accuracy, à la Chess.com's estimated
-  // rating. A monotonic mapping rounded to the nearest 50 — clearly an estimate,
-  // not a real rating.
-  function estimateElo(accuracy) {
-    if (accuracy === undefined || accuracy === null) return null;
-    const raw = (accuracy - 40) * 33;
-    return Math.max(100, Math.min(2900, Math.round(raw / 50) * 50));
+  // Chess.com's timeClass keys, derived from a PGN TimeControl header, so we can
+  // compare a game against the right slice of your history (daily accuracy is
+  // inflated by the long thinking time and shouldn't be mixed with rapid).
+  function gameTimeClass(header) {
+    const tc = header.TimeControl || '';
+    if (tc.includes('/') || tc.includes('86400') || tc.includes('172800')) return 'daily';
+    const secs = tcSeconds(tc);
+    if (!secs) return 'autre';
+    if (secs < 180) return 'bullet';
+    if (secs < 600) return 'blitz';
+    return 'rapid';
+  }
+  const TC_FR = { daily: 'journalières', rapid: 'rapides', blitz: 'blitz', bullet: 'bullet', autre: '' };
+
+  // "vs your usual level": where this game's accuracy sits in YOUR own accuracy
+  // distribution for the same format. Calibrated on your games (Coach data),
+  // not a fabricated Elo — accuracy doesn't reliably map to a rating.
+  function buildLevelIndicator(header, myAcc, isUserGame) {
+    const el = $('#acc-hero-elo');
+    if (!el) return;
+    el.textContent = '';
+    el.className = 'acc-elo';
+    if (!isUserGame || typeof Coach === 'undefined' || !Coach.accuracyBaseline) return;
+    const fmt = gameTimeClass(header);
+    Coach.accuracyBaseline().then(byFmt => {
+      const samples = (byFmt && byFmt[fmt]) || [];
+      if (samples.length < 5) return; // not enough of your history in this format
+      const below = samples.filter(a => a < myAcc).length;
+      const pct = Math.round(below / samples.length * 100);
+      const mean = samples.reduce((s, a) => s + a, 0) / samples.length;
+      let tag, cls;
+      if (myAcc >= mean + 3) { tag = 'Au-dessus de ta moyenne'; cls = 'rel-up'; }
+      else if (myAcc <= mean - 3) { tag = 'Sous ta moyenne'; cls = 'rel-down'; }
+      else { tag = 'Dans ta moyenne'; cls = 'rel-mid'; }
+      el.className = 'acc-elo ' + cls;
+      el.textContent = `${tag} · mieux que ${pct}% de tes parties ${TC_FR[fmt] || fmt}`;
+    }).catch(() => {});
   }
 
   function buildAccuracyHero(header, summary) {
@@ -1709,9 +1739,7 @@ const App = (() => {
       myAcc = s.w.accuracy; oppAcc = s.b.accuracy;
       myLabel = 'Blancs'; oppLabel = 'Noirs';
     }
-    const myElo = estimateElo(myAcc), oppElo = estimateElo(oppAcc);
-    $('#acc-hero-elo').textContent = myElo ? `Niveau estimé ≈ ${myElo}` : '';
-    $('#acc-opp-elo').textContent = oppElo ? `≈ ${oppElo}` : '';
+    buildLevelIndicator(header, myAcc, !!user);
 
     const C = 2 * Math.PI * 25; // ring circumference (r=25)
     const ring = $('#acc-fill-ring');

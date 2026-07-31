@@ -2018,5 +2018,23 @@ const Coach = (() => {
     $('#screen-import').classList.add('active');
   }
 
-  return { show, hide, getUser, setUser };
+  // Per-format accuracy history from the analysed games — feeds the "vs your
+  // usual level" indicator on the analysis screen. Lazily opens the DB and
+  // loads the games so it works even if the Coach view was never opened.
+  async function accuracyBaseline() {
+    try {
+      if (!db) db = await openDB();
+      if (!games.length) games = await getAll();
+    } catch (_) { return {}; }
+    const byFmt = {};
+    for (const g of games) {
+      const a = g.analysis;
+      if (!a || a.accuracy == null) continue;
+      const f = g.timeClass || 'autre';
+      (byFmt[f] = byFmt[f] || []).push(a.accuracy);
+    }
+    return byFmt;
+  }
+
+  return { show, hide, getUser, setUser, accuracyBaseline };
 })();
