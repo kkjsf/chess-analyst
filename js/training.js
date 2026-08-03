@@ -688,6 +688,15 @@ const Training = (() => {
         onMove(from, sq);
       }
     };
+    // Drag-and-drop (chess.com-style), coexisting with click-to-move. A tap still
+    // runs the click handler above; only a real drag makes the move. The board
+    // SVG is rebuilt on every render, so listeners never accumulate.
+    BoardRenderer.enableDrag(board, {
+      getFen: () => liveFen,
+      arrows,
+      canMove: () => !!onMove,
+      onMove: (from, to) => { if (onMove) { selected = null; onMove(from, to); } },
+    });
   }
 
   // ───────────────────────── PUZZLES tab ─────────────────────────
@@ -859,7 +868,7 @@ const Training = (() => {
     }
     // Any legal mate is objectively best — accept it whatever the stored line is.
     if (played && played.san.includes('#')) { revealSolution(true, played); return; }
-    if (!legal) { setFeedback('wrong', `⚠️ Coup illégal — clique la pièce puis sa case d'arrivée.`); return; }
+    if (!legal) { setFeedback('wrong', `⚠️ Coup illégal — clique (ou glisse) la pièce puis sa case d'arrivée.`); return; }
 
     // Accept an equally-good alternative if the engine agrees it's within a hair
     // of the intended move. For a multi-move line we can't keep the stored
