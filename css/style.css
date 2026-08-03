@@ -2326,6 +2326,50 @@ body.guess-open { overflow: hidden; }
   #coach-dashboard { column-count: 3; }
 }
 
+/* ── Analysis screen: desktop two-column (big board left, cards right) ──
+   On phones/tablets the board sits above the cards in one centered column,
+   capped at 440px. On a wide screen that wastes most of the viewport, so the
+   layout becomes a grid: a large board column (up to ~600px) on the left that
+   stays pinned while the analysis cards scroll in the right column. The DOM
+   stays in mobile order — only .board-sticky is forced to column 1 spanning
+   every row, its siblings (tabs + panels) fall into column 2. */
+@media (min-width: 1000px) {
+  .analysis-body {
+    display: grid;
+    grid-template-columns: minmax(460px, 560px) minmax(340px, 1fr);
+    align-items: start;
+    column-gap: 34px;
+    row-gap: 16px;
+    max-width: 1180px;
+    padding: 24px 28px calc(78px + env(safe-area-inset-bottom,0));
+  }
+  .analysis-body .board-sticky,
+  .analysis-body.board-pinned .board-sticky {
+    grid-column: 1;
+    grid-row: 1 / span 50;
+    align-self: start;
+    align-items: stretch;
+    position: sticky;
+    top: 16px;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  /* Board and its rails fill the (now much wider) board column. The wrapper
+     must take an explicit full width — under the column-flex it otherwise
+     shrinks to its content and the board collapses to ~300px. */
+  .board-wrapper, .board-container, .player-bar, .move-strip, .coach-review {
+    width: 100%;
+    max-width: 100%;
+  }
+  /* Right column: segmented tabs + every seg-panel stack under each other. */
+  .analysis-segmented,
+  .analysis-body > .seg-panel {
+    grid-column: 2;
+    width: 100%;
+  }
+}
+
 /* ── Training screen: desktop two-column drill ──────────────────────────────
    On phones the drill stays a single centered column (board under the prompt).
    On wide screens that wastes most of the viewport, so the puzzle / vigilance
