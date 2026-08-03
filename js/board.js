@@ -100,7 +100,7 @@ const BoardRenderer = (() => {
   }
 
   function renderPieceHtml(p) {
-    return `<g transform="translate(${p.x},${p.y})" style="pointer-events:none">${PIECE_DEFS[p.piece]}</g>`;
+    return `<g transform="translate(${p.x},${p.y})" data-sq="${p.sq}" style="pointer-events:none">${PIECE_DEFS[p.piece]}</g>`;
   }
 
   function render(svgEl, fen, lastMove) {
@@ -314,5 +314,72 @@ const BoardRenderer = (() => {
     overlaySvg.innerHTML = html;
   }
 
-  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl };
+  // Drag-and-drop moves (chess.com-style), coexisting with click-to-move.
+  // opts: { getFen():fen, onMove(from,to), arrows?:overlaySvg, canMove?():bool }
+  // A tap (no drag) is left untouched so the existing click handler still runs;
+  // only a real drag consumes the gesture and suppresses the trailing click.
+  function enableDrag(svgEl, opts) {
+    opts = opts || {};
+    svgEl.style.touchAction = 'none';
+    let from = null, dragging = false, sx = 0, sy = 0, ghost = null, orig = null, targets = [];
+
+    const toUser = (cx, cy) => {
+      const r = svgEl.getBoundingClientRect();
+      return { x: (cx - r.left) / r.width * 360, y: (cy - r.top) / r.height * 360 };
+    };
+    const legal = (sq) => {
+      try { return new Chess(opts.getFen()).moves({ square: sq, verbose: true }).map(m => ({ to: m.to, capture: !!m.captured })); }
+      catch (_) { return []; }
+    };
+    const cleanup = () => {
+      if (ghost) { ghost.remove(); ghost = null; }
+      if (orig) { orig.style.opacity = ''; orig = null; }
+      if (opts.arrows) clearArrows(opts.arrows);
+      dragging = false; from = null; targets = [];
+    };
+
+    svgEl.addEventListener('pointerdown', (e) => {
+      if (opts.canMove && !opts.canMove()) return;
+      const sq = coordToSquare(svgEl, e.clientX, e.clientY);
+      if (!sq) return;
+      targets = legal(sq);
+      if (!targets.length) return; // no movable piece of the side to move here
+      from = sq; sx = e.clientX; sy = e.clientY; dragging = false;
+      try { svgEl.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    svgEl.addEventListener('pointermove', (e) => {
+      if (!from) return;
+      if (!dragging) {
+        if (Math.abs(e.clientX - sx) < 6 && Math.abs(e.clientY - sy) < 6) return;
+        dragging = true;
+        if (opts.arrows) showMoveHints(opts.arrows, from, targets);
+        orig = svgEl.querySelector(`g[data-sq="${from}"]`);
+        if (orig) {
+          orig.style.opacity = '0.25';
+          ghost = orig.cloneNode(true);
+          ghost.removeAttribute('data-sq');
+          ghost.style.pointerEvents = 'none';
+          svgEl.appendChild(ghost);
+        }
+      }
+      if (ghost) { const u = toUser(e.clientX, e.clientY); ghost.setAttribute('transform', `translate(${u.x - SQ / 2},${u.y - SQ / 2})`); }
+    });
+
+    svgEl.addEventListener('pointerup', (e) => {
+      if (!from) return;
+      const wasDrag = dragging, src = from, to = coordToSquare(svgEl, e.clientX, e.clientY);
+      cleanup();
+      if (wasDrag) {
+        svgEl.__suppressClick = true; // swallow the click this drag would fire
+        if (to && to !== src && opts.onMove) opts.onMove(src, to);
+      }
+    });
+    svgEl.addEventListener('pointercancel', cleanup);
+    svgEl.addEventListener('click', (e) => {
+      if (svgEl.__suppressClick) { svgEl.__suppressClick = false; e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+  }
+
+  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag };
 })();

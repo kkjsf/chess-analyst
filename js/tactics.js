@@ -269,6 +269,12 @@ const Tactics = (() => {
     BoardRenderer.render($('#tac-board'), p.fen);
     BoardRenderer.clearArrows($('#tac-arrows'));
     attachClicks();
+    BoardRenderer.enableDrag($('#tac-board'), {
+      getFen: () => game.fen(),
+      arrows: $('#tac-arrows'),
+      canMove: () => !locked,
+      onMove: (from, to) => tryMove(from, to),
+    });
     $('#tac-hint').onclick = showHint;
     $('#tac-solve').onclick = solve;
   }

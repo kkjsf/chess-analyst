@@ -97,6 +97,12 @@ const GuessMove = (() => {
     BoardRenderer.render($('#guess-board'), p.fenBefore);
     BoardRenderer.clearArrows($('#guess-arrows'));
     attachClicks();
+    BoardRenderer.enableDrag($('#guess-board'), {
+      getFen: () => plies[gi].fenBefore,
+      arrows: $('#guess-arrows'),
+      canMove: () => !answered,
+      onMove: (from, to) => submit(from, to),
+    });
     $('#guess-skip').onclick = () => reveal(null);
   }
 

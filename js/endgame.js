@@ -115,6 +115,12 @@ const Endgame = (() => {
     BoardRenderer.render($('#eg-board'), chess.fen());
     BoardRenderer.clearArrows($('#eg-arrows'));
     attachClicks();
+    BoardRenderer.enableDrag($('#eg-board'), {
+      getFen: () => chess.fen(),
+      arrows: $('#eg-arrows'),
+      canMove: () => !busy && !chess.game_over(),
+      onMove: (from, to) => userMove(from, to),
+    });
     $('#eg-restart').onclick = () => start(sc);
     $('#eg-other').onclick = () => { sc = null; renderMenu(); };
   }
