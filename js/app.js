@@ -3225,12 +3225,86 @@ const App = (() => {
   }
 
   function refreshHome() {
+    renderRoutine();
     if (typeof Training === 'undefined') return;
     const due = Training.dueCount();
     const badge = $('#tab-train-badge');
     if (!badge) return;
     badge.hidden = !(due > 0);
     badge.textContent = due > 99 ? '99+' : String(due);
+  }
+
+  // ── "Ma routine du jour" — a daily checklist that materialises the coaching
+  // plan (tactics > review your games > SRS > play slow). State is per-day in
+  // localStorage; completing every item feeds a day streak. ──
+  const ROUTINE_ITEMS = [
+    { key: 'puzzles', icon: '🧩', label: 'Puzzles tactiques (10 min)', action: 'train' },
+    { key: 'srs',     icon: '🛡️', label: 'Réviser mes erreurs',        action: 'srs', due: true },
+    { key: 'review',  icon: '🔎', label: 'Revoir une partie',           action: 'review' },
+    { key: 'rapide',  icon: '♟️', label: 'Une partie en Rapide (pas de bullet !)', action: null },
+  ];
+  const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function routineTodayKey() { return 'chess-routine-' + isoDay(new Date()); }
+  function routineState() { try { return JSON.parse(localStorage.getItem(routineTodayKey()) || '{}'); } catch (_) { return {}; } }
+
+  function renderRoutine() {
+    const list = $('#routine-list');
+    if (!list) return;
+    const state = routineState();
+    const due = (typeof Training !== 'undefined' && Training.dueCount) ? Training.dueCount() : 0;
+    list.innerHTML = '';
+    ROUTINE_ITEMS.forEach(item => {
+      const row = document.createElement('label');
+      row.className = 'routine-item' + (state[item.key] ? ' done' : '');
+      const dueTag = (item.due && due > 0) ? ` <span class="routine-due">${due}</span>` : '';
+      const launch = item.action ? '<button type="button" class="routine-go" aria-label="Ouvrir">→</button>' : '';
+      row.innerHTML = `<input type="checkbox" ${state[item.key] ? 'checked' : ''}>` +
+        `<span class="routine-ico">${item.icon}</span>` +
+        `<span class="routine-label">${item.label}${dueTag}</span>${launch}`;
+      row.querySelector('input').addEventListener('change', (e) => toggleRoutine(item.key, e.target.checked));
+      const go = row.querySelector('.routine-go');
+      if (go) go.addEventListener('click', (e) => { e.preventDefault(); runRoutineAction(item.action); });
+      list.appendChild(row);
+    });
+    renderStreak();
+  }
+
+  function toggleRoutine(key, checked) {
+    const state = routineState();
+    state[key] = checked;
+    try { localStorage.setItem(routineTodayKey(), JSON.stringify(state)); } catch (_) {}
+    if (ROUTINE_ITEMS.every(it => state[it.key])) bumpStreak();
+    renderRoutine();
+  }
+
+  function bumpStreak() {
+    const today = isoDay(new Date());
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const yesterday = isoDay(y);
+    let s; try { s = JSON.parse(localStorage.getItem('chess-routine-streak') || '{}'); } catch (_) { s = {}; }
+    if (s.date === today) return; // already counted today
+    s.count = (s.date === yesterday ? (s.count || 0) : 0) + 1;
+    s.date = today;
+    try { localStorage.setItem('chess-routine-streak', JSON.stringify(s)); } catch (_) {}
+  }
+
+  function renderStreak() {
+    const el = $('#routine-streak');
+    if (!el) return;
+    let s; try { s = JSON.parse(localStorage.getItem('chess-routine-streak') || '{}'); } catch (_) { s = {}; }
+    const today = isoDay(new Date());
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const valid = s.date === today || s.date === isoDay(y); // streak still alive
+    if (s.count > 0 && valid) { el.hidden = false; el.textContent = `🔥 ${s.count} j`; }
+    else { el.hidden = true; }
+  }
+
+  function runRoutineAction(action) {
+    if (action === 'train' || action === 'srs') { if (typeof Training !== 'undefined') Training.show(); return; }
+    if (action === 'review') {
+      const ta = $('#pgn-input');
+      if (ta) { ta.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); ta.focus(); }
+    }
   }
 
   function formatDate(dateStr) {

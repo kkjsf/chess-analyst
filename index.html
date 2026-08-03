@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '135';
+window.APP_VERSION = '136';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -341,6 +341,16 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
 
   <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> ou <b>Finales</b> dans la barre du bas.</p>
+
+  <div class="routine-card" id="routine-card">
+    <div class="routine-head">
+      <span class="routine-title">🎯 Ma routine du jour</span>
+      <span class="routine-streak" id="routine-streak" hidden></span>
+    </div>
+    <p class="routine-sub">Le plan qui fait vraiment progresser à ton niveau. Coche au fil de la journée.</p>
+    <div class="routine-list" id="routine-list"></div>
+    <p class="routine-foot"><b>Priorité :</b> ne rien laisser en prise · tactique chaque jour · revoir tes parties. Les ouvertures, plus tard.</p>
+  </div>
 
   <div class="recent-section" id="recent-section" hidden>
     <h3>Parties récentes</h3>
