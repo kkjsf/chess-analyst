@@ -2326,6 +2326,90 @@ body.guess-open { overflow: hidden; }
   #coach-dashboard { column-count: 3; }
 }
 
+/* ── Training screen: desktop two-column drill ──────────────────────────────
+   On phones the drill stays a single centered column (board under the prompt).
+   On wide screens that wastes most of the viewport, so the puzzle / vigilance
+   panels become a grid: a large board on the left, the info + actions stacked
+   in a narrow column on the right. The DOM stays flat and in mobile order, so
+   grid-template-areas do the placement without any JS change (drag keeps
+   working — the SVG just gets bigger). Only panels that actually hold a board
+   flip to the grid, via :has(); the Motifs list and empty states stay stacked. */
+@media (min-width: 720px) {
+  #screen-training .train-tabs,
+  #screen-training .train-body { max-width: 940px; }
+  #screen-training .train-body { padding-top: 18px; }
+
+  /* Motifs has no board — keep its list at a comfortable reading width. */
+  #train-motifs { max-width: 560px; margin: 0 auto; }
+
+  #train-puzzles.active:has(.train-board-wrap) {
+    display: grid;
+    grid-template-columns: minmax(360px, 520px) minmax(260px, 320px);
+    grid-template-areas:
+      "banner   banner"
+      "board    progress"
+      "board    prompt"
+      "board    feedback"
+      "board    actions"
+      "board    context";
+    grid-template-rows: auto auto auto auto auto 1fr;
+    column-gap: 40px;
+    align-content: start;
+    justify-content: center;
+  }
+  #train-vigilance.active:has(.train-board-wrap) {
+    display: grid;
+    grid-template-columns: minmax(360px, 520px) minmax(260px, 320px);
+    grid-template-areas:
+      "board    progress"
+      "board    prompt"
+      "board    options"
+      "board    feedback";
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: 40px;
+    align-content: start;
+    justify-content: center;
+  }
+
+  #train-puzzles.active:has(.train-board-wrap) > .train-motif-banner { grid-area: banner; }
+  #train-puzzles.active:has(.train-board-wrap) > .train-board-wrap,
+  #train-vigilance.active:has(.train-board-wrap) > .train-board-wrap {
+    grid-area: board;
+    align-self: start;
+    max-width: 520px;
+    margin: 0;
+  }
+  #train-puzzles.active:has(.train-board-wrap) > .train-progress { grid-area: progress; }
+  #train-puzzles.active:has(.train-board-wrap) > .train-prompt   { grid-area: prompt; }
+  #train-puzzles.active:has(.train-board-wrap) > .train-feedback { grid-area: feedback; }
+  #train-puzzles.active:has(.train-board-wrap) > .train-actions  { grid-area: actions; }
+  #train-puzzles.active:has(.train-board-wrap) > .train-context  { grid-area: context; }
+  #train-vigilance.active:has(.train-board-wrap) > .train-progress { grid-area: progress; }
+  #train-vigilance.active:has(.train-board-wrap) > .train-prompt   { grid-area: prompt; }
+  #train-vigilance.active:has(.train-board-wrap) > .train-options  { grid-area: options; }
+  #train-vigilance.active:has(.train-board-wrap) > .train-feedback { grid-area: feedback; }
+
+  /* Right-hand info column: left-aligned, a touch larger, own vertical rhythm
+     rather than the centered mobile spacing. The top items pack together; the
+     board's extra height spills into the flexible last row, not into gaps. */
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-progress,
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-prompt,
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-feedback,
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-actions,
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-options,
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-context {
+    align-self: start;
+    text-align: left;
+    justify-content: flex-start;
+    margin-left: 0; margin-right: 0;
+  }
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-progress { font-size: 13px; margin: 0 0 10px; }
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-prompt   { font-size: 17px; line-height: 1.4; margin: 0 0 16px; }
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-feedback { margin: 0 0 4px; }
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-actions  { margin: 8px 0 0; }
+  #screen-training .train-panel.active:has(.train-board-wrap) > .train-context  { margin: 14px 0 0; }
+}
+
 /* Touch swipe hint */
 @media (max-width: 480px) {
   /* Leave a left gutter for the eval bar so it doesn't slide off-screen */
