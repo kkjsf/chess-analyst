@@ -32,6 +32,7 @@ const Coach = (() => {
   // drills — one and the same set of mistakes. The chips still let you narrow
   // to a single cadence as an explicit lens.
   let filterTc = 'all';
+  let filterDefaulted = false; // one-time: open on the rapid (10-min) pool
   // Bullet/blitz are excluded from the coach: too fast to be instructive, they
   // only add noise. The coach focuses on rapid (10-min) games and slower.
   const COACH_SKIP_TC = new Set(['bullet', 'blitz']);
@@ -411,6 +412,12 @@ const Coach = (() => {
       body.innerHTML = `<div class="coach-empty">${games.length} parties synchronisées. Lance l'analyse complète pour générer ton bilan.</div>`;
       return;
     }
+    // Open on the 10-min (rapid) pool by default — the cadence the coaching is
+    // built around — falling back to "Toutes" when the account has none.
+    if (!filterDefaulted) {
+      filterDefaulted = true;
+      if (anAll.some(g => (g.timeClass || 'autre') === 'rapid')) filterTc = 'rapid';
+    }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     curAn = an;
     const cards = an.length
@@ -444,6 +451,7 @@ const Coach = (() => {
       bindMissed();
       bindRepeated();
       bindEvolution();
+      bindRatingChart();
       bindTrainingCta();
       bindGamesDrill();
       bindRepertoire();
@@ -846,9 +854,56 @@ const Coach = (() => {
     </div>`;
   }
 
+  // ── Elo evolution: cadence-aware curve + fullscreen "calibration" view ──
+  // Chess.com keeps a separate rating per time class, so mixing rapid/daily on
+  // one axis is meaningless — the line would jump between two pools. We group
+  // by cadence and always plot a single pool at a time.
+  const RES_COLOR = { win: '#4ade80', loss: '#f87171', draw: '#e2b857' };
+  const resColor = g => RES_COLOR[g.result] || '#e2b857';
+
+  function ratingSeries(an) {
+    const byTc = {};
+    an.forEach(g => {
+      if (!g.myRating || !g.rated) return;
+      const k = g.timeClass || 'autre';
+      (byTc[k] = byTc[k] || []).push(g);
+    });
+    return Object.keys(byTc)
+      .map(tc => ({ tc, games: byTc[tc].slice().sort((a, b) => a.endTime - b.endTime) }))
+      .filter(s => s.games.length >= 3)
+      .sort((a, b) => b.games.length - a.games.length);
+  }
+
+  // Provisional-Elo window + the "real level" band read from the settled games.
+  function calibInfo(games) {
+    const r = games.map(g => g.myRating);
+    const n = r.length;
+    const calN = Math.min(8, Math.max(3, Math.round(n * 0.3)));
+    const stable = r.slice(calN);
+    const bandMin = Math.min(...stable), bandMax = Math.max(...stable);
+    const mean = Math.round(avg(stable));
+    // Only call it "calibrage" when the start clearly sits outside the band.
+    const showCal = n >= 8 && (r[0] > bandMax + 20 || r[0] < bandMin - 20);
+    return { calN, bandMin, bandMax, mean, showCal };
+  }
+
+  // Pick the pool to preview inline: the active cadence filter if it's a single
+  // one, otherwise the most-played pool.
+  function primarySeries(an) {
+    const series = ratingSeries(an);
+    if (!series.length) return null;
+    if (filterTc !== 'all') {
+      const match = series.find(s => s.tc === filterTc);
+      if (match) return { series, active: match };
+    }
+    return { series, active: series[0] };
+  }
+
+  // Inline sparkline (one pool), one colored dot per game, click → fullscreen.
   function ratingChart(an) {
-    const pts = an.filter(g => g.myRating && g.rated).sort((a, b) => a.endTime - b.endTime);
-    if (pts.length < 3) return '';
+    const ps = primarySeries(an);
+    if (!ps) return '';
+    const pts = ps.active.games;
     const W = 320, H = 90, pad = 6;
     const ratings = pts.map(p => p.myRating);
     const min = Math.min(...ratings), max = Math.max(...ratings);
@@ -856,16 +911,137 @@ const Coach = (() => {
     const x = (i) => pad + (i / (pts.length - 1)) * (W - 2 * pad);
     const y = (r) => H - pad - ((r - min) / range) * (H - 2 * pad);
     const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.myRating).toFixed(1)}`).join(' ');
-    const last = pts[pts.length - 1].myRating;
-    const first = pts[0].myRating;
-    const delta = last - first;
-    return `<div class="coach-rating">
-      <div class="coach-rating-head"><span>Évolution Elo (parties classées)</span>
+    const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="2.4" fill="${resColor(p)}"/>`).join('');
+    const last = ratings[ratings.length - 1], first = ratings[0], delta = last - first;
+    return `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
+      <div class="coach-rating-head"><span>Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶ plein écran</span></span>
         <b class="${delta >= 0 ? 'up' : 'down'}">${last} ${delta >= 0 ? '▲ +' + delta : '▼ ' + delta}</b></div>
       <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg" preserveAspectRatio="none">
         <path d="${path}" fill="none" stroke="#e2b857" stroke-width="2"/>
-        <circle cx="${x(pts.length - 1)}" cy="${y(last)}" r="3" fill="#e2b857"/>
+        ${dots}
       </svg></div>`;
+  }
+
+  // Rich fullscreen chart for one pool: calibration zone, real-level band,
+  // dashed mean line, gridlines, one colored dot per game, trough/end labels.
+  function richRatingChart(active) {
+    const pts = active.games;
+    const ratings = pts.map(p => p.myRating);
+    const info = calibInfo(pts);
+    const W = 900, H = 460, padL = 52, padR = 22, padT = 26, padB = 40;
+    const dmin = Math.min(...ratings), dmax = Math.max(...ratings);
+    const span = Math.max(1, dmax - dmin);
+    const yMin = dmin - span * 0.08 - 4, yMax = dmax + span * 0.08 + 4;
+    const x = i => padL + (W - padL - padR) * i / (pts.length - 1);
+    const y = v => padT + (H - padT - padB) * (1 - (v - yMin) / (yMax - yMin));
+    let s = '';
+    // real-level band
+    s += `<rect x="${padL}" y="${y(info.bandMax).toFixed(1)}" width="${(W - padL - padR).toFixed(1)}" height="${Math.max(0, y(info.bandMin) - y(info.bandMax)).toFixed(1)}" fill="rgba(226,184,87,.07)"/>`;
+    // dashed mean line
+    s += `<line x1="${padL}" y1="${y(info.mean).toFixed(1)}" x2="${W - padR}" y2="${y(info.mean).toFixed(1)}" stroke="rgba(226,184,87,.45)" stroke-width="1" stroke-dasharray="4 4"/>`;
+    s += `<text x="${W - padR}" y="${(y(info.mean) - 5).toFixed(1)}" fill="#c9982e" font-size="12" text-anchor="end">niveau réel ~${info.mean}</text>`;
+    // calibration zone (provisional Elo)
+    if (info.showCal) {
+      s += `<rect x="${x(0).toFixed(1)}" y="${padT}" width="${(x(info.calN - 1) - x(0)).toFixed(1)}" height="${H - padT - padB}" fill="rgba(255,255,255,.045)"/>`;
+      s += `<text x="${((x(0) + x(info.calN - 1)) / 2).toFixed(1)}" y="${padT + 13}" fill="#8892a4" font-size="12" text-anchor="middle">calibrage (Elo provisoire)</text>`;
+    }
+    // gridlines + rating labels
+    const step = span > 260 ? 100 : span > 130 ? 50 : 25;
+    for (let g = Math.ceil(yMin / step) * step; g <= yMax; g += step) {
+      s += `<line x1="${padL}" y1="${y(g).toFixed(1)}" x2="${W - padR}" y2="${y(g).toFixed(1)}" stroke="rgba(255,255,255,.06)"/>`;
+      s += `<text x="${padL - 8}" y="${(y(g) + 4).toFixed(1)}" fill="#8892a4" font-size="12" text-anchor="end">${g}</text>`;
+    }
+    // line
+    const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.myRating).toFixed(1)}`).join(' ');
+    s += `<path d="${path}" fill="none" stroke="#e2b857" stroke-width="2.5" stroke-linejoin="round"/>`;
+    // one colored dot per game
+    pts.forEach((p, i) => {
+      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="4.5" fill="${resColor(p)}" stroke="#16213e" stroke-width="1.5"/>`;
+    });
+    // start / trough / end labels
+    const firstR = ratings[0], lastR = ratings[ratings.length - 1], troughI = ratings.indexOf(dmin);
+    s += `<text x="${x(0).toFixed(1)}" y="${(y(firstR) - 10).toFixed(1)}" fill="${resColor(pts[0])}" font-size="13" font-weight="700" text-anchor="middle">${firstR}</text>`;
+    if (troughI > 1 && troughI < pts.length - 1)
+      s += `<text x="${x(troughI).toFixed(1)}" y="${(y(dmin) + 18).toFixed(1)}" fill="#f87171" font-size="13" font-weight="700" text-anchor="middle">${dmin}</text>`;
+    s += `<text x="${x(pts.length - 1).toFixed(1)}" y="${(y(lastR) - 10).toFixed(1)}" fill="${resColor(pts[pts.length - 1])}" font-size="13" font-weight="700" text-anchor="end">${lastR}</text>`;
+    // date axis (first & last)
+    s += `<text x="${x(0).toFixed(1)}" y="${H - 12}" fill="#8892a4" font-size="11" text-anchor="start">${fmtDate(pts[0].endTime)}</text>`;
+    s += `<text x="${x(pts.length - 1).toFixed(1)}" y="${H - 12}" fill="#8892a4" font-size="11" text-anchor="end">${fmtDate(pts[pts.length - 1].endTime)}</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" class="rating-modal-svg" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
+  }
+
+  function ratingModalInner(series, active) {
+    const info = calibInfo(active.games);
+    const chips = series.length > 1
+      ? `<div class="rating-modal-chips">` + series.map(s =>
+          `<button class="rating-modal-chip${s.tc === active.tc ? ' active' : ''}" data-tc="${esc(s.tc)}">${tcLabel(s.tc)} <b>${s.games.length}</b></button>`).join('') + `</div>`
+      : '';
+    const note = info.showCal
+      ? `La descente du début (zone grisée) n'est pas un effondrement : c'est ton <b>Elo provisoire</b> qui se calibre sur tes ~${info.calN} premières parties. Chess.com te place haut, puis corrige par paliers. Ton vrai niveau se lit sur le reste : moyenne <b class="gold">~${info.mean}</b>, dans une bande ${info.bandMin}-${info.bandMax}.`
+      : `Ton Elo ${tcLabel(active.tc)} oscille autour de <b class="gold">${info.mean}</b> (bande ${info.bandMin}-${info.bandMax}). Chaque point est une partie, coloré selon son résultat.`;
+    return `${chips}
+      <div class="rating-modal-chart">${richRatingChart(active)}</div>
+      <div class="rating-modal-legend">
+        <span><i style="background:#4ade80"></i>Victoire</span>
+        <span><i style="background:#f87171"></i>Défaite</span>
+        <span><i style="background:#e2b857"></i>Nulle</span>
+      </div>
+      <p class="rating-modal-note">${note}</p>`;
+  }
+
+  let ratingModalEl = null;
+  function onRatingKey(e) { if (e.key === 'Escape') closeRatingModal(); }
+  function closeRatingModal() {
+    if (!ratingModalEl) return;
+    document.removeEventListener('keydown', onRatingKey);
+    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {}
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (_) {}
+    const el = ratingModalEl; ratingModalEl = null;
+    el.classList.remove('visible');
+    setTimeout(() => el.remove(), 200);
+  }
+  function openRatingModal(initialTc) {
+    const series = ratingSeries(curAn);
+    if (!series.length) return;
+    let active = series.find(s => s.tc === initialTc) || series[0];
+    const el = document.createElement('div');
+    el.className = 'rating-modal-overlay';
+    el.innerHTML = `<div class="rating-modal">
+      <div class="rating-modal-head">
+        <h3>📈 Évolution Elo</h3>
+        <span class="rating-modal-rotate">↻ Tourne ton téléphone</span>
+        <button class="rating-modal-close" aria-label="Fermer">×</button>
+      </div>
+      <div class="rating-modal-body">${ratingModalInner(series, active)}</div>
+    </div>`;
+    document.body.appendChild(el);
+    ratingModalEl = el;
+    const body = el.querySelector('.rating-modal-body');
+    const bindChips = () => el.querySelectorAll('.rating-modal-chip').forEach(b =>
+      b.addEventListener('click', () => {
+        active = series.find(s => s.tc === b.dataset.tc) || active;
+        body.innerHTML = ratingModalInner(series, active);
+        bindChips();
+      }));
+    bindChips();
+    el.querySelector('.rating-modal-close').addEventListener('click', closeRatingModal);
+    el.addEventListener('click', e => { if (e.target === el) closeRatingModal(); });
+    document.addEventListener('keydown', onRatingKey);
+    // Best-effort landscape lock on phones (Android/Chrome); no-ops elsewhere.
+    requestAnimationFrame(() => {
+      el.classList.add('visible');
+      try {
+        const p = el.requestFullscreen && el.requestFullscreen();
+        if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape'); } catch (_) {} }).catch(() => {});
+      } catch (_) {}
+    });
+  }
+  function bindRatingChart() {
+    document.querySelectorAll('.coach-rating[data-tc]').forEach(el => {
+      const open = () => openRatingModal(el.dataset.tc);
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
   }
 
   function tcLabel(k) {
