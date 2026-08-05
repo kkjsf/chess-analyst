@@ -2307,8 +2307,16 @@ body.guess-open { overflow: hidden; }
   #coach-dashboard > .coach-empty,
   #coach-dashboard > .coach-empty-mini,
   #coach-dashboard > #coach-word,
+  #coach-dashboard > #coach-recent-games,
   #coach-dashboard > .coach-hero-row {
     column-span: all; -webkit-column-span: all;
+  }
+  /* Recent-games band: lay its rows across the full width (col 1 = the 5 most
+     recent, already-analysed games; col 2 = the next 5) instead of a lone tall
+     card stranded in the first masonry column. */
+  #coach-recent-games .coach-recent-list { column-count: 2; column-gap: 28px; }
+  #coach-recent-games .coach-recent-list > .coach-drill-row {
+    break-inside: avoid; -webkit-column-break-inside: avoid;
   }
   /* Keep the coach's word as a full-width opening banner above the masonry. */
   #coach-dashboard > #coach-word { margin: 0 0 22px; }

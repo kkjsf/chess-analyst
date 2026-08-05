@@ -2012,7 +2012,7 @@ const Coach = (() => {
     return `<div class="home-card coach-card" id="coach-recent-games">
       <h3>🕐 Tes dernières parties</h3>
       <p class="coach-puz-intro">Les plus récentes sont déjà analysées côté serveur — ouvre-les directement. Les autres s'analysent ici en un clic.</p>
-      ${rows}
+      <div class="coach-recent-list">${rows}</div>
     </div>`;
   }
 
