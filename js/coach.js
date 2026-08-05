@@ -422,6 +422,7 @@ const Coach = (() => {
     curAn = an;
     const cards = an.length
       ? renderNarrative(an) +
+        renderRecentGames(anAll) +
         `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>` +
         renderFocus(an) +
         renderMissed(an) +
@@ -453,6 +454,7 @@ const Coach = (() => {
       bindEvolution();
       bindRatingChart();
       bindTrainingCta();
+      bindRecentGames();
       bindGamesDrill();
       bindRepertoire();
       bindConversion();
@@ -1979,6 +1981,51 @@ const Coach = (() => {
   function bindTrainingCta() {
     const b = $('#coach-open-training');
     if (b) b.addEventListener('click', () => { if (typeof Training !== 'undefined') Training.show(); });
+  }
+
+  // "Tes dernières parties" — the 10 most recent analyzed games (all cadences).
+  // The RICH_RECENT most recent embed a full server-side report (tools/analyze.mjs)
+  // so they open straight in the detailed analyzer with no engine run; the rest
+  // fall back to a client-side Stockfish analysis on click.
+  function renderRecentGames(list) {
+    const recent = list.slice()
+      .sort((a, b) => (b.endTime || 0) - (a.endTime || 0))
+      .slice(0, 10);
+    if (!recent.length) return '';
+    const resLbl = { win: 'V', draw: 'N', loss: 'D' };
+    const rows = recent.map(g => {
+      const a = g.analysis || {};
+      const errs = (a.inaccuracies || 0) + (a.mistakes || 0) + (a.blunders || 0);
+      const acc = a.accuracy != null ? a.accuracy + '%' : '—';
+      const rich = !!(g.report && g.report.analysis);
+      const btn = rich
+        ? `<button class="coach-drill-btn coach-recent-btn" data-uuid="${esc(g.uuid)}" data-mode="open">📊 Voir l'analyse</button>`
+        : `<button class="coach-recent-btn coach-recent-analyze" data-uuid="${esc(g.uuid)}" data-mode="engine">Analyser ici</button>`;
+      return `<div class="coach-drill-row">
+        <span class="coach-drill-res ${g.result || 'draw'}">${resLbl[g.result] || '·'}</span>
+        <span class="coach-drill-opp">${esc(g.oppName)}</span>
+        <span class="coach-drill-date">${g.endTime ? fmtDate(g.endTime) : ''}</span>
+        <span class="coach-drill-count">${acc} · ${errs} err</span>
+        ${btn}
+      </div>`;
+    }).join('');
+    return `<div class="home-card coach-card" id="coach-recent-games">
+      <h3>🕐 Tes dernières parties</h3>
+      <p class="coach-puz-intro">Les plus récentes sont déjà analysées côté serveur — ouvre-les directement. Les autres s'analysent ici en un clic.</p>
+      ${rows}
+    </div>`;
+  }
+
+  function bindRecentGames() {
+    document.querySelectorAll('#coach-recent-games .coach-recent-btn').forEach(b =>
+      b.addEventListener('click', () => openRecent(b.dataset.uuid, b.dataset.mode)));
+  }
+
+  function openRecent(uuid, mode) {
+    const g = games.find(x => x.uuid === uuid);
+    if (!g || typeof App === 'undefined') return;
+    if (mode === 'open' && App.openStoredReport && App.openStoredReport(g)) return;
+    if (App.loadPgnAndAnalyze && g.pgn) App.loadPgnAndAnalyze(g.pgn);
   }
 
   // Replay one archive game's own mistakes as a focused "Devine le coup" drill.

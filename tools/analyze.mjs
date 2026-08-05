@@ -48,6 +48,11 @@ const DRAW_RESULTS = new Set(['agreed', 'repetition', 'stalemate', 'insufficient
 // Bullet/blitz are excluded from the coach — too fast to be instructive. The
 // coach focuses on rapid (10-min) games and slower. Keep in sync with js/coach.js.
 const SKIP_TC = new Set(['bullet', 'blitz']);
+// How many of the most recent games embed their FULL per-ply report (evals,
+// alternatives, tips) so the coach's "dernières parties" card can open them in
+// the detailed analyzer without re-running Stockfish. Older games keep only the
+// aggregate stats. Keep small — a full report is ~10× the size of the stats.
+const RICH_RECENT = 5;
 // Practice games vs the Chess.com coach bot — not real games, excluded from stats.
 const EXCLUDED_OPPONENTS = new Set(['coach-david']);
 const excludedOpp = (name) => !!name && EXCLUDED_OPPONENTS.has(String(name).toLowerCase());
@@ -170,15 +175,18 @@ function normalize(g, user) {
 }
 
 // Per-game stats come from the shared Analyzer.computeGameStats (js/analysis.js),
-// the single source of truth used by both server and browser analyzers.
+// the single source of truth used by both server and browser analyzers. Returns
+// both the aggregate stats and the full per-ply results + summary (the latter
+// only persisted for the RICH_RECENT most recent games — see main()).
 async function analyzeGame(rec) {
   const moves = Analyzer.parsePgnMoves(rec.pgn);
-  if (!moves.length) return { error: 'pgn' };
+  if (!moves.length) return { stats: { error: 'pgn' }, results: null, summary: null };
   const results = await Analyzer.analyzeGameAsync(new Chess(), moves, null, 'depth ' + DEPTH);
   const summary = Analyzer.generateSummary(results, moves);
-  return Analyzer.computeGameStats(results, summary, {
+  const stats = Analyzer.computeGameStats(results, summary, {
     side: rec.userColor, pgn: rec.pgn, timeClass: rec.timeClass, timeControl: rec.timeControl
   });
+  return { stats, results, summary };
 }
 
 // ─────────────── main ───────────────
@@ -230,7 +238,9 @@ async function main() {
   for (const g of pending) {
     const rec = normalize(g, USER);
     try {
-      rec.analysis = await analyzeGame(rec);
+      const out = await analyzeGame(rec);
+      rec.analysis = out.stats;
+      if (out.results) rec.report = { analysis: out.results, summary: out.summary };
     } catch (e) {
       rec.analysis = { error: String(e.message || e) };
     }
@@ -239,9 +249,28 @@ async function main() {
     const a = rec.analysis;
     console.log(`[coach] (${done}/${pending.length}) vs ${rec.oppName} — ${a.error ? 'ERR ' + a.error : `acc ${a.accuracy}% · ${a.blunderList.length} err`}`);
   }
-  engine.destroy();
 
   const games = Object.values(merged).sort((a, b) => (b.endTime || 0) - (a.endTime || 0));
+
+  // Guarantee the RICH_RECENT most recent games carry a full per-ply report so
+  // the coach can open them in the detailed analyzer with no client-side engine
+  // run. Freshly-analyzed games above already have one; games kept from a prior
+  // run (before this feature, or aged into the top slots) get theirs backfilled.
+  const recentOk = games.filter(g => g.analysis && !g.analysis.error).slice(0, RICH_RECENT);
+  for (const g of recentOk) {
+    if (g.report) continue;
+    try {
+      const out = await analyzeGame(g);
+      if (out.results) { g.analysis = out.stats; g.report = { analysis: out.results, summary: out.summary }; }
+      console.log(`[coach] backfilled report — vs ${g.oppName} (${g.timeClass})`);
+    } catch (e) { console.warn(`[coach] report backfill failed ${g.uuid}: ${e.message}`); }
+  }
+  engine.destroy();
+
+  // Strip the report everywhere else — only the recent set stays rich, to keep
+  // coach-data.json small (older games keep aggregate stats only).
+  const richSet = new Set(recentOk.map(g => g.uuid));
+  for (const g of games) { if (g.report && !richSet.has(g.uuid)) delete g.report; }
   const out = {
     schema: 1,
     username: USER,

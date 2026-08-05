@@ -2631,6 +2631,12 @@ body.guess-open { overflow: hidden; }
   padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .coach-drill-btn:hover { filter: brightness(1.08); }
+.coach-recent-analyze {
+  flex-shrink: 0; background: transparent; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 8px;
+  padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.coach-recent-analyze:hover { background: rgba(255,255,255,0.06); }
 
 /* Coach — extended stats (move quality, conversion, time, progress) */
 .coach-sub2 { font-size: 12px; color: var(--text-dim); margin: 2px 0 10px; line-height: 1.5; }

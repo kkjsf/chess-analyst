@@ -307,6 +307,40 @@ const App = (() => {
     return null;
   }
 
+  // Parse a single-game PGN into its header + verbose move list, replaying the
+  // raw move text when chess.js's own parser drops moves. Returns null when the
+  // PGN yields no moves. Shared by onAnalyze and openStoredReport.
+  function deriveHeaderMoves(pgnText) {
+    const chess = new Chess();
+    const cleaned = sanitizePgn(pgnText);
+    chess.load_pgn(cleaned, { sloppy: true });
+    if (chess.history().length === 0) chess.load_pgn(pgnText, { sloppy: true });
+    if (chess.history().length === 0) return null;
+
+    const header = chess.header();
+    let moves = chess.history({ verbose: true });
+
+    const movesText = (cleaned.substring(cleaned.lastIndexOf(']') + 1)
+      || pgnText.replace(/\[[^\]]*\]/g, '')).trim();
+    const moveTokens = movesText.split(/\s+/)
+      .filter(t => !t.match(/^\d+\.+$/) && !t.match(/^(1-0|0-1|1\/2-1\/2|\*)$/));
+
+    if (moveTokens.length > moves.length) {
+      const replay = new Chess();
+      for (const tok of moveTokens) {
+        let r = replay.move(tok, { sloppy: true });
+        if (!r) {
+          const legal = replay.moves({ verbose: true });
+          const sanMatch = legal.find(m => m.san.replace(/[+#]/, '') === tok.replace(/[+#]/, ''));
+          if (sanMatch) r = replay.move({ from: sanMatch.from, to: sanMatch.to, promotion: sanMatch.promotion });
+        }
+        if (!r) break;
+      }
+      if (replay.history().length > moves.length) moves = replay.history({ verbose: true });
+    }
+    return { header, moves };
+  }
+
   // Only one analysis may run at a time: Stockfish lives in a single shared
   // worker with one result resolver, so a second run started mid-analysis (a
   // fast second paste, or a drag-drop) would clobber the first's resolver and
@@ -369,40 +403,12 @@ const App = (() => {
 
     currentClocks = extractClocks(pgnText);
 
-    const chess = new Chess();
-    const cleaned = sanitizePgn(pgnText);
-    chess.load_pgn(cleaned, { sloppy: true });
-    if (chess.history().length === 0) {
-      chess.load_pgn(pgnText, { sloppy: true });
-    }
-    if (chess.history().length === 0) {
+    const parsed = deriveHeaderMoves(pgnText);
+    if (!parsed) {
       showError('PGN invalide. Vérifiez le format et réessayez.');
       return;
     }
-
-    const header = chess.header();
-    let moves = chess.history({ verbose: true });
-
-    const movesText = (cleaned.substring(cleaned.lastIndexOf(']') + 1)
-      || pgnText.replace(/\[[^\]]*\]/g, '')).trim();
-    const moveTokens = movesText.split(/\s+/)
-      .filter(t => !t.match(/^\d+\.+$/) && !t.match(/^(1-0|0-1|1\/2-1\/2|\*)$/));
-
-    if (moveTokens.length > moves.length) {
-      const replay = new Chess();
-      for (const tok of moveTokens) {
-        let r = replay.move(tok, { sloppy: true });
-        if (!r) {
-          const legal = replay.moves({ verbose: true });
-          const sanMatch = legal.find(m => m.san.replace(/[+#]/, '') === tok.replace(/[+#]/, ''));
-          if (sanMatch) r = replay.move({ from: sanMatch.from, to: sanMatch.to, promotion: sanMatch.promotion });
-        }
-        if (!r) break;
-      }
-      if (replay.history().length > moves.length) {
-        moves = replay.history({ verbose: true });
-      }
-    }
+    const { header, moves } = parsed;
 
     hideError();
 
@@ -548,6 +554,37 @@ const App = (() => {
     lastRenderIndex = -1;
     unpinBoard();
     goTo(0);
+  }
+
+  // Open a coach game's server-computed report directly in the detailed analyzer
+  // — no Stockfish run. rec.report holds the full per-ply analysis + summary
+  // embedded by tools/analyze.mjs for the most recent games.
+  function openStoredReport(rec) {
+    if (!rec || !rec.report || !rec.report.analysis || !rec.pgn) return false;
+    const parsed = deriveHeaderMoves(rec.pgn);
+    if (!parsed) return false;
+    const { header, moves } = parsed;
+    const { analysis, summary } = rec.report;
+    currentClocks = extractClocks(rec.pgn);
+    currentPgn = rec.pgn;
+    const ck = cacheKey(header, moves.length);
+    const user = detectUser(header);
+    saveCachedAnalysis(ck, analysis, summary, header, user);
+    if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, user);
+    saveGame(rec.pgn, header, moves.length);
+    hideError();
+    showAnalysis(header, moves, analysis, summary);
+    return true;
+  }
+
+  // Load a PGN into the analyzer and run the engine (the normal flow), used for
+  // coach games that don't embed a server report.
+  function loadPgnAndAnalyze(pgn) {
+    const input = $('#pgn-input');
+    if (input) input.value = pgn;
+    $('#screen-coach').classList.remove('active');
+    $('#screen-import').classList.add('active');
+    onAnalyze();
   }
 
   function prefersReducedMotion() {
@@ -3839,5 +3876,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo, refreshHome, openOpeningExplorer, openOpeningByLine, openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing };
+  return { goTo, refreshHome, openOpeningExplorer, openOpeningByLine, openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing, openStoredReport, loadPgnAndAnalyze };
 })();
