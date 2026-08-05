@@ -431,6 +431,9 @@ const App = (() => {
 
     showProgressBar('Chargement du moteur Stockfish...');
 
+    // Analyzer.analyzeGame(Async) rebuild their own board from `moves`; the first
+    // arg is vestigial but positional, so pass a Chess instance to fill the slot.
+    const chess = new Chess();
     try {
       await StockfishEngine.init();
       analysis = await Analyzer.analyzeGameAsync(chess, moves, (done, total) => {
