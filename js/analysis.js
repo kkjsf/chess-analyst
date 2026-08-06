@@ -750,6 +750,7 @@ const Analyzer = (() => {
       let evalForWhite = null;
       let winPctLoss = 0;
       let winBefore = 0.5, winAfterPlayed = 0.5, onlyMoveGap = 0;
+      let bestEquivalent = false;
       const alternatives = [];
 
       if (evalBefore && evalAfter) {
@@ -789,6 +790,13 @@ const Analyzer = (() => {
         }
         winAfterPlayed = cpToWinPct(scoreAfterMover);
         winPctLoss = Math.max(0, winBefore - winAfterPlayed);
+
+        // "Best" the way Chess.com shows it: not only the engine's single #1 move,
+        // but any move that TIES the top line (its own search score is within a
+        // few cp of the best). Equal-best alternatives are graded Best, not the
+        // lower Excellent tier — this is why our Best count sat below Chess.com's.
+        bestEquivalent = (playedUci === bestMoveUci) ||
+          (typeof scoreAfterMover === 'number' && scoreAfterMover >= evalBefore.score - 8);
 
         // Gap (in cp, mover POV) between the engine's #1 and #2 lines — how much
         // worse every alternative is. A large gap means the best move was the
@@ -884,7 +892,7 @@ const Analyzer = (() => {
                  winBefore > 0.15 && winBefore < 0.92) {
         // The only good move in a contested position — a Great Move (!).
         type = 'great';
-      } else if (isBestMove) {
+      } else if (isBestMove || bestEquivalent) {
         type = 'best';
       } else {
         type = 'excellent';
@@ -935,8 +943,8 @@ const Analyzer = (() => {
       } else if (type === 'great') {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched
-          ? `Très bon ! Le seul bon coup de la position. ${enriched}${ed}`
-          : `Très bon ! C'était le seul bon coup de la position.${ed}`;
+          ? `Excellent ! Le seul bon coup de la position. ${enriched}${ed}`
+          : `Excellent ! C'était le seul bon coup de la position.${ed}`;
       } else if (type === 'best') {
         const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
         tipFr = enriched
@@ -945,10 +953,10 @@ const Analyzer = (() => {
       } else if (type === 'excellent') {
         if (madeMove.captured) {
           const capName = PIECE_NAMES_FR[madeMove.captured];
-          tipFr = `Excellent ! Capture optimale${capName ? ' du ' + capName : ''}.${ed}`;
+          tipFr = `Très bien ! Capture optimale${capName ? ' du ' + capName : ''}.${ed}`;
         } else {
           const enriched = enrichNeutralTip(positions[i], newFen, madeMove, phase, i);
-          tipFr = enriched ? `Excellent coup. ${enriched}${ed}` : `Excellent coup, quasi-optimal.${ed}`;
+          tipFr = enriched ? `Très bien. ${enriched}${ed}` : `Très bien, coup quasi-optimal.${ed}`;
         }
       } else if (type === 'book') {
         const note = openingMoveNote(madeMove.san);

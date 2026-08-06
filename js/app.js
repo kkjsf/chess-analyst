@@ -50,9 +50,9 @@ const App = (() => {
   // □ Forced · ?! Inaccuracy · ✗ Miss · ? Mistake · ?? Blunder.
   const MOVE_CLASS = {
     brilliant:  { label: 'Brillant',          cls: 'brilliant',  mark: '!!' },
-    great:      { label: 'Très bon',          cls: 'great',      mark: '!' },
+    great:      { label: 'Excellent',         cls: 'great',      mark: '!' },
     best:       { label: 'Meilleur',          cls: 'best',       mark: '★' },
-    excellent:  { label: 'Excellent',         cls: 'excellent',  mark: '✔' },
+    excellent:  { label: 'Très bien',         cls: 'excellent',  mark: '✔' },
     good:       { label: 'Bon',               cls: 'good',       mark: '✓' },
     book:       { label: 'Théorique',         cls: 'book',       mark: '📖' },
     forced:     { label: 'Forcé',             cls: 'forced',     mark: '□' },

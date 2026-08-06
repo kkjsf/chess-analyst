@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '144';
+window.APP_VERSION = '145';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -166,9 +166,9 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
           <tr><td><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span></td><td>ouverture connue, &lt; 0,10 pp</td><td>Coup d'ouverture reconnu ; prioritaire sur « Imprécision » dans la théorie connue.</td></tr>
           <tr><td><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span></td><td>0,05 – 0,10 pp</td><td>Petit écart, l'avantage se grignote.</td></tr>
           <tr><td><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span></td><td>0,02 – 0,05 pp</td><td>Un bon coup, sans être optimal.</td></tr>
-          <tr><td><span class="info-badge great"><i class="mv-mark mv-great">!</i> Très bon</span></td><td>&lt; 0,02 pp + seul coup</td><td>Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée.</td></tr>
-          <tr><td><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span></td><td>&lt; 0,02 pp, coup n°1</td><td>Le coup n°1 du moteur (perte quasi nulle). Le mat est toujours classé ici.</td></tr>
-          <tr><td><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span></td><td>&lt; 0,02 pp</td><td>Presque optimal, sans être exactement le coup n°1.</td></tr>
+          <tr><td><span class="info-badge great"><i class="mv-mark mv-great">!</i> Excellent</span></td><td>&lt; 0,02 pp + seul coup</td><td>Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée. (Le « Great Move » de Chess.com.)</td></tr>
+          <tr><td><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span></td><td>&lt; 0,02 pp, coup n°1 (ou équivalent)</td><td>Le coup n°1 du moteur, ou un coup qui l'égale à ≤ 8 cp près (perte quasi nulle). Le mat est toujours classé ici.</td></tr>
+          <tr><td><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Très bien</span></td><td>&lt; 0,02 pp</td><td>Presque optimal, sans être exactement le coup n°1.</td></tr>
         </tbody>
       </table>
 
