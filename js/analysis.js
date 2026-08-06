@@ -977,6 +977,10 @@ const Analyzer = (() => {
         tipFr += ` Fourchette sur ${forkTargets.join(' et ')} !`;
       }
 
+      // The opponent's best reply is their THREAT. When it's serious (mate, a
+      // real capture, or a check) we both warn in the tip AND draw it as a red
+      // arrow on the board, the way Chess.com surfaces threats.
+      let threatArrow = null;
       if (!forkTargets && evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
         try {
           const tg = new Chess(newFen);
@@ -985,15 +989,20 @@ const Analyzer = (() => {
           if (tm) {
             const tFr = toFrench(tm.san);
             const opp = isWhite ? 'les Noirs' : 'les Blancs';
+            let isThreat = false;
             if (tm.san.includes('#')) {
               tipFr += ` ⚠ ${opp} menacent mat avec ${tFr} !`;
+              isThreat = true;
             } else if (tm.captured && PIECE_VALUES[tm.captured] >= 3) {
               const art = PIECE_ARTICLE_FR[tm.captured];
               const cn = PIECE_NAMES_FR[tm.captured];
               tipFr += ` ⚠ Attention, ${opp} menacent de prendre ${art} ${cn} (${tFr}).`;
+              isThreat = true;
             } else if (tm.san.includes('+')) {
               tipFr += ` ⚠ ${opp} menacent un échec (${tFr}).`;
+              isThreat = true;
             }
+            if (isThreat) threatArrow = { from: tu.slice(0, 2), to: tu.slice(2, 4), color: '#e0574a', opacity: 0.85, width: 6, threat: true };
           }
         } catch(_) {}
       }
@@ -1012,6 +1021,8 @@ const Analyzer = (() => {
       } else if (madeMove.captured) {
         arrows.push({ from: madeMove.from, to: madeMove.to, color: '#e2b857', opacity: 0.6, width: 5 });
       }
+      // Red threat arrow drawn on top of any move/best arrows (Chess.com-style).
+      if (threatArrow) arrows.push(threatArrow);
 
       results.push({
         type, san: madeMove.san, sanFr, tipFr,

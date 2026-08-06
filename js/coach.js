@@ -420,28 +420,51 @@ const Coach = (() => {
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     curAn = an;
+    // Cards are organised into a few themed sections so related material sits
+    // together (results with results, errors with errors …) with a clear
+    // labelled band between categories — much easier to scan on desktop than
+    // one long undifferentiated masonry.
+    const group = (key, title, items) => {
+      const inner = items.filter(Boolean).join('');
+      // Treat an empty hero-row wrapper as no content.
+      const meaningful = inner.replace(/<div class="coach-hero-row"><\/div>/g, '').trim();
+      return meaningful ? `<section class="coach-group coach-group-${key}">
+        <h2 class="coach-group-head">${title}</h2>
+        <div class="coach-group-cards">${inner}</div>
+      </section>` : '';
+    };
     const cards = an.length
-      ? renderNarrative(an) +
-        renderRecentGames(anAll) +
-        `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>` +
-        renderFocus(an) +
-        renderMissed(an) +
-        renderTrends(an) +
-        renderProfile(an) +
-        renderMoveQuality(an) +
-        renderErrorDetail(an) +
-        renderErrorEvolution(an) +
-        renderProgressStory(an) +
-        renderTacticalWeakness(an) +
-        renderRepeated(an) +
-        renderConversion(an) +
-        renderTime(an) +
-        renderProgress(an) +
-        renderRepertoire(an) +
-        renderWeakness(an) +
-        renderNationality(an) +
-        renderGamesDrill(an) +
-        renderTrainingCta()
+      ? group('now', 'Vue d\'ensemble', [
+          renderNarrative(an),
+          renderRecentGames(anAll),
+          `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>`,
+          renderFocus(an)
+        ]) +
+        group('results', 'Résultats & progression', [
+          renderTrends(an),
+          renderProgressStory(an),
+          renderErrorEvolution(an),
+          renderProgress(an)
+        ]) +
+        group('errors', 'Erreurs & faiblesses', [
+          renderErrorDetail(an),
+          renderMissed(an),
+          renderRepeated(an),
+          renderTacticalWeakness(an),
+          renderConversion(an),
+          renderWeakness(an),
+          renderMoveQuality(an)
+        ]) +
+        group('style', 'Style de jeu & adversaires', [
+          renderProfile(an),
+          renderRepertoire(an),
+          renderTime(an),
+          renderNationality(an)
+        ]) +
+        group('action', 'Passer à l\'action', [
+          renderGamesDrill(an),
+          renderTrainingCta()
+        ])
       : `<div class="coach-empty-mini">Aucune partie « ${tcLabel(filterTc)} » analysée. Choisis une autre cadence.</div>`;
     body.innerHTML = renderFilterBar(anAll) + cards;
     body.dataset.ready = '1';

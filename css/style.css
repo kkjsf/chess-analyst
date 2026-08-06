@@ -2295,43 +2295,45 @@ body.guess-open { overflow: hidden; }
      the later mobile `.coach-body`/`.coach-card { max-width }` base rules. */
   #screen-coach .coach-body { max-width: 1600px; padding-left: 16px; padding-right: 16px; }
   #screen-coach .coach-sync-bar { max-width: 820px; }
-  #coach-dashboard { width: 100%; column-count: 2; column-gap: 22px; }
-  #coach-dashboard > .home-card,
-  #coach-dashboard > .coach-card {
+  #coach-dashboard { width: 100%; }
+  /* Each themed section runs its OWN masonry, so a category's cards pack among
+     themselves and never bleed into the next category's band. */
+  .coach-group-cards { display: block; column-count: 2; column-gap: 22px; }
+  .coach-group-cards > .home-card,
+  .coach-group-cards > .coach-card {
     max-width: none; width: 100%; margin: 0 0 22px;
     break-inside: avoid; -webkit-column-break-inside: avoid;
   }
-  /* Full-width bands spanning all columns: the cadence filter, empty-state
-     notices, and the hero row of top priority cards. */
-  .coach-filter,
-  #coach-dashboard > .coach-empty,
-  #coach-dashboard > .coach-empty-mini,
-  #coach-dashboard > #coach-word,
-  #coach-dashboard > #coach-recent-games,
-  #coach-dashboard > .coach-hero-row {
+  /* Full-width bands spanning all columns of their section. */
+  .coach-group-cards > .coach-empty,
+  .coach-group-cards > .coach-empty-mini,
+  .coach-group-cards > #coach-word,
+  .coach-group-cards > #coach-recent-games,
+  .coach-group-cards > .coach-hero-row {
     column-span: all; -webkit-column-span: all;
   }
   /* Recent-games band: lay its rows across the full width (col 1 = the 5 most
-     recent, already-analysed games; col 2 = the next 5) instead of a lone tall
-     card stranded in the first masonry column. */
+     recent, already-analysed games; col 2 = the next 5). */
   #coach-recent-games .coach-recent-list { column-count: 2; column-gap: 28px; }
   #coach-recent-games .coach-recent-list > .coach-drill-row {
     break-inside: avoid; -webkit-column-break-inside: avoid;
   }
-  /* Keep the coach's word as a full-width opening banner above the masonry. */
-  #coach-dashboard > #coach-word { margin: 0 0 22px; }
+  .coach-group-cards > #coach-word { margin: 0 0 22px; }
   .coach-filter { margin-bottom: 22px; }
   /* Hero header: the two most actionable cards (Vigilance + Rythme) sit
-     side-by-side above the masonry to establish clear priority. */
-  #coach-dashboard > .coach-hero-row { display: flex; gap: 22px; align-items: stretch; }
-  #coach-dashboard > .coach-hero-row > .home-card { flex: 1; margin: 0 0 22px; max-width: none; }
-  #coach-dashboard > .coach-hero-row:empty { display: none; }
+     side-by-side to establish clear priority. */
+  .coach-group-cards > .coach-hero-row { display: flex; gap: 22px; align-items: stretch; }
+  .coach-group-cards > .coach-hero-row > .home-card { flex: 1; margin: 0 0 22px; max-width: none; }
+  .coach-group-cards > .coach-hero-row:empty { display: none; }
+  /* Category framing: a faint tinted panel + accent label per section, so the
+     eye reads distinct groups instead of one flat wall of cards. */
+  .coach-group { background: var(--grp-bg); border: 1px solid var(--grp-bd); border-radius: 16px; padding: 2px 18px 12px; margin-bottom: 22px; }
+  .coach-group-head { border-left: none; padding-left: 0; margin: 12px 2px 12px; }
 }
 
-/* Three columns once there's room, so the cards keep a comfortable width
-   instead of stretching too wide. */
+/* Three columns once there's room, so cards keep a comfortable width. */
 @media (min-width: 1180px) {
-  #coach-dashboard { column-count: 3; }
+  .coach-group-cards { column-count: 3; }
 }
 
 /* ── Analysis screen: desktop two-column (big board left, cards right) ──
@@ -2375,6 +2377,22 @@ body.guess-open { overflow: hidden; }
   .analysis-body > .seg-panel {
     grid-column: 2;
     width: 100%;
+  }
+  /* The bottom nav is a centred 600px pill from the ≥720px rule — on this wide
+     grid it sat ON TOP of the board column, hiding the move strip beneath the
+     board. Span the full width here so it's a normal bottom bar again. */
+  .tabbar {
+    left: 0; right: 0; transform: none;
+    width: auto; max-width: none;
+    border-radius: 0; border-left: none; border-right: none;
+  }
+  /* The board column (board + the move strip under it) is sticky and can be
+     taller than the viewport, pinning the move strip below the fold behind the
+     nav. Cap it to the space above the nav; it scrolls internally only if a
+     short viewport forces it, so the moves under the board stay reachable. */
+  .analysis-body .board-sticky {
+    max-height: calc(100vh - 100px);
+    overflow-y: auto; overflow-x: hidden;
   }
 }
 
@@ -2496,6 +2514,23 @@ body.guess-open { overflow: hidden; }
 .coach-entry { background: linear-gradient(135deg, #1c3a4a, #16213e); }
 .coach-body { width: 100%; max-width: 480px; margin: 0 auto; padding: 12px 14px calc(78px + env(safe-area-inset-bottom, 0)); display: flex; flex-direction: column; align-items: center; }
 .coach-card { max-width: 480px; }
+
+/* ── Coach themed sections ──────────────────────────────────────────────────
+   Cards are grouped into a few categories, each with its own accent colour.
+   Base = mobile: a labelled divider above each stacked group. Desktop (≥720px,
+   above) adds a tinted box per group and runs a masonry inside it. */
+.coach-group-now     { --grp: #e2b857; --grp-bg: rgba(226,184,87,.06);  --grp-bd: rgba(226,184,87,.22); }
+.coach-group-results { --grp: #4ade80; --grp-bg: rgba(74,222,128,.05);  --grp-bd: rgba(74,222,128,.20); }
+.coach-group-errors  { --grp: #e0574a; --grp-bg: rgba(224,87,74,.06);   --grp-bd: rgba(224,87,74,.22); }
+.coach-group-style   { --grp: #5b8fb9; --grp-bg: rgba(91,143,185,.06);  --grp-bd: rgba(91,143,185,.22); }
+.coach-group-action  { --grp: #b98fe0; --grp-bg: rgba(185,143,224,.06); --grp-bd: rgba(185,143,224,.22); }
+.coach-group-head {
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--grp, var(--accent));
+  margin: 20px 2px 10px; padding-left: 10px;
+  border-left: 3px solid var(--grp, var(--accent));
+}
+.coach-group-cards { display: flex; flex-direction: column; align-items: center; }
 
 .coach-sync-bar { width: 100%; max-width: 480px; background: var(--bg-card); border-radius: var(--radius); padding: 14px; margin-bottom: 4px; }
 .coach-user-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
