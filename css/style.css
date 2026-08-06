@@ -2539,6 +2539,15 @@ body.guess-open { overflow: hidden; }
 .wdl-w { color: var(--success); } .wdl-d { color: var(--text-dim); } .wdl-l { color: var(--danger); }
 
 .coach-sub { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin: 14px 0 6px; }
+.coach-streaks { display: flex; gap: 10px; flex-wrap: wrap; }
+.coach-streak { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 10px; background: var(--bg); border-radius: 8px; padding: 8px 11px; }
+.coach-streak-n { display: flex; align-items: center; gap: 5px; font-size: 15px; flex-shrink: 0; }
+.coach-streak-n b { font-size: 22px; line-height: 1; }
+.coach-streak-win .coach-streak-n b { color: var(--success); }
+.coach-streak-loss .coach-streak-n b { color: var(--danger); }
+.coach-streak-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.coach-streak-lbl { font-size: 12px; font-weight: 600; }
+.coach-streak-dates { font-size: 11px; color: var(--text-dim); }
 .coach-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
 .coach-row-label { font-size: 13px; width: 110px; flex-shrink: 0; }
 .coach-row-val { font-size: 12px; color: var(--text-dim); width: 64px; text-align: right; flex-shrink: 0; }

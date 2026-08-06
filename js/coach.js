@@ -793,11 +793,52 @@ const Coach = (() => {
     return `<div class="home-card coach-card coach-narrative" id="coach-word"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
   }
 
+  // Longest run of consecutive games with a given result (win/loss), scanning
+  // games in chronological order. Any other result breaks the run (a draw ends
+  // a win streak). Returns {len, start, end} where start/end are the games that
+  // bound the streak, so we can show its dates.
+  function longestRun(an, result) {
+    const sorted = an.slice().sort((a, b) => (a.endTime || 0) - (b.endTime || 0));
+    let best = { len: 0, start: null, end: null }, cur = 0, startG = null;
+    for (const g of sorted) {
+      if (g.result === result) {
+        if (!cur) startG = g;
+        cur++;
+        if (cur > best.len) best = { len: cur, start: startG, end: g };
+      } else cur = 0;
+    }
+    return best;
+  }
+  const streakDate = ts => ts ? new Date(ts * 1000).toLocaleDateString('fr-FR') : '';
+  function streakDates(run) {
+    const a = streakDate(run.start && run.start.endTime);
+    const b = streakDate(run.end && run.end.endTime);
+    if (!a && !b) return '';
+    return a === b ? a : `du ${a} au ${b}`;
+  }
+  function streakRow(run, kind) {
+    const isWin = kind === 'win';
+    const noun = run.len > 1 ? (isWin ? 'victoires' : 'défaites') : (isWin ? 'victoire' : 'défaite');
+    const dates = run.len ? streakDates(run) : '';
+    const caption = run.len
+      ? (dates ? `${run.len} ${noun} · ${dates}` : `${run.len} ${noun} d'affilée`)
+      : 'aucune pour l\'instant';
+    return `<div class="coach-streak coach-streak-${kind}">
+      <span class="coach-streak-n">${isWin ? '🔥' : '🥶'}<b>${run.len}</b></span>
+      <div class="coach-streak-meta">
+        <span class="coach-streak-lbl">${isWin ? 'Meilleure série de victoires' : 'Pire série de défaites'}</span>
+        <span class="coach-streak-dates">${caption}</span>
+      </div>
+    </div>`;
+  }
+
   function renderTrends(an) {
     const wins = an.filter(g => g.result === 'win').length;
     const draws = an.filter(g => g.result === 'draw').length;
     const losses = an.filter(g => g.result === 'loss').length;
     const total = an.length;
+    const bestWin = longestRun(an, 'win');
+    const worstLoss = longestRun(an, 'loss');
 
     // by color
     const byColor = ['w', 'b'].map(c => {
@@ -842,6 +883,8 @@ const Coach = (() => {
         </div>
       </div>
       ${ratingSvg}
+      <div class="coach-sub">Séries</div>
+      <div class="coach-streaks">${streakRow(bestWin, 'win')}${streakRow(worstLoss, 'loss')}</div>
       <div class="coach-sub">Par couleur</div>
       ${colorRows}
       <div class="coach-sub">Par cadence</div>
