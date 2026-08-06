@@ -420,6 +420,11 @@ const Coach = (() => {
     }
     const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
     curAn = an;
+    // Streaks are match-result records, so they must span EVERY game of the
+    // cadence (analysed or not) — the analysed subset drops games and would
+    // undercount a run. Results/dates are known for every synced game.
+    const allForTc = (filterTc === 'all' ? games : games.filter(g => (g.timeClass || 'autre') === filterTc))
+      .filter(g => g.result && !excludedOpp(g.oppName) && !skipCadence(g.timeClass));
     // Cards are organised into a few themed sections so related material sits
     // together (results with results, errors with errors …) with a clear
     // labelled band between categories — much easier to scan on desktop than
@@ -441,7 +446,7 @@ const Coach = (() => {
           renderFocus(an)
         ]) +
         group('results', 'Résultats & progression', [
-          renderTrends(an),
+          renderTrends(an, allForTc),
           renderProgressStory(an),
           renderErrorEvolution(an),
           renderProgress(an)
@@ -855,13 +860,15 @@ const Coach = (() => {
     </div>`;
   }
 
-  function renderTrends(an) {
+  function renderTrends(an, streakPool) {
     const wins = an.filter(g => g.result === 'win').length;
     const draws = an.filter(g => g.result === 'draw').length;
     const losses = an.filter(g => g.result === 'loss').length;
     const total = an.length;
-    const bestWin = longestRun(an, 'win');
-    const worstLoss = longestRun(an, 'loss');
+    // Streaks span ALL games of the cadence (see render()), not just analysed.
+    const pool = (streakPool && streakPool.length) ? streakPool : an;
+    const bestWin = longestRun(pool, 'win');
+    const worstLoss = longestRun(pool, 'loss');
 
     // by color
     const byColor = ['w', 'b'].map(c => {
