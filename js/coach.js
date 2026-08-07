@@ -1799,7 +1799,7 @@ const Coach = (() => {
     }).join('');
     const loLabel = lo > 0 ? `<text x="${padL}" y="${(H - padB - 1).toFixed(1)}" class="coach-evo-max">${fmtEvo(lo, key)}</text>` : '';
     const gid = 'evoGrad';
-    return `<svg viewBox="0 0 ${W} ${H}" class="coach-evo-svg" preserveAspectRatio="none">
+    return `<svg viewBox="0 0 ${W} ${H}" class="coach-evo-svg">
       <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
         <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
