@@ -2105,29 +2105,46 @@ body.guess-open { overflow: hidden; }
 .guess-final { font-size: 28px; color: var(--accent); display: inline-block; margin: 6px 0; }
 .guess-actions { margin-top: 18px; }
 
-/* ── Endgame trainer (reuses .guess-overlay/.guess-panel/.guess-head shell) ── */
-.eg-intro { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 6px 0 16px; }
-.eg-menu { display: flex; flex-direction: column; gap: 10px; }
-.eg-card {
-  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+/* ── Cours sur les mats (reuses .guess-overlay/.guess-panel/.guess-head shell) ── */
+.mate-intro { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 6px 0 18px; }
+.mate-intro b { color: var(--text); }
+.mate-group { margin-bottom: 22px; }
+.mate-group-title { font-size: 14px; font-weight: 700; margin: 0 0 4px; color: var(--text); }
+.mate-group-intro { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 12px; }
+.mate-group-intro b { color: var(--accent); }
+.mate-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+.mate-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  text-align: left; width: 100%;
   background: var(--bg-card); border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px; padding: 16px; cursor: pointer; color: var(--text);
+  border-radius: 12px; padding: 13px 14px; cursor: pointer; color: var(--text);
   font: inherit; transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.eg-card:hover { background: var(--bg-elevated); border-color: var(--accent-dim); }
-.eg-card:active { transform: scale(0.99); }
-.eg-card-icon { font-size: 28px; flex-shrink: 0; }
-.eg-card-name { font-size: 15px; font-weight: 600; }
-.eg-card-badge {
-  margin-left: auto; flex-shrink: 0; font-size: 11px; font-weight: 600;
-  color: var(--text-dim); background: var(--bg); border-radius: 10px; padding: 3px 9px; white-space: nowrap;
+.mate-card:hover { background: var(--bg-elevated); border-color: var(--accent-dim); }
+.mate-card:active { transform: scale(0.99); }
+.mate-card-icon { font-size: 24px; }
+.mate-card-name { font-size: 14px; font-weight: 700; line-height: 1.25; }
+.mate-card-en { font-size: 11px; color: var(--text-dim); font-style: italic; }
+.mate-card-train { margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--accent); }
+
+.mate-detail { margin: 4px 0 6px; }
+.mate-diagram {
+  position: relative; width: 100%; max-width: 300px; aspect-ratio: 1; margin: 0 auto 14px;
 }
-.eg-card-badge.done { color: var(--success); background: rgba(74,222,128,0.12); }
-.eg-card-done { border-color: rgba(74,222,128,0.35); }
-.eg-tip {
-  font-size: 13px; line-height: 1.55; background: var(--bg-card);
-  border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+.mate-diagram svg { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px; }
+.mate-diagram .arrow-overlay { pointer-events: none; }
+.mate-lesson { font-size: 14px; line-height: 1.65; }
+.mate-lesson p { margin: 0 0 10px; }
+.mate-lesson b { color: var(--text); font-weight: 700; }
+.mate-detail-en { display: block; font-size: 12px; font-style: italic; color: var(--text-dim); margin-bottom: 8px; }
+.mate-seq {
+  font-size: 13.5px; font-weight: 600; color: var(--accent);
+  background: var(--bg-card); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 9px 12px; margin-top: 4px; line-height: 1.5;
 }
+.guess-nav { gap: 10px; flex-wrap: wrap; }
 
 /* ── Analysis "Plus d'analyse" accordion ── */
 .analysis-more { margin-top: 4px; }

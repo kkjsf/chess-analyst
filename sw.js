@@ -14,8 +14,8 @@ const VERSIONED = [
   './js/analysis.js',
   './js/training.js',
   './js/guess.js',
-  './js/endgame.js',
   './js/tactics.js',
+  './js/mates.js',
   './js/repertoire.js',
   './js/coach.js',
   './js/app.js'

@@ -88,8 +88,6 @@ const App = (() => {
     });
     const coachBtn = $('#btn-open-coach');
     if (coachBtn) coachBtn.addEventListener('click', () => Coach.show());
-    const endgameBtn = $('#btn-open-endgame');
-    if (endgameBtn) endgameBtn.addEventListener('click', () => { if (typeof Endgame !== 'undefined') Endgame.show(); });
     const coachBack = $('#btn-coach-back');
     if (coachBack) coachBack.addEventListener('click', () => Coach.hide());
     $('#btn-back').addEventListener('click', showImport);
@@ -3138,7 +3136,7 @@ const App = (() => {
     if (tab === 'coach') { if (typeof Coach !== 'undefined') Coach.show(); return; }
     if (tab === 'apprendre') { showLearn(); return; }
     if (tab === 'entrainer') { if (typeof Training !== 'undefined') Training.show(); return; }
-    if (tab === 'finales') { if (typeof Endgame !== 'undefined') Endgame.show(); return; }
+    if (tab === 'mats') { if (typeof Mates !== 'undefined') Mates.show(); return; }
     // analyser: leave any sub-screen, show the loaded game or the import home
     $('#screen-training').classList.remove('active');
     $('#screen-coach').classList.remove('active');
@@ -3161,8 +3159,8 @@ const App = (() => {
     };
     if (typeof Coach !== 'undefined') { patch(Coach, 'show', () => setTab('coach')); patch(Coach, 'hide', syncTabbar); }
     if (typeof Training !== 'undefined') { patch(Training, 'show', () => setTab('entrainer')); patch(Training, 'hide', syncTabbar); }
-    if (typeof Endgame !== 'undefined') { patch(Endgame, 'show', () => setTab('finales')); patch(Endgame, 'close', syncTabbar); }
-    // Endgame/GuessMove are overlays toggling body.guess-open; re-sync the tab when one closes.
+    if (typeof Mates !== 'undefined') { patch(Mates, 'show', () => setTab('mats')); patch(Mates, 'close', syncTabbar); }
+    // Mates/GuessMove are overlays toggling body.guess-open; re-sync the tab when one closes.
     new MutationObserver(() => { if (!document.body.classList.contains('guess-open')) syncTabbar(); })
       .observe(document.body, { attributes: true, attributeFilter: ['class'] });
   }

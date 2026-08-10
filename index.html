@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '149';
+window.APP_VERSION = '150';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -340,7 +340,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
-  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> ou <b>Finales</b> dans la barre du bas.</p>
+  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> ou <b>Mats</b> dans la barre du bas.</p>
 
   <div class="routine-card" id="routine-card">
     <div class="routine-head">
@@ -574,7 +574,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <div class="learn-tile-icon">⚔️</div>
       <div class="learn-tile-txt">
         <span class="learn-tile-title">Tactiques &amp; concepts</span>
-        <span class="learn-tile-sub">Fourchette, clouage, zwischenzug, mats… 35 motifs illustrés, avec entraînement sur l'échiquier.</span>
+        <span class="learn-tile-sub">Fourchette, clouage, zwischenzug… les motifs tactiques illustrés, avec entraînement sur l'échiquier. (Les mats ont leur propre cours dans l'onglet Mats.)</span>
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
@@ -648,9 +648,9 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     <span>Entraîner</span>
     <span class="tab-badge" id="tab-train-badge" hidden></span>
   </button>
-  <button class="tab" data-tab="finales" aria-label="Finales">
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M6 4h11l-2.6 4L17 12H6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
-    <span>Finales</span>
+  <button class="tab" data-tab="mats" aria-label="Mats">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 13 6h2.2L13.5 7.7l.7 2.3-2.2-1.4-2.2 1.4.7-2.3L8.8 6H11l1-2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 13h10l-1 7H8l-1-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M6 20.5h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    <span>Mats</span>
   </button>
 </nav>
 
@@ -659,8 +659,8 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 // document.write during initial parse keeps the exact synchronous, in-order,
 // blocking semantics of static <script> tags.
 ['js/chess.min.js', 'js/board.js', 'js/engine.js', 'js/openings.js',
- 'js/analysis.js', 'js/training.js', 'js/guess.js', 'js/endgame.js',
- 'js/tactics.js', 'js/repertoire.js', 'js/courses.js', 'js/opening-tree.js', 'js/coach.js', 'js/app.js']
+ 'js/analysis.js', 'js/training.js', 'js/guess.js',
+ 'js/tactics.js', 'js/mates.js', 'js/repertoire.js', 'js/courses.js', 'js/opening-tree.js', 'js/coach.js', 'js/app.js']
   .forEach(function (src) { document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>'); });
 </script>
 <script>

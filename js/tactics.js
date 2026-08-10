@@ -102,43 +102,7 @@ const Tactics = (() => {
         { fen: '4k3/3R4/8/8/8/8/1B6/3QK3 w - - 0 1', sol: ['Rd8+', 'Ke7', 'Qd7#'], hint: 'La tour occupe d7, la case dont la dame a besoin. Joue Rd8+ : la tour dégage d7 en donnant échec, puis la dame s\'y installe pour mater (le fou b2 coupe la fuite en f6).' },
       ] },
 
-    // ════════ ♚ Mats classiques ════════
-    { cat: '♚ Mats classiques', name: 'Mat du couloir', en: 'Back-rank mate',
-      desc: `Le roi est <b>coincé sur sa rangée par ses propres pions</b>, et une tour ou une dame mate sur la dernière rangée. Prévention : créer une « lucarne » en avançant un pion devant le roi (h3, g3…).`,
-      fen: '4R1k1/5ppp/8/8/8/8/8/6K1', arrows: [{ from: 'e8', to: 'g8', color: R }],
-      puzzles: [
-        { fen: '6k1/5ppp/8/8/8/8/8/3R2K1 w - - 0 1', sol: ['Rd8#'], hint: 'La dernière rangée est sans issue : les pions bloquent leur propre roi.' },
-      ] },
-    { cat: '♚ Mats classiques', name: "Mat de l'escalier", en: 'Ladder mate',
-      desc: `Deux tours (ou dame + tour) repoussent le roi rangée après rangée. La tour a7 verrouille la 7<sup>e</sup> rangée pendant que la tour b8 mate sur la 8<sup>e</sup>. Technique de finale fondamentale.`,
-      fen: '1R2k3/R7/8/8/8/8/8/6K1', arrows: [{ from: 'a7', to: 'h7', color: G }, { from: 'b8', to: 'e8', color: R }],
-      puzzles: [
-        { fen: '4k3/R7/1R6/8/8/8/8/6K1 w - - 0 1', sol: ['Rb8#'], hint: 'Une tour coupe la 7ᵉ rangée ; l\'autre mate sur la 8ᵉ.' },
-      ] },
-    { cat: '♚ Mats classiques', name: 'Mat étouffé', en: 'Smothered mate',
-      desc: `Le roi est <b>entouré de ses propres pièces</b> et un cavalier mate — aucune fuite. Souvent précédé d'un sacrifice de dame pour forcer le blocage de la dernière case.`,
-      fen: '6rk/5Npp/8/8/8/8/8/6K1', arrows: [{ from: 'f7', to: 'h8', color: R }],
-      puzzles: [
-        { fen: '6rk/6pp/8/6N1/8/8/8/6K1 w - - 0 1', sol: ['Nf7#'], hint: 'Le roi est emmuré par sa tour et ses pions : un saut de cavalier suffit.' },
-        { fen: '5r1k/6pp/7N/8/8/8/Q7/6K1 w - - 0 1', sol: ['Qg8+', 'Rxg8', 'Nf7#'], hint: 'Le combo classique : sacrifie la dame pour étouffer le roi, puis mate au cavalier.' },
-      ] },
-    { cat: '♚ Mats classiques', name: 'Coup du Berger', en: "Scholar's Mate",
-      desc: `Mat en 4 coups visant le point faible <b>f7</b> : la dame, soutenue par le fou c4, prend en f7 (1.e4 e5 2.Fc4 Cc6 3.Dh5 Cf6?? 4.Dxf7#). Facile à parer une fois connu — ravageur contre les débutants.`,
-      fen: 'r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR', arrows: [{ from: 'c4', to: 'f7', color: G }, { from: 'f7', to: 'e8', color: R }],
-      puzzles: [
-        { fen: 'rnbqk2r/pppp1ppp/5n2/2b1p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1', sol: ['Qxf7#'], hint: 'La dame, épaulée par le fou c4, frappe le point le plus faible.' },
-      ] },
-    { cat: '♚ Mats classiques', name: 'Baiser de la mort', en: 'Kiss of death',
-      desc: `La dame, <b>soutenue par une pièce</b>, se colle au roi dans un coin. En g7 elle est défendue par le roi f6 : le roi h8 ne peut ni fuir ni la capturer.`,
-      fen: '7k/6Q1/5K2/8/8/8/8/8', arrows: [{ from: 'f6', to: 'g7', color: G }, { from: 'g7', to: 'h8', color: R }],
-      puzzles: [
-        { fen: '7k/8/5KQ1/8/8/8/8/8 w - - 0 1', sol: ['Qg7#'], hint: 'Colle la dame au roi : ton propre roi la défend, le sien est sans air.' },
-      ] },
-    { cat: '♚ Mats classiques', name: 'Mat de Légal', en: "Légal's Mate",
-      desc: `Un sacrifice de dame en ouverture exploitant un cavalier cloué : on « ignore » le clouage pour mater avec les pièces mineures (1.e4 e5 2.Cf3 d6 3.Fc4 Fg4 4.Cc3 g6?? 5.Cxe5! Fxd1 6.Fxf7+ Re7 7.Cd5#). Piège célèbre de l'Italienne.` },
-    { cat: '♚ Mats classiques', name: 'Sacrifice grec (fou h7)', en: 'Greek gift',
-      desc: `Le <b>sacrifice grec</b> Fxh7+ : on offre le fou pour arracher le roque adverse. Après Rxh7, Cg5+ ramène la dame (Dh5) et l'attaque déferle. Schéma type quand le roi noir a roqué et que f6/h6 sont fragiles.`,
-      fen: 'r1bq1rk1/pp3ppp/2n1pn2/2pp4/3P4/3B1N2/PPP2PPP/RNBQ1RK1', arrows: [{ from: 'd3', to: 'h7', color: R }, { from: 'f3', to: 'g5', color: G }] },
+    // Les mats classiques ont leur propre cours dédié (js/mates.js, onglet « Mats »).
 
     // ════════ 🧠 Méthode & calcul ════════
     { cat: '🧠 Méthode & calcul', name: 'Méthode CCT (É-C-M)', en: 'Checks, Captures, Threats',
