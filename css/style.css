@@ -2732,6 +2732,13 @@ body.guess-open { overflow: hidden; }
 .coach-recent-analyze:hover { background: rgba(255,255,255,0.06); }
 
 /* Coach — "Tes plus beaux coups" gallery (brilliant / great move boards) */
+.coach-hl-tier { margin-top: 14px; }
+.coach-hl-tier:first-of-type { margin-top: 4px; }
+.coach-hl-tier-head {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+  font-size: 14px; font-weight: 700; color: var(--text);
+}
+.coach-hl-tier-head .stat-pill { font-size: 12px; }
 .coach-hl-gallery {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px;
 }

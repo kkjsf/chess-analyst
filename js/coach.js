@@ -1580,9 +1580,9 @@ const Coach = (() => {
     if (!q.moveCount) return '';
     const order = [
       { k: 'brilliant', l: 'Brillant', c: '#67d4e8' },
-      { k: 'great', l: 'Très bon', c: '#7ba7d6' },
+      { k: 'great', l: 'Excellent', c: '#7ba7d6' },
       { k: 'best', l: 'Meilleur', c: '#56b886' },
-      { k: 'excellent', l: 'Excellent', c: '#86d99a' },
+      { k: 'excellent', l: 'Très bien', c: '#86d99a' },
       { k: 'good', l: 'Bon', c: '#b9cf8f' },
       { k: 'book', l: 'Théorique', c: '#cdab72' },
       { k: 'forced', l: 'Forcé', c: '#8a8aa0' },
@@ -1762,11 +1762,11 @@ const Coach = (() => {
     blunder:  { label: 'Gaffes', plural: 'gaffes', glyph: '??', color: '#d36b6b', better: 'down', kind: 'count' },
     mistake:  { label: 'Erreurs', plural: 'erreurs', glyph: '?', color: '#e08a4b', better: 'down', kind: 'count' },
     miss:     { label: 'Coups manqués', plural: 'coups manqués', glyph: '✗', color: '#e0574a', better: 'down', kind: 'count' },
-    strong:   { label: 'Très bons', plural: 'coups très bons', glyph: '!', color: '#56b886', better: 'up', kind: 'count' },
+    strong:   { label: 'Coups forts', plural: 'coups forts', glyph: '!', color: '#56b886', better: 'up', kind: 'count' },
     accuracy: { label: 'Précision', plural: 'précision', glyph: '✓', color: '#67d4e8', better: 'up', kind: 'pct' }
   };
   // Per-game count for a count-metric. 'strong' = the standout moves only —
-  // brillant (!!) + très bon (!) — kept distinct from overall precision.
+  // brillant (!!) + excellent (!) — kept distinct from overall precision.
   function metricCount(g, key) {
     if (key === 'strong') { const q = g.analysis.moveQuality || {}; return (q.brilliant || 0) + (q.great || 0); }
     return errCounts(g)[key] || 0;
@@ -1886,7 +1886,7 @@ const Coach = (() => {
   function renderProgressStory(an) {
     const { early, late } = splitHalves(an);
     if (early.length < 4 || late.length < 4) return '';
-    const subj = { accuracy: 'ta précision', blunder: 'tes gaffes', mistake: 'tes erreurs', miss: 'tes coups manqués', strong: 'tes coups très bons' };
+    const subj = { accuracy: 'ta précision', blunder: 'tes gaffes', mistake: 'tes erreurs', miss: 'tes coups manqués', strong: 'tes coups forts' };
     const unit = k => EVO_META[k].kind === 'pct' ? '' : ' pour 100 coups';
     const fmt = (v, k) => EVO_META[k].kind === 'pct' ? Math.round(v) + '%' : v.toFixed(1);
     const rows = ['accuracy', 'blunder', 'mistake', 'miss', 'strong'].map(k => {
@@ -2161,19 +2161,23 @@ const Coach = (() => {
     GuessMove.start(analysis, null, side, { indices, title: '🎯 Tes erreurs vs ' + (g.oppName || '?') });
   }
 
-  // ─────────────── Tes plus beaux coups (brillants & très bons) ───────────────
+  // ─────────────── Tes plus beaux coups (brillants & excellents) ───────────────
+  // Labels match the move badges + engine comments + Chess.com FR: brilliant = !!
+  // "Brillant", great = ! "Excellent" (a rarer, harder-to-find move than a plain
+  // best move). Kept in sync with MOVE_CLASS in app.js so a move never changes
+  // name between this card and the detailed analyzer it links to.
   const HL_META = {
-    brilliant: { mark: '!!', label: 'Brillant', cls: 'brilliant' },
-    great:     { mark: '!',  label: 'Très bon', cls: 'great' }
+    brilliant: { mark: '!!', label: 'Brillant', plural: 'Brillants', cls: 'brilliant' },
+    great:     { mark: '!',  label: 'Excellent', plural: 'Excellents', cls: 'great' }
   };
 
-  // Gather the user's brilliant / très-bon moves across the filtered games.
-  // Per-move positions come from analysis.highlights (added by computeGameStats)
-  // or, for the recent games that embed a full server report, from that report.
-  // Games that only carry aggregate counts (not yet re-analysed) are returned in
-  // `pending` so the user can open them to see the move in the analyzer.
+  // Bucket the user's brilliant / excellent moves by type across the filtered
+  // games. Per-move positions come from analysis.highlights (added by
+  // computeGameStats) or, for the recent games that embed a full server report,
+  // from that report. Games with only aggregate counts (not yet re-analysed)
+  // land in `pending` so they can still be opened to see the move.
   function collectHighlights(an) {
-    const moves = [], pending = [];
+    const bucket = { brilliant: { moves: [], pending: [] }, great: { moves: [], pending: [] } };
     for (const g of an) {
       const a = g.analysis || {};
       const side = g.userColor;
@@ -2192,64 +2196,70 @@ const Coach = (() => {
         });
       }
       if (list && list.length) {
-        for (const h of list) moves.push(Object.assign({}, h, { side, ctx }));
+        for (const h of list) if (bucket[h.type]) bucket[h.type].moves.push(Object.assign({}, h, { side, ctx }));
       } else {
         const mq = a.moveQuality || {};
-        const b = mq.brilliant || 0, gr = mq.great || 0;
-        if (b + gr) pending.push({ ctx, brilliant: b, great: gr });
+        if (mq.brilliant) bucket.brilliant.pending.push({ ctx, n: mq.brilliant });
+        if (mq.great) bucket.great.pending.push({ ctx, n: mq.great });
       }
     }
-    // Brilliants first, then most recent. Same ordering for the pending list.
-    const rank = t => t === 'brilliant' ? 0 : 1;
-    moves.sort((x, y) => rank(x.type) - rank(y.type) || (y.ctx.end || 0) - (x.ctx.end || 0));
-    pending.sort((x, y) => (y.brilliant - x.brilliant) || (y.ctx.end || 0) - (x.ctx.end || 0));
-    return { moves, pending };
+    for (const t of ['brilliant', 'great']) {
+      bucket[t].moves.sort((x, y) => (y.ctx.end || 0) - (x.ctx.end || 0));
+      bucket[t].pending.sort((x, y) => (y.ctx.end || 0) - (x.ctx.end || 0));
+    }
+    return bucket;
   }
 
-  function renderHighlights(an) {
-    const { moves, pending } = collectHighlights(an);
-    if (!moves.length && !pending.length) return '';
-    const GALLERY_CAP = 24, PENDING_CAP = 12;
+  const HL_BOARD_CAP = 12, HL_PEND_CAP = 12;
+  const HL_RES = { win: 'V', draw: 'N', loss: 'D' };
 
-    const cards = moves.slice(0, GALLERY_CAP).map(h => {
-      const m = HL_META[h.type] || HL_META.great;
+  // One tier (Brillants or Excellents): a mini-board gallery of the moves whose
+  // position we have, plus a "à revoir" list for games we only have counts for.
+  function renderHlTier(type, tier) {
+    if (!tier.moves.length && !tier.pending.length) return '';
+    const m = HL_META[type];
+    const boards = tier.moves.slice(0, HL_BOARD_CAP).map(h => {
       const from = h.playedUci.slice(0, 2), to = h.playedUci.slice(2, 4);
       const date = h.ctx.end ? fmtDate(h.ctx.end) : '';
       const tip = h.tip ? esc(h.tip.replace(/<[^>]+>/g, '')) : '';
       return `<figure class="coach-hl-card">
-        <span class="stat-pill ${m.cls} coach-hl-badge">${m.mark} ${m.label}</span>
         <svg class="coach-hl-board" viewBox="0 0 360 360" data-fen="${esc(h.fenBefore)}" data-from="${from}" data-to="${to}" data-flip="${h.side === 'b' ? 1 : 0}"></svg>
         <figcaption class="coach-hl-meta">${moveNo(h.ply)} <b>${esc(h.playedSan)}</b> · vs ${esc(h.ctx.opp)}${date ? ' · ' + date : ''}</figcaption>
         ${tip ? `<p class="coach-hl-tip">${tip}</p>` : ''}
       </figure>`;
     }).join('');
-
-    const gallery = moves.length
-      ? `<div class="coach-hl-gallery">${cards}</div>${moves.length > GALLERY_CAP ? `<p class="coach-hl-more">+ ${moves.length - GALLERY_CAP} autres beaux coups.</p>` : ''}`
+    const gallery = tier.moves.length
+      ? `<div class="coach-hl-gallery">${boards}</div>${tier.moves.length > HL_BOARD_CAP ? `<p class="coach-hl-more">+ ${tier.moves.length - HL_BOARD_CAP} autres.</p>` : ''}`
       : '';
-
-    const resLbl = { win: 'V', draw: 'N', loss: 'D' };
-    const pendRows = pending.slice(0, PENDING_CAP).map(p => {
-      const bits = [];
-      if (p.brilliant) bits.push(`${p.brilliant} brillant${p.brilliant > 1 ? 's' : ''}`);
-      if (p.great) bits.push(`${p.great} très bon${p.great > 1 ? 's' : ''}`);
-      return `<div class="coach-drill-row">
-        <span class="coach-drill-res ${p.ctx.result || 'draw'}">${resLbl[p.ctx.result] || '·'}</span>
+    const pendRows = tier.pending.slice(0, HL_PEND_CAP).map(p =>
+      `<div class="coach-drill-row">
+        <span class="coach-drill-res ${p.ctx.result || 'draw'}">${HL_RES[p.ctx.result] || '·'}</span>
         <span class="coach-drill-opp">${esc(p.ctx.opp)}</span>
         <span class="coach-drill-date">${p.ctx.end ? fmtDate(p.ctx.end) : ''}</span>
-        <span class="coach-drill-count">${bits.join(' · ')}</span>
+        <span class="coach-drill-count">${p.n} ${p.n > 1 ? m.plural.toLowerCase() : m.label.toLowerCase()}</span>
         <button class="coach-drill-btn coach-hl-open" data-uuid="${esc(p.ctx.uuid)}" data-mode="${p.ctx.hasReport ? 'open' : 'engine'}">👁 Voir</button>
-      </div>`;
-    }).join('');
-    const pendBlock = pending.length
-      ? `<p class="coach-puz-intro" style="margin-top:${moves.length ? 16 : 0}px">Ces parties contiennent de beaux coups pas encore détaillés — ouvre-les pour revoir le coup dans l'analyse${pending.length > PENDING_CAP ? ` (${pending.length} parties au total)` : ''}.</p>${pendRows}`
+      </div>`).join('');
+    // Only nag about re-analysis when we truly can't board this tier yet.
+    const pendNote = tier.pending.length
+      ? `<p class="coach-puz-intro" style="margin-top:${tier.moves.length ? 14 : 6}px">${tier.moves.length
+          ? 'Ces parties en ont d\'autres, pas encore enregistrés au coup près - ouvre-les pour revoir le coup.'
+          : 'Positions pas encore enregistrées : clique 👁 pour revoir le coup directement dans la partie. Une ré-analyse complète du Coach les affichera ensuite en échiquier ici.'}${tier.pending.length > HL_PEND_CAP ? ` (${tier.pending.length} parties)` : ''}</p>${pendRows}`
       : '';
+    return `<div class="coach-hl-tier">
+      <h4 class="coach-hl-tier-head"><span class="stat-pill ${m.cls}">${m.mark}</span> ${m.plural}</h4>
+      ${gallery}${pendNote}
+    </div>`;
+  }
 
+  function renderHighlights(an) {
+    const b = collectHighlights(an);
+    const brill = renderHlTier('brilliant', b.brilliant);
+    const great = renderHlTier('great', b.great);
+    if (!brill && !great) return '';
     return `<div class="home-card coach-card" id="coach-highlights">
       <h3>✨ Tes plus beaux coups</h3>
-      <p class="coach-sub2">Tes coups <b>brillants</b> et <b>très bons</b> — revois-les pour t'en inspirer.</p>
-      ${gallery}
-      ${pendBlock}
+      <p class="coach-sub2">Tes coups <b>brillants</b> (!!) et <b>excellents</b> (!) - revois-les pour t'en inspirer.</p>
+      ${brill}${great}
     </div>`;
   }
 

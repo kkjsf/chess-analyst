@@ -2174,9 +2174,9 @@ const App = (() => {
     const pillsHtml = (side) => {
       let pills = '';
       if (side.brilliants) pills += `<span class="stat-pill brilliant">${side.brilliants} brillant${side.brilliants !== 1 ? 's' : ''}</span>`;
-      if (side.great) pills += `<span class="stat-pill great">${side.great} très bon${side.great !== 1 ? 's' : ''}</span>`;
+      if (side.great) pills += `<span class="stat-pill great">${side.great} excellent${side.great !== 1 ? 's' : ''}</span>`;
       if (side.best) pills += `<span class="stat-pill best">${side.best} meilleur${side.best !== 1 ? 's' : ''}</span>`;
-      if (side.excellent) pills += `<span class="stat-pill excellent">${side.excellent} excellent${side.excellent !== 1 ? 's' : ''}</span>`;
+      if (side.excellent) pills += `<span class="stat-pill excellent">${side.excellent} très bien</span>`;
       if (side.good) pills += `<span class="stat-pill good">${side.good} bon${side.good !== 1 ? 's' : ''}</span>`;
       if (side.book) pills += `<span class="stat-pill book">${side.book} théorique${side.book !== 1 ? 's' : ''}</span>`;
       if (side.inaccuracies) pills += `<span class="stat-pill inaccuracy">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
