@@ -1506,6 +1506,23 @@ html, body {
 .info-content li { margin-bottom: 6px; }
 .info-content b { color: var(--accent); }
 .panel.panel-wide { max-width: 100%; }
+
+/* Reading panels (Guide / Notation / Comment ça marche ?) open full-page, with
+   the content centered in a comfortable column so the wide tables aren't clipped
+   in a narrow side drawer. */
+.panel-read .panel-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+}
+.panel-read .panel-body > * {
+  width: 100%;
+  max-width: 900px;
+}
+/* Let any wide table scroll inside the reading column rather than clip. */
+.panel-read .info-content,
+.panel-read .panel-body > .notation-table { overflow-x: auto; }
 .concepts-intro {
   font-size: 13px;
   line-height: 1.6;

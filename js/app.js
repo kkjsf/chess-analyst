@@ -3562,6 +3562,17 @@ const App = (() => {
       deviations: [
         { label: `2…Fc5 (gambit refusé)`, note: `Les Noirs déclinent : 2…Fc5 vise f2 (qui ne peut plus roquer facilement) et garde la structure intacte, en évitant toutes les complications.` }
       ] },
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Ouverture Viennoise', en: 'Vienna Game', eco: 'C25–C29', side: 'w', level: '👍 Simple et piégeuse',
+      line: 'e4 e5 Nc3',
+      desc: `Les Blancs développent d'abord le <b>cavalier en c3</b> pour soutenir e4, puis enchaînent souvent par <b>f4</b> (un Gambit du Roi « différé », mieux préparé). Peu de théorie, des plans clairs et quelques pièges bien connus : une excellente première ouverture d'attaque.`,
+      idea: `Soutenir e4 par Cc3 avant de lancer f4 : on garde l'idée d'attaque du Gambit du Roi mais en ayant d'abord développé une pièce. Jeu sain et agressif, facile à jouer.`,
+      plans: { w: `Développer (Cc3, Fc4 ou g3+Fg2), puis frapper par f4 pour ouvrir la colonne f et attaquer f7/l'aile roi.`, b: `Contester le centre par …Cf6 puis …d5 (la contre-attaque saine), ou copier avec …Cc6/…Fc5 et viser un jeu solide.` },
+      structure: `Centre e4 soutenu par le cavalier c3 ; après f4, le jeu s'ouvre sur l'aile roi. Dynamique mais moins risqué que le Gambit du Roi immédiat.`,
+      mistakes: `Contre 2…Cf6, jouer 3.f4 sans préparation permet 3…d5! qui égalise net. Côté noir, l'erreur classique est de laisser filer …d5 et de rester passif, ou de tomber dans le piège 3.Fc4 Cxe4?? 4.Dh5!`,
+      deviations: [
+        { label: `2…Cf6 (la réponse principale)`, note: `Les Noirs frappent e4 tout de suite ; ils visent la libératrice …d5. C'est la façon la plus sûre de neutraliser la Viennoise.` },
+        { label: `2…Cc6 puis 3.Fc4`, note: `Jeu symétrique qui peut transposer vers une Italienne ; attention au piège 3…Cxe4?? 4.Dh5! qui regagne la pièce avec avantage.` }
+      ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Défense Petrov (Russe)', en: "Petrov's Defence", eco: 'C42', side: 'b', level: '🛡️ Solide pour les Noirs',
       line: 'e4 e5 Nf3 Nf6',
       desc: `Au lieu de défendre e5, les Noirs <b>contre-attaquent</b> aussitôt e4. Réputation de solidité et de symétrie : une défense fiable, parfois aride, qui vise l'égalité tranquille.`,

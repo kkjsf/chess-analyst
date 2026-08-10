@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '150';
+window.APP_VERSION = '152';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -27,7 +27,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
 <div class="panel-overlay" id="panel-overlay" hidden></div>
 
-<div class="panel" id="panel-guide" hidden>
+<div class="panel panel-wide panel-read" id="panel-guide" hidden>
   <div class="panel-header">
     <h2>Guide d'utilisation</h2>
     <button class="panel-close" aria-label="Fermer">&times;</button>
@@ -87,7 +87,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
 </div>
 
-<div class="panel" id="panel-notation" hidden>
+<div class="panel panel-wide panel-read" id="panel-notation" hidden>
   <div class="panel-header">
     <h2>Notation des échecs</h2>
     <button class="panel-close" aria-label="Fermer">&times;</button>
@@ -140,7 +140,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
 </div>
 
-<div class="panel" id="panel-technical" hidden>
+<div class="panel panel-wide panel-read" id="panel-technical" hidden>
   <div class="panel-header">
     <h2>Comment ça marche ?</h2>
     <button class="panel-close" aria-label="Fermer">&times;</button>
