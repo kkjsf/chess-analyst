@@ -838,6 +838,7 @@ const Training = (() => {
     }
     current = queue[qi];
     solved = false;
+    exploring = false;
     explainToken++;
     warmEngine();
     solLine = buildSolutionLine(current);
@@ -980,23 +981,19 @@ const Training = (() => {
     // card already shows its full line.
     if (!multi && afterFirstFen) maybeContinuation(afterFirstFen, bestFr, explainToken);
 
+    // Seed free-play "continue" mode from the position right after the best
+    // move (opponent to move). Hidden when that position is already terminal.
+    exploring = false;
+    exploreSeed = afterFirstFen || current.fen;
+    let terminal = false;
+    try { terminal = new Chess(exploreSeed).game_over(); } catch (_) {}
     $('#train-actions').innerHTML = `
       <button class="train-btn again" data-g="again">À revoir</button>
       <button class="train-btn good" data-g="good">Bon</button>
-      <button class="train-btn easy" data-g="easy">Facile</button>`;
-    $$('#train-actions .train-btn').forEach(b => {
-      b.onclick = () => {
-        const g = b.dataset.g;
-        schedule(current, g);
-        if (g === 'again') {
-          // Re-ask this lapsed card later in the SAME session (Anki-style)
-          // rather than freezing the queue at start and never revisiting it.
-          queue.splice(Math.min(queue.length, qi + 3), 0, current);
-        }
-        qi++;
-        renderPuzzle();
-      };
-    });
+      <button class="train-btn easy" data-g="easy">Facile</button>
+      ${terminal ? '' : `<button class="train-btn ghost" id="puz-explore">🔍 Continuer à jouer</button>`}`;
+    bindGradeButtons();
+    const ex = $('#puz-explore'); if (ex) ex.onclick = () => enterExplore();
   }
 
   // Build the "pourquoi" prose for a solved puzzle: what the played move gave
@@ -1118,6 +1115,120 @@ const Training = (() => {
     const el = $('#train-explain-line');
     if (!line.length || !el) return;
     el.innerHTML = ` <span class="train-cont">Suite probable : <b>${[bestFr].concat(line).join(' ')}</b></span>`;
+  }
+
+  // ───────────────────────── free-play exploration ─────────────────────────
+  // After a puzzle is solved, keep playing the position freely: any legal move
+  // for either side, with Stockfish drawing its best move (blue arrow) and a
+  // live White-relative eval — a mini analysis board grafted onto the trainer.
+  let exploring = false, exploreHist = [], exploreSeed = null, exploreToken = 0;
+
+  // Grade buttons behave the same whether shown on the solved card or while
+  // exploring: schedule the card, re-queue a lapse, move to the next puzzle.
+  function bindGradeButtons() {
+    $$('#train-actions .train-btn[data-g]').forEach(b => {
+      b.onclick = () => {
+        const g = b.dataset.g;
+        schedule(current, g);
+        // Re-ask a lapsed card later in the SAME session (Anki-style) rather
+        // than freezing the queue at start and never revisiting it.
+        if (g === 'again') queue.splice(Math.min(queue.length, qi + 3), 0, current);
+        exploring = false; onMove = null;
+        qi++;
+        renderPuzzle();
+      };
+    });
+  }
+
+  function enterExplore() {
+    const seed = exploreSeed || (current && current.fen);
+    if (!seed) return;
+    exploring = true;
+    exploreHist = [seed];
+    renderExplore(null);
+  }
+
+  function renderExplore(lastMove) {
+    const fen = exploreHist[exploreHist.length - 1];
+    liveFen = fen;
+    selected = null;
+    BoardRenderer.render(board, fen, lastMove);
+    BoardRenderer.clearArrows(arrows);
+    onMove = exploreMove;
+    const canUndo = exploreHist.length > 1;
+    $('#train-actions').innerHTML = `
+      <button class="train-btn ghost" id="exp-undo"${canUndo ? '' : ' disabled'}>↶ Annuler</button>
+      <button class="train-btn ghost" id="exp-reset"${canUndo ? '' : ' disabled'}>⟳ Départ</button>
+      <button class="train-btn again" data-g="again">À revoir</button>
+      <button class="train-btn good" data-g="good">Bon</button>
+      <button class="train-btn easy" data-g="easy">Facile</button>`;
+    bindGradeButtons();
+    const u = $('#exp-undo'); if (u) u.onclick = () => { if (exploreHist.length > 1) { exploreHist.pop(); renderExplore(null); } };
+    const r = $('#exp-reset'); if (r) r.onclick = () => { if (exploreHist.length > 1) { exploreHist = [exploreHist[0]]; renderExplore(null); } };
+    setFeedback('explore', exploreStatusHtml(fen, { pending: true }));
+    analyzeExplore(fen, ++exploreToken);
+  }
+
+  function exploreMove(from, to) {
+    if (!exploring) return;
+    const fen = exploreHist[exploreHist.length - 1];
+    let g, m = null;
+    try { g = new Chess(fen); m = g.move({ from, to, promotion: 'q' }); } catch (_) { m = null; }
+    if (!m) return; // illegal — ignore, keep the position as is
+    exploreHist.push(g.fen());
+    renderExplore(m);
+  }
+
+  // Live eval + best-move arrow for the current explore position. Warms the
+  // engine on demand (exploration is an explicit user action, so a short init
+  // wait is acceptable — unlike the passive reveal continuation).
+  async function analyzeExplore(fen, token) {
+    let over = false;
+    try { over = new Chess(fen).game_over(); } catch (_) {}
+    if (over) { setFeedback('explore', exploreStatusHtml(fen, null)); return; }
+    if (typeof StockfishEngine === 'undefined') { setFeedback('explore', exploreStatusHtml(fen, { noEngine: true })); return; }
+    if (!StockfishEngine.isReady()) {
+      setFeedback('explore', exploreStatusHtml(fen, { booting: true }));
+      try { await StockfishEngine.init(); } catch (_) { if (token === exploreToken) setFeedback('explore', exploreStatusHtml(fen, { noEngine: true })); return; }
+    }
+    if (token !== exploreToken) return;
+    let res;
+    try { res = await StockfishEngine.evaluate(fen, 'movetime 500'); } catch (_) { res = null; }
+    if (token !== exploreToken) return;
+    if (res && res.bestMove) {
+      BoardRenderer.drawArrows(arrows, [{ from: res.bestMove.slice(0, 2), to: res.bestMove.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 }]);
+    }
+    setFeedback('explore', exploreStatusHtml(fen, res));
+  }
+
+  // White-relative eval (engine scores are side-to-move relative). Mate scores
+  // are encoded as ±(30000 - n) with res.mate = signed mate distance.
+  function fmtEvalWhite(res, stm) {
+    if (res.mate != null) {
+      const mateW = stm === 'w' ? res.mate : -res.mate;
+      return (mateW > 0 ? 'Mat en ' : 'Mat en ') + Math.abs(mateW) + (mateW > 0 ? ' (Blancs)' : ' (Noirs)');
+    }
+    const w = (stm === 'w' ? res.score : -res.score) / 100;
+    return (w >= 0 ? '+' : '') + w.toFixed(1);
+  }
+
+  function exploreStatusHtml(fen, res) {
+    const stm = fen.split(' ')[1] === 'w' ? 'w' : 'b';
+    try {
+      const g = new Chess(fen);
+      if (g.in_checkmate()) return `♚ <b>Échec et mat.</b> Position finale — annule pour explorer une autre suite.`;
+      if (g.in_stalemate()) return `<b>Pat</b> — nulle. Annule pour explorer une autre suite.`;
+      if (g.in_draw()) return `<b>Nulle</b> (matériel / répétition). Annule pour explorer une autre suite.`;
+    } catch (_) {}
+    const turn = stm === 'w' ? 'Blancs' : 'Noirs';
+    const head = `🔍 <b>Exploration</b> — trait aux <b>${turn}</b>.`;
+    if (res && res.noEngine) return head + ` <span class="train-cont">Moteur indisponible — joue librement, sans suggestion.</span>`;
+    if (res && res.booting) return head + ` <span class="train-cont">⏳ Démarrage du moteur…</span>`;
+    if (!res || res.pending) return head + ` <span class="train-cont">⏳ Analyse…</span>`;
+    const pv = pvLineFr(fen, res.pv, 4);
+    const best = pv[0] || '';
+    return head + ` Éval : <b>${fmtEvalWhite(res, stm)}</b>.${best ? ` Meilleur coup : <b>${best}</b> (flèche bleue).` : ''}`
+      + (pv.length > 1 ? `<div class="train-cont">Suite : <b>${pv.join(' ')}</b></div>` : '');
   }
 
   // ───────────────────────── MOTIFS dashboard tab ─────────────────────────

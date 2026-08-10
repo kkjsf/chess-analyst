@@ -132,6 +132,19 @@
   Excellent sous un titre brillants. ⚠️ Toujours : les brillants de Simon (5 rapide + 9 daily) n'ont pas
   de position stockée → ils sont dans la liste 👁 (re-run Coach FULL requise pour les échiquiers).
 
+- v156 — **mode exploration après un puzzle résolu** (`js/training.js`). Une fois le puzzle résolu,
+  bouton « 🔍 Continuer à jouer » (masqué si la position est déjà terminale) → mode analyse libre :
+  l'échiquier redevient jouable (n'importe quel coup légal, les deux camps), Stockfish trace son
+  meilleur coup (flèche bleue) et affiche une éval en direct (relative aux Blancs) + la suite en FR.
+  Fonctions `enterExplore`/`renderExplore`/`exploreMove`/`analyzeExplore`/`exploreStatusHtml`/
+  `fmtEvalWhite` ; état `exploreHist` (pile pour Annuler/Départ) ; le moteur est réveillé à la
+  demande (StockfishEngine.init si pas prêt). Les boutons de notation SRS (À revoir/Bon/Facile)
+  restent dispo et terminent l'exploration. Binding notation factorisé dans `bindGradeButtons`
+  (partagé entre carte résolue et mode explore). Seed = position après le meilleur coup (afterFirstFen).
+  Vérifié en preview : reveal → Continuer → coup g7g6 (trait passe aux Blancs) → Annuler → Départ →
+  notation avance au puzzle suivant ; éval/flèche/PV OK (moteur fonctionnel sous npx serve). CSS
+  `.train-feedback.explore`. APP_VERSION 155→156.
+
 **Backlog / laissé de côté (à connaître avant de reprendre):**
 - NON fait (gap features signalé): type de coup **Forcé**, et glyphe Excellent (✔ à passer en 👍 pour matcher Chess.com).
 - Volontairement laissés: adherence-after-deviation, tactics forced-replies, profondeur item #20, accuracy=100, renderRepeated en brut.

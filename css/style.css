@@ -1992,6 +1992,8 @@ html, body {
 .train-feedback.right { color: var(--success); }
 .train-feedback.wrong { color: var(--danger); }
 .train-feedback.shown { color: var(--accent); }
+.train-feedback.explore { color: var(--text); }
+.train-feedback.explore b { color: var(--accent); }
 .train-explain {
   margin-top: 10px; padding: 10px 12px; border-radius: 10px;
   background: var(--card-alt, rgba(255, 255, 255, 0.04));
