@@ -451,6 +451,9 @@ const Coach = (() => {
           renderErrorEvolution(an),
           renderProgress(an)
         ]) +
+        group('wins', 'Tes réussites', [
+          renderHighlights(an)
+        ]) +
         group('errors', 'Erreurs & faiblesses', [
           renderErrorDetail(an),
           renderMissed(an),
@@ -484,6 +487,7 @@ const Coach = (() => {
       bindTrainingCta();
       bindRecentGames();
       bindGamesDrill();
+      bindHighlights();
       bindRepertoire();
       bindConversion();
       bindTactics();
@@ -2155,6 +2159,111 @@ const Coach = (() => {
     }
     if (!indices.length) return;
     GuessMove.start(analysis, null, side, { indices, title: '🎯 Tes erreurs vs ' + (g.oppName || '?') });
+  }
+
+  // ─────────────── Tes plus beaux coups (brillants & très bons) ───────────────
+  const HL_META = {
+    brilliant: { mark: '!!', label: 'Brillant', cls: 'brilliant' },
+    great:     { mark: '!',  label: 'Très bon', cls: 'great' }
+  };
+
+  // Gather the user's brilliant / très-bon moves across the filtered games.
+  // Per-move positions come from analysis.highlights (added by computeGameStats)
+  // or, for the recent games that embed a full server report, from that report.
+  // Games that only carry aggregate counts (not yet re-analysed) are returned in
+  // `pending` so the user can open them to see the move in the analyzer.
+  function collectHighlights(an) {
+    const moves = [], pending = [];
+    for (const g of an) {
+      const a = g.analysis || {};
+      const side = g.userColor;
+      const ctx = { uuid: g.uuid, opp: g.oppName || '?', end: g.endTime, result: g.result, hasReport: !!(g.report && g.report.analysis) };
+      let list = null;
+      if (Array.isArray(a.highlights) && a.highlights.length) {
+        list = a.highlights;
+      } else if (g.report && Array.isArray(g.report.analysis)) {
+        list = [];
+        g.report.analysis.forEach((r, i) => {
+          if ((r.type === 'brilliant' || r.type === 'great') && r.fenBefore && r.move && r.move.color === side) {
+            list.push({ ply: i, type: r.type, fenBefore: r.fenBefore,
+              playedUci: r.move.from + r.move.to + (r.move.promotion || ''),
+              playedSan: r.sanFr || r.san, eval: typeof r.eval === 'number' ? r.eval : null, tip: r.tipFr || '' });
+          }
+        });
+      }
+      if (list && list.length) {
+        for (const h of list) moves.push(Object.assign({}, h, { side, ctx }));
+      } else {
+        const mq = a.moveQuality || {};
+        const b = mq.brilliant || 0, gr = mq.great || 0;
+        if (b + gr) pending.push({ ctx, brilliant: b, great: gr });
+      }
+    }
+    // Brilliants first, then most recent. Same ordering for the pending list.
+    const rank = t => t === 'brilliant' ? 0 : 1;
+    moves.sort((x, y) => rank(x.type) - rank(y.type) || (y.ctx.end || 0) - (x.ctx.end || 0));
+    pending.sort((x, y) => (y.brilliant - x.brilliant) || (y.ctx.end || 0) - (x.ctx.end || 0));
+    return { moves, pending };
+  }
+
+  function renderHighlights(an) {
+    const { moves, pending } = collectHighlights(an);
+    if (!moves.length && !pending.length) return '';
+    const GALLERY_CAP = 24, PENDING_CAP = 12;
+
+    const cards = moves.slice(0, GALLERY_CAP).map(h => {
+      const m = HL_META[h.type] || HL_META.great;
+      const from = h.playedUci.slice(0, 2), to = h.playedUci.slice(2, 4);
+      const date = h.ctx.end ? fmtDate(h.ctx.end) : '';
+      const tip = h.tip ? esc(h.tip.replace(/<[^>]+>/g, '')) : '';
+      return `<figure class="coach-hl-card">
+        <span class="stat-pill ${m.cls} coach-hl-badge">${m.mark} ${m.label}</span>
+        <svg class="coach-hl-board" viewBox="0 0 360 360" data-fen="${esc(h.fenBefore)}" data-from="${from}" data-to="${to}" data-flip="${h.side === 'b' ? 1 : 0}"></svg>
+        <figcaption class="coach-hl-meta">${moveNo(h.ply)} <b>${esc(h.playedSan)}</b> · vs ${esc(h.ctx.opp)}${date ? ' · ' + date : ''}</figcaption>
+        ${tip ? `<p class="coach-hl-tip">${tip}</p>` : ''}
+      </figure>`;
+    }).join('');
+
+    const gallery = moves.length
+      ? `<div class="coach-hl-gallery">${cards}</div>${moves.length > GALLERY_CAP ? `<p class="coach-hl-more">+ ${moves.length - GALLERY_CAP} autres beaux coups.</p>` : ''}`
+      : '';
+
+    const resLbl = { win: 'V', draw: 'N', loss: 'D' };
+    const pendRows = pending.slice(0, PENDING_CAP).map(p => {
+      const bits = [];
+      if (p.brilliant) bits.push(`${p.brilliant} brillant${p.brilliant > 1 ? 's' : ''}`);
+      if (p.great) bits.push(`${p.great} très bon${p.great > 1 ? 's' : ''}`);
+      return `<div class="coach-drill-row">
+        <span class="coach-drill-res ${p.ctx.result || 'draw'}">${resLbl[p.ctx.result] || '·'}</span>
+        <span class="coach-drill-opp">${esc(p.ctx.opp)}</span>
+        <span class="coach-drill-date">${p.ctx.end ? fmtDate(p.ctx.end) : ''}</span>
+        <span class="coach-drill-count">${bits.join(' · ')}</span>
+        <button class="coach-drill-btn coach-hl-open" data-uuid="${esc(p.ctx.uuid)}" data-mode="${p.ctx.hasReport ? 'open' : 'engine'}">👁 Voir</button>
+      </div>`;
+    }).join('');
+    const pendBlock = pending.length
+      ? `<p class="coach-puz-intro" style="margin-top:${moves.length ? 16 : 0}px">Ces parties contiennent de beaux coups pas encore détaillés — ouvre-les pour revoir le coup dans l'analyse${pending.length > PENDING_CAP ? ` (${pending.length} parties au total)` : ''}.</p>${pendRows}`
+      : '';
+
+    return `<div class="home-card coach-card" id="coach-highlights">
+      <h3>✨ Tes plus beaux coups</h3>
+      <p class="coach-sub2">Tes coups <b>brillants</b> et <b>très bons</b> — revois-les pour t'en inspirer.</p>
+      ${gallery}
+      ${pendBlock}
+    </div>`;
+  }
+
+  function bindHighlights() {
+    const host = document.getElementById('coach-highlights');
+    if (!host) return;
+    const wasFlipped = BoardRenderer.isFlipped();
+    host.querySelectorAll('.coach-hl-board').forEach(svg => {
+      BoardRenderer.setFlipped(svg.dataset.flip === '1');
+      BoardRenderer.render(svg, svg.dataset.fen, { from: svg.dataset.from, to: svg.dataset.to });
+    });
+    BoardRenderer.setFlipped(wasFlipped);
+    host.querySelectorAll('.coach-hl-open').forEach(b =>
+      b.addEventListener('click', () => openRecent(b.dataset.uuid, b.dataset.mode)));
   }
 
   // Replay just the single turning-point position of a game (from Conversion card).

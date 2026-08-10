@@ -584,6 +584,7 @@ const Analyzer = (() => {
     const phaseAcc = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
     const phaseCp = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
     const blunders = [];
+    const highlights = [];
     let maxUserEval = null, minUserEval = null, turningPoint = null;
 
     for (let i = 0; i < results.length; i++) {
@@ -606,6 +607,19 @@ const Analyzer = (() => {
             playedSan: r.sanFr || r.san, cpLoss: r.cpLoss || 0, tip: r.tipFr || ''
           });
         }
+      }
+
+      // Your best moves — the ones worth revisiting for inspiration. Stored the
+      // same way as blunders (position + the move you played, which IS the good
+      // move) so the coach can replay them without a fresh engine run.
+      if ((r.type === 'brilliant' || r.type === 'great') && r.fenBefore && r.move) {
+        highlights.push({
+          ply: i, phase, type: r.type,
+          fenBefore: r.fenBefore,
+          playedUci: r.move.from + r.move.to + (r.move.promotion || ''),
+          playedSan: r.sanFr || r.san, eval: typeof r.eval === 'number' ? r.eval : null,
+          tip: r.tipFr || ''
+        });
       }
 
       phaseAcc[phase].total += winLossToAccuracy(r.winPctLoss);
@@ -648,7 +662,8 @@ const Analyzer = (() => {
       moveQuality: mq,
       maxUserEval, minUserEval, turningPoint,
       time,
-      blunderList: blunders
+      blunderList: blunders,
+      highlights
     };
   }
 

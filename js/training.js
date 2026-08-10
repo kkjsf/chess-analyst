@@ -74,6 +74,25 @@ const Training = (() => {
     const d = it.date ? Date.parse(String(it.date).replace(/\./g, '-')) : NaN;
     return isNaN(d) ? (it.savedAt || 0) : d;
   }
+  // "2024.05.12" → "12 mai 2024" for the puzzle's game context. Falls back to
+  // the raw string when the date is missing or malformed.
+  const CARD_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  function formatCardDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const parts = String(dateStr).replace(/\./g, '-').split('-');
+      if (parts.length >= 3) {
+        const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1, d = parseInt(parts[2], 10);
+        if (m >= 0 && m < 12 && d > 0) return `${d} ${CARD_MONTHS[m]}${y ? ' ' + y : ''}`;
+      }
+    } catch (_) {}
+    return dateStr;
+  }
+  // The opponent's name = whichever colour the user was NOT playing.
+  function opponentName(it) {
+    const name = it.side === 'w' ? it.black : it.white;
+    return name && name !== '?' ? name : null;
+  }
   function weightContext(pool) {
     const total = pool.length || 1;
     const share = {};
@@ -786,6 +805,19 @@ const Training = (() => {
     if (pa) pa.onclick = () => { motifFilter = null; startPuzzles(); };
   }
 
+  // "Coup 21 · tu avais joué Cf3 lors de ta partie contre Bob le 12 mai 2024"
+  // — anchors the puzzle to the real game it came from (opponent + date), so a
+  // recurring leak is recognisable ("ah, that game against Bob again").
+  function puzzleContextHtml(it) {
+    const opp = opponentName(it);
+    const date = formatCardDate(it.date);
+    let s = `Coup ${it.moveNo} · tu avais joué <b>${it.playedSan}</b>`;
+    if (opp) s += ` lors de ta partie contre <b>${opp}</b>`;
+    else s += ` lors de cette partie`;
+    if (date) s += ` le ${date}`;
+    return s;
+  }
+
   function renderPuzzle() {
     const host = $('#train-puzzles');
     if (!queue.length) {
@@ -826,7 +858,7 @@ const Training = (() => {
         <button class="train-btn ghost" id="puz-hint">💡 Indice</button>
         <button class="train-btn ghost" id="puz-reveal">Voir la solution</button>
       </div>
-      <div class="train-context">Ta partie : ${current.white} vs ${current.black} · coup ${current.moveNo} · tu avais joué <b>${current.playedSan}</b></div>`;
+      <div class="train-context">${puzzleContextHtml(current)}</div>`;
 
     board = $('#train-board'); arrows = $('#train-arrows'); selected = null;
     BoardRenderer.setFlipped(flip);

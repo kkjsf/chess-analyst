@@ -2731,6 +2731,27 @@ body.guess-open { overflow: hidden; }
 }
 .coach-recent-analyze:hover { background: rgba(255,255,255,0.06); }
 
+/* Coach — "Tes plus beaux coups" gallery (brilliant / great move boards) */
+.coach-hl-gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px;
+}
+.coach-hl-card {
+  margin: 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
+}
+.coach-hl-badge { align-self: flex-start; }
+.coach-hl-board { width: 100%; height: auto; border-radius: 6px; display: block; }
+.coach-hl-meta { font-size: 12px; color: var(--text); line-height: 1.4; }
+.coach-hl-meta b { color: var(--accent); }
+.coach-hl-tip { font-size: 11px; color: var(--text-dim); line-height: 1.45; margin: 0; }
+.coach-hl-more { font-size: 12px; color: var(--text-dim); margin: 12px 0 0; }
+.coach-hl-open {
+  flex-shrink: 0; background: transparent; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 8px;
+  padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.coach-hl-open:hover { background: rgba(255,255,255,0.06); }
+
 /* Coach — extended stats (move quality, conversion, time, progress) */
 .coach-sub2 { font-size: 12px; color: var(--text-dim); margin: 2px 0 10px; line-height: 1.5; }
 .coach-sub2 b { color: var(--accent); }
