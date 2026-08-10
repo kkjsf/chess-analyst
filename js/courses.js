@@ -383,6 +383,88 @@ const Courses = (() => {
         { q: `Après 3.Cxe5, quel est le bon coup ?`, opts: [`3…d6 pour chasser le cavalier d'abord`, `3…Cxe4 tout de suite`, `3…De7`, `3…Fc5`], answer: 0, explain: `3…Cxe4 ?? tombe sur 4.De2 ! On joue d'abord 3…d6, puis …Cxe4 en sécurité.` },
         { q: `Après 3.Cxe5 Cxe4 ?? 4.De2 Cf6 ??, que jouent les Blancs ?`, opts: [`5.Cc6+ gagne la dame`, `5.Dxe4`, `5.Cf3`, `5.d4`], answer: 0, explain: `5.Cc6+ est un échec à la découverte (dame e2) qui gagne la dame noire en d8.` }
       ]
+    },
+
+    // ─────────────────────────── Ouverture Viennoise ───────────────────────────
+    'e4 e5 Nc3': {
+      intro: `La Viennoise (2.Cc3) est le Gambit du Roi « bien élevé » : on développe d'abord le cavalier et on surprotège e4, PUIS on lance f4 avec une pièce déjà sortie. Peu de théorie, des plans d'attaque limpides et quelques pièges bien connus. Trois familles : le Gambit tranchant (3.f4), le développement à l'italienne (3.Fc4) et le fianchetto positionnel (3.g3).`,
+      lines: [
+        {
+          name: 'Gambit Viennois (3.f4)', eco: 'C29',
+          sans: ['e4', 'e5', 'Nc3', 'Nf6', 'f4', 'd5', 'fxe5', 'Nxe4', 'Nf3', 'Be7', 'd4', 'O-O', 'Bd3'],
+          notes: [
+            `On prend le centre.`,
+            `Réponse symétrique : jeux ouverts.`,
+            `<b>Le coup-signature de la Viennoise</b> : on développe le cavalier et on surprotège e4 avant de lancer f4.`,
+            `La meilleure réponse : les Noirs frappent e4 tout de suite et préparent la libératrice …d5.`,
+            `<b>Le Gambit Viennois</b> : e4 est soutenu, on ouvre l'aile roi comme au Gambit du Roi, mais mieux préparé.`,
+            `<b>LA parade</b>. Surtout pas 4…exf4 : la contre-frappe centrale …d5 est la réfutation théorique du gambit.`,
+            `On prend au passage ; 6.exd5 exf4 est l'autre grande ligne.`,
+            `Les Noirs récupèrent leur pion en se centralisant.`,
+            `Développe et prépare d4 : la position est ouverte et à peu près équilibrée.`,
+            `Développe et prépare le roque (5…Fc5 est aussi jouable).`,
+            `Les Blancs prennent tout le centre.`,
+            `Les deux rois sont à l'abri : jeu dynamique et sain des deux côtés.`,
+            `Le fou vise h7 et l'aile roi. Position type du Gambit Viennois moderne.`
+          ]
+        },
+        {
+          name: 'Classique (3.Fc4)', eco: 'C26',
+          sans: ['e4', 'e5', 'Nc3', 'Nf6', 'Bc4', 'Nc6', 'd3', 'Bb4', 'Nge2', 'd5'],
+          notes: [
+            '', '', '', '',
+            `L'autre grand plan : le fou file en c4 contre f7 (comme à l'Italienne), en gardant f4 en réserve.`,
+            `Développement symétrique et solide.`,
+            `Soutient e4 et ouvre le fou c1 : jeu calme et positionnel.`,
+            `Cloue le cavalier c3, le défenseur de e4, pour préparer …d5.`,
+            `<b>Le bon développement</b> : le cavalier va en e2 (pas f3) pour renforcer c3, défaire le clouage et garder f4 possible.`,
+            `<b>La rupture libératrice</b> : les Noirs contestent le centre et égalisent confortablement.`
+          ]
+        },
+        {
+          name: 'Fianchetto (3.g3)', eco: 'C25',
+          sans: ['e4', 'e5', 'Nc3', 'Nc6', 'g3', 'Nf6', 'Bg2', 'Bc5', 'Nge2', 'd6', 'O-O', 'O-O'],
+          notes: [
+            '', '', '', '',
+            `<b>Le plan positionnel de Botvinnik</b> : on fianchette en g2 pour presser d5/e4 sur la grande diagonale, sans hâte.`,
+            `Développe et attaque e4.`,
+            `Le fou fianchetto surveille le centre et l'aile dame adverse.`,
+            `Développe activement en visant f2.`,
+            `Cavalier en e2 pour ne pas gêner le fou g2 et garder f4/d4 en réserve.`,
+            `Soutient e5.`,
+            `Petit roque.`,
+            `Position type : manœuvre lente, les Blancs enchaînent d3, h3, puis f4 ou Cd5 selon les cas.`
+          ]
+        }
+      ],
+      traps: [
+        {
+          title: '🎯 Gambit accepté ? La poussée e5 !',
+          hint: `Si les Noirs prennent le pion par 3…exf4 au lieu de contester par …d5, ne reprends pas f4 : joue 4.e5 ! Le pion chasse le cavalier f6 et te donne un centre écrasant avec une longueur d'avance. Joue e5.`,
+          fen: 'rnbqkb1r/pppp1ppp/5n2/8/4Pp2/2N5/PPPP2PP/R1BQKBNR w KQkq - 0 4',
+          sol: ['e5']
+        },
+        {
+          title: '⚡ Si 3…Cxe4 : la double menace Dh5 !',
+          hint: `Après 3.Fc4, si les Noirs grignotent le pion par 3…Cxe4 ?, joue 4.Dh5 ! : la dame menace le mat en f7 (épaulée par le fou c4) ET, après …g6 5.Dxe5+, de fourcher le roi et le cavalier e4. Les Noirs n'ont que l'unique 4…Cd6. Joue Dh5.`,
+          fen: 'rnbqkb1r/pppp1ppp/8/4p3/2B1n3/2N5/PPPP1PPP/R1BQK1NR w KQkq - 0 4',
+          sol: ['Qh5']
+        },
+        {
+          title: `🛡️ La règle d'or : …d5 contre le gambit`,
+          hint: `Face au Gambit Viennois (3.f4), la réponse saine des Noirs n'est pas de garder le pion (3…exf4) mais de frapper au centre par 3…d5 ! : ça ouvre les lignes pour les pièces noires et neutralise l'attaque avant qu'elle ne démarre. Le plan d'égalisation à retenir.`
+        }
+      ],
+      transpositions: [
+        { label: '3.Fc4 Fc5', note: `Sans …Cxe4, un jeu à l'italienne peut se produire, mais les Blancs gardent l'idée f4 en réserve.` },
+        { label: '2…Cc6 puis 3.f4', note: `Le gambit est aussi jouable contre 2…Cc6 ; les thèmes (f4, …d5) restent les mêmes.` },
+        { label: 'Vers le Gambit du Roi', note: `La Viennoise est souvent décrite comme « un Gambit du Roi avec Cc3 joué d'abord » : mêmes idées d'attaque, mais mieux préparées.` }
+      ],
+      quiz: [
+        { q: `Quel coup définit l'Ouverture Viennoise ?`, opts: ['2.Cc3', '2.Cf3', '2.Fc4', '2.f4'], answer: 0, explain: `2.Cc3 développe le cavalier dame et surprotège e4 avant de lancer f4.` },
+        { q: `Contre le Gambit Viennois (3.f4), la meilleure réponse des Noirs ?`, opts: ['3…d5', '3…exf4', '3…Cc6', '3…d6'], answer: 0, explain: `3…d5 ! contre-frappe au centre ; garder le pion par 3…exf4 laisse 4.e5 avec un fort avantage blanc.` },
+        { q: `Pourquoi développer le cavalier roi en e2 plutôt qu'en f3 ?`, opts: [`Pour garder f4 disponible et ne pas gêner le fou g2`, `Parce que Cf3 est illégal`, `Pour attaquer la dame`, `Pour préparer le grand roque`], answer: 0, explain: `Cge2 renforce c3 et laisse la colonne f + le fou fianchetto libres ; Cf3 bloquerait le pion f.` }
+      ]
     }
 
   };
