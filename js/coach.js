@@ -393,7 +393,7 @@ const Coach = (() => {
       const white = g.userColor === 'w' ? user : g.oppName;
       const black = g.userColor === 'w' ? g.oppName : user;
       const date = g.endTime ? new Date(g.endTime * 1000).toLocaleDateString('fr-FR') : '';
-      added += Training.ingestGame(g.uuid, bl, { side: g.userColor, white, black, date }) || 0;
+      added += Training.ingestGame(g.uuid, bl, { side: g.userColor, white, black, date, result: g.result, timeClass: g.timeClass }) || 0;
     });
     if (added && typeof App !== 'undefined' && App.refreshHome) App.refreshHome();
     return added;

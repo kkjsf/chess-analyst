@@ -93,6 +93,31 @@ const Training = (() => {
     const name = it.side === 'w' ? it.black : it.white;
     return name && name !== '?' ? name : null;
   }
+  // Result from the user's point of view + game cadence, so a puzzle recalls the
+  // game it came from ("défaite en rapide contre Bob"). Derived once at capture
+  // time from the PGN header (single game) or the archive game (Coach).
+  const RESULT_FR = { win: 'victoire', loss: 'défaite', draw: 'partie nulle' };
+  const CADENCE_FR = { rapid: 'rapide', daily: 'journalière', blitz: 'blitz', bullet: 'bullet' };
+  function tcSeconds(tc) {
+    const m = /(\d+)(?:\+(\d+))?/.exec(tc || '');
+    return m ? parseInt(m[1], 10) + 40 * (parseInt(m[2], 10) || 0) : 0;
+  }
+  function deriveTimeClass(tc) {
+    tc = tc || '';
+    if (tc.includes('/') || tc.includes('86400') || tc.includes('172800')) return 'daily';
+    const secs = tcSeconds(tc);
+    if (!secs) return '';
+    if (secs < 180) return 'bullet';
+    if (secs < 600) return 'blitz';
+    return 'rapid';
+  }
+  // PGN Result ('1-0'/'0-1'/'1/2-1/2') seen from the side the user played.
+  function deriveResult(result, side) {
+    if (result === '1/2-1/2') return 'draw';
+    if (result === '1-0') return side === 'w' ? 'win' : 'loss';
+    if (result === '0-1') return side === 'b' ? 'win' : 'loss';
+    return '';
+  }
   function weightContext(pool) {
     const total = pool.length || 1;
     const share = {};
@@ -568,6 +593,8 @@ const Training = (() => {
     const white = header.White || '?';
     const black = header.Black || '?';
     const date = header.Date || '';
+    const result = deriveResult(header.Result, user);
+    const timeClass = deriveTimeClass(header.TimeControl);
     const base = [];
     for (let i = 0; i < analysis.length; i++) {
       const r = analysis[i];
@@ -579,7 +606,7 @@ const Training = (() => {
         bestUci: r.bestUci, bestSan: r.bestSan || '',
         playedSan: r.sanFr || r.san, type: r.type, cpLoss: r.cpLoss || 0,
         motif: detectMotif(r.fenBefore, r.bestUci, user, r.sanFr || r.san),
-        moveNo: Math.floor(i / 2) + 1, white, black, date, pv: r.bestPv || '',
+        moveNo: Math.floor(i / 2) + 1, white, black, date, result, timeClass, pv: r.bestPv || '',
       });
     }
     mergeItems(base);
@@ -601,7 +628,8 @@ const Training = (() => {
         playedSan: b.playedSan || '', type: b.type, cpLoss: b.cpLoss || 0,
         motif: detectMotif(b.fenBefore, b.bestUci, meta.side, b.playedSan),
         moveNo: Math.floor(b.ply / 2) + 1,
-        white: meta.white || '?', black: meta.black || '?', date: meta.date || '', pv: b.bestPv || '',
+        white: meta.white || '?', black: meta.black || '?', date: meta.date || '',
+        result: meta.result || '', timeClass: meta.timeClass || '', pv: b.bestPv || '',
       });
     }
     return mergeItems(base);
@@ -611,7 +639,7 @@ const Training = (() => {
   // by id and by position signature (so the same mistake seen via the single
   // analyzer and via Coach doesn't become two cards), and never evicts cards
   // already in review when capping.
-  const MUTABLE = ['bestSan', 'playedSan', 'type', 'cpLoss', 'motif', 'moveNo', 'white', 'black', 'date', 'pv'];
+  const MUTABLE = ['bestSan', 'playedSan', 'type', 'cpLoss', 'motif', 'moveNo', 'white', 'black', 'date', 'result', 'timeClass', 'pv'];
   function mergeItems(base) {
     base = base.filter(isCleanPuzzle);
     if (!base.length) return 0;
@@ -815,6 +843,12 @@ const Training = (() => {
     if (opp) s += ` lors de ta partie contre <b>${opp}</b>`;
     else s += ` lors de cette partie`;
     if (date) s += ` le ${date}`;
+    const bits = [];
+    const res = RESULT_FR[it.result];
+    if (res) bits.push(`<b>${res}</b>`);
+    const cad = CADENCE_FR[it.timeClass];
+    if (cad) bits.push(`partie ${cad}`);
+    if (bits.length) s += ` · ${bits.join(' · ')}`;
     return s;
   }
 
