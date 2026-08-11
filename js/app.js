@@ -551,6 +551,7 @@ const App = (() => {
     $('#screen-analysis').classList.add('active');
     setTab('analyser');
     setSegment('conseil');
+    layoutCoachReview();
 
     lastRenderIndex = -1;
     unpinBoard();
@@ -591,6 +592,28 @@ const App = (() => {
   function prefersReducedMotion() {
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
+
+  // The coach verdict bubble lives inside the sticky board header on phones (so
+  // it stays pinned with the board while stepping moves), but on the desktop
+  // two-column grid that wasted vertical space above the board and left the
+  // right column half-empty. There it moves to the top of the right column,
+  // above the tabs. Grid only places direct children, so the node is physically
+  // relocated between the two containers by viewport.
+  const analysisDesktopMQ = window.matchMedia('(min-width: 1000px)');
+  function layoutCoachReview() {
+    const coach = $('.coach-review');
+    const sticky = $('.board-sticky');
+    const body = $('.analysis-body');
+    const seg = $('.analysis-segmented');
+    if (!coach || !sticky || !body || !seg) return;
+    if (analysisDesktopMQ.matches) {
+      if (coach.parentElement !== body || coach.nextElementSibling !== seg)
+        body.insertBefore(coach, seg);
+    } else if (coach.parentElement !== sticky || sticky.firstElementChild !== coach) {
+      sticky.insertBefore(coach, sticky.firstElementChild);
+    }
+  }
+  analysisDesktopMQ.addEventListener('change', layoutCoachReview);
 
   function setSegment(seg) {
     $$('#analysis-segmented .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));

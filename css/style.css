@@ -2384,38 +2384,58 @@ body.guess-open { overflow: hidden; }
 @media (min-width: 1000px) {
   .analysis-body {
     display: grid;
-    grid-template-columns: minmax(460px, 560px) minmax(340px, 1fr);
+    grid-template-columns: auto minmax(360px, 1fr);
     align-items: start;
-    column-gap: 34px;
-    row-gap: 16px;
-    max-width: 1180px;
-    padding: 24px 28px calc(78px + env(safe-area-inset-bottom,0));
+    column-gap: 32px;
+    row-gap: 14px;
+    max-width: 1160px;
+    padding: 22px 28px calc(78px + env(safe-area-inset-bottom,0));
   }
   .analysis-body .board-sticky,
   .analysis-body.board-pinned .board-sticky {
     grid-column: 1;
     grid-row: 1 / span 50;
     align-self: start;
-    align-items: stretch;
+    align-items: center;
     position: sticky;
     top: 16px;
     margin: 0;
     padding: 0;
     box-shadow: none;
+    /* The board is height-capped (below) so the whole column — board, player
+       bars and move strip — always fits above the nav. No internal scroll, so
+       the eval bar to the board's left isn't clipped either. */
+    overflow: visible;
   }
-  /* Board and its rails fill the (now much wider) board column. The wrapper
-     must take an explicit full width — under the column-flex it otherwise
-     shrinks to its content and the board collapses to ~300px. */
-  .board-wrapper, .board-container, .player-bar, .move-strip, .coach-review {
+  /* Cap the board by whichever is smaller: a sane max, or the height left once
+     the player bars + move strip + nav are accounted for. This is what keeps
+     the move strip on-screen without zooming out. */
+  .board-wrapper {
+    width: min(540px, calc(100vh - 280px));
+    max-width: 100%;
+    padding-left: 24px; /* room for the eval bar that sits at the board's left */
+  }
+  .board-container, .player-bar, .move-strip {
     width: 100%;
     max-width: 100%;
   }
-  /* Right column: segmented tabs + every seg-panel stack under each other. */
+  /* Right column: the coach verdict bubble sits at the top (it used to eat
+     vertical space above the board and leave this column half-empty), then the
+     segmented tabs and every seg-panel stack under it. */
+  .analysis-body > .coach-review,
   .analysis-segmented,
   .analysis-body > .seg-panel {
     grid-column: 2;
     width: 100%;
+    max-width: 100%;
   }
+  .analysis-body > .coach-review {
+    align-items: stretch;
+    margin: 0;
+  }
+  .analysis-body > .coach-review .coach-bubble { min-height: 0; }
+  .analysis-body > .coach-review .tip-text { height: auto; max-height: 5em; }
+  .analysis-body > .analysis-segmented { align-self: stretch; max-width: none; }
   /* The bottom nav is a centred 600px pill from the ≥720px rule — on this wide
      grid it sat ON TOP of the board column, hiding the move strip beneath the
      board. Span the full width here so it's a normal bottom bar again. */
@@ -2423,14 +2443,6 @@ body.guess-open { overflow: hidden; }
     left: 0; right: 0; transform: none;
     width: auto; max-width: none;
     border-radius: 0; border-left: none; border-right: none;
-  }
-  /* The board column (board + the move strip under it) is sticky and can be
-     taller than the viewport, pinning the move strip below the fold behind the
-     nav. Cap it to the space above the nav; it scrolls internally only if a
-     short viewport forces it, so the moves under the board stay reachable. */
-  .analysis-body .board-sticky {
-    max-height: calc(100vh - 100px);
-    overflow-y: auto; overflow-x: hidden;
   }
 }
 
