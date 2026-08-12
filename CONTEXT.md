@@ -21,6 +21,19 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v167 - explorer les variations d'ouverture depuis n'importe quel coup + coup théorique indiqué**
+  (`js/app.js`, modale `#opening-modal`) : le mode « Continuer à jouer » (analyse libre, v164) n'était
+  proposé qu'à la **fin** de la ligne. Maintenant on peut **reprendre la main à n'importe quel coup** :
+  bouton « 🔍 Continuer à jouer d'ici » affiché à chaque pas (`renderStep`, gate `!exploring && boardActive`)
+  **et** glisser-déposer directement une pièce sur une position théorique (auto-branche : `_exCanMove` =
+  `exploring || boardActive`, `_onExploreMove` entre en explore depuis `idx` si besoin). Pendant l'exploration,
+  on **suit la théorie** : `exStartIdx` = point de reprise, `bookInfo()` compare la suite jouée (`exHist`)
+  à la ligne d'ouverture (`positions`) → dit si on est **encore dans la théorie** et quel est le coup attendu.
+  Affichage clair (`bookLineHtml`) : encadré vert « 📖 Coup théorique : 3.Cf3 (flèche verte) » tant qu'on
+  suit la ligne, encadré rouge « 📖 Hors théorie. La ligne jouait X ici » dès qu'on dévie, « Fin de la théorie
+  répertoriée » au bout. Le **coup théorique est aussi dessiné en flèche verte** (`exBookArrow`) en plus de
+  la flèche bleue du moteur (`drawExploreArrows` compose les deux, verte au-dessus). Logique `bookInfo`
+  vérifiée headless avec chess.js (on-book/déviation/fin de ligne). CSS `.oe-book-move`/`.oe-book-dev` ajouté.
 - **v166 - menaces fourchettes en flèches + liens Chess.com de l'arbre corrigés** :
   - **Fourchettes montrées avec des flèches** (`js/analysis.js`) : `detectForkAfterMove` renvoie
     désormais `{ names, squares, forkSquare }` (avant : juste les noms) pour pouvoir tracer une flèche

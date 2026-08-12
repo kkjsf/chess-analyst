@@ -1302,12 +1302,14 @@ const App = (() => {
         if (note) explEl.innerHTML = note;
         else explEl.textContent = explainMove(pos.san, pos.color, moveNum, pos.fen);
       }
-      // À la fin de la séquence d'ouverture : proposer de continuer en analyse libre.
-      if (!exploring && idx === positions.length - 1) {
+      // À tout moment de la ligne : proposer de reprendre la main et d'explorer
+      // les variations à partir d'ici (le coup théorique reste indiqué).
+      if (!exploring && boardActive) {
+        const atEnd = idx === positions.length - 1;
         const html = explEl.innerHTML;
         explEl.innerHTML = html +
-          `<div class="oe-explore-cta"><button class="train-btn good" id="oe-explore">🔍 Continuer à jouer (moteur)</button>` +
-          `<span class="oe-explore-hint">Fin de l'ouverture — glisse une pièce pour jouer librement, le moteur t'indique le meilleur coup.</span></div>`;
+          `<div class="oe-explore-cta"><button class="train-btn good" id="oe-explore">🔍 Continuer à jouer d'ici</button>` +
+          `<span class="oe-explore-hint">${atEnd ? 'Fin de la ligne — ' : ''}reprends la main à partir de ce coup : joue les deux camps (ou glisse une pièce), le coup théorique reste indiqué (flèche verte).</span></div>`;
         const b = $('#oe-explore'); if (b) b.onclick = enterExplore;
       }
       requestEval();
@@ -1316,7 +1318,7 @@ const App = (() => {
     // ───────────────────── Analyse libre (« Continuer à jouer ») ──────────────
     // À la fin de l'ouverture, on rejoue librement pour les deux camps : Stockfish
     // dessine son meilleur coup (flèche bleue) + éval relative aux Blancs et suite.
-    let exploring = false, exHist = [], exToken = 0;
+    let exploring = false, exHist = [], exToken = 0, exStartIdx = 0, exBookArrow = null;
 
     function pvToFr(fen, pvStr, max) {
       if (!pvStr) return [];
@@ -1351,7 +1353,45 @@ const App = (() => {
         + (pv.length > 1 ? `<div class="oe-explore-pv">Suite : ${pv.join(' ')}</div>` : '');
     }
 
+    // ── Suivi de la théorie pendant l'exploration ──
+    // exStartIdx = le coup de la ligne d'où l'on a repris la main. On compare la
+    // suite jouée (exHist) à la ligne d'ouverture pour dire, à chaque instant, si
+    // l'on est encore « dans la théorie » et quel était le coup attendu.
+    function moveLabelOf(pos) {
+      const fr = (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(pos.san) : pos.san;
+      const moveNum = Math.ceil(pos.num / 2);
+      const pfx = pos.num % 2 === 1 ? `${moveNum}.` : `${moveNum}...`;
+      return `${pfx} ${fr}`;
+    }
+    function bookInfo() {
+      let matched = 0;
+      for (let k = 1; k < exHist.length; k++) {
+        const bp = positions[exStartIdx + k];
+        if (bp && bp.fen === exHist[k]) matched = k; else break;
+      }
+      const tipOnBook = matched === exHist.length - 1;
+      const nextBook = positions[exStartIdx + matched + 1] || null;
+      return { tipOnBook, nextBook };
+    }
+    function bookLineHtml() {
+      const bi = bookInfo();
+      if (bi.tipOnBook) {
+        if (bi.nextBook) return `<div class="oe-book-move">📖 Coup théorique : <b>${moveLabelOf(bi.nextBook)}</b> <span class="oe-sugg">(flèche verte)</span></div>`;
+        return `<div class="oe-book-move">📖 Fin de la théorie répertoriée — à toi de trouver la suite.</div>`;
+      }
+      if (bi.nextBook) return `<div class="oe-book-move oe-book-dev">📖 Hors théorie. La ligne d'ouverture jouait <b>${moveLabelOf(bi.nextBook)}</b> ici.</div>`;
+      return `<div class="oe-book-move oe-book-dev">📖 Hors de la théorie répertoriée.</div>`;
+    }
+    function drawExploreArrows(bestUci) {
+      const arr = [];
+      // Blue = engine best; green = book/theory move, drawn last so it stays on top.
+      if (bestUci) arr.push({ from: bestUci.slice(0, 2), to: bestUci.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 });
+      if (exBookArrow) arr.push(exBookArrow);
+      BoardRenderer.drawArrows(arrowsEl, arr);
+    }
+
     function enterExplore() {
+      exStartIdx = idx;
       exploring = true;
       exHist = [positions[idx].fen];
       renderExplore(null);
@@ -1359,12 +1399,19 @@ const App = (() => {
     function renderExplore(lastMove) {
       const fen = exHist[exHist.length - 1];
       BoardRenderer.render(svg, fen, lastMove);
-      BoardRenderer.clearArrows(arrowsEl);
+      // Compute the theory move for this position (if still on book) and draw it
+      // in green straight away, before the engine (blue) even answers.
+      const bi = bookInfo();
+      exBookArrow = (bi.tipOnBook && bi.nextBook && bi.nextBook.move)
+        ? { from: bi.nextBook.move.from, to: bi.nextBook.move.to, color: '#56b886', opacity: 0.95, width: 7 }
+        : null;
+      drawExploreArrows(null);
       labelEl.textContent = '🔍 Exploration libre';
       prevBtn.disabled = true; nextBtn.disabled = true;
       evalEl.hidden = true;
       const canUndo = exHist.length > 1;
       explEl.innerHTML =
+        bookLineHtml() +
         `<div class="oe-explore-status" id="oe-ex-status">⏳ Analyse…</div>` +
         `<div class="oe-explore-actions">` +
         `<button class="train-btn ghost" id="oe-ex-undo"${canUndo ? '' : ' disabled'}>↶ Annuler</button>` +
@@ -1395,9 +1442,7 @@ const App = (() => {
       if (token !== exToken || !exploring) return;
       let res; try { res = await StockfishEngine.evaluate(fen, 'movetime 600'); } catch (_) { res = null; }
       if (token !== exToken || !exploring) return;
-      if (res && res.bestMove) {
-        BoardRenderer.drawArrows(arrowsEl, [{ from: res.bestMove.slice(0, 2), to: res.bestMove.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 }]);
-      }
+      drawExploreArrows(res && res.bestMove ? res.bestMove : null);
       const s = statusEl(); if (s) s.innerHTML = exStatusHtml(fen, res);
     }
 
@@ -1412,9 +1457,13 @@ const App = (() => {
         onMove: (f, t) => { if (svg._onExploreMove) svg._onExploreMove(f, t); },
       });
     }
-    svg._exGetFen = () => (exHist.length ? exHist[exHist.length - 1] : positions[idx].fen);
-    svg._exCanMove = () => exploring;
-    svg._onExploreMove = exploreMove;
+    svg._exGetFen = () => (exploring && exHist.length ? exHist[exHist.length - 1] : positions[idx].fen);
+    // Dragging a piece works in free-play AND on any book position (auto-branch).
+    svg._exCanMove = () => exploring || boardActive;
+    svg._onExploreMove = (from, to) => {
+      if (!exploring) { exStartIdx = idx; exploring = true; exHist = [positions[idx].fen]; }
+      exploreMove(from, to);
+    };
 
     // Swap the board's active line (lesson mode): rebuild positions from a new
     // SAN string, attach its notes, and rewind to the start.

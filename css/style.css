@@ -544,6 +544,17 @@ html, body {
 .oe-explore-cta .oe-explore-hint {
   display: block; margin-top: 6px; font-size: 12px; color: var(--text-dim);
 }
+.oe-book-move {
+  font-size: 13px; line-height: 1.45; text-align: center; margin-bottom: 8px;
+  padding: 6px 10px; border-radius: 8px;
+  background: rgba(86, 184, 134, 0.14); border: 1px solid rgba(86, 184, 134, 0.4);
+  color: var(--text);
+}
+.oe-book-move b { color: #56b886; }
+.oe-book-move.oe-book-dev {
+  background: rgba(224, 87, 74, 0.12); border-color: rgba(224, 87, 74, 0.4);
+}
+.oe-book-move.oe-book-dev b { color: #e0574a; }
 .oe-explore-status { font-size: 13px; line-height: 1.5; color: var(--text); text-align: center; }
 .oe-explore-status b { color: var(--text); }
 .oe-explore-pv { margin-top: 4px; font-size: 12.5px; color: var(--text-dim); }
