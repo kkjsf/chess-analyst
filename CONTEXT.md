@@ -21,6 +21,24 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v166 - menaces fourchettes en flèches + liens Chess.com de l'arbre corrigés** :
+  - **Fourchettes montrées avec des flèches** (`js/analysis.js`) : `detectForkAfterMove` renvoie
+    désormais `{ names, squares, forkSquare }` (avant : juste les noms) pour pouvoir tracer une flèche
+    vers chaque pièce attaquée. Quand **le meilleur coup adverse est une fourchette**, la menace est
+    dessinée : flèche rouge pleine sur le coup + une **branche rouge clair** (`#f0938a`, w4) du point de
+    fourchette vers chacune des pièces visées, et le tip dit « ⚠ Fourchette ! … attaque à la fois X et Y ».
+    Bonus : quand **le coup du joueur** fait lui-même une fourchette, on trace des **rayons dorés**
+    (`#f0c96b`) vers les pièces fourchées. Détecteur vérifié headless (fourchette royale du cavalier →
+    bonnes cases ; 1 seule pièce touchée → null). Tout passe par `drawArrows` v165 donc rendu façon Chess.com.
+  - **Liens « Voir sur Chess.com » de l'arbre d'ouvertures corrigés** (`js/opening-tree.js`) : sur les
+    64 slugs `cc:`, **21 étaient cassés** (redirigeaient 302 vers le hub au lieu d'ouvrir la fiche). Tous
+    revérifiés en live (200 = fiche existe, 302 = cassé) et remappés vers le slug canonique Chess.com,
+    ex. `Italian-Game-Giuoco-Piano`→`Giuoco-Piano-Game`, `Evans-Gambit`→`Giuoco-Piano-Game-Evans-Gambit`,
+    `Ruy-Lopez-Opening-Schliemann-Defense`→`…-Jaenisch-Gambit`, `Sicilian-Defense-Rossolimo-Variation`→
+    `Sicilian-Defense-Nyezhmetdinov-Rossolimo-Attack`, `Sicilian-Defense-Closed`→`Closed-Sicilian-Defense`,
+    `Tennison-Gambit`→`Reti-Opening-Tennison-Gambit`, `Vienna-Game-Vienna-Gambit`→`…-Falkbeer-Vienna-Gambit`,
+    etc. (Pianissimo et Knight-Attack sans fiche dédiée → repli sur la fiche parente valide). **Re-check
+    final : 63/63 slugs uniques renvoient 200.** Méthode : `curl` avec UA navigateur, 200 vs 302.
 - **v165 - flèches « façon Chess.com » partout** : `drawArrows` dans `js/board.js` refait. Shaft en
   `<path>` épais à jointures/bouts arrondis (`stroke-linejoin/linecap:round`) + tête (marker) large et
   nette dont la taille est proportionnelle à l'épaisseur du trait (une tête par couple couleur+width,

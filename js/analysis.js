@@ -120,6 +120,7 @@ const Analyzer = (() => {
   }
 
   function sqToRC(sq) { return [8 - +sq[1], sq.charCodeAt(0) - 97]; }
+  function rcToSq(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
   function detectForkAfterMove(fenAfter, toSquare, moverColor) {
     const board = parseFenBoard(fenAfter);
@@ -136,7 +137,7 @@ const Analyzer = (() => {
           if (nr < 0 || nr > 7 || nc < 0 || nc > 7) break;
           const t = board[nr][nc];
           if (t) {
-            if (t.color === opp && (PIECE_VALUES[t.type] >= 3 || t.type === 'k')) targets.push(t.type);
+            if (t.color === opp && (PIECE_VALUES[t.type] >= 3 || t.type === 'k')) targets.push({ type: t.type, square: rcToSq(nr, nc) });
             break;
           }
         }
@@ -151,7 +152,13 @@ const Analyzer = (() => {
     if (piece.type === 'b' || piece.type === 'q') scan([[-1,-1],[-1,1],[1,-1],[1,1]], 7);
     if (piece.type === 'r' || piece.type === 'q') scan([[-1,0],[1,0],[0,-1],[0,1]], 7);
 
-    if (targets.length >= 2) return targets.map(t => t === 'k' ? 'roi' : PIECE_NAMES_FR[t]);
+    // Returns { names, squares, forkSquare } so callers can both name the forked
+    // pieces and draw an arrow to each. null when fewer than two pieces are hit.
+    if (targets.length >= 2) return {
+      names: targets.map(t => t.type === 'k' ? 'roi' : PIECE_NAMES_FR[t.type]),
+      squares: targets.map(t => t.square),
+      forkSquare: toSquare
+    };
     return null;
   }
 
@@ -214,13 +221,13 @@ const Analyzer = (() => {
       if (oppMove.san.includes('+')) {
         const oppColor = madeMove.color === 'w' ? 'b' : 'w';
         const fork = detectForkAfterMove(g.fen(), oppMove.to, oppColor);
-        if (fork) return `L'adversaire menace une fourchette avec échec sur ${fork.join(' et ')}.`;
+        if (fork) return `L'adversaire menace une fourchette avec échec sur ${fork.names.join(' et ')}.`;
         return 'Ce coup expose le roi à un échec dangereux.';
       }
 
       const oppColor = madeMove.color === 'w' ? 'b' : 'w';
       const fork = detectForkAfterMove(g.fen(), oppMove.to, oppColor);
-      if (fork) return `L'adversaire menace une fourchette sur ${fork.join(' et ')}.`;
+      if (fork) return `L'adversaire menace une fourchette sur ${fork.names.join(' et ')}.`;
     } catch (_) {}
 
     const struct = analyzeStructure(fenAfter);
@@ -989,13 +996,14 @@ const Analyzer = (() => {
 
       const forkTargets = detectForkAfterMove(newFen, madeMove.to, madeMove.color);
       if (forkTargets && type !== 'blunder' && type !== 'mistake') {
-        tipFr += ` Fourchette sur ${forkTargets.join(' et ')} !`;
+        tipFr += ` Fourchette sur ${forkTargets.names.join(' et ')} !`;
       }
 
       // The opponent's best reply is their THREAT. When it's serious (mate, a
-      // real capture, or a check) we both warn in the tip AND draw it as a red
-      // arrow on the board, the way Chess.com surfaces threats.
-      let threatArrow = null;
+      // real capture, a fork, or a check) we both warn in the tip AND draw it as
+      // red arrows on the board, the way Chess.com surfaces threats. A fork adds
+      // one ray per attacked piece so the double attack is obvious.
+      let threatArrows = [];
       if (!forkTargets && evalAfter && evalAfter.lines && evalAfter.lines[0] && evalAfter.lines[0].move) {
         try {
           const tg = new Chess(newFen);
@@ -1004,20 +1012,33 @@ const Analyzer = (() => {
           if (tm) {
             const tFr = toFrench(tm.san);
             const opp = isWhite ? 'les Noirs' : 'les Blancs';
-            let isThreat = false;
-            if (tm.san.includes('#')) {
-              tipFr += ` ⚠ ${opp} menacent mat avec ${tFr} !`;
-              isThreat = true;
-            } else if (tm.captured && PIECE_VALUES[tm.captured] >= 3) {
-              const art = PIECE_ARTICLE_FR[tm.captured];
-              const cn = PIECE_NAMES_FR[tm.captured];
-              tipFr += ` ⚠ Attention, ${opp} menacent de prendre ${art} ${cn} (${tFr}).`;
-              isThreat = true;
-            } else if (tm.san.includes('+')) {
-              tipFr += ` ⚠ ${opp} menacent un échec (${tFr}).`;
-              isThreat = true;
+            const oppColor = isWhite ? 'b' : 'w';
+            const threatFork = detectForkAfterMove(tg.fen(), tm.to, oppColor);
+            const moveArrow = { from: tu.slice(0, 2), to: tu.slice(2, 4), color: '#e0574a', opacity: 0.9, width: 6, threat: true };
+            if (threatFork) {
+              const chk = tm.san.includes('+') ? ' avec échec' : '';
+              tipFr += ` ⚠ Fourchette${chk} ! ${opp} menacent ${tFr}, qui attaque à la fois ${threatFork.names.join(' et ')}.`;
+              threatArrows.push(moveArrow);
+              // Lighter, thinner rays from the fork square to each victim.
+              for (const sq of threatFork.squares) {
+                threatArrows.push({ from: tm.to, to: sq, color: '#f0938a', opacity: 0.75, width: 4, threat: true });
+              }
+            } else {
+              let isThreat = false;
+              if (tm.san.includes('#')) {
+                tipFr += ` ⚠ ${opp} menacent mat avec ${tFr} !`;
+                isThreat = true;
+              } else if (tm.captured && PIECE_VALUES[tm.captured] >= 3) {
+                const art = PIECE_ARTICLE_FR[tm.captured];
+                const cn = PIECE_NAMES_FR[tm.captured];
+                tipFr += ` ⚠ Attention, ${opp} menacent de prendre ${art} ${cn} (${tFr}).`;
+                isThreat = true;
+              } else if (tm.san.includes('+')) {
+                tipFr += ` ⚠ ${opp} menacent un échec (${tFr}).`;
+                isThreat = true;
+              }
+              if (isThreat) threatArrows.push(moveArrow);
             }
-            if (isThreat) threatArrow = { from: tu.slice(0, 2), to: tu.slice(2, 4), color: '#e0574a', opacity: 0.85, width: 6, threat: true };
           }
         } catch(_) {}
       }
@@ -1036,8 +1057,18 @@ const Analyzer = (() => {
       } else if (madeMove.captured) {
         arrows.push({ from: madeMove.from, to: madeMove.to, color: '#e2b857', opacity: 0.6, width: 5 });
       }
-      // Red threat arrow drawn on top of any move/best arrows (Chess.com-style).
-      if (threatArrow) arrows.push(threatArrow);
+      // When the player's own move forks, trace a gold ray to each piece it
+      // hits (on top of the move arrow) so the double attack reads at a glance.
+      if (forkTargets && type !== 'blunder' && type !== 'mistake') {
+        if (!arrows.some(a => a.from === madeMove.from && a.to === madeMove.to)) {
+          arrows.push({ from: madeMove.from, to: madeMove.to, color: '#e2b857', opacity: 0.7, width: 5 });
+        }
+        for (const sq of forkTargets.squares) {
+          arrows.push({ from: forkTargets.forkSquare, to: sq, color: '#f0c96b', opacity: 0.6, width: 4 });
+        }
+      }
+      // Red threat arrows drawn on top of any move/best arrows (Chess.com-style).
+      if (threatArrows.length) arrows.push(...threatArrows);
 
       results.push({
         type, san: madeMove.san, sanFr, tipFr,
