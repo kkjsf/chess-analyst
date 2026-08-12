@@ -164,7 +164,7 @@ const Openings = (() => {
     ['d4 d5 c4 e6 Nc3 Nf6 cxd5 exd5', 'D35', 'GDR — variante d\'échange'],
 
     // Slav variations
-    ['d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4', 'D31', 'Slave — variante semi-Slave'],
+    ['d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4', 'D15', 'Slave acceptée'],
     ['d4 d5 c4 c6 Nf3 Nf6 e3', 'D12', 'Slave — système lent'],
 
     // London extended
@@ -237,6 +237,34 @@ const Openings = (() => {
 
     // Bird
     ['f4 d5 Nf3 Nf6 e3 g6', 'A03', 'Bird — système Leningrad inversé'],
+
+    // Ruy Lopez — variations supplémentaires
+    ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O', 'C84', 'Ruy Lopez — variante fermée'],
+    ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 O-O c3 d5', 'C89', 'Ruy Lopez — attaque Marshall'],
+    ['e4 e5 Nf3 Nc6 Bb5 a6 Bxc6 dxc6', 'C68', 'Ruy Lopez — variante d\'échange'],
+    ['e4 e5 Nf3 Nc6 Bb5 d6', 'C62', 'Ruy Lopez — défense Steinitz'],
+
+    // Italienne — Giuoco Piano & Deux Cavaliers en profondeur
+    ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3', 'C53', 'Giuoco Piano — variante centrale'],
+    ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4', 'C54', 'Giuoco Piano — attaque centrale'],
+    ['e4 e5 Nf3 Nc6 Bc4 Bc5 b4 Bxb4 c3', 'C52', 'Gambit Evans accepté'],
+    ['e4 e5 Nf3 Nc6 Bc4 Bc5 b4 Bb6', 'C51', 'Gambit Evans décliné'],
+    ['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5', 'C57', 'Deux Cavaliers — attaque du Cg5'],
+    ['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 Bc5', 'C57', 'Deux Cavaliers — contre-attaque Traxler'],
+    ['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Na5', 'C58', 'Deux Cavaliers — variante Polerio'],
+    ['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Nxd5', 'C57', 'Deux Cavaliers — Fegatello / foie frit'],
+    ['e4 e5 Nf3 Nc6 Bc4 Nf6 d3', 'C55', 'Deux Cavaliers — variante lente'],
+    ['e4 e5 Nf3 Nc6 Bc4 Be7', 'C50', 'Défense hongroise'],
+
+    // Écossaise / gambits
+    ['e4 e5 Nf3 Nc6 d4 exd4 Bc4', 'C44', 'Gambit Écossais'],
+
+    // Gambit du Roi — Falkbeer
+    ['e4 e5 f4 d5', 'C31', 'Gambit du Roi — contre-gambit Falkbeer'],
+
+    // Viennoise — gambit
+    ['e4 e5 Nc3 Nf6 f4', 'C29', 'Viennoise — gambit viennois'],
+    ['e4 e5 Nc3 Nc6 Bc4 Bc5', 'C25', 'Viennoise — variante Hamppe'],
   ];
 
   DB.sort((a, b) => b[0].split(' ').length - a[0].split(' ').length);

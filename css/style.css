@@ -336,12 +336,61 @@ html, body {
 .opening-modal-overlay.visible .opening-modal {
   transform: scale(1);
 }
+/* Layout wrappers: single column on phones, board-left / text-right on desktop. */
+.opening-modal-main {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.opening-modal-left,
+.opening-modal-right {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.opening-modal-right { max-width: 760px; }
 .opening-modal-header,
 .opening-modal-controls,
 .opening-modal-explanation,
 .opening-modal-footer {
   width: 100%;
   max-width: 760px;
+}
+.opening-modal-header { align-self: center; }
+
+/* ── Desktop: give the board the room, push the reading matter to its right ── */
+@media (min-width: 900px) {
+  .opening-modal { padding: 20px 32px; }
+  .opening-modal-header { max-width: 1180px; }
+  .opening-modal-main {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 34px;
+    max-width: 1180px;
+  }
+  .opening-modal-left {
+    flex: 0 0 auto;
+    width: auto;
+    position: sticky;
+    top: 4px;
+    gap: 14px;
+  }
+  .opening-modal-right {
+    flex: 1 1 auto;
+    align-items: stretch;
+    text-align: left;
+    max-width: 680px;
+    padding-top: 2px;
+  }
+  .opening-modal-right > * { max-width: none; }
+  .opening-modal-board { margin-bottom: 0; }
+  .opening-modal-left .opening-modal-board svg { width: min(70vh, 600px); height: min(70vh, 600px); }
+  .opening-modal-controls { margin-bottom: 0; }
 }
 .opening-modal-header {
   display: flex;
@@ -1448,6 +1497,133 @@ html, body {
 }
 .panel-close:hover { color: var(--text); }
 
+/* ── Check-list « Ouvertures à connaître » ── */
+.chk-intro {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin: 0 0 16px;
+  max-width: 760px;
+}
+.chk-intro b { color: var(--text); }
+.chk-explore-inline {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chk-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  max-width: 760px;
+}
+.chk-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.chk-progress-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--success);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.chk-progress-txt {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chk-reset {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.14);
+  color: var(--text-dim);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.chk-reset:hover { color: var(--text); border-color: var(--accent-dim); }
+.chk-group {
+  margin-bottom: 22px;
+  max-width: 820px;
+}
+.chk-group h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.chk-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 11px 13px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.chk-item:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+.chk-item input { position: absolute; opacity: 0; width: 0; height: 0; }
+.chk-box {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.chk-box::after {
+  content: '✓';
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a2e;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.chk-checked .chk-box {
+  background: var(--success);
+  border-color: var(--success);
+}
+.chk-checked .chk-box::after { opacity: 1; transform: scale(1); }
+.chk-txt {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.chk-txt b { color: var(--text); }
+.chk-checked .chk-txt { color: var(--text-dim); opacity: 0.7; }
+.chk-explore {
+  flex: 0 0 auto;
+  align-self: center;
+  background: rgba(226,184,87,0.12);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chk-explore:hover { background: rgba(226,184,87,0.22); }
+
 .panel-body {
   flex: 1;
   overflow-y: auto;
@@ -2123,6 +2299,18 @@ body.guess-open { overflow: hidden; }
 .guess-empty span { font-size: 13px; color: var(--text-dim); }
 .guess-final { font-size: 28px; color: var(--accent); display: inline-block; margin: 6px 0; }
 .guess-actions { margin-top: 18px; }
+
+/* ── Desktop : l'échiquier des exercices (tactiques, mats, drills d'ouverture)
+      était minuscule (360px) et perdu au milieu du vide. On lui donne la place. ── */
+@media (min-width: 700px) {
+  .guess-panel { max-width: 680px; padding-bottom: 32px; }
+  .guess-prompt { font-size: 16px; text-align: center; margin: 8px 0 16px; }
+  .guess-board-wrap { max-width: min(66vh, 560px); }
+  .guess-feedback { font-size: 15px; }
+}
+@media (min-width: 700px) and (min-height: 780px) {
+  .guess-board-wrap { max-width: min(70vh, 620px); }
+}
 
 /* ── Cours sur les mats (reuses .guess-overlay/.guess-panel/.guess-head shell) ── */
 .mate-intro { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 6px 0 18px; }

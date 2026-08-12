@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '158';
+window.APP_VERSION = '162';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -268,13 +268,13 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
 </div>
 
-<div class="panel panel-wide" id="panel-repertoire" hidden>
+<div class="panel panel-wide" id="panel-checklist" hidden>
   <div class="panel-header">
-    <h2>📖 Mon répertoire</h2>
+    <h2>✅ Ouvertures à connaître</h2>
     <button class="panel-close" aria-label="Fermer">&times;</button>
   </div>
   <div class="panel-body">
-    <div id="repertoire-content"></div>
+    <div id="checklist-content"></div>
   </div>
 </div>
 
@@ -302,22 +302,28 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <span class="opening-modal-eco" id="opening-modal-eco"></span>
       <button class="opening-modal-close" id="opening-modal-close" aria-label="Fermer">&times;</button>
     </div>
-    <nav class="opening-lesson-nav" id="opening-lesson-nav" hidden></nav>
-    <div class="opening-lesson-progress" id="opening-lesson-progress" hidden><span></span></div>
-    <div class="opening-modal-board">
-      <svg id="opening-modal-svg" viewBox="0 0 360 360" width="280" height="280"></svg>
+    <div class="opening-modal-main">
+      <div class="opening-modal-left">
+        <div class="opening-modal-board">
+          <svg id="opening-modal-svg" viewBox="0 0 360 360" width="280" height="280"></svg>
+        </div>
+        <div class="opening-modal-controls">
+          <button class="opening-modal-btn" id="opening-modal-prev">◀</button>
+          <span class="opening-modal-move-label" id="opening-modal-move-label">Position initiale</span>
+          <button class="opening-modal-btn" id="opening-modal-next">▶</button>
+        </div>
+      </div>
+      <div class="opening-modal-right">
+        <nav class="opening-lesson-nav" id="opening-lesson-nav" hidden></nav>
+        <div class="opening-lesson-progress" id="opening-lesson-progress" hidden><span></span></div>
+        <div class="opening-lesson-picker" id="opening-lesson-picker" hidden></div>
+        <div class="opening-modal-explanation" id="opening-modal-explanation"></div>
+        <div class="opening-modal-eval" id="opening-modal-eval" hidden></div>
+        <div class="opening-lesson-body" id="opening-lesson-body" hidden></div>
+        <div class="opening-modal-details" id="opening-modal-details" hidden></div>
+        <div class="opening-modal-footer" id="opening-modal-footer"></div>
+      </div>
     </div>
-    <div class="opening-lesson-picker" id="opening-lesson-picker" hidden></div>
-    <div class="opening-modal-controls">
-      <button class="opening-modal-btn" id="opening-modal-prev">◀</button>
-      <span class="opening-modal-move-label" id="opening-modal-move-label">Position initiale</span>
-      <button class="opening-modal-btn" id="opening-modal-next">▶</button>
-    </div>
-    <div class="opening-modal-explanation" id="opening-modal-explanation"></div>
-    <div class="opening-modal-eval" id="opening-modal-eval" hidden></div>
-    <div class="opening-lesson-body" id="opening-lesson-body" hidden></div>
-    <div class="opening-modal-details" id="opening-modal-details" hidden></div>
-    <div class="opening-modal-footer" id="opening-modal-footer"></div>
   </div>
 </div>
 
@@ -578,11 +584,11 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
-    <button class="learn-tile" data-panel="repertoire">
-      <div class="learn-tile-icon">🗺️</div>
+    <button class="learn-tile" data-panel="checklist">
+      <div class="learn-tile-icon">✅</div>
       <div class="learn-tile-txt">
-        <span class="learn-tile-title">Mon répertoire</span>
-        <span class="learn-tile-sub">Un seul schéma d'ouverture, appris à fond — tes premiers coups avec chaque couleur, à réviser sur l'échiquier.</span>
+        <span class="learn-tile-title">Ouvertures à connaître</span>
+        <span class="learn-tile-sub">La check-list de l'essentiel à ton niveau : un plan simple par situation. Coche ce que tu maîtrises, clique pour explorer.</span>
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
@@ -660,7 +666,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 // blocking semantics of static <script> tags.
 ['js/chess.min.js', 'js/board.js', 'js/engine.js', 'js/openings.js',
  'js/analysis.js', 'js/training.js', 'js/guess.js',
- 'js/tactics.js', 'js/mates.js', 'js/repertoire.js', 'js/courses.js', 'js/opening-tree.js', 'js/coach.js', 'js/app.js']
+ 'js/tactics.js', 'js/mates.js', 'js/courses.js', 'js/opening-tree.js', 'js/coach.js', 'js/app.js']
   .forEach(function (src) { document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>'); });
 </script>
 <script>

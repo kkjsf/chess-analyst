@@ -3386,15 +3386,92 @@ const App = (() => {
     if (quizBtn) quizBtn.addEventListener('click', startQuiz);
   }
 
+  // ───────────────────── Check-list « Ouvertures à connaître » ─────────────────
+  // Remplace l'ancien « Mon répertoire » : l'essentiel à retenir au niveau
+  // débutant/intermédiaire (≈300-900), cochable et persistant, avec un lien
+  // « Explorer » vers la fiche du catalogue quand elle existe.
+  const CHECKLIST = [
+    { group: '🧭 Les réflexes de base', items: [
+      { t: `Occuper le centre dès le 1<sup>er</sup> coup (<b>1.e4</b> ou <b>1.d4</b>).` },
+      { t: `Sortir les <b>cavaliers avant les fous</b>, et les diriger vers le centre (Cf3, Cc3).` },
+      { t: `<b>Roquer tôt</b> (dans les 10 premiers coups) pour mettre le roi à l'abri.` },
+      { t: `Ne pas sortir la <b>dame trop tôt</b> : elle se fait chasser en perdant des tempo.` },
+      { t: `Ne pas bouger deux fois la même pièce en ouverture sans bonne raison.` },
+    ]},
+    { group: '♙ Avec les Blancs : 1.e4', items: [
+      { t: `<b>Partie Italienne</b> — le plan modèle : Cf3, Fc4 (vise f7), roque, puis c3 + d4.`, line: 'e4 e5 Nf3 Nc6 Bc4' },
+      { t: `Envie d'ouvrir vite le centre ? La <b>Partie Écossaise</b> (3.d4) : claire et peu théorique.`, line: 'e4 e5 Nf3 Nc6 d4 exd4 Nxd4' },
+    ]},
+    { group: '♟ Contre 1.e4 (avec les Noirs)', items: [
+      { t: `Répondre <b>1…e5</b> et jouer en miroir (…Cc6, …Fc5/…Cf6, roque) — simple et sain.`, line: 'e4 e5 Nf3 Nc6 Bc4' },
+      { t: `Option très solide, sans théorie : <b>Caro-Kann</b> (1…c6, 2…d5, sortir le fou en f5).`, line: 'e4 c6 d4 d5' },
+      { t: `Option facile et répétable : <b>Scandinave</b> (1…d5).`, line: 'e4 d5 exd5 Qxd5' },
+    ]},
+    { group: '♛ Contre 1.d4 (avec les Noirs)', items: [
+      { t: `Répondre <b>1…d5</b>, puis <b>Gambit dame refusé</b> : …e6, …Cf6, …Fe7, roque.`, line: 'd4 d5 c4 e6' },
+      { t: `Reconnaître le <b>Système Londres</b> adverse (Ff4) et jouer …c5 + …Db6 sur d4/b2.`, line: 'd4 d5 Bf4' },
+    ]},
+    { group: '🪤 Les pièges à connaître', items: [
+      { t: `<b>Mat du berger</b> (Dh5 + Fc4 sur f7) : défends par …g6 ou …De7, ne panique pas.` },
+      { t: `<b>Piège de Légal</b> (Philidor) : gare au sacrifice de dame si ton fou cloue en g4.` },
+      { t: `<b>Foie frit</b> / Deux Cavaliers (4.Cg5) : joue …d5 puis …Ca5, <b>pas</b> …Cxd5.`, line: 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5' },
+    ]},
+  ];
+  const CHK_KEY = 'ca_checklist_v1';
+  function chkLoad() { try { return JSON.parse(localStorage.getItem(CHK_KEY) || '{}'); } catch (_) { return {}; } }
+  function chkSave(s) { try { localStorage.setItem(CHK_KEY, JSON.stringify(s)); } catch (_) {} }
+
+  function renderChecklist() {
+    const host = $('#checklist-content');
+    if (!host) return;
+    const state = chkLoad();
+    const total = CHECKLIST.reduce((n, g) => n + g.items.length, 0);
+    const done = Object.values(state).filter(Boolean).length;
+
+    let html = `<p class="chk-intro">À ton niveau, pas besoin de mémoriser des variantes : retiens <b>un plan simple par situation</b>. Coche ce que tu maîtrises, et clique sur <span class="chk-explore-inline">Explorer ↗</span> pour t'amuser à parcourir le catalogue.</p>`;
+    html += `<div class="chk-progress"><div class="chk-progress-bar"><span style="width:${total ? Math.round(done / total * 100) : 0}%"></span></div><span class="chk-progress-txt">${done}/${total} maîtrisées</span><button class="chk-reset" id="chk-reset">Réinitialiser</button></div>`;
+
+    CHECKLIST.forEach((g, gi) => {
+      html += `<div class="chk-group"><h3>${g.group}</h3>`;
+      g.items.forEach((it, ii) => {
+        const id = `${gi}.${ii}`;
+        const checked = state[id] ? 'checked' : '';
+        const explore = it.line ? `<button class="chk-explore" data-line="${it.line}">Explorer ↗</button>` : '';
+        html += `<label class="chk-item${checked ? ' chk-checked' : ''}"><input type="checkbox" data-id="${id}" ${checked}><span class="chk-box" aria-hidden="true"></span><span class="chk-txt">${it.t}</span>${explore}</label>`;
+      });
+      html += `</div>`;
+    });
+    host.innerHTML = html;
+
+    host.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const s = chkLoad();
+        s[cb.dataset.id] = cb.checked;
+        chkSave(s);
+        cb.closest('.chk-item').classList.toggle('chk-checked', cb.checked);
+        const d = Object.values(s).filter(Boolean).length;
+        const bar = host.querySelector('.chk-progress-bar span');
+        const txt = host.querySelector('.chk-progress-txt');
+        if (bar) bar.style.width = `${total ? Math.round(d / total * 100) : 0}%`;
+        if (txt) txt.textContent = `${d}/${total} maîtrisées`;
+      });
+    });
+    host.querySelectorAll('.chk-explore').forEach(btn => {
+      btn.addEventListener('click', e => { e.preventDefault(); openOpeningByLine(btn.dataset.line); });
+    });
+    const reset = $('#chk-reset');
+    if (reset) reset.addEventListener('click', () => { chkSave({}); renderChecklist(); });
+  }
+
   let _openPanel = null;
 
   function initPanels() {
     const overlay = $('#panel-overlay');
-    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), tree: $('#panel-tree'), repertoire: $('#panel-repertoire'), technical: $('#panel-technical') };
+    const panels = { guide: $('#panel-guide'), notation: $('#panel-notation'), concepts: $('#panel-concepts'), openings: $('#panel-openings'), tree: $('#panel-tree'), checklist: $('#panel-checklist'), technical: $('#panel-technical') };
     const btns = { guide: $('#btn-guide'), notation: $('#btn-notation'), concepts: $('#btn-concepts'), openings: $('#btn-openings'), technical: $('#btn-technical') };
 
     function openPanel(name) {
-      if (name === 'repertoire' && typeof Repertoire !== 'undefined') Repertoire.renderPanel();
+      if (name === 'checklist') renderChecklist();
       Object.values(panels).forEach(p => { p.hidden = true; p.classList.remove('open'); });
       overlay.hidden = false;
       requestAnimationFrame(() => {
@@ -3553,6 +3630,40 @@ const App = (() => {
       mistakes: `Vouloir tout casser trop tôt : la position récompense la patience et le bon placement des pièces, pas la précipitation.`,
       deviations: [
         { label: `…d5 prématuré`, note: `Si un camp force …d5 sans l'avoir préparé, l'ouverture du centre profite presque toujours au camp le mieux développé.` }
+      ] },
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Giuoco Piano', en: 'Giuoco Piano', eco: 'C53', side: 'w', level: '👍 L\'Italienne classique',
+      line: 'e4 e5 Nf3 Nc6 Bc4 Bc5',
+      desc: `« Le jeu tranquille » : les deux fous se font face en <b>c4</b> et <b>c5</b>, visant f7 et f2. Position symétrique et saine où l'on choisit son tempo — jeu lent (d3) ou poussée centrale (c3 + d4).`,
+      idea: `Développer harmonieusement et fixer la diagonale a2-g8 sur f7. On prépare c3 pour jouer d4 et bâtir un centre de pions, ou on manœuvre lentement à la Pianissimo.`,
+      plans: { w: `Choisir son tempo : c3 + d4 pour ouvrir le centre au bon moment, ou d3 et une longue manœuvre (Cbd2-f1-g3) avant de frapper.`, b: `Copier le développement (…Cf6, …d6, …O-O), contrôler d4 et viser la rupture libératrice …d5.` },
+      structure: `Centre symétrique e4/e5 : jeu de pièces ouvert. Le premier à réussir sa rupture (d4 pour les Blancs, …d5 pour les Noirs) prend l'initiative.`,
+      mistakes: `Jouer d4 sans préparation (…exd4 et le pion c c'est pour rien), ou négliger f2/f7 : la diagonale du fou peut devenir mortelle après un roque.`,
+      deviations: [
+        { label: `4.b4 (Gambit Evans)`, note: `Au lieu du calme 4.c3/4.d3, les Blancs sacrifient un pion par b4 pour chasser le fou et bâtir un centre écrasant : l'arme romantique par excellence.` },
+        { label: `4.d3 (Giuoco Pianissimo)`, note: `La version très tranquille et moderne : d3 soutient e4 et l'on manœuvre longtemps avant tout contact — une partie positionnelle, pas tactique.` }
+      ] },
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Gambit Evans', en: 'Evans Gambit', eco: 'C51', side: 'w', level: '⚔️ Agressif et romantique',
+      line: 'e4 e5 Nf3 Nc6 Bc4 Bc5 b4',
+      desc: `Un pion offert par <b>b4</b> pour gagner des tempo : après …Fxb4 c3 le fou est chassé et les Blancs jouent <b>d4</b> avec un centre écrasant et une attaque directe sur f7. L'ouverture d'attaque par excellence.`,
+      idea: `Sacrifier le pion b pour gagner les tempo c3 + d4 : on construit un gros centre et on ouvre les lignes vers le roi noir avant qu'il ne se coordonne.`,
+      plans: { w: `Après …Fxb4 c3, jouer d4 tout de suite, roquer et lancer l'attaque sur f7 et la colonne d ; viser Db3/Fa3 sur les points faibles.`, b: `Accepter puis rendre le pion au bon moment (…Fa5/…Fb6, …d6, …Ca5 pour échanger le Fc4), neutraliser l'attaque et garder le pion en finale.` },
+      structure: `Centre de pions blanc mobile (e4-d4) contre un pion de plus noir : course entre l'attaque blanche et la consolidation noire.`,
+      mistakes: `Côté noir : s'accrocher au pion et laisser filer le développement ; côté blanc : attaquer sans avoir joué d4 et roqué, l'initiative retombe alors.`,
+      deviations: [
+        { label: `4…Fb6 (Evans décliné)`, note: `Refuser le cadeau et garder la structure : sûr, mais les Blancs gagnent de l'espace par a4-a5 et gardent l'initiative sans avoir rien sacrifié.` },
+        { label: `4…Fxb4 5.c3 Fa5 (Evans accepté)`, note: `La ligne principale : les Noirs prennent et reculent en a5 ; les Blancs jouent d4 avec un développement et un centre en compensation du pion.` }
+      ] },
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Défense des deux cavaliers', en: 'Two Knights Defence', eco: 'C55', side: 'b', level: '⚔️ Combative pour les Noirs',
+      line: 'e4 e5 Nf3 Nc6 Bc4 Nf6',
+      desc: `Plus ambitieuse que 3…Fc5 : au lieu d'imiter, les Noirs attaquent <b>e4</b> et invitent les complications. Après <b>4.Cg5</b> le fou et le cavalier fondent sur f7 (le fameux « foie frit »), d'où des lignes très tranchantes.`,
+      idea: `Contre-attaquer e4 tout de suite et accepter le jeu concret : soit rendre un pion pour un développement supérieur (…d5, …Ca5), soit contre-attaquer f2 (Traxler).`,
+      plans: { w: `Choisir : 4.Cg5 pour viser f7 (mais bien calculer !), ou le sain 4.d3/4.d4 vers un jeu positionnel de type Italienne moderne.`, b: `Après 4.Cg5 d5 5.exd5, jouer …Ca5 pour chasser le fou c4 et sacrifier un pion contre une longue avance de développement et l'initiative.` },
+      structure: `Souvent déséquilibrée : les Noirs donnent un pion (variante Polerio) contre du temps et l'activité — un pari concret qui exige de connaître les idées.`,
+      mistakes: `Côté noir : jouer 4…Cxd5?! après 4.Cg5 d5 5.exd5 (le « foie frit » 6.Cxf7! est très dangereux) au lieu du solide 5…Ca5. Côté blanc : s'emballer avec 5.Cxf7 contre le Traxler sans calcul.`,
+      deviations: [
+        { label: `4.Cg5 (attaque sur f7)`, note: `Le coup tranchant : le cavalier saute en g5 pour prendre f7 avec le fou. La parade est …d5, puis …Ca5 (Polerio) — pas …Cxd5, qui invite le foie frit.` },
+        { label: `4.d4 (attaque Max Lange)`, note: `Ouvrir le centre immédiatement mène à des lignes très tactiques (l'attaque Max Lange proprement dite naît de 5.O-O) : à connaître des deux côtés.` },
+        { label: `4…Fc5 (contre-attaque Traxler)`, note: `Ignorer la menace sur f7 et contre-attaquer f2 ! Une ligne romantique et sauvage où les deux rois s'exposent — pleine de pièges des deux côtés.` }
       ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Partie Espagnole (Ruy Lopez)', en: 'Ruy Lopez', eco: 'C60', side: 'w', level: '⭐ La référence',
       line: 'e4 e5 Nf3 Nc6 Bb5',
