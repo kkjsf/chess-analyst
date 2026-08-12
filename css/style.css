@@ -389,7 +389,7 @@ html, body {
   }
   .opening-modal-right > * { max-width: none; }
   .opening-modal-board { margin-bottom: 0; }
-  .opening-modal-left .opening-modal-board svg { width: min(70vh, 600px); height: min(70vh, 600px); }
+  .opening-modal-left .opening-modal-board { width: min(70vh, 600px); }
   .opening-modal-controls { margin-bottom: 0; }
 }
 .opening-modal-header {
@@ -425,17 +425,20 @@ html, body {
 .opening-modal-close:hover { color: var(--text); }
 .opening-modal-board {
   flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
+  position: relative;
+  width: min(52vh, 88vw, 460px);
+  aspect-ratio: 1;
+  margin: 0 auto 12px;
 }
 .opening-modal-board svg {
-  width: min(52vh, 88vw, 460px);
-  height: min(52vh, 88vw, 460px);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 4px;
-  border: 2px solid rgba(255,255,255,0.1);
 }
+#opening-modal-svg { border: 2px solid rgba(255,255,255,0.1); }
+#opening-modal-arrows { pointer-events: none; }
 .opening-modal-controls {
   display: flex;
   align-items: center;
@@ -535,6 +538,18 @@ html, body {
   color: var(--text-dim);
 }
 .opening-modal-details b { color: var(--text); }
+
+/* ── Explorateur d'ouverture : mode « Continuer à jouer » (analyse libre) ── */
+.oe-explore-cta { margin-top: 10px; text-align: center; }
+.oe-explore-cta .oe-explore-hint {
+  display: block; margin-top: 6px; font-size: 12px; color: var(--text-dim);
+}
+.oe-explore-status { font-size: 13px; line-height: 1.5; color: var(--text); text-align: center; }
+.oe-explore-status b { color: var(--text); }
+.oe-explore-pv { margin-top: 4px; font-size: 12.5px; color: var(--text-dim); }
+.oe-explore-actions {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px;
+}
 
 /* ─────────────────────── Cours d'ouverture (lesson mode) ─────────────────── */
 .opening-lesson-nav {

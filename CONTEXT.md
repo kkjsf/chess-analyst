@@ -55,6 +55,18 @@
     droite 642 ; mobile 375px → empilé, board 330), check-list 15 items/5 groupes/8 liens Explorer +
     persistance, les 3 nouvelles fiches présentes dans la liste Ouvertures, aucune erreur console.
     APP_VERSION 158→**161**.
+  - **v164 - « Continuer à jouer » (analyse libre) dans l'explorateur d'ouverture** : à la fin de la
+    séquence d'ouverture, un bouton « 🔍 Continuer à jouer (moteur) » lance un mode analyse libre (comme
+    l'exploration post-puzzle de l'entraînement, v156) : on joue les 2 camps par glisser-déposer, Stockfish
+    dessine son meilleur coup (flèche bleue) + éval relative aux Blancs + suite PV en FR, avec Annuler /
+    Départ / Revenir à l'ouverture. Implémenté dans `openOpeningExplorer` (`js/app.js`) : état
+    `exploring`/`exHist`, `enterExplore`/`renderExplore`/`exploreMove`/`analyzeExplore`, `enableDrag` lié
+    **une seule fois** au board svg via des refs mutables (`svg._exGetFen/_exCanMove/_onExploreMove`). Ajout
+    d'un overlay de flèches `#opening-modal-arrows` (le `.opening-modal-board` devient un conteneur carré
+    `position:relative`, les 2 svg en `position:absolute inset:0`). Marche dans l'explorateur plat ET la
+    section « Lignes » des cours. Vérifié preview : bouton à la fin, coup joué → flèche bleue + « Éval +1.3,
+    Meilleur : Dd6, Suite : Dd6 Cf3 », Annuler/quitter OK, board 504px overlay aligné, 0 erreur.
+    APP_VERSION 163→**164**.
   - **v163 - Réti étoffé + Gambit Tennison** : le nœud Réti (1.Cf3) n'avait pas de variantes ; ajout de
     1…d5 → {Gambit Réti 2.c4, système fianchetto 2.g3, **Gambit Tennison 2.e4** → accepté 2…dxe4 3.Cg5}
     et 1…Cf6 symétrique (arbre 89→**95 nœuds**). Détection (`js/openings.js`) : Tennison ajouté dans les

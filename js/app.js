@@ -1134,6 +1134,7 @@ const App = (() => {
 
     const modal = $('#opening-modal');
     const svg = $('#opening-modal-svg');
+    const arrowsEl = $('#opening-modal-arrows');
     const titleEl = $('#opening-modal-title');
     const ecoEl = $('#opening-modal-eco');
     const labelEl = $('#opening-modal-move-label');
@@ -1262,7 +1263,9 @@ const App = (() => {
       pumpEval();
     }
 
+    let evalEnabled = false;
     if ((rich || opening.showEval) && typeof StockfishEngine !== 'undefined') {
+      evalEnabled = true;
       evalEl.hidden = false;
       evalEl.innerHTML = `<span class="oe-text">⏳ Le moteur analyse la position…</span>`;
       (StockfishEngine.isReady() ? Promise.resolve() : StockfishEngine.init())
@@ -1299,12 +1302,125 @@ const App = (() => {
         if (note) explEl.innerHTML = note;
         else explEl.textContent = explainMove(pos.san, pos.color, moveNum, pos.fen);
       }
+      // À la fin de la séquence d'ouverture : proposer de continuer en analyse libre.
+      if (!exploring && idx === positions.length - 1) {
+        const html = explEl.innerHTML;
+        explEl.innerHTML = html +
+          `<div class="oe-explore-cta"><button class="train-btn good" id="oe-explore">🔍 Continuer à jouer (moteur)</button>` +
+          `<span class="oe-explore-hint">Fin de l'ouverture — glisse une pièce pour jouer librement, le moteur t'indique le meilleur coup.</span></div>`;
+        const b = $('#oe-explore'); if (b) b.onclick = enterExplore;
+      }
       requestEval();
     }
+
+    // ───────────────────── Analyse libre (« Continuer à jouer ») ──────────────
+    // À la fin de l'ouverture, on rejoue librement pour les deux camps : Stockfish
+    // dessine son meilleur coup (flèche bleue) + éval relative aux Blancs et suite.
+    let exploring = false, exHist = [], exToken = 0;
+
+    function pvToFr(fen, pvStr, max) {
+      if (!pvStr) return [];
+      const g = new Chess(fen); const out = [];
+      for (const uci of pvStr.trim().split(/\s+/)) {
+        if (out.length >= (max || 5)) break;
+        let m; try { m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined }); } catch (_) { m = null; }
+        if (!m) break;
+        out.push((typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(m.san) : m.san);
+      }
+      return out;
+    }
+    function exEvalWhite(res, stm) {
+      if (res.mate != null) { const mw = stm === 'w' ? res.mate : -res.mate; return 'Mat en ' + Math.abs(mw) + (mw > 0 ? ' (Blancs)' : ' (Noirs)'); }
+      const w = (stm === 'w' ? res.score : -res.score) / 100;
+      return (w >= 0 ? '+' : '') + w.toFixed(1);
+    }
+    function exStatusHtml(fen, res) {
+      const stm = fen.split(' ')[1] === 'w' ? 'w' : 'b';
+      try {
+        const g = new Chess(fen);
+        if (g.in_checkmate()) return `♚ <b>Échec et mat.</b> Annule pour explorer une autre suite.`;
+        if (g.in_stalemate()) return `<b>Pat</b> — nulle. Annule pour explorer une autre suite.`;
+        if (g.in_draw()) return `<b>Nulle</b> (matériel / répétition). Annule pour explorer une autre suite.`;
+      } catch (_) {}
+      const turn = stm === 'w' ? 'Blancs' : 'Noirs';
+      const head = `Trait aux <b>${turn}</b>.`;
+      if (!res) return head + ` Moteur indisponible — joue librement, sans suggestion.`;
+      const pv = pvToFr(fen, res.pv, 5);
+      const best = pv[0] || '';
+      return `${head} Éval <b>${exEvalWhite(res, stm)}</b>.` + (best ? ` Meilleur : <b>${best}</b> <span class="oe-sugg">(flèche bleue)</span>.` : '')
+        + (pv.length > 1 ? `<div class="oe-explore-pv">Suite : ${pv.join(' ')}</div>` : '');
+    }
+
+    function enterExplore() {
+      exploring = true;
+      exHist = [positions[idx].fen];
+      renderExplore(null);
+    }
+    function renderExplore(lastMove) {
+      const fen = exHist[exHist.length - 1];
+      BoardRenderer.render(svg, fen, lastMove);
+      BoardRenderer.clearArrows(arrowsEl);
+      labelEl.textContent = '🔍 Exploration libre';
+      prevBtn.disabled = true; nextBtn.disabled = true;
+      evalEl.hidden = true;
+      const canUndo = exHist.length > 1;
+      explEl.innerHTML =
+        `<div class="oe-explore-status" id="oe-ex-status">⏳ Analyse…</div>` +
+        `<div class="oe-explore-actions">` +
+        `<button class="train-btn ghost" id="oe-ex-undo"${canUndo ? '' : ' disabled'}>↶ Annuler</button>` +
+        `<button class="train-btn ghost" id="oe-ex-reset"${canUndo ? '' : ' disabled'}>⟳ Départ</button>` +
+        `<button class="train-btn ghost" id="oe-ex-quit">✕ Revenir à l'ouverture</button></div>`;
+      const u = $('#oe-ex-undo'); if (u) u.onclick = () => { if (exHist.length > 1) { exHist.pop(); renderExplore(null); } };
+      const r = $('#oe-ex-reset'); if (r) r.onclick = () => { if (exHist.length > 1) { exHist = [exHist[0]]; renderExplore(null); } };
+      const q = $('#oe-ex-quit'); if (q) q.onclick = () => { exploring = false; exToken++; BoardRenderer.clearArrows(arrowsEl); if (evalEnabled) evalEl.hidden = false; renderStep(false); };
+      analyzeExplore(fen, ++exToken);
+    }
+    function exploreMove(from, to) {
+      if (!exploring) return;
+      const fen = exHist[exHist.length - 1];
+      let g, m = null;
+      try { g = new Chess(fen); m = g.move({ from, to, promotion: 'q' }); } catch (_) { m = null; }
+      if (!m) return;
+      exHist.push(g.fen());
+      renderExplore(m);
+    }
+    async function analyzeExplore(fen, token) {
+      const statusEl = () => document.getElementById('oe-ex-status');
+      let over = false; try { over = new Chess(fen).game_over(); } catch (_) {}
+      if (over) { const s = statusEl(); if (s) s.innerHTML = exStatusHtml(fen, null); return; }
+      if (typeof StockfishEngine === 'undefined') { const s = statusEl(); if (s) s.innerHTML = exStatusHtml(fen, null); return; }
+      if (!StockfishEngine.isReady()) {
+        try { await StockfishEngine.init(); } catch (_) { const s = statusEl(); if (s) s.innerHTML = exStatusHtml(fen, null); return; }
+      }
+      if (token !== exToken || !exploring) return;
+      let res; try { res = await StockfishEngine.evaluate(fen, 'movetime 600'); } catch (_) { res = null; }
+      if (token !== exToken || !exploring) return;
+      if (res && res.bestMove) {
+        BoardRenderer.drawArrows(arrowsEl, [{ from: res.bestMove.slice(0, 2), to: res.bestMove.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 }]);
+      }
+      const s = statusEl(); if (s) s.innerHTML = exStatusHtml(fen, res);
+    }
+
+    // Entrée de coups à la souris/doigt pour le mode exploration. Lié une seule
+    // fois à l'élément (réutilisé entre ouvertures via des refs mutables).
+    if (!svg._exploreBound) {
+      svg._exploreBound = true;
+      BoardRenderer.enableDrag(svg, {
+        getFen: () => (svg._exGetFen ? svg._exGetFen() : ''),
+        arrows: arrowsEl,
+        canMove: () => !!(svg._exCanMove && svg._exCanMove()),
+        onMove: (f, t) => { if (svg._onExploreMove) svg._onExploreMove(f, t); },
+      });
+    }
+    svg._exGetFen = () => (exHist.length ? exHist[exHist.length - 1] : positions[idx].fen);
+    svg._exCanMove = () => exploring;
+    svg._onExploreMove = exploreMove;
 
     // Swap the board's active line (lesson mode): rebuild positions from a new
     // SAN string, attach its notes, and rewind to the start.
     function loadLine(lineStr, notes) {
+      exploring = false; exToken++;
+      if (arrowsEl) BoardRenderer.clearArrows(arrowsEl);
       positions = buildPositions(lineStr);
       activeNotes = notes || null;
       idx = 0;
@@ -1314,13 +1430,15 @@ const App = (() => {
     function cleanup() {
       modal.classList.remove('visible');
       document.removeEventListener('keydown', onKey);
+      exploring = false; exToken++;
+      if (arrowsEl) BoardRenderer.clearArrows(arrowsEl);
       if (modal._release) { modal._release(); modal._release = null; }
       if (flip !== undefined) BoardRenderer.setFlipped(prevFlip);
     }
 
     function onKey(e) {
       if (e.key === 'Escape') { cleanup(); return; }
-      if (!boardActive) return;
+      if (!boardActive || exploring) return;
       if (e.key === 'ArrowLeft' && idx > 0) { idx--; renderStep(false); }
       if (e.key === 'ArrowRight' && idx < positions.length - 1) { idx++; renderStep(true); }
     }

@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '163';
+window.APP_VERSION = '164';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -306,6 +306,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <div class="opening-modal-left">
         <div class="opening-modal-board">
           <svg id="opening-modal-svg" viewBox="0 0 360 360" width="280" height="280"></svg>
+          <svg id="opening-modal-arrows" viewBox="0 0 360 360" class="arrow-overlay"></svg>
         </div>
         <div class="opening-modal-controls">
           <button class="opening-modal-btn" id="opening-modal-prev">◀</button>
