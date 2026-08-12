@@ -418,7 +418,37 @@ const OpeningTree = (() => {
       { mv: '1.Cf3', icon: '🐎', lbl: 'Réti', fam: 'flank', eco: 'A04–A09', fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKBNR b KQkq - 1 1',
         appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
         idea: "Flexible et hypermoderne : développe avant de fixer la structure. Peut transposer partout.",
-        plans: { w: "Développer avant de fixer la structure, pression hypermoderne sur d5, fianchetto.", b: "Occuper le centre (...d5, ...e6/...c6) et le tenir, ou copier le plan de flanc." } },
+        plans: { w: "Développer avant de fixer la structure, pression hypermoderne sur d5, fianchetto.", b: "Occuper le centre (...d5, ...e6/...c6) et le tenir, ou copier le plan de flanc." },
+        kids: [
+          { mv: '1...d5', icon: '⬜', lbl: 'Réponse centrale', fen: 'rnbqkbnr/ppp1pppp/8/3p4/8/5N2/PPPPPPPP/RNBQKB1R w KQkq d6 0 2',
+            appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
+            idea: "Les Noirs occupent le centre. Les Blancs choisissent alors leur arme : <span class='k'>2.c4</span> (Gambit Réti), <span class='k'>2.g3</span> (fianchetto lent), ou le tranchant <span class='k'>2.e4</span> (Gambit Tennison).",
+            plans: { w: "Contester d5 de flanc (c4) ou à distance (g3-Fg2), sans fixer sa propre structure.", b: "Soutenir d5 (…c6/…e6) et sortir le fou de cases blanches, ou copier le fianchetto." },
+            kids: [
+              { mv: '2.c4', icon: '💎', lbl: 'Gambit Réti', eco: 'A09', fen: 'rnbqkbnr/ppp1pppp/8/3p4/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq c3 0 2',
+                appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
+                idea: "L'idée maîtresse du Réti : c4 attaque d5 depuis le flanc. Si <span class='k'>2...dxc4</span>, les Blancs récupèrent le pion (Da4+ ou e3/Fxc4) avec un développement fluide et la pression sur la grande diagonale.",
+                plans: { w: "Récupérer c4 sans hâte, fianchetto g3-Fg2, pression sur d5 et l'aile dame.", b: "Tenir d5 (…c6/…e6) ou rendre le pion et viser …e5 pour prendre le centre." } },
+              { mv: '2.g3', icon: '🏹', lbl: 'Système fianchetto', eco: 'A05–A07', fen: 'rnbqkbnr/ppp1pppp/8/3p4/8/5NP1/PPPPPP1P/RNBQKB1R b KQkq - 0 2',
+                appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
+                idea: "Le fou file en g2 pour presser d5 et la grande diagonale : jeu positionnel et souple qui transpose souvent vers l'Attaque est-indienne (KIA) ou l'Anglaise.",
+                plans: { w: "Fianchetto Fg2, roque, puis c4/d3 et manœuvres au centre et à l'aile dame.", b: "Bâtir un centre solide (…Cf6, …e6/…c6, …Fd6) et le tenir, ou fianchetter en miroir." } },
+              { mv: '2.e4', icon: '🎁', lbl: 'Gambit Tennison', eco: 'A06', fen: 'rnbqkbnr/ppp1pppp/8/3p4/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq e3 0 2',
+                appLine: 'Nf3 d5 e4', cc: 'Tennison-Gambit',
+                idea: "Surprise ! 2.e4 offre un pion façon Scandinave inversée. Après <span class='k'>2...dxe4 3.Cg5</span>, les Blancs visent la reprise rapide de e4 et une attaque sur f7 : piégeux, très prisé en blitz.",
+                plans: { w: "Reprendre e4 vite (Cg5, Cc3, Fc4), garder l'initiative et cibler f7.", b: "Défendre le pion avec calme (…Cf6, …e5, …Ff5) ou le rendre pour un développement sain et confortable." },
+                kids: [
+                  { mv: '2...dxe4 3.Cg5', icon: '🍴', lbl: 'Tennison accepté', eco: 'A06', fen: 'rnbqkbnr/ppp1pppp/8/6N1/4p3/8/PPPP1PPP/RNBQKB1R b KQkq - 1 3',
+                    appLine: 'Nf3 d5 e4', cc: 'Tennison-Gambit',
+                    idea: "Le cavalier saute en g5 pour reprendre e4 et lorgner f7. Les Noirs doivent défendre précisément — le naturel <span class='k'>3...Cf6</span> tient, mais 3...e5?! ou 3...Ff5?! invitent des complications à l'avantage des Blancs.",
+                    plans: { w: "Cxe4 (ou Cc3), Fc4, roque : pression permanente sur f7 et jeu ouvert.", b: "…Cf6 pour tenir e4 sereinement, développer et convertir le pion en plus." } },
+                ]},
+            ]},
+          { mv: '1...Cf6', icon: '🪞', lbl: 'Réponse symétrique', fen: 'rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 2 2',
+            appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
+            idea: "Développement en miroir : souple, il transpose fréquemment vers l'Anglaise, une Est-indienne ou une partie fermée selon la suite.",
+            plans: { w: "Garder la souplesse (c4/g3/d4) et choisir la structure au moment opportun.", b: "Copier le plan hypermoderne (…g6/…Fg7 ou …d5/…c6) et contester le centre à distance." } },
+        ]},
     ]
   };
 

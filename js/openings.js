@@ -265,6 +265,13 @@ const Openings = (() => {
     // Viennoise — gambit
     ['e4 e5 Nc3 Nf6 f4', 'C29', 'Viennoise — gambit viennois'],
     ['e4 e5 Nc3 Nc6 Bc4 Bc5', 'C25', 'Viennoise — variante Hamppe'],
+
+    // Réti & Gambit Tennison
+    ['Nf3 d5 g3', 'A05', 'Réti — système fianchetto'],
+    ['Nf3 d5 e4', 'A06', 'Gambit Tennison'],
+    ['Nf3 d5 e4 dxe4 Ng5', 'A06', 'Gambit Tennison accepté'],
+    ['e4 d5 Nf3', 'B01', 'Gambit Tennison (via 1.e4 d5)'],
+    ['e4 d5 Nf3 dxe4 Ng5', 'B01', 'Gambit Tennison accepté (via 1.e4 d5)'],
   ];
 
   DB.sort((a, b) => b[0].split(' ').length - a[0].split(' ').length);

@@ -55,6 +55,11 @@
     droite 642 ; mobile 375px → empilé, board 330), check-list 15 items/5 groupes/8 liens Explorer +
     persistance, les 3 nouvelles fiches présentes dans la liste Ouvertures, aucune erreur console.
     APP_VERSION 158→**161**.
+  - **v163 - Réti étoffé + Gambit Tennison** : le nœud Réti (1.Cf3) n'avait pas de variantes ; ajout de
+    1…d5 → {Gambit Réti 2.c4, système fianchetto 2.g3, **Gambit Tennison 2.e4** → accepté 2…dxe4 3.Cg5}
+    et 1…Cf6 symétrique (arbre 89→**95 nœuds**). Détection (`js/openings.js`) : Tennison ajouté dans les
+    **2 ordres de coups** (1.Cf3 d5 2.e4 = A06, et 1.e4 d5 2.Cf3 = B01) + accepté. FEN/appLine vérifiés.
+    APP_VERSION 162→**163**.
   - **v162 - échiquiers des exercices agrandis** : la coquille de drill `.guess-panel` / `.guess-board-wrap`
     (partagée par les tactiques, le cours des Mats, les drills « Essayer ce coup » des ouvertures et
     « Devine le coup ») était cappée à 460px/**360px** et perdue au milieu du vide sur desktop. Ajout d'un
