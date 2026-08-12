@@ -151,46 +151,80 @@ const BoardRenderer = (() => {
     drawArrows(overlaySvg, [{ from: fromSq, to: toSq, color: '#56b886', opacity: 0.85, width: 6 }]);
   }
 
+  // Chess.com-style arrows: a thick, round-jointed shaft topped by a wide, clean
+  // arrowhead. Knight moves (an L of {1,2}/{2,1}) bend at a right angle — the
+  // long leg first, then a short leg into the target — exactly like chess.com.
+  // markerUnits="userSpaceOnUse" keeps the head a constant size (not stroke-
+  // scaled), and each colour+width pair gets its own head so it stays
+  // proportional to its shaft.
   function drawArrows(overlaySvg, arrows) {
     if (!arrows || arrows.length === 0) { clearArrows(overlaySvg); return; }
 
-    // Arrowhead in user-space units (constant size, not scaled by stroke width)
-    // so short one-square arrows aren't swallowed by a giant head.
-    const colors = [...new Set(arrows.map(a => a.color || '#56b886'))];
-    let defsHtml = '<defs>';
-    for (const c of colors) {
-      const id = 'ah-' + c.replace('#', '');
-      defsHtml += `<marker id="${id}" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto" markerUnits="userSpaceOnUse"><path d="M2,2 L12,7 L2,12 Z" fill="${c}"/></marker>`;
-    }
-    defsHtml += '</defs>';
+    const markers = new Map(); // markerId -> { color, headLen, headHalf }
+    const bodies = [];
 
-    let html = defsHtml;
     for (const a of arrows) {
       const color = a.color || '#56b886';
-      const op = a.opacity || 0.85;
+      const op = a.opacity != null ? a.opacity : 0.85;
       const w = a.width || 6;
       const f = squareToCoords(a.from);
       const t = squareToCoords(a.to);
-      const x1 = f.col * SQ + SQ / 2, y1 = f.row * SQ + SQ / 2;
-      const x2 = t.col * SQ + SQ / 2, y2 = t.row * SQ + SQ / 2;
-      const dx = x2 - x1, dy = y2 - y1;
-      const len = Math.sqrt(dx * dx + dy * dy);
+      const cx1 = f.col * SQ + SQ / 2, cy1 = f.row * SQ + SQ / 2;
+      const cx2 = t.col * SQ + SQ / 2, cy2 = t.row * SQ + SQ / 2;
+
       // Same square (from === to): mark it with a ring — used to flag an
       // outpost / weak square where a piece should settle.
-      if (len < 1) {
-        html += `<circle cx="${x1}" cy="${y1}" r="${SQ / 2 - 4}" fill="none" stroke="${color}" stroke-width="${w}" opacity="${op}"/>`;
+      if (Math.abs(cx2 - cx1) < 1 && Math.abs(cy2 - cy1) < 1) {
+        bodies.push(`<circle cx="${cx1}" cy="${cy1}" r="${SQ / 2 - 4}" fill="none" stroke="${color}" stroke-width="${w}" opacity="${op}"/>`);
         continue;
       }
-      const ux = dx / len, uy = dy / len;
-      // Trim ends proportionally so short arrows keep a visible shaft.
-      const startTrim = Math.min(SQ * 0.30, len * 0.20);
-      const headTrim = Math.min(SQ * 0.36, len * 0.34);
-      const sx = x1 + ux * startTrim, sy = y1 + uy * startTrim;
-      const ex = x2 - ux * headTrim, ey = y2 - uy * headTrim;
-      const markerId = 'ah-' + color.replace('#', '');
-      html += `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${w}" opacity="${op}" marker-end="url(#${markerId})" stroke-linecap="round"/>`;
+
+      // Arrowhead sized from the shaft width for a bold, chess.com-like head.
+      const headLen = w * 2.4 + 6;
+      const headHalf = w * 1.6 + 2;
+      const markerId = 'ah-' + color.replace('#', '') + '-' + Math.round(w * 10);
+      if (!markers.has(markerId)) markers.set(markerId, { color, headLen, headHalf });
+
+      // Waypoints in board coords: straight = [start, end]; knight = elbow.
+      const dCol = Math.abs(t.col - f.col), dRow = Math.abs(t.row - f.row);
+      const isKnight = (dCol === 1 && dRow === 2) || (dCol === 2 && dRow === 1);
+      let pts;
+      if (isKnight) {
+        // Long leg first, then the short leg into the target.
+        const elbow = dRow > dCol ? { x: cx1, y: cy2 } : { x: cx2, y: cy1 };
+        pts = [{ x: cx1, y: cy1 }, elbow, { x: cx2, y: cy2 }];
+      } else {
+        pts = [{ x: cx1, y: cy1 }, { x: cx2, y: cy2 }];
+      }
+
+      // Pull the tail in from the source-square centre so the arrow starts
+      // just off-centre (chess.com convention), keeping short arrows readable.
+      {
+        const p0 = pts[0], p1 = pts[1];
+        const dx = p1.x - p0.x, dy = p1.y - p0.y, l = Math.hypot(dx, dy) || 1;
+        const tr = Math.min(SQ * 0.28, l * 0.5);
+        p0.x += dx / l * tr; p0.y += dy / l * tr;
+      }
+      // Pull the tip back by one head-length so the shaft ends where the head
+      // begins (the marker fills that gap and points at the true target).
+      {
+        const n = pts.length, p1 = pts[n - 1], p0 = pts[n - 2];
+        const dx = p1.x - p0.x, dy = p1.y - p0.y, l = Math.hypot(dx, dy) || 1;
+        const tr = Math.min(headLen, l * 0.9);
+        p1.x -= dx / l * tr; p1.y -= dy / l * tr;
+      }
+
+      const d = pts.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' ');
+      bodies.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" opacity="${op}" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#${markerId})"/>`);
     }
-    overlaySvg.innerHTML = html;
+
+    let defs = '<defs>';
+    for (const [id, m] of markers) {
+      defs += `<marker id="${id}" markerWidth="${m.headLen}" markerHeight="${m.headHalf * 2}" refX="0" refY="${m.headHalf}" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L${m.headLen},${m.headHalf} L0,${m.headHalf * 2} Z" fill="${m.color}"/></marker>`;
+    }
+    defs += '</defs>';
+
+    overlaySvg.innerHTML = defs + bodies.join('');
   }
 
   function clearArrows(overlaySvg) {

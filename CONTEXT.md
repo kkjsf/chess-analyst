@@ -21,6 +21,18 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v165 - flèches « façon Chess.com » partout** : `drawArrows` dans `js/board.js` refait. Shaft en
+  `<path>` épais à jointures/bouts arrondis (`stroke-linejoin/linecap:round`) + tête (marker) large et
+  nette dont la taille est proportionnelle à l'épaisseur du trait (une tête par couple couleur+width,
+  `markerUnits=userSpaceOnUse`). **Coude en L pour les cavaliers** : déplacement détecté par
+  Δcol/Δrow ∈ {1,2}/{2,1} → 2 segments perpendiculaires, **longue jambe d'abord** puis courte jambe
+  vers la cible (tête sur la courte jambe), comme Chess.com. Tail rentré du centre (0.28·SQ), tip
+  reculé d'une longueur de tête. Case→même case = anneau conservé. API `drawArrows`/`drawArrow`/
+  `clearArrows` inchangée (coords viewBox 0-360), donc **tous les appelants mis à jour d'un coup** :
+  analyse (vert meilleur coup, rouge menace), exploration entraînement + explorateur d'ouverture
+  (bleu), tactiques/mats, devine-le-coup, vigilance. Couleurs conservées (#56b886/#5b8fb9/#d36b6b).
+  Vérifié headless (board.js chargé sous node) : droit=2 sommets, cavalier=3 sommets (elbow
+  longue-jambe-first), têtes 22.8×26.4 (w7) / 20.4×23.2 (w6), même-case=cercle.
 - Ouvertures : arbre + catalogue étoffés, cours 2 colonnes, check-list (v159→161) :
   - **Arbre des ouvertures** (`js/opening-tree.js`) bien plus exhaustif - passé de ~40 à **89 nœuds**.
     Ajout des variantes demandées et de leurs sous-lignes : **Italienne** → Giuoco Piano (variante
