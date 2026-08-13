@@ -1205,7 +1205,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase };
+  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase, explainBadMove, detectForkAfterMove };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

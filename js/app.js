@@ -768,11 +768,39 @@ const App = (() => {
       else { badge.textContent = ''; badge.hidden = true; }
     }
 
+    updateReplayCta(index);
+
     updateMoveStripActive(index);
 
     updateWinGraphCursor(index);
     updateMatGraphCursor(index);
 
+  }
+
+  // « Rejoue cette position » : quand le coup affiché est une de TES erreurs
+  // (gaffe / erreur / coup manqué) et qu'on a la position + le meilleur coup,
+  // proposer de reprendre la main juste avant et de rejouer contre Stockfish.
+  function updateReplayCta(index) {
+    const bubble = $('#coach-bubble');
+    if (!bubble) return;
+    let cta = $('#rp-cta');
+    const r = index > 0 ? currentAnalysis[index - 1] : null;
+    const isMine = r && r.move && currentUser && r.move.color === currentUser;
+    const isError = r && (r.type === 'blunder' || r.type === 'mistake' || r.type === 'miss');
+    const ok = typeof Replay !== 'undefined' && isMine && isError && r.fenBefore && r.bestUci;
+    if (!ok) { if (cta) cta.hidden = true; return; }
+    if (!cta) {
+      cta = document.createElement('button');
+      cta.id = 'rp-cta';
+      cta.className = 'pill pill-gold rp-cta';
+      bubble.appendChild(cta);
+    }
+    cta.hidden = false;
+    cta.textContent = '▶ Rejoue cette position';
+    cta.onclick = () => Replay.start({
+      fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan,
+      playedSan: r.sanFr || r.san, tip: r.tipFr || '', ply: index - 1,
+    });
   }
 
   let altPreview = false;
@@ -2033,6 +2061,17 @@ const App = (() => {
       replay.textContent = 'Rejouer ce coup';
       replay.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, { indices: [i], title: '🎯 Le tournant' });
       actions.appendChild(replay);
+    }
+
+    if (isUser && typeof Replay !== 'undefined' && r.fenBefore && r.bestUci) {
+      const replaySf = document.createElement('button');
+      replaySf.className = 'pill pill-ghost';
+      replaySf.textContent = '▶ Rejoue vs Stockfish';
+      replaySf.onclick = () => Replay.start({
+        fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan,
+        playedSan: r.sanFr || r.san, tip: r.tipFr || '', ply: i,
+      });
+      actions.appendChild(replaySf);
     }
 
     const view = document.createElement('button');

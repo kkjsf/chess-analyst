@@ -2379,6 +2379,36 @@ body.guess-open { overflow: hidden; }
 }
 .guess-nav { gap: 10px; flex-wrap: wrap; }
 
+/* ── « Rejoue ta défaite » overlay (reuses the .guess-* shell) ── */
+.rp-intro {
+  background: var(--bg-card); border-radius: 8px; padding: 10px 12px;
+  font-size: 13.5px; line-height: 1.5; text-align: left; color: var(--text);
+}
+.rp-intro b { color: var(--accent); }
+.rp-goal { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12.5px; }
+.rp-comment { text-align: left; line-height: 1.5; }
+.rp-comment b { color: var(--text); }
+.rp-verdict:not(:empty) { margin-bottom: 6px; }
+.rp-verdict.right { color: var(--success); }
+.rp-verdict.wrong { color: var(--danger); }
+.rp-status { color: var(--text-dim); font-size: 13.5px; }
+.rp-status b { color: var(--text); }
+.rp-hint { color: #5b8fb9; }
+.rp-reply { margin-top: 5px; font-size: 13px; color: var(--text-dim); }
+.rp-reply b { color: var(--text); }
+.rp-term { margin-top: 6px; font-size: 13px; font-weight: 600; }
+.rp-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+.rp-cta { display: block; width: 100%; margin-top: 10px; }
+
+/* Secondary "vs Stockfish" buttons on the Coach cards (ghost variant). */
+.coach-drill-row { flex-wrap: wrap; }
+.coach-drill-btn.ghost, .coach-tp-btn.ghost {
+  background: transparent; color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,0.16);
+}
+.coach-drill-btn.ghost:hover, .coach-tp-btn.ghost:hover { filter: none; border-color: var(--accent); color: var(--text); }
+.coach-tp-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
 /* ── Analysis "Plus d'analyse" accordion ── */
 .analysis-more { margin-top: 4px; }
 .analysis-more > summary {

@@ -21,6 +21,33 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v170→172 - mode « Rejoue ta défaite » (jeu contre Stockfish depuis une gaffe, commenté)**
+  - Nouveau module `js/replay.js` (`Replay.start(entry)` / `Replay.close`), sur la coquille
+    `.guess-*` comme `tactics.js`/`mates.js`. Depuis une partie analysée, on reprend la main à
+    `fenBefore` d'une de tes gaffes et on **rejoue la position CONTRE Stockfish** : tu glisses ton
+    coup (drag, comme l'explorateur d'ouverture - pas de clic-clic), l'ordi répond automatiquement
+    son meilleur coup, et un **commentaire du coach** apparaît à chaque coup.
+  - **Commentaires** (réutilise les helpers de `analysis.js`, désormais exportés :
+    `explainBadMove` + `detectForkAfterMove`). Intro au coup de la gaffe (ce que tu avais joué +
+    le tip + la meilleure suite). Verdict de chaque coup par perte de centipions vue de ton camp,
+    calé sur la classif de l'app : ✅ Parfait (= meilleur coup) / 👍 Précis (≤20cp) / 🟡 Imprécision
+    (≤50) / 🟠 Erreur (≤120) / 🔴 Gaffe (>120) ou « permet un mat forcé », enrichi par
+    `explainBadMove` (« tu rends le fou », « fourchette sur roi et tour »). Réplique de l'ordi
+    décrite (prise / échec / mat). Éval live au point de vue des Blancs + flèche bleue du meilleur
+    coup à ton trait. Boutons ↶ Annuler / ⟳ Recommencer / ✕ Quitter. Détection mat/pat/nulle.
+  - **Deux zones de commentaire** (correctif clé) : le **verdict** de ton dernier coup (+ la réplique)
+    PERSISTE, tandis qu'une ligne de **statut** (trait courant + éval) se rafraîchit ; sinon le prompt
+    du tour suivant écrasait instantanément la sanction et tu ne la lisais jamais.
+  - **Points d'entrée** (`▶ Rejoue …`) : bulle du coach de l'écran Analyse (sur chacune de TES
+    erreurs, via `updateReplayCta` dans `goTo`), carte « Le tournant » (`buildTurningPoint`), et côté
+    Coach les cartes « Rejoue tes erreurs partie par partie » (rejoue la gaffe la plus coûteuse) et
+    « Conversion & moments charnières » (le tournant). GuessMove (devine le coup) reste en parallèle.
+  - Vérifié : logique d'échecs headless chess.js (14/14 : signes meScore/cpLoss, verdicts, légalité,
+    helpers exportés, détection mat/fourchette) ; puis bout-en-bout en preview avec le vrai moteur
+    (overlay + flip + intro dédoublonnée, flèche bleue + éval, mat du berger → verdict « permet un
+    mat » + « Dxf7# » + fin de partie, g6 → « Erreur (-103cp) » qui coexiste avec le statut du tour
+    suivant, Annuler/Recommencer/Quitter, boutons présents sur la carte tournant + bulle coach d'une
+    vraie partie analysée). 0 erreur console. APP_VERSION 169→**172** (3 bumps : SW cache-first).
 - **v169 - échiquier sur TOUS les onglets de cours + cours Scandinave & Londres + Mats déplacé dans Apprendre**
   - **Board partout** (`js/app.js`) : helper `freezeBoardOnTabiya()` (charge la ligne, fige sur la
     tabiya, `controlsEl.hidden`, `boardActive=false`, `explEl.hidden`). `renderPlans`, `renderPieges`,

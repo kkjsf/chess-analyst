@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '169';
+window.APP_VERSION = '172';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -671,7 +671,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 // blocking semantics of static <script> tags.
 ['js/chess.min.js', 'js/board.js', 'js/engine.js', 'js/openings.js',
  'js/analysis.js', 'js/training.js', 'js/guess.js',
- 'js/tactics.js', 'js/mates.js', 'js/courses.js', 'js/opening-tree.js', 'js/coach.js', 'js/app.js']
+ 'js/tactics.js', 'js/mates.js', 'js/courses.js', 'js/opening-tree.js', 'js/replay.js', 'js/coach.js', 'js/app.js']
   .forEach(function (src) { document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>'); });
 </script>
 <script>

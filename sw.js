@@ -17,6 +17,7 @@ const VERSIONED = [
   './js/tactics.js',
   './js/mates.js',
   './js/repertoire.js',
+  './js/replay.js',
   './js/coach.js',
   './js/app.js'
 ];

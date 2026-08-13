@@ -1940,13 +1940,17 @@ const Coach = (() => {
       const lost = Math.round(tp.winPctLoss * 100);
       const best = tp.bestSan ? ` À la place, <b>${esc(tp.bestSan)}</b> gardait l'avantage.` : '';
       const canDrill = typeof GuessMove !== 'undefined' && tp.bestUci;
+      const canReplay = typeof Replay !== 'undefined' && tp.bestUci && tp.fenBefore;
       return `<div class="coach-tp">
         <div class="coach-tp-head">
           <span class="coach-tp-when">vs ${esc(g.oppName)} · ${fmtDate(g.endTime)}</span>
           <span class="coach-tp-loss">−${lost}%</span>
         </div>
         <p class="coach-tp-text">Au coup <b>${moveNo(tp.ply)} ${esc(tp.playedSan || '?')}</b>, tu as perdu <b>${lost}%</b> de tes chances de gagner.${best}</p>
-        ${canDrill ? `<button class="coach-tp-btn" data-uuid="${esc(g.uuid)}">🎯 Revoir ce moment</button>` : ''}
+        <div class="coach-tp-btns">
+          ${canDrill ? `<button class="coach-tp-btn" data-uuid="${esc(g.uuid)}">🎯 Revoir ce moment</button>` : ''}
+          ${canReplay ? `<button class="coach-tp-btn coach-tp-replay ghost" data-uuid="${esc(g.uuid)}">▶ Rejoue vs Stockfish</button>` : ''}
+        </div>
       </div>`;
     }).join('');
     return `<div class="home-card coach-card" id="coach-conversion">
@@ -2124,7 +2128,8 @@ const Coach = (() => {
         <span class="coach-drill-opp">${esc(g.oppName)}</span>
         <span class="coach-drill-date">${g.endTime ? fmtDate(g.endTime) : ''}</span>
         <span class="coach-drill-count">${n} erreur${n > 1 ? 's' : ''}</span>
-        <button class="coach-drill-btn" data-uuid="${esc(g.uuid)}">🎯 Rejouer</button>
+        <button class="coach-drill-btn" data-uuid="${esc(g.uuid)}">🎯 Deviner</button>
+        ${typeof Replay !== 'undefined' ? `<button class="coach-drill-btn coach-drill-replay ghost" data-uuid="${esc(g.uuid)}">▶ vs Stockfish</button>` : ''}
       </div>`;
     }).join('');
     return `<div class="home-card coach-card" id="coach-games-drill">
@@ -2135,8 +2140,29 @@ const Coach = (() => {
   }
 
   function bindGamesDrill() {
-    document.querySelectorAll('#coach-games-drill .coach-drill-btn').forEach(b =>
+    document.querySelectorAll('#coach-games-drill .coach-drill-btn:not(.coach-drill-replay)').forEach(b =>
       b.addEventListener('click', () => drillGame(b.dataset.uuid)));
+    document.querySelectorAll('#coach-games-drill .coach-drill-replay').forEach(b =>
+      b.addEventListener('click', () => replayGameWorst(b.dataset.uuid)));
+  }
+
+  // « Rejoue ta défaite » depuis le Coach : reprend la gaffe la plus coûteuse de
+  // la partie (max cpLoss) et la rejoue contre Stockfish.
+  function replayGameWorst(uuid) {
+    if (typeof Replay === 'undefined') return;
+    const g = games.find(x => x.uuid === uuid);
+    const bl = g && g.analysis && g.analysis.blunderList;
+    if (!bl || !bl.length) return;
+    let worst = null;
+    for (const b of bl) {
+      if (!b.fenBefore || !b.bestUci) continue;
+      if (!worst || (b.cpLoss || 0) > (worst.cpLoss || 0)) worst = b;
+    }
+    if (!worst) return;
+    Replay.start({
+      fenBefore: worst.fenBefore, bestUci: worst.bestUci, bestSan: worst.bestSan || '',
+      playedSan: worst.playedSan || '', tip: worst.tip || '', ply: worst.ply,
+    });
   }
 
   function drillGame(uuid) {
@@ -2278,8 +2304,20 @@ const Coach = (() => {
 
   // Replay just the single turning-point position of a game (from Conversion card).
   function bindConversion() {
-    document.querySelectorAll('#coach-conversion .coach-tp-btn').forEach(b =>
+    document.querySelectorAll('#coach-conversion .coach-tp-btn:not(.coach-tp-replay)').forEach(b =>
       b.addEventListener('click', () => drillTurningPoint(b.dataset.uuid)));
+    document.querySelectorAll('#coach-conversion .coach-tp-replay').forEach(b =>
+      b.addEventListener('click', () => replayTurningPoint(b.dataset.uuid)));
+  }
+  function replayTurningPoint(uuid) {
+    if (typeof Replay === 'undefined') return;
+    const g = games.find(x => x.uuid === uuid);
+    const tp = g && g.analysis && g.analysis.turningPoint;
+    if (!tp || !tp.fenBefore || !tp.bestUci) return;
+    Replay.start({
+      fenBefore: tp.fenBefore, bestUci: tp.bestUci, bestSan: tp.bestSan || '',
+      playedSan: tp.playedSan || '', tip: '', ply: tp.ply,
+    });
   }
   function drillTurningPoint(uuid) {
     if (typeof GuessMove === 'undefined') return;
