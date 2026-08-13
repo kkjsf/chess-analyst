@@ -3441,12 +3441,57 @@ const App = (() => {
     } catch (_) {}
   }
 
+  let homeBound = false;
+  function bindHome() {
+    if (homeBound) return;
+    homeBound = true;
+    const resume = $('#resume-card');
+    if (resume) resume.addEventListener('click', () => {
+      const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      if (!games.length) return;
+      $('#pgn-input').value = games[0].pgn;
+      onAnalyze();
+    });
+    $$('.home-quick .qtile').forEach(t => t.addEventListener('click', () => {
+      const nav = t.dataset.nav;
+      if (nav === 'tree') { showLearn(); if (_openPanel) _openPanel('tree'); return; }
+      navTo(nav);
+    }));
+  }
+
+  function renderResume(g) {
+    const sec = $('#resume-section');
+    if (!sec) return;
+    if (!g) { sec.hidden = true; return; }
+    sec.hidden = false;
+    const user = detectUser({ White: g.white, Black: g.black });
+    const userWon = user ? ((user === 'w' && g.result === '1-0') || (user === 'b' && g.result === '0-1')) : g.result === '1-0';
+    const userLost = user ? ((user === 'w' && g.result === '0-1') || (user === 'b' && g.result === '1-0')) : g.result === '0-1';
+    let cls = 'draw', lbl = 'Nulle';
+    if (userWon) { cls = 'win'; lbl = 'Victoire'; }
+    else if (userLost) { cls = 'loss'; lbl = 'Défaite'; }
+    const title = $('#resume-title'); if (title) title.textContent = `${g.white} vs ${g.black}`;
+    const cached = isGameCached({ White: g.white, Black: g.black, Date: g.date }, g.moveCount);
+    const meta = $('#resume-meta');
+    if (meta) meta.innerHTML = `<span class="chip ${cls}">${lbl}</span><span>${formatDate(g.date)}</span>` +
+      (cached ? '<span class="cached-badge">Analysé</span>' : '');
+    const svg = $('#resume-board-svg');
+    if (svg && typeof BoardRenderer !== 'undefined') {
+      const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      let fen = START;
+      try { if (typeof Chess !== 'undefined') { const c = new Chess(); if (c.load_pgn(g.pgn, { sloppy: true })) fen = c.fen(); } } catch (_) {}
+      try { BoardRenderer.render(svg, fen); } catch (_) {}
+    }
+  }
+
   function loadRecent() {
+    bindHome();
     const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     const section = $('#recent-section');
     const list = $('#recent-list');
     const hint = $('#home-hint');
     if (hint) hint.hidden = games.length > 0;
+    renderResume(games[0]);
 
     if (games.length === 0) {
       section.hidden = true;
@@ -3505,6 +3550,8 @@ const App = (() => {
     renderRoutine();
     if (typeof Training === 'undefined') return;
     const due = Training.dueCount();
+    const qb = $('#quick-train-badge');
+    if (qb) { qb.hidden = !(due > 0); qb.textContent = due > 99 ? '99+' : String(due); }
     const badge = $('#tab-train-badge');
     if (!badge) return;
     badge.hidden = !(due > 0);
@@ -3543,6 +3590,16 @@ const App = (() => {
       if (go) go.addEventListener('click', (e) => { e.preventDefault(); runRoutineAction(item.action); });
       list.appendChild(row);
     });
+    // Progress ring in the routine header
+    const doneCount = ROUTINE_ITEMS.filter(it => state[it.key]).length;
+    const total = ROUTINE_ITEMS.length;
+    const num = $('#rr-num'); if (num) num.textContent = `${doneCount}/${total}`;
+    const fill = $('#rr-fill');
+    if (fill) {
+      const C = 2 * Math.PI * 24;
+      fill.style.strokeDasharray = C.toFixed(1);
+      fill.style.strokeDashoffset = (C * (1 - doneCount / total)).toFixed(1);
+    }
     renderStreak();
   }
 

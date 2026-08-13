@@ -17,10 +17,42 @@
 - `sw.js`, `manifest.json` - PWA.
 - `coach-data.json` - contenu de coaching généré (~680 KB). Certains items de correctness ne se reflètent qu'après une RE-RUN complète du coach.
 - `tools/` - scripts utilitaires.
-- Prototypes/mockups (non prod): `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
+- Prototypes/mockups (non prod): `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v173 - REFONTE UI : accueil "hub" + système visuel + sidebar desktop**
+  - Demande user : « pas fan de l'écran d'accueil et de pas mal de choix d'UI » (garde le Coach,
+    les échiquiers, l'arbre). Validé sur 2 maquettes autonomes (`home-redesign-mockup.html` mobile
+    + `home-redesign-desktop-mockup.html` desktop), puis implémenté pour de vrai.
+  - **Système visuel** : tokens `:root` retravaillés en profondeur (mêmes couleurs, navy + or) :
+    `--bg #12172b`, `--bg-card #1a2140`, `--bg-elevated #212a4d`, `--text #eef1f7`,
+    `--text-dim #9aa4bd`, `--radius 16px` + nouveaux tokens `--bg-2 #0e1223`, `--card-2`,
+    `--line`/`--line-str`, `--blue #5b8fb9`, `--dim-2`, `--side-w 236px`. `body` prend un dégradé
+    radial doux. Comme les composants existants utilisent ces tokens, TOUT est repeint (coach,
+    analyse, arbre inclus - logique inchangée). `theme-color` meta → `#12172b`.
+  - **Accueil refait en hub** (`#screen-import`, ex gros textarea en pointillés) : app bar
+    (marque ♟ + « Bonjour / Prêt à progresser ? » + streak), **hero Analyser** (carte dégradée :
+    textarea + bouton or pleine largeur + hint drop), carte **Reprendre** (dernière partie, avec
+    **mini-échiquier réel** = position finale via `Chess.load_pgn`+`BoardRenderer.render`), **routine
+    du jour** avec **anneau de progression** SVG (done/total), **accès rapides** (tuiles Entraîner
+    /Coach/Arbre/Apprendre, badge SRS), **parties récentes**. Tous les hooks JS existants conservés
+    (`#pgn-input`, `#btn-analyze`, `#drop-zone`, `#routine-list`, `#recent-list`, `#home-hint`…).
+  - **Desktop (≥1000px)** : la **tabbar du bas devient une sidebar gauche** (236px, marque en haut,
+    onglets en lignes, barre d'accent à gauche de l'actif) via media query ; `body{padding-left}`
+    décale tous les écrans (vérifié : coach/apprendre/entraîner/analyse ne passent jamais sous la
+    sidebar, 0 débordement). L'accueil devient un **dashboard 2 colonnes** (`.home-main` en grid :
+    hero pleine largeur, reprendre+récentes à gauche, routine+accès rapides à droite) ; état "aucune
+    partie" retombe en colonne unique centrée via `:not(:has(#recent-section:not([hidden])))`.
+    720-999px = mode tablette inchangé (pill centrée en bas).
+  - **JS** (`js/app.js`) : `renderRoutine` calcule l'anneau (`#rr-num`/`#rr-fill` dashoffset) ;
+    `loadRecent` appelle `renderResume(games[0])` + `bindHome()` (once) ; `renderResume` rend la
+    carte Reprendre + mini-board ; `bindHome` câble le clic Reprendre (→ `onAnalyze`) et les tuiles
+    accès rapides (`data-nav` → `navTo`, 'tree' → `showLearn()`+`_openPanel('tree')`) ;
+    `refreshHome` alimente aussi `#quick-train-badge`.
+  - Vérifié en preview (mobile 375 + desktop 1300) avec données injectées : dashboard 2-col,
+    mini-échiquier réel (110 nœuds SVG), navigation entre écrans OK, 0 erreur applicative
+    (seules erreurs = enregistrement SW sous `http.server`, inoffensif). APP_VERSION 172→**173**.
 - **v170→172 - mode « Rejoue ta défaite » (jeu contre Stockfish depuis une gaffe, commenté)**
   - Nouveau module `js/replay.js` (`Replay.start(entry)` / `Replay.close`), sur la coquille
     `.guess-*` comme `tactics.js`/`mates.js`. Depuis une partie analysée, on reprend la main à

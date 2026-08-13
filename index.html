@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#1a1a2e">
+<meta name="theme-color" content="#12172b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Chess Analyst</title>
@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '172';
+window.APP_VERSION = '173';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -328,41 +328,109 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
 </div>
 
-<!-- ═══════ SCREEN 1: IMPORT ═══════ -->
+<!-- ═══════ SCREEN 1: IMPORT (HOME HUB) ═══════ -->
 <div id="screen-import" class="screen import-screen active">
-  <div class="logo-section">
-    <div class="icon">♟</div>
-    <h1>Chess Analyst</h1>
-    <p>Analysez vos parties, progressez à chaque coup</p>
-  </div>
 
-  <div class="import-zone" id="drop-zone">
-    <textarea id="pgn-input" placeholder="Collez votre PGN ou une URL Chess.com ici..."></textarea>
-    <div class="hint">📎 ou glissez un fichier .pgn ici</div>
-    <button class="btn-primary" id="btn-analyze">Analyser la partie</button>
-    <div id="progress-container" class="progress-container" hidden>
-      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-      <div class="progress-text" id="progress-text">Chargement...</div>
+  <header class="home-appbar">
+    <div class="home-brand">
+      <div class="hb-mark">♟</div>
+      <div class="hb-txt">
+        <span class="hb-hi" id="hb-hi">Bonjour</span>
+        <span class="hb-title">Prêt à progresser&nbsp;?</span>
+      </div>
     </div>
-    <div id="import-error" class="import-error" hidden></div>
-  </div>
+    <span class="routine-streak home-streak" id="routine-streak" hidden></span>
+  </header>
 
-  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> - tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> dans la barre du bas, ou ouvre les <b>Mats</b> dans <b>Apprendre</b>.</p>
+  <div class="home-main">
 
-  <div class="routine-card" id="routine-card">
-    <div class="routine-head">
-      <span class="routine-title">🎯 Ma routine du jour</span>
-      <span class="routine-streak" id="routine-streak" hidden></span>
-    </div>
-    <p class="routine-sub">Le plan qui fait vraiment progresser à ton niveau. Coche au fil de la journée.</p>
-    <div class="routine-list" id="routine-list"></div>
-    <p class="routine-foot"><b>Priorité :</b> ne rien laisser en prise · tactique chaque jour · revoir tes parties. Les ouvertures, plus tard.</p>
-  </div>
+    <!-- Hero: Analyser -->
+    <section class="home-hero import-zone" id="drop-zone">
+      <div class="hero-head">
+        <h2>Analyser une partie</h2>
+        <p>Colle un lien Chess.com ou un PGN</p>
+      </div>
+      <textarea id="pgn-input" placeholder="Colle ton PGN ou une URL Chess.com ici..."></textarea>
+      <div class="hero-actions">
+        <button class="btn-primary" id="btn-analyze">Analyser la partie</button>
+        <span class="hero-drop-hint">📎 ou glisse un fichier .pgn</span>
+      </div>
+      <div id="progress-container" class="progress-container" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-text" id="progress-text">Chargement...</div>
+      </div>
+      <div id="import-error" class="import-error" hidden></div>
+    </section>
 
-  <div class="recent-section" id="recent-section" hidden>
-    <h3>Parties récentes</h3>
-    <div id="recent-list"></div>
-  </div>
+    <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> - tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> dans la barre du bas, ou ouvre les <b>Mats</b> dans <b>Apprendre</b>.</p>
+
+    <!-- Reprendre : dernière partie -->
+    <section class="resume-section" id="resume-section" hidden>
+      <div class="home-sec-label">Reprendre</div>
+      <button class="resume-card" id="resume-card" type="button">
+        <div class="resume-board"><svg id="resume-board-svg" viewBox="0 0 360 360"></svg></div>
+        <div class="resume-body">
+          <div class="resume-title" id="resume-title"></div>
+          <div class="resume-meta" id="resume-meta"></div>
+        </div>
+        <span class="resume-go">›</span>
+      </button>
+    </section>
+
+    <!-- Routine du jour -->
+    <section class="routine-card" id="routine-card">
+      <div class="routine-head">
+        <div class="routine-ring">
+          <svg viewBox="0 0 56 56" aria-hidden="true">
+            <circle class="rr-track" cx="28" cy="28" r="24"/>
+            <circle class="rr-fill" id="rr-fill" cx="28" cy="28" r="24" transform="rotate(-90 28 28)"/>
+          </svg>
+          <span class="rr-num" id="rr-num">0/4</span>
+        </div>
+        <div class="routine-head-txt">
+          <span class="routine-title">♞ Ma routine du jour</span>
+          <span class="routine-sub-inline">Le geste qui fait vraiment progresser à ton niveau</span>
+        </div>
+      </div>
+      <div class="routine-list" id="routine-list"></div>
+      <p class="routine-foot"><b>Priorité :</b> ne rien laisser en prise · tactique chaque jour · revoir tes parties. Les ouvertures, plus tard.</p>
+    </section>
+
+    <!-- Accès rapides -->
+    <section class="home-quick">
+      <div class="home-sec-label">Accès rapides</div>
+      <div class="quick-grid">
+        <button class="qtile accent" data-nav="entrainer" type="button">
+          <span class="qtile-badge" id="quick-train-badge" hidden></span>
+          <span class="qtile-ic">🎯</span>
+          <span class="qtile-tt">Entraîner</span>
+          <span class="qtile-ds">Tes erreurs en exercices</span>
+        </button>
+        <button class="qtile" data-nav="coach" type="button">
+          <span class="qtile-ic">📊</span>
+          <span class="qtile-tt">Coach</span>
+          <span class="qtile-ds">Bilan de toutes tes parties</span>
+        </button>
+        <button class="qtile" data-nav="tree" type="button">
+          <span class="qtile-ic">🌳</span>
+          <span class="qtile-tt">Arbre</span>
+          <span class="qtile-ds">Explorer les ouvertures</span>
+        </button>
+        <button class="qtile" data-nav="apprendre" type="button">
+          <span class="qtile-ic">📚</span>
+          <span class="qtile-tt">Apprendre</span>
+          <span class="qtile-ds">Tactiques, mats, notions</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Parties récentes -->
+    <section class="recent-section" id="recent-section" hidden>
+      <div class="home-sec-label">Parties récentes</div>
+      <div id="recent-list"></div>
+    </section>
+
+  </div><!-- /home-main -->
 </div>
 
 <!-- ═══════ SCREEN 2: ANALYSIS ═══════ -->
@@ -646,6 +714,10 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
 <!-- ═══════ BOTTOM TAB BAR ═══════ -->
 <nav class="tabbar" id="tabbar">
+  <div class="tabbar-brand" aria-hidden="true">
+    <span class="tb-mark">♟</span>
+    <span class="tb-word">Chess Analyst</span>
+  </div>
   <button class="tab active" data-tab="analyser" aria-label="Analyser">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7.5 11.7 9.6 9.2l1.9 1.9 2.4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span>Analyser</span>

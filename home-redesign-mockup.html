@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Analyst - Maquette refonte UI</title>
+<style>
+:root{
+  /* Palette conservée (navy + or) mais retravaillée en profondeur */
+  --bg:#12172b;
+  --bg-2:#0e1223;
+  --card:#1a2140;
+  --card-2:#212a4d;
+  --line:rgba(255,255,255,.07);
+  --line-str:rgba(255,255,255,.12);
+  --accent:#e2b857;      /* or */
+  --accent-dim:#c9982e;
+  --blue:#5b8fb9;        /* info / secondaire */
+  --green:#4ade80;
+  --red:#f87171;
+  --text:#eef1f7;
+  --dim:#9aa4bd;
+  --dim-2:#6b7590;
+  --sq-l:#ebd7b2;
+  --sq-d:#ae8a68;
+  --radius:18px;
+  --shadow:0 8px 28px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:
+     radial-gradient(1200px 600px at 20% -10%, #1c2140 0%, transparent 60%),
+     radial-gradient(1000px 500px at 100% 0%, #171b38 0%, transparent 55%),
+     var(--bg-2);
+  color:var(--text);
+  padding:36px 20px 80px;
+  min-height:100vh;
+}
+
+/* ---- Page shell (la page de maquette elle-meme) ---- */
+.wrap{max-width:1180px;margin:0 auto}
+.page-head{text-align:center;margin-bottom:8px}
+.page-head .eyebrow{color:var(--accent);font-weight:700;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+.page-head h1{font-size:30px;font-weight:800;margin:6px 0}
+.page-head p{color:var(--dim);max-width:660px;margin:0 auto;font-size:15px;line-height:1.55}
+
+.rationale{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:14px;margin:30px auto 44px;max-width:1000px;
+}
+.rat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.rat .k{font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px}
+.rat .k.ok{color:var(--green)}
+.rat h4{font-size:15px;margin:6px 0 4px}
+.rat p{font-size:13px;color:var(--dim);line-height:1.5}
+
+.phones{display:flex;gap:44px;justify-content:center;flex-wrap:wrap;align-items:flex-start}
+.phone-col{display:flex;flex-direction:column;align-items:center;gap:12px}
+.phone-tag{font-size:13px;color:var(--dim);font-weight:600}
+.phone-tag b{color:var(--accent)}
+
+/* ---- Phone frame ---- */
+.phone{
+  width:390px;height:800px;background:var(--bg);border-radius:38px;
+  border:1px solid var(--line-str);box-shadow:var(--shadow),0 0 0 10px #05060c;
+  overflow:hidden;position:relative;display:flex;flex-direction:column;
+}
+.phone .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:130px;height:26px;background:#05060c;border-radius:0 0 16px 16px;z-index:50}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 16px 18px}
+.scroll::-webkit-scrollbar{width:0}
+
+/* ---- App bar ---- */
+.appbar{position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg),rgba(18,23,43,.85) 70%,transparent);
+  padding:44px 4px 12px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(4px)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));
+  display:grid;place-items:center;color:#161a2e;font-size:20px;font-weight:800;box-shadow:0 3px 10px rgba(226,184,87,.25)}
+.brand .who{line-height:1.1}
+.brand .who .hi{font-size:12px;color:var(--dim)}
+.brand .who .nm{font-size:16px;font-weight:700}
+.appbar .streak{display:flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line);
+  padding:6px 11px;border-radius:20px;font-size:13px;font-weight:700}
+.appbar .streak .f{filter:drop-shadow(0 0 6px rgba(251,146,60,.5))}
+
+/* ---- Section label ---- */
+.sec{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim-2);font-weight:700;margin:22px 4px 10px}
+
+/* ---- Hero analyser ---- */
+.hero{
+  background:linear-gradient(135deg,#242c52,#1a2140);
+  border:1px solid var(--line-str);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden;
+}
+.hero::after{content:"♟";position:absolute;right:-8px;bottom:-26px;font-size:130px;opacity:.06;line-height:1}
+.hero h2{font-size:19px;font-weight:800;margin-bottom:3px}
+.hero .sub{font-size:13px;color:var(--dim);margin-bottom:14px}
+.hero .inrow{display:flex;gap:8px;margin-bottom:10px}
+.hero .field{flex:1;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;
+  color:var(--dim-2);font-size:13.5px;display:flex;align-items:center;gap:8px}
+.hero .paste{background:var(--card-2);border:1px solid var(--line);border-radius:11px;padding:0 13px;color:var(--dim);font-size:13px;font-weight:600;display:grid;place-items:center}
+.btn{display:block;width:100%;text-align:center;background:linear-gradient(135deg,var(--accent),var(--accent-dim));
+  color:#161a2e;font-weight:800;font-size:15.5px;border:none;border-radius:12px;padding:13px;box-shadow:0 4px 14px rgba(226,184,87,.28)}
+.hero .alt{text-align:center;font-size:12.5px;color:var(--dim-2);margin-top:11px}
+.hero .alt b{color:var(--blue)}
+
+/* ---- Resume card (parties recentes / reprendre) ---- */
+.resume{display:flex;gap:13px;align-items:center;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:13px;position:relative}
+.resume .miniboard{width:66px;height:66px;border-radius:10px;overflow:hidden;flex-shrink:0;display:grid;
+  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line-str)}
+.resume .miniboard i{display:block}
+.resume .body{flex:1;min-width:0}
+.resume .body .t{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.resume .body .m{font-size:12.5px;color:var(--dim);margin-top:2px}
+.resume .chip{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px}
+.chip.loss{background:rgba(248,113,113,.14);color:var(--red)}
+.chip.win{background:rgba(74,222,128,.14);color:var(--green)}
+.resume .acc{text-align:right;flex-shrink:0}
+.resume .acc .v{font-size:20px;font-weight:800;color:var(--accent)}
+.resume .acc .l{font-size:10px;color:var(--dim-2);text-transform:uppercase;letter-spacing:.5px}
+.resume .go{position:absolute;right:12px;top:12px;color:var(--dim-2);font-size:18px}
+
+/* ---- Routine du jour (coach) ---- */
+.routine{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+  position:relative;overflow:hidden}
+.routine .rh{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.routine .ring{position:relative;width:52px;height:52px;flex-shrink:0}
+.routine .ring svg{transform:rotate(-90deg)}
+.routine .ring .rt{fill:none;stroke:rgba(255,255,255,.08);stroke-width:5}
+.routine .ring .rf{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round}
+.routine .ring .rn{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:800}
+.routine .rh .tt{flex:1}
+.routine .rh .tt .a{font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:6px}
+.routine .rh .tt .b{font-size:12.5px;color:var(--dim);margin-top:1px}
+.rlist{display:flex;flex-direction:column;gap:8px}
+.ritem{display:flex;align-items:center;gap:11px;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+.ritem .box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--dim-2);flex-shrink:0;display:grid;place-items:center;font-size:12px}
+.ritem.done .box{background:var(--green);border-color:var(--green);color:#0e1223;font-weight:800}
+.ritem .tx{flex:1;font-size:13.5px}
+.ritem.done .tx{color:var(--dim);text-decoration:line-through}
+.ritem .em{font-size:16px}
+
+/* ---- Quick actions ---- */
+.quick{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.qtile{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:14px;position:relative;overflow:hidden}
+.qtile .ic{font-size:24px}
+.qtile .tt{font-size:14.5px;font-weight:700;margin-top:8px}
+.qtile .ds{font-size:12px;color:var(--dim);margin-top:2px;line-height:1.4}
+.qtile .badge{position:absolute;top:11px;right:11px;background:var(--red);color:#fff;font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px}
+.qtile.accent{background:linear-gradient(135deg,rgba(226,184,87,.14),var(--card));border-color:rgba(226,184,87,.28)}
+
+/* ---- Bottom tab bar ---- */
+.tabbar{position:absolute;left:12px;right:12px;bottom:12px;height:64px;background:rgba(26,33,64,.92);
+  backdrop-filter:blur(10px);border:1px solid var(--line-str);border-radius:20px;display:flex;
+  align-items:center;justify-content:space-around;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:30}
+.tabbar .tb{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--dim-2);font-size:10.5px;font-weight:600;position:relative}
+.tabbar .tb svg{width:24px;height:24px}
+.tabbar .tb.active{color:var(--accent)}
+.tabbar .tb.active::before{content:"";position:absolute;top:-8px;width:26px;height:26px;background:rgba(226,184,87,.14);border-radius:50%;filter:blur(2px)}
+.tabbar .tb .dot{position:absolute;top:-2px;right:2px;width:8px;height:8px;background:var(--red);border-radius:50%;border:2px solid var(--card)}
+
+/* ---- Apprendre hub (2e telephone) ---- */
+.hub-hd{padding:44px 4px 6px}
+.hub-hd .ttl{font-size:22px;font-weight:800}
+.hub-hd .sb{font-size:13px;color:var(--dim);margin-top:2px}
+.tile{display:flex;align-items:center;gap:13px;background:var(--card);border:1px solid var(--line);
+  border-radius:15px;padding:14px;margin-top:11px}
+.tile .ic{width:44px;height:44px;border-radius:12px;background:var(--bg-2);display:grid;place-items:center;font-size:22px;flex-shrink:0;border:1px solid var(--line)}
+.tile .bd{flex:1;min-width:0}
+.tile .bd .t{font-size:15px;font-weight:700}
+.tile .bd .s{font-size:12px;color:var(--dim);margin-top:2px;line-height:1.4}
+.tile .ar{color:var(--dim-2);font-size:18px}
+.tile.hero-tile{background:linear-gradient(135deg,#2a3260,var(--card));border-color:var(--line-str)}
+.tile.hero-tile .ic{background:linear-gradient(135deg,rgba(91,143,185,.35),rgba(91,143,185,.1));border-color:rgba(91,143,185,.3)}
+
+/* ---- Tokens panel ---- */
+.tokens{max-width:1000px;margin:52px auto 0;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px}
+.tokens h3{font-size:17px;margin-bottom:4px}
+.tokens .sub{color:var(--dim);font-size:13px;margin-bottom:20px}
+.swatches{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+.sw{width:96px}
+.sw .c{height:52px;border-radius:11px;border:1px solid var(--line-str)}
+.sw .n{font-size:11.5px;margin-top:6px;font-weight:600}
+.sw .h{font-size:10.5px;color:var(--dim-2);font-family:monospace}
+.comp-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.demo-btn{background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:#161a2e;font-weight:800;border:none;border-radius:12px;padding:12px 26px;font-size:14px}
+.demo-btn.ghost{background:var(--card-2);color:var(--text);border:1px solid var(--line-str)}
+.demo-chip{font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:rgba(226,184,87,.14);color:var(--accent)}
+
+@media(max-width:460px){
+  .phone{width:100%;max-width:390px;height:760px}
+  body{padding:20px 8px 60px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-head">
+    <div class="eyebrow">Chess Analyst</div>
+    <h1>Refonte de l'interface</h1>
+    <p>On garde ce qui marche (le Coach, les échiquiers, l'arbre des ouvertures) et l'identité navy + or. On repense l'accueil pour qu'il accueille comme un tableau de bord, pas comme un formulaire d'import - et on modernise le systeme de cartes et la barre du bas.</p>
+  </div>
+
+  <div class="rationale">
+    <div class="rat"><div class="k">Avant</div><h4>Accueil = un textarea</h4><p>Le gros champ PGN en pointilles ouvre l'app comme un outil technique. Peu engageant, vide sur grand ecran.</p></div>
+    <div class="rat"><div class="k">Avant</div><h4>Tout empile a plat</h4><p>Logo + routine + recentes se suivent sans hierarchie ni point d'entree clair.</p></div>
+    <div class="rat"><div class="k ok">Apres</div><h4>Un hub, pas un import</h4><p>Salut + reprendre + routine du jour + acces rapides. L'import devient une carte propre parmi d'autres.</p></div>
+    <div class="rat"><div class="k ok">Apres</div><h4>Cartes + tabbar modernes</h4><p>Profondeur (degrades doux, bordures 1px, ombres), coins arrondis, barre du bas flottante avec pastille d'activite.</p></div>
+  </div>
+
+  <div class="phones">
+
+    <!-- ============ PHONE 1 : ACCUEIL ============ -->
+    <div class="phone-col">
+      <div class="phone-tag"><b>1.</b> Nouvel accueil (hub)</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="scroll">
+
+          <div class="appbar">
+            <div class="brand">
+              <div class="mark">♟</div>
+              <div class="who"><div class="hi">Bonjour Simon</div><div class="nm">Prêt à progresser ?</div></div>
+            </div>
+            <div class="streak"><span class="f">🔥</span>5</div>
+          </div>
+
+          <!-- Hero analyser -->
+          <div class="hero">
+            <h2>Analyser une partie</h2>
+            <div class="sub">Colle un lien Chess.com ou un PGN</div>
+            <div class="inrow">
+              <div class="field">🔗 chess.com/game/… ou PGN</div>
+              <div class="paste">📋</div>
+            </div>
+            <button class="btn">Analyser</button>
+            <div class="alt">ou glisse un fichier <b>.pgn</b></div>
+          </div>
+
+          <!-- Reprendre -->
+          <div class="sec">Reprendre</div>
+          <div class="resume">
+            <div class="miniboard" id="mb"></div>
+            <div class="body">
+              <div class="t">Simon vs. nimokaji</div>
+              <div class="m"><span class="chip loss">Défaite</span> &nbsp;il y a 2 h · Italienne</div>
+            </div>
+            <div class="acc"><div class="v">78%</div><div class="l">précision</div></div>
+            <span class="go">›</span>
+          </div>
+
+          <!-- Routine -->
+          <div class="sec">Ma routine du jour</div>
+          <div class="routine">
+            <div class="rh">
+              <div class="ring">
+                <svg width="52" height="52" viewBox="0 0 52 52">
+                  <circle class="rt" cx="26" cy="26" r="22"/>
+                  <circle class="rf" cx="26" cy="26" r="22" stroke-dasharray="138.2" stroke-dashoffset="55"/>
+                </svg>
+                <div class="rn">2/4</div>
+              </div>
+              <div class="tt">
+                <div class="a">♞ Ton plan du jour</div>
+                <div class="b">Le geste qui fait vraiment progresser à ton niveau</div>
+              </div>
+            </div>
+            <div class="rlist">
+              <div class="ritem done"><span class="box">✓</span><span class="tx">Analyser ta dernière partie</span><span class="em">🔍</span></div>
+              <div class="ritem done"><span class="box">✓</span><span class="tx">3 puzzles tirés de tes erreurs</span><span class="em">🧩</span></div>
+              <div class="ritem"><span class="box"></span><span class="tx">Entraînement vigilance (pièces en prise)</span><span class="em">🛡️</span></div>
+              <div class="ritem"><span class="box"></span><span class="tx">Revoir 1 schéma de mat</span><span class="em">👑</span></div>
+            </div>
+          </div>
+
+          <!-- Acces rapides -->
+          <div class="sec">Accès rapides</div>
+          <div class="quick">
+            <div class="qtile accent">
+              <span class="badge">12</span>
+              <div class="ic">🎯</div><div class="tt">Entraîner</div>
+              <div class="ds">Tes erreurs en exercices</div>
+            </div>
+            <div class="qtile">
+              <div class="ic">📊</div><div class="tt">Coach</div>
+              <div class="ds">Bilan de toutes tes parties</div>
+            </div>
+            <div class="qtile">
+              <div class="ic">🌳</div><div class="tt">Arbre</div>
+              <div class="ds">Explorer les ouvertures</div>
+            </div>
+            <div class="qtile">
+              <div class="ic">📚</div><div class="tt">Apprendre</div>
+              <div class="ds">Tactiques, mats, notions</div>
+            </div>
+          </div>
+
+          <div style="height:80px"></div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tabbar">
+          <div class="tb active">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7.5 11.7 9.6 9.2l1.9 1.9 2.4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Analyser</span>
+          </div>
+          <div class="tb">
+            <svg viewBox="0 0 24 24" fill="none"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            <span>Coach</span>
+          </div>
+          <div class="tb">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 6.5C10 5 6.5 4.6 3.5 5v13c3-.4 6.5 0 8.5 1.5 2-1.5 5.5-1.9 8.5-1.5V5c-3-.4-6.5 0-8.5 1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 6.5v13" stroke="currentColor" stroke-width="1.7"/></svg>
+            <span>Apprendre</span>
+          </div>
+          <div class="tb">
+            <span class="dot"></span>
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Entraîner</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PHONE 2 : APPRENDRE ============ -->
+    <div class="phone-col">
+      <div class="phone-tag"><b>2.</b> Hub Apprendre restylé</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="scroll">
+          <div class="hub-hd">
+            <div class="ttl">📚 Apprendre</div>
+            <div class="sb">Tactiques, ouvertures et notions essentielles</div>
+          </div>
+
+          <div class="tile hero-tile">
+            <div class="ic">⚔️</div>
+            <div class="bd"><div class="t">Tactiques &amp; concepts</div><div class="s">Fourchette, clouage, zwischenzug… avec entraînement sur l'échiquier</div></div>
+            <div class="ar">→</div>
+          </div>
+          <div class="tile">
+            <div class="ic">👑</div>
+            <div class="bd"><div class="t">Mats</div><div class="s">Les schémas essentiels à rejouer un par un</div></div>
+            <div class="ar">→</div>
+          </div>
+          <div class="tile">
+            <div class="ic">🌳</div>
+            <div class="bd"><div class="t">Arbre des ouvertures</div><div class="s">Toutes les familles en un coup d'œil</div></div>
+            <div class="ar">→</div>
+          </div>
+          <div class="tile">
+            <div class="ic">✅</div>
+            <div class="bd"><div class="t">Ouvertures à connaître</div><div class="s">La check-list de l'essentiel à ton niveau</div></div>
+            <div class="ar">→</div>
+          </div>
+          <div class="tile">
+            <div class="ic">📖</div>
+            <div class="bd"><div class="t">Ouvertures</div><div class="s">Les grandes ouvertures, coup par coup</div></div>
+            <div class="ar">→</div>
+          </div>
+          <div class="tile">
+            <div class="ic">♟</div>
+            <div class="bd"><div class="t">Notation des échecs</div><div class="s">Lire et écrire les coups, avec un quiz</div></div>
+            <div class="ar">→</div>
+          </div>
+
+          <div style="height:90px"></div>
+        </div>
+        <div class="tabbar">
+          <div class="tb">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7.5 11.7 9.6 9.2l1.9 1.9 2.4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Analyser</span>
+          </div>
+          <div class="tb">
+            <svg viewBox="0 0 24 24" fill="none"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            <span>Coach</span>
+          </div>
+          <div class="tb active">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 6.5C10 5 6.5 4.6 3.5 5v13c3-.4 6.5 0 8.5 1.5 2-1.5 5.5-1.9 8.5-1.5V5c-3-.4-6.5 0-8.5 1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 6.5v13" stroke="currentColor" stroke-width="1.7"/></svg>
+            <span>Apprendre</span>
+          </div>
+          <div class="tb">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Entraîner</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /phones -->
+
+  <!-- ============ TOKENS ============ -->
+  <div class="tokens">
+    <h3>Système visuel</h3>
+    <div class="sub">Mêmes couleurs qu'aujourd'hui, plus de profondeur. Rien à réapprendre pour toi.</div>
+    <div class="swatches">
+      <div class="sw"><div class="c" style="background:#0e1223"></div><div class="n">Fond</div><div class="h">#0e1223</div></div>
+      <div class="sw"><div class="c" style="background:#1a2140"></div><div class="n">Carte</div><div class="h">#1a2140</div></div>
+      <div class="sw"><div class="c" style="background:#e2b857"></div><div class="n">Or (action)</div><div class="h">#e2b857</div></div>
+      <div class="sw"><div class="c" style="background:#5b8fb9"></div><div class="n">Bleu (info)</div><div class="h">#5b8fb9</div></div>
+      <div class="sw"><div class="c" style="background:#4ade80"></div><div class="n">Succès</div><div class="h">#4ade80</div></div>
+      <div class="sw"><div class="c" style="background:#f87171"></div><div class="n">Alerte</div><div class="h">#f87171</div></div>
+    </div>
+    <div class="comp-row">
+      <button class="demo-btn">Action principale</button>
+      <button class="demo-btn ghost">Action secondaire</button>
+      <span class="demo-chip">★ Meilleur</span>
+      <span style="color:var(--dim);font-size:13px">Cartes: radius 18px · bordure 1px · ombre douce · dégradé léger</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// mini-echiquier de la carte "Reprendre" (juste decoratif)
+(function(){
+  var L='#ebd7b2',D='#ae8a68',mb=document.getElementById('mb');
+  for(var r=0;r<8;r++)for(var c=0;c<8;c++){var i=document.createElement('i');i.style.background=((r+c)%2)?D:L;mb.appendChild(i);}
+})();
+</script>
+</body>
+</html>

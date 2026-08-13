@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Analyst - Refonte UI (desktop)</title>
+<style>
+:root{
+  --bg:#12172b;--bg-2:#0e1223;--card:#1a2140;--card-2:#212a4d;
+  --line:rgba(255,255,255,.07);--line-str:rgba(255,255,255,.12);
+  --accent:#e2b857;--accent-dim:#c9982e;--blue:#5b8fb9;--green:#4ade80;--red:#f87171;
+  --text:#eef1f7;--dim:#9aa4bd;--dim-2:#6b7590;--sq-l:#ebd7b2;--sq-d:#ae8a68;
+  --radius:18px;--shadow:0 8px 28px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:radial-gradient(1200px 600px at 20% -10%,#1c2140 0,transparent 60%),var(--bg-2);
+  color:var(--text);padding:32px 20px 70px}
+.wrap{max-width:1320px;margin:0 auto}
+.page-head{text-align:center;margin-bottom:26px}
+.page-head .eyebrow{color:var(--accent);font-weight:700;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+.page-head h1{font-size:28px;font-weight:800;margin:6px 0}
+.page-head p{color:var(--dim);max-width:720px;margin:0 auto;font-size:14.5px;line-height:1.55}
+
+/* ---- Browser frame ---- */
+.browser{background:var(--bg);border-radius:16px;border:1px solid var(--line-str);
+  box-shadow:var(--shadow);overflow:hidden}
+.chrome{display:flex;align-items:center;gap:8px;padding:11px 14px;background:#0b0e1c;border-bottom:1px solid var(--line)}
+.chrome .dots{display:flex;gap:6px}
+.chrome .dots i{width:11px;height:11px;border-radius:50%;display:block}
+.chrome .url{flex:1;background:#141a30;border:1px solid var(--line);border-radius:8px;
+  padding:6px 12px;font-size:12.5px;color:var(--dim);margin-left:8px;max-width:420px}
+
+/* ---- App shell : sidebar + main ---- */
+.app{display:flex;min-height:720px}
+.sidebar{width:236px;flex-shrink:0;background:var(--bg-2);border-right:1px solid var(--line);
+  padding:22px 16px;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:11px;padding:0 6px 22px}
+.brand .mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));
+  display:grid;place-items:center;color:#161a2e;font-size:22px;font-weight:800;box-shadow:0 3px 10px rgba(226,184,87,.25)}
+.brand .nm{font-size:16px;font-weight:800}
+.brand .nm small{display:block;font-size:11px;color:var(--dim);font-weight:500}
+.navg{display:flex;flex-direction:column;gap:4px}
+.nav-i{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;color:var(--dim);
+  font-size:14.5px;font-weight:600;position:relative;cursor:pointer}
+.nav-i svg{width:21px;height:21px}
+.nav-i:hover{background:var(--card)}
+.nav-i.active{background:linear-gradient(135deg,rgba(226,184,87,.16),rgba(226,184,87,.05));color:var(--accent)}
+.nav-i.active::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:var(--accent)}
+.nav-i .bdg{margin-left:auto;background:var(--red);color:#fff;font-size:11px;font-weight:800;padding:1px 7px;border-radius:20px}
+.side-foot{margin-top:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 13px;display:flex;align-items:center;gap:10px}
+.side-foot .f{font-size:22px;filter:drop-shadow(0 0 6px rgba(251,146,60,.5))}
+.side-foot .st{line-height:1.2}
+.side-foot .st b{font-size:16px}
+.side-foot .st small{display:block;color:var(--dim);font-size:11.5px}
+
+/* ---- Main ---- */
+.main{flex:1;padding:26px 30px;overflow:hidden}
+.main-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:22px}
+.main-head .hi{font-size:13px;color:var(--dim)}
+.main-head .h1{font-size:25px;font-weight:800;margin-top:2px}
+.main-head .today{font-size:13px;color:var(--dim-2)}
+
+/* Hero analyser (large) */
+.hero{background:linear-gradient(120deg,#242c52,#1a2140);border:1px solid var(--line-str);
+  border-radius:var(--radius);padding:22px 24px;position:relative;overflow:hidden;margin-bottom:22px}
+.hero::after{content:"♟";position:absolute;right:24px;bottom:-34px;font-size:150px;opacity:.06;line-height:1}
+.hero h2{font-size:20px;font-weight:800}
+.hero .sub{font-size:13.5px;color:var(--dim);margin:3px 0 16px}
+.hero .row{display:flex;gap:10px;max-width:720px}
+.hero .field{flex:1;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:13px 15px;color:var(--dim-2);font-size:14px;display:flex;align-items:center;gap:9px}
+.hero .paste{background:var(--card-2);border:1px solid var(--line);border-radius:12px;padding:0 16px;color:var(--dim);font-size:13px;font-weight:600;display:grid;place-items:center}
+.btn{background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:#161a2e;font-weight:800;
+  font-size:15px;border:none;border-radius:12px;padding:0 30px;box-shadow:0 4px 14px rgba(226,184,87,.28);cursor:pointer}
+
+/* Dashboard grid */
+.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:22px}
+.col{display:flex;flex-direction:column;gap:18px}
+.sec{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim-2);font-weight:700;margin-bottom:11px}
+
+/* Reprendre (grand) */
+.resume-big{display:flex;gap:18px;align-items:center;background:linear-gradient(135deg,#222a4e,var(--card));
+  border:1px solid var(--line-str);border-radius:var(--radius);padding:18px}
+.resume-big .mb{width:104px;height:104px;border-radius:12px;overflow:hidden;flex-shrink:0;display:grid;
+  grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:1px solid var(--line-str)}
+.resume-big .mb i{display:block}
+.resume-big .bd{flex:1}
+.resume-big .bd .t{font-size:18px;font-weight:800}
+.resume-big .bd .m{font-size:13px;color:var(--dim);margin-top:5px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px}
+.chip.loss{background:rgba(248,113,113,.14);color:var(--red)}
+.chip.win{background:rgba(74,222,128,.14);color:var(--green)}
+.resume-big .bd .cta{margin-top:14px;display:inline-block;background:var(--card-2);border:1px solid var(--line-str);
+  border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:700;color:var(--text)}
+.resume-big .acc{text-align:center;flex-shrink:0;padding-right:8px}
+.resume-big .acc .v{font-size:34px;font-weight:800;color:var(--accent);line-height:1}
+.resume-big .acc .l{font-size:11px;color:var(--dim-2);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+
+/* Recent list */
+.recent{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:8px}
+.rrow{display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:12px;cursor:pointer}
+.rrow:hover{background:var(--bg-2)}
+.rrow+.rrow{border-top:1px solid var(--line)}
+.rrow .res{font-size:11px;font-weight:800;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex-shrink:0}
+.res.w{background:rgba(74,222,128,.14);color:var(--green)}
+.res.l{background:rgba(248,113,113,.14);color:var(--red)}
+.res.d{background:rgba(255,255,255,.07);color:var(--dim)}
+.rrow .pl{flex:1;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrow .op{font-size:12.5px;color:var(--dim);width:110px}
+.rrow .ac{font-size:14px;font-weight:800;color:var(--accent);width:52px;text-align:right}
+.rrow .dt{font-size:12px;color:var(--dim-2);width:64px;text-align:right}
+
+/* Routine */
+.routine{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.routine .rh{display:flex;align-items:center;gap:13px;margin-bottom:15px}
+.routine .ring{position:relative;width:56px;height:56px;flex-shrink:0}
+.routine .ring svg{transform:rotate(-90deg)}
+.routine .rt{fill:none;stroke:rgba(255,255,255,.08);stroke-width:5}
+.routine .rf{fill:none;stroke:var(--accent);stroke-width:5;stroke-linecap:round}
+.routine .rn{position:absolute;inset:0;display:grid;place-items:center;font-size:14px;font-weight:800}
+.routine .a{font-size:16px;font-weight:800;display:flex;align-items:center;gap:6px}
+.routine .b{font-size:12.5px;color:var(--dim);margin-top:1px}
+.rlist{display:flex;flex-direction:column;gap:9px}
+.ritem{display:flex;align-items:center;gap:12px;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+.ritem .box{width:21px;height:21px;border-radius:6px;border:1.5px solid var(--dim-2);flex-shrink:0;display:grid;place-items:center;font-size:12px}
+.ritem.done .box{background:var(--green);border-color:var(--green);color:#0e1223;font-weight:800}
+.ritem .tx{flex:1;font-size:13.5px}
+.ritem.done .tx{color:var(--dim);text-decoration:line-through}
+.ritem .em{font-size:16px}
+
+/* stat mini cards */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stat .v{font-size:24px;font-weight:800}
+.stat .v.g{color:var(--green)}.stat .v.a{color:var(--accent)}
+.stat .l{font-size:12px;color:var(--dim);margin-top:2px}
+
+.note{max-width:900px;margin:26px auto 0;text-align:center;color:var(--dim);font-size:13.5px;line-height:1.6}
+.note b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <div class="eyebrow">Chess Analyst</div>
+    <h1>Refonte UI - version desktop</h1>
+    <p>Sur grand écran, la barre du bas laisse place à une <b>sidebar de navigation</b> et l'accueil devient un vrai <b>tableau de bord</b> qui remplit la largeur au lieu de flotter au centre. Mêmes composants et mêmes couleurs que la maquette mobile.</p>
+  </div>
+
+  <div class="browser">
+    <div class="chrome">
+      <div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>
+      <div class="url">chess-analyst.app</div>
+    </div>
+
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="brand"><div class="mark">♟</div><div class="nm">Chess Analyst<small>Analyse &amp; progrès</small></div></div>
+        <nav class="navg">
+          <div class="nav-i active">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7.5 11.7 9.6 9.2l1.9 1.9 2.4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Analyser
+          </div>
+          <div class="nav-i">
+            <svg viewBox="0 0 24 24" fill="none"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            Coach
+          </div>
+          <div class="nav-i">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 6.5C10 5 6.5 4.6 3.5 5v13c3-.4 6.5 0 8.5 1.5 2-1.5 5.5-1.9 8.5-1.5V5c-3-.4-6.5 0-8.5 1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 6.5v13" stroke="currentColor" stroke-width="1.7"/></svg>
+            Apprendre
+          </div>
+          <div class="nav-i">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Entraîner <span class="bdg">12</span>
+          </div>
+        </nav>
+        <div class="side-foot">
+          <span class="f">🔥</span>
+          <div class="st"><b>5 jours</b><small>de suite</small></div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="main">
+        <div class="main-head">
+          <div><div class="hi">Bonjour Simon 👋</div><div class="h1">Prêt à progresser ?</div></div>
+          <div class="today">Mercredi 13 août</div>
+        </div>
+
+        <div class="hero">
+          <h2>Analyser une partie</h2>
+          <div class="sub">Colle un lien Chess.com ou un PGN, ou glisse un fichier .pgn</div>
+          <div class="row">
+            <div class="field">🔗 chess.com/game/… ou colle ton PGN</div>
+            <div class="paste">📋 Coller</div>
+            <button class="btn">Analyser</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <!-- Colonne gauche -->
+          <div class="col">
+            <div>
+              <div class="sec">Reprendre</div>
+              <div class="resume-big">
+                <div class="mb" id="mb"></div>
+                <div class="bd">
+                  <div class="t">Simon vs. nimokaji</div>
+                  <div class="m"><span class="chip loss">Défaite</span> Italienne, Giuoco Piano · il y a 2 h · 3 gaffes</div>
+                  <span class="cta">Revoir l'analyse →</span>
+                </div>
+                <div class="acc"><div class="v">78%</div><div class="l">précision</div></div>
+              </div>
+            </div>
+            <div>
+              <div class="sec">Parties récentes</div>
+              <div class="recent">
+                <div class="rrow"><span class="res l">D</span><span class="pl">Simon vs. nimokaji</span><span class="op">Italienne</span><span class="ac">78%</span><span class="dt">2 h</span></div>
+                <div class="rrow"><span class="res w">V</span><span class="pl">tomcat90 vs. Simon</span><span class="op">Sicilienne</span><span class="ac">91%</span><span class="dt">hier</span></div>
+                <div class="rrow"><span class="res w">V</span><span class="pl">Simon vs. bishopg/</span><span class="op">Londres</span><span class="ac">84%</span><span class="dt">hier</span></div>
+                <div class="rrow"><span class="res d">N</span><span class="pl">m_karim vs. Simon</span><span class="op">Française</span><span class="ac">88%</span><span class="dt">2 j</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Colonne droite -->
+          <div class="col">
+            <div>
+              <div class="sec">Ma routine du jour</div>
+              <div class="routine">
+                <div class="rh">
+                  <div class="ring">
+                    <svg width="56" height="56" viewBox="0 0 56 56"><circle class="rt" cx="28" cy="28" r="24"/><circle class="rf" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="60"/></svg>
+                    <div class="rn">2/4</div>
+                  </div>
+                  <div><div class="a">♞ Ton plan du jour</div><div class="b">Le geste qui fait progresser à ton niveau</div></div>
+                </div>
+                <div class="rlist">
+                  <div class="ritem done"><span class="box">✓</span><span class="tx">Analyser ta dernière partie</span><span class="em">🔍</span></div>
+                  <div class="ritem done"><span class="box">✓</span><span class="tx">3 puzzles tirés de tes erreurs</span><span class="em">🧩</span></div>
+                  <div class="ritem"><span class="box"></span><span class="tx">Vigilance : pièces en prise</span><span class="em">🛡️</span></div>
+                  <div class="ritem"><span class="box"></span><span class="tx">Revoir 1 schéma de mat</span><span class="em">👑</span></div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="sec">Cette semaine</div>
+              <div class="stats">
+                <div class="stat"><div class="v a">83%</div><div class="l">Précision moyenne</div></div>
+                <div class="stat"><div class="v g">+62</div><div class="l">Elo estimé (7 j)</div></div>
+                <div class="stat"><div class="v">14</div><div class="l">Parties analysées</div></div>
+                <div class="stat"><div class="v">9</div><div class="l">Puzzles réussis</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <p class="note">Points clés desktop : <b>sidebar</b> au lieu de la tabbar (les 4 mêmes destinations) · l'accueil <b>remplit la largeur</b> (reprendre + récentes à gauche, routine + stats à droite) · le champ Analyser, le bouton Coller et Analyser tiennent <b>sur une ligne</b>. Le Coach, l'échiquier d'analyse et l'arbre gardent leurs vues existantes, juste repeints avec ce système.</p>
+</div>
+<script>
+(function(){var L='#ebd7b2',D='#ae8a68',mb=document.getElementById('mb');
+for(var r=0;r<8;r++)for(var c=0;c<8;c++){var i=document.createElement('i');i.style.background=((r+c)%2)?D:L;mb.appendChild(i);}})();
+</script>
+</body>
+</html>
