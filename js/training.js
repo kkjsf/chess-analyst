@@ -1444,7 +1444,7 @@ const Training = (() => {
 
   // ───────────────────────── screen + tabs ─────────────────────────
   let bound = false;
-  function show() {
+  function show(tab) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     $('#screen-training').classList.add('active');
     window.scrollTo(0, 0);
@@ -1453,7 +1453,7 @@ const Training = (() => {
       $$('.train-tab').forEach(t => t.onclick = () => { motifFilter = null; switchTab(t.dataset.tab); });
       bound = true;
     }
-    switchTab('puzzles');
+    switchTab(tab || 'puzzles');
   }
 
   function hide() {

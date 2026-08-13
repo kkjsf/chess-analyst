@@ -3562,9 +3562,10 @@ const App = (() => {
   // plan (tactics > review your games > SRS > play slow). State is per-day in
   // localStorage; completing every item feeds a day streak. ──
   const ROUTINE_ITEMS = [
-    { key: 'puzzles', icon: '🧩', label: 'Puzzles tactiques (tes erreurs)', action: 'train', due: true },
-    { key: 'review',  icon: '🔎', label: 'Revoir une partie',           action: 'review' },
-    { key: 'rapide',  icon: '♟️', label: 'Une partie en Rapide (pas de bullet !)', action: null },
+    { key: 'vigilance', icon: '🛡️', label: 'Vigilance - pièces en prise',   action: 'vigilance' },
+    { key: 'puzzles',   icon: '🧩', label: 'Puzzles tactiques (tes erreurs)', action: 'train', due: true },
+    { key: 'review',    icon: '🔎', label: 'Revoir une partie',              action: 'review' },
+    { key: 'rapide',    icon: '♟️', label: 'Une partie en Rapide (pas de bullet !)', action: null },
   ];
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   function routineTodayKey() { return 'chess-routine-' + isoDay(new Date()); }
@@ -3633,7 +3634,8 @@ const App = (() => {
   }
 
   function runRoutineAction(action) {
-    if (action === 'train' || action === 'srs') { if (typeof Training !== 'undefined') Training.show(); return; }
+    if (action === 'train') { if (typeof Training !== 'undefined') Training.show(); return; }
+    if (action === 'vigilance') { if (typeof Training !== 'undefined') Training.show('vigilance'); return; }
     if (action === 'review') {
       const ta = $('#pgn-input');
       if (ta) { ta.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); ta.focus(); }
