@@ -3562,8 +3562,7 @@ const App = (() => {
   // plan (tactics > review your games > SRS > play slow). State is per-day in
   // localStorage; completing every item feeds a day streak. ──
   const ROUTINE_ITEMS = [
-    { key: 'puzzles', icon: '🧩', label: 'Puzzles tactiques (10 min)', action: 'train' },
-    { key: 'srs',     icon: '🛡️', label: 'Réviser mes erreurs',        action: 'srs', due: true },
+    { key: 'puzzles', icon: '🧩', label: 'Puzzles tactiques (tes erreurs)', action: 'train', due: true },
     { key: 'review',  icon: '🔎', label: 'Revoir une partie',           action: 'review' },
     { key: 'rapide',  icon: '♟️', label: 'Une partie en Rapide (pas de bullet !)', action: null },
   ];
