@@ -21,6 +21,11 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v175 - item Vigilance ajouté à la routine du jour**
+  - Le seul drill distinct de la tactique (repérer les pièces en prise) n'avait pas d'item alors
+    que « ne rien laisser en prise » est priorité n°1 du pied de carte. Ajout de `🛡️ Vigilance -
+    pièces en prise` en tête de `ROUTINE_ITEMS`, action `'vigilance'` → `Training.show('vigilance')`
+    (show accepte désormais un onglet cible optionnel). Routine = 4 items, anneau `/4`.
 - **v174 - fusion des 2 items redondants de la routine du jour**
   - `🧩 Puzzles tactiques` et `🛡️ Réviser mes erreurs` ouvraient tous deux `Training.show()` →
     onglet Puzzles, qui EST déjà la répétition espacée de tes erreurs. Doublon. Item `srs` retiré,
