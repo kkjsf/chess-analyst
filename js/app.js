@@ -1613,8 +1613,12 @@ const App = (() => {
       }
 
       function renderTranspo() {
-        setBoardVisible(false);
+        setBoardVisible(true);
+        loadLine(opening.courseLine || opening.line, null);
+        idx = positions.length - 1; renderStep(false); // freeze on the tabiya for context
+        controlsEl.hidden = true; boardActive = false;
         pickerEl.hidden = true; bodyEl.hidden = false;
+        explEl.hidden = true;
         const items = has(course.transpositions) ? course.transpositions : opening.deviations;
         bodyEl.innerHTML = `<div class="ol-section"><h5>🔀 Si l'adversaire ne suit pas la ligne</h5>` +
           items.map(d => `<p><b>${esc(d.label)} :</b> ${d.note}</p>`).join('') + `</div>`;

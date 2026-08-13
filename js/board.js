@@ -369,6 +369,7 @@ const BoardRenderer = (() => {
       if (ghost) { ghost.remove(); ghost = null; }
       if (orig) { orig.style.opacity = ''; orig = null; }
       if (opts.arrows) clearArrows(opts.arrows);
+      svgEl.style.cursor = '';
       dragging = false; from = null; targets = [];
     };
 
@@ -383,10 +384,17 @@ const BoardRenderer = (() => {
     });
 
     svgEl.addEventListener('pointermove', (e) => {
-      if (!from) return;
+      if (!from) {
+        if (!opts.canMove || opts.canMove()) {
+          const hoverSq = coordToSquare(svgEl, e.clientX, e.clientY);
+          svgEl.style.cursor = (hoverSq && legal(hoverSq).length) ? 'grab' : '';
+        }
+        return;
+      }
       if (!dragging) {
         if (Math.abs(e.clientX - sx) < 6 && Math.abs(e.clientY - sy) < 6) return;
         dragging = true;
+        svgEl.style.cursor = 'grabbing';
         if (opts.arrows) showMoveHints(opts.arrows, from, targets);
         orig = svgEl.querySelector(`g[data-sq="${from}"]`);
         if (orig) {
