@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '168';
+window.APP_VERSION = '169';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -347,7 +347,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     <div id="import-error" class="import-error" hidden></div>
   </div>
 
-  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> — tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> ou <b>Mats</b> dans la barre du bas.</p>
+  <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> - tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> dans la barre du bas, ou ouvre les <b>Mats</b> dans <b>Apprendre</b>.</p>
 
   <div class="routine-card" id="routine-card">
     <div class="routine-head">
@@ -581,7 +581,15 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <div class="learn-tile-icon">⚔️</div>
       <div class="learn-tile-txt">
         <span class="learn-tile-title">Tactiques &amp; concepts</span>
-        <span class="learn-tile-sub">Fourchette, clouage, zwischenzug… les motifs tactiques illustrés, avec entraînement sur l'échiquier. (Les mats ont leur propre cours dans l'onglet Mats.)</span>
+        <span class="learn-tile-sub">Fourchette, clouage, zwischenzug… les motifs tactiques illustrés, avec entraînement sur l'échiquier. (Les mats ont leur propre cours juste en dessous.)</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
+    <button class="learn-tile" data-panel="mats">
+      <div class="learn-tile-icon">👑</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Mats</span>
+        <span class="learn-tile-sub">Les schémas de mat essentiels (couloir, étouffé, tour + roi…), à rejouer un par un sur l'échiquier.</span>
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
@@ -654,10 +662,6 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span>Entraîner</span>
     <span class="tab-badge" id="tab-train-badge" hidden></span>
-  </button>
-  <button class="tab" data-tab="mats" aria-label="Mats">
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 13 6h2.2L13.5 7.7l.7 2.3-2.2-1.4-2.2 1.4.7-2.3L8.8 6H11l1-2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M7 13h10l-1 7H8l-1-7Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M6 20.5h12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-    <span>Mats</span>
   </button>
 </nav>
 

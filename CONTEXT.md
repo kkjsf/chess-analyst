@@ -21,6 +21,31 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v169 - échiquier sur TOUS les onglets de cours + cours Scandinave & Londres + Mats déplacé dans Apprendre**
+  - **Board partout** (`js/app.js`) : helper `freezeBoardOnTabiya()` (charge la ligne, fige sur la
+    tabiya, `controlsEl.hidden`, `boardActive=false`, `explEl.hidden`). `renderPlans`, `renderPieges`,
+    `renderTranspo` ET `renderQuiz` l'appellent → l'échiquier reste visible sur les 6 onglets de la
+    modale de cours (avant : Plans/Pièges/Transpo/Quiz le masquaient).
+  - **2 nouveaux cours 🎓** (`js/courses.js`) : **Scandinave** (`'e4 d5 exd5 Qxd5'`, 3 lignes Da5/Dd6/Dd8,
+    drill Cb5 fourchette c7, 3 pièges, 3 transpo, 3 quiz) et **Système de Londres** (`'d4 d5 Bf4'`, 3 lignes
+    principal/…Ff5/…c5+Db6, drill Ce5→dxe5 fourchette de pion sur d6+f6, schéma d'attaque Ce5/Fd3/Dc1-h6,
+    3 quiz). Toutes les `sans` + les 2 FEN/sol de drill **vérifiés chess.js** (script node jetable).
+    Comme les fiches OPENINGS existent déjà pour ces lignes, `openOpeningByLine` ouvre direct en mode cours.
+  - **Mats déplacé** : l'onglet **Mats** de la barre du bas est supprimé (`index.html`) ; il devient une
+    tuile 👑 dans le hub **Apprendre** (`data-panel="mats"`, handler spécial dans `showLearn` → `Mates.show()`).
+    `wireTabSync` : `Mates.show` surligne désormais l'onglet **Apprendre** (plus 'mats'). Branche morte
+    `navTo('mats')` retirée, home-hint mis à jour (+ em dash → tiret).
+  - Vérifié en preview (localhost:3456, SW purgé) : v169, barre du bas = analyser/coach/apprendre/entrainer
+    (plus de mats), tuile Mats dans Apprendre ouvre l'overlay en gardant l'onglet Apprendre actif ; les 2 cours
+    ouvrent les 6 onglets avec board visible partout, 3 lignes chacun, drill « Essayer ce coup » lance Tactics ;
+    0 erreur console. `node --check` OK sur app.js/courses.js/board.js.
+- **v168 - curseur main fermée au drag + échiquier gardé dans l'onglet Transpositions**
+  - `js/board.js` (`enableDrag`) : au survol d'une pièce jouable le curseur passe en `grab` (main
+    ouverte) et pendant le glisser-déposer en `grabbing` (main fermée), réinitialisé au `cleanup`.
+    Feedback drag-and-drop plus clair.
+  - `js/app.js` (`renderTranspo`) : l'onglet « 🔀 Transpositions » de la modale de cours ne masquait
+    plus le board (`setBoardVisible(false)` comme Plans/Pièges/Quiz). Il **garde maintenant l'échiquier
+    visible**, figé sur la tabiya, pour donner le contexte des lignes alternatives.
 - **v167 - explorer les variations d'ouverture depuis n'importe quel coup + coup théorique indiqué**
   (`js/app.js`, modale `#opening-modal`) : le mode « Continuer à jouer » (analyse libre, v164) n'était
   proposé qu'à la **fin** de la ligne. Maintenant on peut **reprendre la main à n'importe quel coup** :

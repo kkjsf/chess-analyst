@@ -1555,6 +1555,17 @@ const App = (() => {
       // Section renderers ------------------------------------------------------
       const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+      // Text-only sections (Plans / Pièges / Transpositions) keep the board
+      // visible, frozen on the tabiya, so the prose always has a position to
+      // refer to. The board is a static reference here (not draggable).
+      function freezeBoardOnTabiya() {
+        setBoardVisible(true);
+        loadLine(opening.courseLine || opening.line, null);
+        idx = positions.length - 1; renderStep(false);
+        controlsEl.hidden = true; boardActive = false;
+        explEl.hidden = true;
+      }
+
       function renderPresentation() {
         setBoardVisible(true);
         pickerEl.hidden = true; bodyEl.hidden = true;
@@ -1585,7 +1596,7 @@ const App = (() => {
       }
 
       function renderPlans() {
-        setBoardVisible(false);
+        freezeBoardOnTabiya();
         pickerEl.hidden = true; bodyEl.hidden = false;
         let h = '';
         if (opening.plans) h += `<div class="ol-section"><h5>🎯 Plans typiques</h5><p><b>Blancs :</b> ${opening.plans.w}</p><p><b>Noirs :</b> ${opening.plans.b}</p></div>`;
@@ -1594,7 +1605,7 @@ const App = (() => {
       }
 
       function renderPieges() {
-        setBoardVisible(false);
+        freezeBoardOnTabiya();
         pickerEl.hidden = true; bodyEl.hidden = false;
         let h = '';
         if (opening.mistakes) h += `<div class="ol-section ol-warn"><h5>⚠️ Erreur fréquente</h5><p>${opening.mistakes}</p></div>`;
@@ -1613,19 +1624,15 @@ const App = (() => {
       }
 
       function renderTranspo() {
-        setBoardVisible(true);
-        loadLine(opening.courseLine || opening.line, null);
-        idx = positions.length - 1; renderStep(false); // freeze on the tabiya for context
-        controlsEl.hidden = true; boardActive = false;
+        freezeBoardOnTabiya();
         pickerEl.hidden = true; bodyEl.hidden = false;
-        explEl.hidden = true;
         const items = has(course.transpositions) ? course.transpositions : opening.deviations;
         bodyEl.innerHTML = `<div class="ol-section"><h5>🔀 Si l'adversaire ne suit pas la ligne</h5>` +
           items.map(d => `<p><b>${esc(d.label)} :</b> ${d.note}</p>`).join('') + `</div>`;
       }
 
       function renderQuiz() {
-        setBoardVisible(false);
+        freezeBoardOnTabiya();
         pickerEl.hidden = true; bodyEl.hidden = false;
         const qs = course.quiz;
         let cur = 0, score = 0;
@@ -3330,7 +3337,6 @@ const App = (() => {
     if (tab === 'coach') { if (typeof Coach !== 'undefined') Coach.show(); return; }
     if (tab === 'apprendre') { showLearn(); return; }
     if (tab === 'entrainer') { if (typeof Training !== 'undefined') Training.show(); return; }
-    if (tab === 'mats') { if (typeof Mates !== 'undefined') Mates.show(); return; }
     // analyser: leave any sub-screen, show the loaded game or the import home
     $('#screen-training').classList.remove('active');
     $('#screen-coach').classList.remove('active');
@@ -3353,7 +3359,7 @@ const App = (() => {
     };
     if (typeof Coach !== 'undefined') { patch(Coach, 'show', () => setTab('coach')); patch(Coach, 'hide', syncTabbar); }
     if (typeof Training !== 'undefined') { patch(Training, 'show', () => setTab('entrainer')); patch(Training, 'hide', syncTabbar); }
-    if (typeof Mates !== 'undefined') { patch(Mates, 'show', () => setTab('mats')); patch(Mates, 'close', syncTabbar); }
+    if (typeof Mates !== 'undefined') { patch(Mates, 'show', () => setTab('apprendre')); patch(Mates, 'close', syncTabbar); }
     // Mates/GuessMove are overlays toggling body.guess-open; re-sync the tab when one closes.
     new MutationObserver(() => { if (!document.body.classList.contains('guess-open')) syncTabbar(); })
       .observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -3688,7 +3694,10 @@ const App = (() => {
     if (!learnBound) {
       $('#btn-learn-back').addEventListener('click', () => { $('#screen-learn').classList.remove('active'); showImport(); });
       $$('#screen-learn .learn-tile').forEach(tile => {
-        tile.addEventListener('click', () => { if (_openPanel) _openPanel(tile.dataset.panel); });
+        tile.addEventListener('click', () => {
+          if (tile.dataset.panel === 'mats') { if (typeof Mates !== 'undefined') Mates.show(); return; }
+          if (_openPanel) _openPanel(tile.dataset.panel);
+        });
       });
       learnBound = true;
     }
