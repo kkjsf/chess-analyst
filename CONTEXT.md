@@ -21,6 +21,12 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v174 - fusion des 2 items redondants de la routine du jour**
+  - `🧩 Puzzles tactiques` et `🛡️ Réviser mes erreurs` ouvraient tous deux `Training.show()` →
+    onglet Puzzles, qui EST déjà la répétition espacée de tes erreurs. Doublon. Item `srs` retiré,
+    gardé un seul `Puzzles tactiques (tes erreurs)` avec le badge SRS "à réviser" reporté dessus.
+    Routine = 3 items (puzzles/review/rapide), anneau `/3`. (L'exercice réellement distinct =
+    l'onglet Vigilance, non mis en item ; `Training.show()` n'accepte pas d'onglet cible.)
 - **v173 - REFONTE UI : accueil "hub" + système visuel + sidebar desktop**
   - Demande user : « pas fan de l'écran d'accueil et de pas mal de choix d'UI » (garde le Coach,
     les échiquiers, l'arbre). Validé sur 2 maquettes autonomes (`home-redesign-mockup.html` mobile
