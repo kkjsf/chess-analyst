@@ -21,6 +21,22 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v179 - durcissement de la classif « Brillant » (!!)**
+  - Suite du point ouvert v178 (user doute des brillants). Ancienne porte (`js/analysis.js`) trop
+    laxe : `isSacrifice && (isBestMove || wpl<0.02) && winAfterPlayed>=0.50 && winBefore<=0.85` →
+    se déclenchait sur des tactiques ordinaires (juste « au moins égal » après). **Nouvelle porte**
+    (stricte) : `isSacrifice && !inBook && (isBestMove || bestEquivalent) && winAfterPlayed>=0.62 &&
+    winBefore>=0.15 && winBefore<=0.80`. Un vrai brillant doit désormais : offrir la pièce jouée
+    (SEE 1-ply net ≥2), ÊTRE le meilleur coup du moteur (ou l'égaler à ≤8cp), laisser une position
+    **clairement gagnante** (≥0.62, pas juste égale), et partir d'une position **disputée** (ni déjà
+    gagnée ≤0.80, ni perdue ≥0.15). Rejette les faux positifs : tactiques qui regagnent le matériel,
+    pseudo-sacs sur cases défendues, « sacs » depuis une position déjà gagnée.
+  - **Vérif preview** (partie de test = mat de Légal `5.Nxe5` sacrifice de dame) : `5.Cxe5` toujours
+    classé **!!** (vrai sacrifice sain, meilleur coup, gagnant) ; reste de la partie classé sainement ;
+    0 erreur console. APP_VERSION 178→**179**. **N'affecte que l'analyse LOCALE** (recalculée à la
+    volée) : les badges/compteurs du Coach viennent des rapports serveur pré-calculés (coach-data.json)
+    → inchangés tant qu'une **ré-analyse complète** n'est pas relancée (GitHub Actions « re-analyze
+    ENTIRE archive », non déclenchable en CLI). `great`/`!` non touché.
 - **v178 - suppression de « Tes plus beaux coups » + tailles d'échiquier uniformes partout**
   - **Section « Tes plus beaux coups » (brillants/excellents) SUPPRIMÉE** (user : « c'est pas bon,
     renvoie pas sur le bon coup »). Retiré : le groupe `'wins'`/« Tes réussites » et son unique

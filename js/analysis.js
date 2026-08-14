@@ -889,12 +889,24 @@ const Analyzer = (() => {
       } else if (legalBefore === 1) {
         // Only one legal move — forced, regardless of how good the position is.
         type = 'forced';
-      } else if (isSacrifice && !inBook && (isBestMove || wpl < 0.02) &&
-                 winAfterPlayed >= 0.50 && winBefore <= 0.85) {
-        // Sound sacrifice: objectively the best (or all-but-best) move, still at
-        // least equal afterwards, and not from an already-winning position — the
-        // sac has to be the point (winning material back, an attack, or mate),
-        // not a giveaway the engine merely tolerates.
+      } else if (isSacrifice && !inBook &&
+                 (isBestMove || bestEquivalent) &&
+                 winAfterPlayed >= 0.62 &&
+                 winBefore >= 0.15 && winBefore <= 0.80) {
+        // Sound sacrifice — deliberately strict so the badge means something.
+        // A real brilliancy must clear ALL of:
+        //  - the piece you just moved is left en prise for net ≥ 2 (isSacrifice);
+        //  - it is the engine's #1 move, or ties it within a few cp
+        //    (isBestMove || bestEquivalent) — not merely "close to best";
+        //  - after best play you are CLEARLY WINNING (winAfterPlayed ≥ 0.62), so
+        //    the sac actually buys a winning advantage, it doesn't just hold
+        //    equality or get tolerated by the engine;
+        //  - the position was genuinely contested first (winBefore 0.15–0.80):
+        //    not already winning easily (where giving material is routine) and
+        //    not already lost (where a desperate sac isn't brilliant).
+        // This rejects the common false positives: everyday tactics that regain
+        // material, pseudo-sacrifices onto defended squares, and "sacs" from an
+        // already-won position.
         type = 'brilliant';
       } else if (wpl >= 0.20) {
         // Blunder — but if a winning move was on the board and you merely let the
