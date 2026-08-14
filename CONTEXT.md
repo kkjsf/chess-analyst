@@ -21,6 +21,15 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v180 - échiquier de l'arbre des ouvertures agrandi**
+  - User : « met le preview de l'échiquier dans l'arbre des ouvertures + gros, qu'on voie au premier
+    coup d'œil ce qui se passe (sans forcément cliquer sur ouvrir) ». Le board du panneau de détail
+    (`.ot-dboard`, affiché quand on sélectionne un nœud) était riquiqui : 128px desktop / 104px
+    mobile / 108px paysage. Agrandi (CSS only) : desktop **128→240px**, mobile portrait (≤720)
+    **104→min(78vw,300px)** (+ `.ot-detail max-height` 36vh→62vh pour lui laisser la place), petit
+    paysage (≤600h) **108→min(100%,200px)** (colonne de 240). Vérifié preview : desktop 1440 → board
+    240×240 (328 nœuds SVG, pièces rendues) ; mobile 390 → 300×300, pas de débordement horizontal, le
+    détail ne force pas le scroll ; 0 erreur. APP_VERSION 179→**180**.
 - **v179 - durcissement de la classif « Brillant » (!!)**
   - Suite du point ouvert v178 (user doute des brillants). Ancienne porte (`js/analysis.js`) trop
     laxe : `isSacrifice && (isBestMove || wpl<0.02) && winAfterPlayed>=0.50 && winBefore<=0.85` →

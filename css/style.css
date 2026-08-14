@@ -3647,8 +3647,8 @@ body.guess-open { overflow: hidden; }
   min-height: 150px;
 }
 .ot-detail .ot-dboard {
-  width: 128px;
-  height: 128px;
+  width: 240px;
+  height: 240px;
   flex: none;
   border-radius: 7px;
   overflow: hidden;
@@ -3730,8 +3730,8 @@ body.guess-open { overflow: hidden; }
   .ot-mv { font-size: 10.5px; }
 
   /* Détail empilé et compact */
-  .ot-detail { flex-direction: column; align-items: stretch; gap: 9px; min-height: 0; padding: 11px 12px; max-height: 36vh; overflow-y: auto; }
-  .ot-detail .ot-dboard { width: 104px; height: 104px; align-self: center; }
+  .ot-detail { flex-direction: column; align-items: stretch; gap: 9px; min-height: 0; padding: 11px 12px; max-height: 62vh; overflow-y: auto; }
+  .ot-detail .ot-dboard { width: min(78vw, 300px); height: min(78vw, 300px); align-self: center; }
   .ot-txt h3 { font-size: 15px; }
   .ot-idea { font-size: 12.5px; }
   .ot-actions { flex-direction: column; }
@@ -3790,7 +3790,7 @@ body.guess-open { overflow: hidden; }
     gap: 8px;
     padding: 10px;
   }
-  .ot-detail .ot-dboard { width: 108px; height: 108px; align-self: center; }
+  .ot-detail .ot-dboard { width: min(100%, 200px); height: auto; aspect-ratio: 1; align-self: center; }
   .ot-txt h3 { font-size: 15px; }
   .ot-idea { font-size: 12.5px; }
   .ot-actions { flex-direction: column; }
