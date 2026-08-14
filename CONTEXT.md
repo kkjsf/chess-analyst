@@ -21,6 +21,17 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v181 - carte Coach « Performance par ouverture »**
+  - Nouvelle carte `renderOpeningPerf(an)` (js/coach.js) dans le groupe « Style de jeu & adversaires »
+    (avant Profil/Répertoire). Croise tes vraies parties avec leur ouverture : regroupe par famille
+    FR (`frenchOpening(g).family`), score = (V + ½N)/parties, ≥3 parties/ligne. Affiche un bandeau
+    score-par-couleur (♔ Blancs / ♚ Noirs), une liste de barres classées par volume (nom · barre
+    colorée vert≥55/or/rouge≤45 + % · V/D/N · nb parties), et un call-out « plus rentable / plus
+    fragile ». CSS `.op-*` ajouté. Aucune donnée nouvelle nécessaire (les jeux du coach ont déjà
+    `family`). Distinct de la carte « Répertoire d'ouvertures » (table + fidélité au répertoire) qui
+    reste : celle-ci est la vue visuelle de perf. Vérifié preview (données réelles 134 parties) :
+    ♔46%/♚43%, 7 familles, meilleure = Attaque Scholar 71%, plus fragile = Ouverture de l'Évêque 17% ;
+    barres OK ; 0 erreur applicative. APP_VERSION 180→**181**.
 - **v180 - échiquier de l'arbre des ouvertures agrandi**
   - User : « met le preview de l'échiquier dans l'arbre des ouvertures + gros, qu'on voie au premier
     coup d'œil ce qui se passe (sans forcément cliquer sur ouvrir) ». Le board du panneau de détail

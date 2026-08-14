@@ -461,6 +461,7 @@ const Coach = (() => {
           renderMoveQuality(an)
         ]) +
         group('style', 'Style de jeu & adversaires', [
+          renderOpeningPerf(an),
           renderProfile(an),
           renderRepertoire(an),
           renderTime(an),
@@ -1186,6 +1187,56 @@ const Coach = (() => {
     const consistent = urls.filter(u => ccFamily(openingSlug(u)) === family);
     if (consistent.length) return majorityUrl(consistent);
     return CC_FAMS.has(family) ? null : majorityUrl(urls);
+  }
+
+  // Opening performance: crosses your real games with the opening they came
+  // from. Groups by French family name, scores each (win + ½ draw), and shows a
+  // ranked bar list + a per-colour headline + best/worst call-outs — the "where
+  // do I actually win/lose by opening" view.
+  function renderOpeningPerf(an) {
+    if (an.length < 4) return '';
+    const colorScore = (c) => {
+      const gs = an.filter(g => g.userColor === c);
+      if (!gs.length) return null;
+      const w = gs.filter(g => g.result === 'win').length;
+      const d = gs.filter(g => g.result === 'draw').length;
+      return { n: gs.length, score: (w + d * 0.5) / gs.length };
+    };
+    const wc = colorScore('w'), bc = colorScore('b');
+    const fam = {};
+    an.forEach(g => {
+      const f = frenchOpening(g).family;
+      if (!f || f === 'Inconnue') return;
+      const o = fam[f] || (fam[f] = { n: 0, w: 0, d: 0, l: 0 });
+      o.n++;
+      if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++; else o.l++;
+    });
+    const MIN = 3;
+    const ranked = Object.keys(fam)
+      .map(name => { const o = fam[name]; return { name, n: o.n, w: o.w, d: o.d, l: o.l, score: (o.w + o.d * 0.5) / o.n }; })
+      .filter(r => r.n >= MIN)
+      .sort((a, b) => b.n - a.n);
+    if (!ranked.length) return '';
+    const byScore = ranked.slice().sort((a, b) => b.score - a.score || b.n - a.n);
+    const best = byScore[0], worst = byScore[byScore.length - 1];
+    const barRow = (r) => {
+      const s = Math.round(r.score * 100);
+      const cls = s >= 55 ? 'op-good' : s <= 45 ? 'op-bad' : 'op-mid';
+      return `<div class="op-row">
+        <span class="op-name" title="${esc(r.name)}">${esc(r.name)}</span>
+        <span class="op-bar"><span class="op-fill ${cls}" style="width:${Math.max(s, 4)}%"></span><span class="op-pct">${s}%</span></span>
+        <span class="op-wdl"><span class="wdl-w">${r.w}</span>/<span class="wdl-d">${r.d}</span>/<span class="wdl-l">${r.l}</span> · ${r.n}p</span>
+      </div>`;
+    };
+    const colorPill = (o, ic, lbl) => o
+      ? `<span class="op-color">${ic} ${lbl} <b>${Math.round(o.score * 100)}%</b> <span class="op-n">${o.n}p</span></span>` : '';
+    return `<div class="home-card coach-card" id="coach-opening-perf">
+      <h3>🎯 Performance par ouverture</h3>
+      <p class="coach-sub2">Ton score (V + ½N) par famille d'ouverture sur tes parties analysées — au moins ${MIN} parties par ligne.</p>
+      <div class="op-colors">${colorPill(wc, '♔', 'avec les Blancs')}${colorPill(bc, '♚', 'avec les Noirs')}</div>
+      <div class="op-list">${ranked.map(barRow).join('')}</div>
+      ${best !== worst ? `<div class="coach-flag">💪 Ta plus rentable : <b>${esc(best.name)}</b> (${Math.round(best.score * 100)}%) · ⚠ la plus fragile : <b>${esc(worst.name)}</b> (${Math.round(worst.score * 100)}%).</div>` : ''}
+    </div>`;
   }
 
   function renderRepertoire(an) {

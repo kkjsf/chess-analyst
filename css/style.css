@@ -2950,6 +2950,22 @@ body.guess-open { overflow: hidden; }
 .coach-rep-table tr.rep-weak td { background: rgba(248,113,113,0.08); }
 .coach-flag { font-size: 12px; color: var(--text); background: rgba(248,113,113,0.1); border-radius: 6px; padding: 8px 10px; margin-top: 8px; }
 
+/* Performance par ouverture — barres de score par famille */
+.op-colors { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.op-color { font-size: 12px; color: var(--text-dim); background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; }
+.op-color b { color: var(--accent); font-size: 14px; }
+.op-color .op-n { color: var(--text-dim); font-size: 11px; }
+.op-list { display: flex; flex-direction: column; gap: 7px; }
+.op-row { display: grid; grid-template-columns: minmax(90px, 1.3fr) minmax(110px, 2fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.op-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-bar { position: relative; height: 18px; background: var(--bg-2); border-radius: 5px; overflow: hidden; }
+.op-fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; }
+.op-fill.op-good { background: linear-gradient(90deg, rgba(86,184,134,0.55), rgba(86,184,134,0.85)); }
+.op-fill.op-mid  { background: linear-gradient(90deg, rgba(226,184,87,0.5), rgba(226,184,87,0.8)); }
+.op-fill.op-bad  { background: linear-gradient(90deg, rgba(211,107,107,0.5), rgba(211,107,107,0.85)); }
+.op-pct { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; font-weight: 700; color: var(--text); }
+.op-wdl { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 .coach-metric-row { display: flex; gap: 8px; margin: 10px 0; }
 .coach-metric { flex: 1; background: var(--bg); border-radius: 8px; padding: 10px; text-align: center; }
 .coach-metric b { display: block; font-size: 20px; color: var(--accent); }
