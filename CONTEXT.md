@@ -21,6 +21,21 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v177 - « Analyser ce coup » atterrit PILE sur le coup (même sans rapport serveur)**
+  - Constat clé dans `coach-data.json` : seulement **5/134 parties ont un `report` serveur, 3 ont
+    rapport+highlights** ; les ~80 autres parties « beaux coups » tombaient donc dans le fallback
+    `engine` de `openRecent` → `loadPgnAndAnalyze(pgn)` qui **ré-analyse et se posait au coup 0**,
+    jamais sur le coup brillant. (Le v176 ne réglait le saut que pour les 3 parties à rapport.)
+  - Fix : mécanisme `pendingGoToIndex` dans `app.js`. `loadPgnAndAnalyze(pgn, {goToIndex})` le
+    stocke ; `showAnalysis` le consomme à la fin (`goTo(target||0)` puis reset) → l'analyseur
+    atterrit sur le coup une fois la ré-analyse Stockfish terminée. Même index de ply (même
+    séquence de coups, quelle que soit la classif locale vs serveur). `openStoredReport` utilise
+    le même canal (plus de double `goTo(0)→goTo(cible)`). Anti-fuite : `pendingGoToIndex=null` dans
+    le `finally` d'`onAnalyze` si la run échoue avant `showAnalysis`. `coach.js openRecent` passe
+    désormais `opts` aussi à `loadPgnAndAnalyze`.
+  - Vérifié preview (localhost:3456) : chemin rapport → carte active `6.dxc4 !` / `16.Dxf3 !` (pile
+    sur le coup) ; ré-ouverture sans cible → coup 0 (pas de fuite) ; chemin moteur (mat du berger,
+    ré-analyse réelle ~13 s) → atterrit sur `4.Dxf7# ★`. 0 erreur console. APP_VERSION 176→**177**.
 - **v176 - Coach « Tes plus beaux coups » : layout desktop + coup ouvrable dans la partie**
   - Problème : sur desktop la carte `#coach-highlights` était un seul item de la masonry
     `column-count` (2/3/4 col) de la section « Tes réussites », donc coincée dans UNE colonne

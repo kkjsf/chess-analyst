@@ -2110,7 +2110,7 @@ const Coach = (() => {
     // engine verdict is on screen.
     const opts = (atPly != null && atPly >= 0) ? { goToIndex: atPly + 1 } : null;
     if (mode === 'open' && App.openStoredReport && App.openStoredReport(g, opts)) return;
-    if (App.loadPgnAndAnalyze && g.pgn) App.loadPgnAndAnalyze(g.pgn);
+    if (App.loadPgnAndAnalyze && g.pgn) App.loadPgnAndAnalyze(g.pgn, opts);
   }
 
   // Replay one archive game's own mistakes as a focused "Devine le coup" drill.
