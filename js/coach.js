@@ -2102,10 +2102,14 @@ const Coach = (() => {
       b.addEventListener('click', () => openRecent(b.dataset.uuid, b.dataset.mode)));
   }
 
-  function openRecent(uuid, mode) {
+  function openRecent(uuid, mode, atPly) {
     const g = games.find(x => x.uuid === uuid);
     if (!g || typeof App === 'undefined') return;
-    if (mode === 'open' && App.openStoredReport && App.openStoredReport(g)) return;
+    // atPly is the 0-based ply of the move; the analyzer lands on the position
+    // just AFTER it (goTo index = ply + 1) so the move sits highlighted and its
+    // engine verdict is on screen.
+    const opts = (atPly != null && atPly >= 0) ? { goToIndex: atPly + 1 } : null;
+    if (mode === 'open' && App.openStoredReport && App.openStoredReport(g, opts)) return;
     if (App.loadPgnAndAnalyze && g.pgn) App.loadPgnAndAnalyze(g.pgn);
   }
 
@@ -2248,10 +2252,12 @@ const Coach = (() => {
       const from = h.playedUci.slice(0, 2), to = h.playedUci.slice(2, 4);
       const date = h.ctx.end ? fmtDate(h.ctx.end) : '';
       const tip = h.tip ? esc(h.tip.replace(/<[^>]+>/g, '')) : '';
-      return `<figure class="coach-hl-card">
+      const mode = h.ctx.hasReport ? 'open' : 'engine';
+      return `<figure class="coach-hl-card" role="button" tabindex="0" data-uuid="${esc(h.ctx.uuid)}" data-mode="${mode}" data-ply="${h.ply}" title="Ouvrir ce coup dans la partie pour l'analyser">
         <svg class="coach-hl-board" viewBox="0 0 360 360" data-fen="${esc(h.fenBefore)}" data-from="${from}" data-to="${to}" data-flip="${h.side === 'b' ? 1 : 0}"></svg>
         <figcaption class="coach-hl-meta">${moveNo(h.ply)} <b>${esc(h.playedSan)}</b> · vs ${esc(h.ctx.opp)}${date ? ' · ' + date : ''}</figcaption>
         ${tip ? `<p class="coach-hl-tip">${tip}</p>` : ''}
+        <span class="coach-hl-cta">🔍 Analyser ce coup dans la partie</span>
       </figure>`;
     }).join('');
     const gallery = tier.moves.length
@@ -2284,7 +2290,7 @@ const Coach = (() => {
     if (!brill && !great) return '';
     return `<div class="home-card coach-card" id="coach-highlights">
       <h3>✨ Tes plus beaux coups</h3>
-      <p class="coach-sub2">Tes coups <b>brillants</b> (!!) et <b>excellents</b> (!) - revois-les pour t'en inspirer.</p>
+      <p class="coach-sub2">Tes coups <b>brillants</b> (!!) et <b>excellents</b> (!) - clique une position pour l'ouvrir dans la partie et juger si le coup mérite vraiment son étiquette.</p>
       ${brill}${great}
     </div>`;
   }
@@ -2300,6 +2306,14 @@ const Coach = (() => {
     BoardRenderer.setFlipped(wasFlipped);
     host.querySelectorAll('.coach-hl-open').forEach(b =>
       b.addEventListener('click', () => openRecent(b.dataset.uuid, b.dataset.mode)));
+    host.querySelectorAll('.coach-hl-card[data-uuid]').forEach(card => {
+      const go = () => openRecent(card.dataset.uuid, card.dataset.mode,
+        card.dataset.ply != null ? +card.dataset.ply : null);
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
   }
 
   // Replay just the single turning-point position of a game (from Conversion card).

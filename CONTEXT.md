@@ -21,6 +21,23 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v176 - Coach « Tes plus beaux coups » : layout desktop + coup ouvrable dans la partie**
+  - Problème : sur desktop la carte `#coach-highlights` était un seul item de la masonry
+    `column-count` (2/3/4 col) de la section « Tes réussites », donc coincée dans UNE colonne
+    étroite (~1/4 de la largeur) avec tout le reste de la section vide → galerie de mini-échiquiers
+    en colonne « en longueur », illisible. Et les échiquiers n'étaient pas cliquables : impossible
+    d'ouvrir le coup dans son contexte pour juger si l'étiquette « Brillant/Excellent » est méritée.
+  - Fix layout : `#coach-highlights` ajouté à la liste `column-span: all` (comme `#coach-recent-games`)
+    → il occupe toute la largeur de la section. Override desktop de `.coach-hl-gallery` en tuiles
+    fixes `repeat(auto-fill, minmax(180px, 210px)) + justify-content:start` → les coups s'alignent
+    en rangées (5/rangée à 1600px, 2-3 à 1000px) au lieu d'une pile verticale. Vérifié en preview
+    (harness `_hl_test.html`, supprimé) : `columnSpan:all`, hlWidth = pleine largeur, tuiles 210px.
+  - Fix « challenger la classification » : chaque figure devient `role=button tabindex=0` avec
+    `data-uuid/data-mode/data-ply`, curseur pointer, hover (lift + bordure accent) et CTA
+    « 🔍 Analyser ce coup dans la partie ». Clic/Entrée → `openRecent(uuid, mode, ply)`.
+    `openRecent` accepte un `atPly` optionnel ; `App.openStoredReport(rec, {goToIndex: ply+1})`
+    fait un `goTo(ply+1)` après `showAnalysis` → l'analyseur s'ouvre PILE sur le coup (surligné,
+    verdict moteur affiché) pour les parties avec rapport serveur ; sinon fallback ré-analyse Stockfish.
 - **v175 - item Vigilance ajouté à la routine du jour**
   - Le seul drill distinct de la tactique (repérer les pièces en prise) n'avait pas d'item alors
     que « ne rien laisser en prise » est priorité n°1 du pied de carte. Ajout de `🛡️ Vigilance -

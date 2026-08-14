@@ -2605,8 +2605,15 @@ body.guess-open { overflow: hidden; }
   .coach-group-cards > .coach-empty-mini,
   .coach-group-cards > #coach-word,
   .coach-group-cards > #coach-recent-games,
+  .coach-group-cards > #coach-highlights,
   .coach-group-cards > .coach-hero-row {
     column-span: all; -webkit-column-span: all;
+  }
+  /* Full width means the board gallery flows into fixed-size tiles across the
+     row instead of a tall 1-2-wide stack squeezed into a masonry column. */
+  #coach-highlights .coach-hl-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 210px));
+    justify-content: start;
   }
   /* Recent-games band: split its rows into columns across the full width. */
   #coach-recent-games .coach-recent-list { column-count: 3; column-gap: 20px; }
@@ -3015,6 +3022,21 @@ body.guess-open { overflow: hidden; }
   margin: 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
   border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
 }
+.coach-hl-card[data-uuid] {
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease, background .12s ease;
+}
+.coach-hl-card[data-uuid]:hover,
+.coach-hl-card[data-uuid]:focus-visible {
+  transform: translateY(-2px); border-color: var(--accent);
+  background: rgba(255,255,255,0.06); outline: none;
+}
+.coach-hl-cta {
+  margin-top: auto; font-size: 11px; font-weight: 600; color: var(--accent);
+  opacity: .55; transition: opacity .12s ease;
+}
+.coach-hl-card[data-uuid]:hover .coach-hl-cta,
+.coach-hl-card[data-uuid]:focus-visible .coach-hl-cta { opacity: 1; }
 .coach-hl-badge { align-self: flex-start; }
 .coach-hl-board { width: 100%; height: auto; border-radius: 6px; display: block; }
 .coach-hl-meta { font-size: 12px; color: var(--text); line-height: 1.4; }

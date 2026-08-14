@@ -561,7 +561,7 @@ const App = (() => {
   // Open a coach game's server-computed report directly in the detailed analyzer
   // — no Stockfish run. rec.report holds the full per-ply analysis + summary
   // embedded by tools/analyze.mjs for the most recent games.
-  function openStoredReport(rec) {
+  function openStoredReport(rec, opts) {
     if (!rec || !rec.report || !rec.report.analysis || !rec.pgn) return false;
     const parsed = deriveHeaderMoves(rec.pgn);
     if (!parsed) return false;
@@ -576,6 +576,7 @@ const App = (() => {
     saveGame(rec.pgn, header, moves.length);
     hideError();
     showAnalysis(header, moves, analysis, summary);
+    if (opts && typeof opts.goToIndex === 'number') goTo(opts.goToIndex);
     return true;
   }
 
