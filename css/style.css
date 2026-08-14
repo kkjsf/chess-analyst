@@ -26,7 +26,13 @@
   --blue: #5b8fb9;
   --dim-2: #6b7590;
   --side-w: 236px;
+  /* Single source of truth for every exercise / lesson chessboard (tactics,
+     mats course + lesson diagrams, "devine le coup", vigilance, replay) so they
+     all render at the same size. Bumped to a comfortable width on wide screens;
+     the desktop value is redefined in the >=700px media query below. */
+  --ex-board: min(94vw, 460px);
 }
+@media (min-width: 700px) { :root { --ex-board: min(72vh, 560px); } }
 body { background:
   radial-gradient(1100px 560px at 18% -12%, #1c2140 0%, transparent 60%),
   var(--bg-2); }
@@ -400,7 +406,7 @@ html, body {
   }
   .opening-modal-right > * { max-width: none; }
   .opening-modal-board { margin-bottom: 0; }
-  .opening-modal-left .opening-modal-board { width: min(70vh, 600px); }
+  .opening-modal-left .opening-modal-board { width: var(--ex-board); }
   .opening-modal-controls { margin-bottom: 0; }
 }
 .opening-modal-header {
@@ -2193,7 +2199,7 @@ html, body {
 .train-progress { font-size: 12px; color: var(--text-dim); font-weight: 600; margin-bottom: 6px; }
 .train-prompt { font-size: 15px; margin-bottom: 12px; }
 .train-board-wrap {
-  position: relative; width: 100%; max-width: 360px; aspect-ratio: 1; margin: 0 auto;
+  position: relative; width: 100%; max-width: var(--ex-board); aspect-ratio: 1; margin: 0 auto;
 }
 .train-board-wrap .train-board {
   position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px;
@@ -2319,7 +2325,7 @@ body.guess-open { overflow: hidden; }
 .guess-score { font-size: 15px; font-weight: 700; color: var(--accent); }
 .guess-prompt { font-size: 15px; margin: 6px 0 12px; }
 .guess-board-wrap {
-  position: relative; width: 100%; max-width: 360px; aspect-ratio: 1; margin: 0 auto;
+  position: relative; width: 100%; max-width: var(--ex-board); aspect-ratio: 1; margin: 0 auto;
 }
 .guess-board-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px; }
 #guess-board { cursor: pointer; }
@@ -2337,16 +2343,12 @@ body.guess-open { overflow: hidden; }
 .guess-final { font-size: 28px; color: var(--accent); display: inline-block; margin: 6px 0; }
 .guess-actions { margin-top: 18px; }
 
-/* ── Desktop : l'échiquier des exercices (tactiques, mats, drills d'ouverture)
-      était minuscule (360px) et perdu au milieu du vide. On lui donne la place. ── */
+/* ── Desktop : donne de l'air au panneau d'exercice (la taille de l'échiquier
+      lui-même est pilotée par --ex-board, partagée avec tous les autres). ── */
 @media (min-width: 700px) {
   .guess-panel { max-width: 680px; padding-bottom: 32px; }
   .guess-prompt { font-size: 16px; text-align: center; margin: 8px 0 16px; }
-  .guess-board-wrap { max-width: min(66vh, 560px); }
   .guess-feedback { font-size: 15px; }
-}
-@media (min-width: 700px) and (min-height: 780px) {
-  .guess-board-wrap { max-width: min(70vh, 620px); }
 }
 
 /* ── Cours sur les mats (reuses .guess-overlay/.guess-panel/.guess-head shell) ── */
@@ -2375,7 +2377,7 @@ body.guess-open { overflow: hidden; }
 
 .mate-detail { margin: 4px 0 6px; }
 .mate-diagram {
-  position: relative; width: 100%; max-width: 300px; aspect-ratio: 1; margin: 0 auto 14px;
+  position: relative; width: 100%; max-width: var(--ex-board); aspect-ratio: 1; margin: 0 auto 14px;
 }
 .mate-diagram svg { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 6px; }
 .mate-diagram .arrow-overlay { pointer-events: none; }
@@ -2605,15 +2607,8 @@ body.guess-open { overflow: hidden; }
   .coach-group-cards > .coach-empty-mini,
   .coach-group-cards > #coach-word,
   .coach-group-cards > #coach-recent-games,
-  .coach-group-cards > #coach-highlights,
   .coach-group-cards > .coach-hero-row {
     column-span: all; -webkit-column-span: all;
-  }
-  /* Full width means the board gallery flows into fixed-size tiles across the
-     row instead of a tall 1-2-wide stack squeezed into a masonry column. */
-  #coach-highlights .coach-hl-gallery {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 210px));
-    justify-content: start;
   }
   /* Recent-games band: split its rows into columns across the full width. */
   #coach-recent-games .coach-recent-list { column-count: 3; column-gap: 20px; }
@@ -2726,7 +2721,7 @@ body.guess-open { overflow: hidden; }
 
   #train-puzzles.active:has(.train-board-wrap) {
     display: grid;
-    grid-template-columns: minmax(360px, 520px) minmax(260px, 320px);
+    grid-template-columns: minmax(360px, 560px) minmax(240px, 300px);
     grid-template-areas:
       "banner   banner"
       "board    progress"
@@ -2741,7 +2736,7 @@ body.guess-open { overflow: hidden; }
   }
   #train-vigilance.active:has(.train-board-wrap) {
     display: grid;
-    grid-template-columns: minmax(360px, 520px) minmax(260px, 320px);
+    grid-template-columns: minmax(360px, 560px) minmax(240px, 300px);
     grid-template-areas:
       "board    progress"
       "board    prompt"
@@ -2758,7 +2753,7 @@ body.guess-open { overflow: hidden; }
   #train-vigilance.active:has(.train-board-wrap) > .train-board-wrap {
     grid-area: board;
     align-self: start;
-    max-width: 520px;
+    max-width: var(--ex-board);
     margin: 0;
   }
   #train-puzzles.active:has(.train-board-wrap) > .train-progress { grid-area: progress; }
@@ -3006,49 +3001,6 @@ body.guess-open { overflow: hidden; }
   padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .coach-recent-analyze:hover { background: rgba(255,255,255,0.06); }
-
-/* Coach — "Tes plus beaux coups" gallery (brilliant / great move boards) */
-.coach-hl-tier { margin-top: 14px; }
-.coach-hl-tier:first-of-type { margin-top: 4px; }
-.coach-hl-tier-head {
-  display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
-  font-size: 14px; font-weight: 700; color: var(--text);
-}
-.coach-hl-tier-head .stat-pill { font-size: 12px; }
-.coach-hl-gallery {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px;
-}
-.coach-hl-card {
-  margin: 0; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 7px;
-}
-.coach-hl-card[data-uuid] {
-  cursor: pointer;
-  transition: transform .12s ease, border-color .12s ease, background .12s ease;
-}
-.coach-hl-card[data-uuid]:hover,
-.coach-hl-card[data-uuid]:focus-visible {
-  transform: translateY(-2px); border-color: var(--accent);
-  background: rgba(255,255,255,0.06); outline: none;
-}
-.coach-hl-cta {
-  margin-top: auto; font-size: 11px; font-weight: 600; color: var(--accent);
-  opacity: .55; transition: opacity .12s ease;
-}
-.coach-hl-card[data-uuid]:hover .coach-hl-cta,
-.coach-hl-card[data-uuid]:focus-visible .coach-hl-cta { opacity: 1; }
-.coach-hl-badge { align-self: flex-start; }
-.coach-hl-board { width: 100%; height: auto; border-radius: 6px; display: block; }
-.coach-hl-meta { font-size: 12px; color: var(--text); line-height: 1.4; }
-.coach-hl-meta b { color: var(--accent); }
-.coach-hl-tip { font-size: 11px; color: var(--text-dim); line-height: 1.45; margin: 0; }
-.coach-hl-more { font-size: 12px; color: var(--text-dim); margin: 12px 0 0; }
-.coach-hl-open {
-  flex-shrink: 0; background: transparent; color: var(--accent);
-  border: 1px solid var(--accent); border-radius: 8px;
-  padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
-}
-.coach-hl-open:hover { background: rgba(255,255,255,0.06); }
 
 /* Coach — extended stats (move quality, conversion, time, progress) */
 .coach-sub2 { font-size: 12px; color: var(--text-dim); margin: 2px 0 10px; line-height: 1.5; }

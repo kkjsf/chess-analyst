@@ -21,6 +21,28 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v178 - suppression de « Tes plus beaux coups » + tailles d'échiquier uniformes partout**
+  - **Section « Tes plus beaux coups » (brillants/excellents) SUPPRIMÉE** (user : « c'est pas bon,
+    renvoie pas sur le bon coup »). Retiré : le groupe `'wins'`/« Tes réussites » et son unique
+    carte, les fonctions `renderHighlights/renderHlTier/collectHighlights/bindHighlights` + consts
+    `HL_*`, tout le CSS `.coach-hl-*` et `#coach-highlights`. **Revert complet** du plumbing « atterrir
+    sur le coup » ajouté en v176/v177 (`pendingGoToIndex`, `openStoredReport(rec,opts)`,
+    `loadPgnAndAnalyze(pgn,opts)`, param `atPly` d'`openRecent`) : ne servait qu'à cette section.
+    `openRecent(uuid,mode)` reste (utilisé par « Tes dernières parties »).
+  - **Tailles d'échiquier uniformisées** (user : « tactiques et mats tout petits »). Nouveau token
+    CSS `--ex-board` (`:root` = `min(94vw,460px)` ; `@media(min-width:700px)` = `min(72vh,560px)`)
+    appliqué à TOUS les échiquiers d'exercice/leçon : `.guess-board-wrap` (tactiques, mats-training,
+    devine-le-coup, replay), `.train-board-wrap` (puzzles/vigilance de l'onglet Entraîner),
+    `.mate-diagram` (diagrammes des leçons de mat, **était 300px** → 560), et le board desktop de la
+    modale d'ouverture. Grille des puzzles Entraîner élargie en conséquence (col 520→560, side 320→300,
+    tient dans 940). Les 2 media-queries `.guess-board-wrap` (66vh/70vh) retirées (le token gère).
+    Board d'analyse principal laissé tel quel (height-cap ~540 + barre d'éval, volontaire).
+  - **Vérif preview** : desktop 1440×900 → `--ex-board`=560, tactiques=560, diagramme mat=**560**
+    (vs 300) ; fenêtre 680px → 432 chacun (vs 360/300), uniformes ; 0 erreur console. Coach : plus de
+    carte « Tes plus beaux coups ». APP_VERSION 177→**178**. **Note ouverte** : user doute de la
+    classif brillant/excellent (le « sacrifice » n'apporte pas toujours du mieux) - vrai point faible
+    (`sacrificedOnMove` = SEE 1-ply, ne vérifie pas que le sac est accepté/gagnant dans la ligne
+    moteur), à re-tuner ou retirer (nécessite une ré-analyse coach complète). Pas encore fait.
 - **v177 - « Analyser ce coup » atterrit PILE sur le coup (même sans rapport serveur)**
   - Constat clé dans `coach-data.json` : seulement **5/134 parties ont un `report` serveur, 3 ont
     rapport+highlights** ; les ~80 autres parties « beaux coups » tombaient donc dans le fallback

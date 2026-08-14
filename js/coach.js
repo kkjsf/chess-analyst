@@ -451,9 +451,6 @@ const Coach = (() => {
           renderErrorEvolution(an),
           renderProgress(an)
         ]) +
-        group('wins', 'Tes réussites', [
-          renderHighlights(an)
-        ]) +
         group('errors', 'Erreurs & faiblesses', [
           renderErrorDetail(an),
           renderMissed(an),
@@ -487,7 +484,6 @@ const Coach = (() => {
       bindTrainingCta();
       bindRecentGames();
       bindGamesDrill();
-      bindHighlights();
       bindRepertoire();
       bindConversion();
       bindTactics();
@@ -2102,15 +2098,11 @@ const Coach = (() => {
       b.addEventListener('click', () => openRecent(b.dataset.uuid, b.dataset.mode)));
   }
 
-  function openRecent(uuid, mode, atPly) {
+  function openRecent(uuid, mode) {
     const g = games.find(x => x.uuid === uuid);
     if (!g || typeof App === 'undefined') return;
-    // atPly is the 0-based ply of the move; the analyzer lands on the position
-    // just AFTER it (goTo index = ply + 1) so the move sits highlighted and its
-    // engine verdict is on screen.
-    const opts = (atPly != null && atPly >= 0) ? { goToIndex: atPly + 1 } : null;
-    if (mode === 'open' && App.openStoredReport && App.openStoredReport(g, opts)) return;
-    if (App.loadPgnAndAnalyze && g.pgn) App.loadPgnAndAnalyze(g.pgn, opts);
+    if (mode === 'open' && App.openStoredReport && App.openStoredReport(g)) return;
+    if (App.loadPgnAndAnalyze && g.pgn) App.loadPgnAndAnalyze(g.pgn);
   }
 
   // Replay one archive game's own mistakes as a focused "Devine le coup" drill.
@@ -2191,130 +2183,6 @@ const Coach = (() => {
     GuessMove.start(analysis, null, side, { indices, title: '🎯 Tes erreurs vs ' + (g.oppName || '?') });
   }
 
-  // ─────────────── Tes plus beaux coups (brillants & excellents) ───────────────
-  // Labels match the move badges + engine comments + Chess.com FR: brilliant = !!
-  // "Brillant", great = ! "Excellent" (a rarer, harder-to-find move than a plain
-  // best move). Kept in sync with MOVE_CLASS in app.js so a move never changes
-  // name between this card and the detailed analyzer it links to.
-  const HL_META = {
-    brilliant: { mark: '!!', label: 'Brillant', plural: 'Brillants', cls: 'brilliant' },
-    great:     { mark: '!',  label: 'Excellent', plural: 'Excellents', cls: 'great' }
-  };
-
-  // Bucket the user's brilliant / excellent moves by type across the filtered
-  // games. Per-move positions come from analysis.highlights (added by
-  // computeGameStats) or, for the recent games that embed a full server report,
-  // from that report. Games with only aggregate counts (not yet re-analysed)
-  // land in `pending` so they can still be opened to see the move.
-  function collectHighlights(an) {
-    const bucket = { brilliant: { moves: [], pending: [] }, great: { moves: [], pending: [] } };
-    for (const g of an) {
-      const a = g.analysis || {};
-      const side = g.userColor;
-      const ctx = { uuid: g.uuid, opp: g.oppName || '?', end: g.endTime, result: g.result, hasReport: !!(g.report && g.report.analysis) };
-      let list = null;
-      if (Array.isArray(a.highlights) && a.highlights.length) {
-        list = a.highlights;
-      } else if (g.report && Array.isArray(g.report.analysis)) {
-        list = [];
-        g.report.analysis.forEach((r, i) => {
-          if ((r.type === 'brilliant' || r.type === 'great') && r.fenBefore && r.move && r.move.color === side) {
-            list.push({ ply: i, type: r.type, fenBefore: r.fenBefore,
-              playedUci: r.move.from + r.move.to + (r.move.promotion || ''),
-              playedSan: r.sanFr || r.san, eval: typeof r.eval === 'number' ? r.eval : null, tip: r.tipFr || '' });
-          }
-        });
-      }
-      if (list && list.length) {
-        for (const h of list) if (bucket[h.type]) bucket[h.type].moves.push(Object.assign({}, h, { side, ctx }));
-      } else {
-        const mq = a.moveQuality || {};
-        if (mq.brilliant) bucket.brilliant.pending.push({ ctx, n: mq.brilliant });
-        if (mq.great) bucket.great.pending.push({ ctx, n: mq.great });
-      }
-    }
-    for (const t of ['brilliant', 'great']) {
-      bucket[t].moves.sort((x, y) => (y.ctx.end || 0) - (x.ctx.end || 0));
-      bucket[t].pending.sort((x, y) => (y.ctx.end || 0) - (x.ctx.end || 0));
-    }
-    return bucket;
-  }
-
-  const HL_BOARD_CAP = 12, HL_PEND_CAP = 12;
-  const HL_RES = { win: 'V', draw: 'N', loss: 'D' };
-
-  // One tier (Brillants or Excellents): a mini-board gallery of the moves whose
-  // position we have, plus a "à revoir" list for games we only have counts for.
-  function renderHlTier(type, tier) {
-    if (!tier.moves.length && !tier.pending.length) return '';
-    const m = HL_META[type];
-    const boards = tier.moves.slice(0, HL_BOARD_CAP).map(h => {
-      const from = h.playedUci.slice(0, 2), to = h.playedUci.slice(2, 4);
-      const date = h.ctx.end ? fmtDate(h.ctx.end) : '';
-      const tip = h.tip ? esc(h.tip.replace(/<[^>]+>/g, '')) : '';
-      const mode = h.ctx.hasReport ? 'open' : 'engine';
-      return `<figure class="coach-hl-card" role="button" tabindex="0" data-uuid="${esc(h.ctx.uuid)}" data-mode="${mode}" data-ply="${h.ply}" title="Ouvrir ce coup dans la partie pour l'analyser">
-        <svg class="coach-hl-board" viewBox="0 0 360 360" data-fen="${esc(h.fenBefore)}" data-from="${from}" data-to="${to}" data-flip="${h.side === 'b' ? 1 : 0}"></svg>
-        <figcaption class="coach-hl-meta">${moveNo(h.ply)} <b>${esc(h.playedSan)}</b> · vs ${esc(h.ctx.opp)}${date ? ' · ' + date : ''}</figcaption>
-        ${tip ? `<p class="coach-hl-tip">${tip}</p>` : ''}
-        <span class="coach-hl-cta">🔍 Analyser ce coup dans la partie</span>
-      </figure>`;
-    }).join('');
-    const gallery = tier.moves.length
-      ? `<div class="coach-hl-gallery">${boards}</div>${tier.moves.length > HL_BOARD_CAP ? `<p class="coach-hl-more">+ ${tier.moves.length - HL_BOARD_CAP} autres.</p>` : ''}`
-      : '';
-    const pendRows = tier.pending.slice(0, HL_PEND_CAP).map(p =>
-      `<div class="coach-drill-row">
-        <span class="coach-drill-res ${p.ctx.result || 'draw'}">${HL_RES[p.ctx.result] || '·'}</span>
-        <span class="coach-drill-opp">${esc(p.ctx.opp)}</span>
-        <span class="coach-drill-date">${p.ctx.end ? fmtDate(p.ctx.end) : ''}</span>
-        <span class="coach-drill-count">${p.n} ${p.n > 1 ? m.plural.toLowerCase() : m.label.toLowerCase()}</span>
-        <button class="coach-drill-btn coach-hl-open" data-uuid="${esc(p.ctx.uuid)}" data-mode="${p.ctx.hasReport ? 'open' : 'engine'}">👁 Voir</button>
-      </div>`).join('');
-    // Only nag about re-analysis when we truly can't board this tier yet.
-    const pendNote = tier.pending.length
-      ? `<p class="coach-puz-intro" style="margin-top:${tier.moves.length ? 14 : 6}px">${tier.moves.length
-          ? 'Ces parties en ont d\'autres, pas encore enregistrés au coup près - ouvre-les pour revoir le coup.'
-          : 'Positions pas encore enregistrées : clique 👁 pour revoir le coup directement dans la partie. Une ré-analyse complète du Coach les affichera ensuite en échiquier ici.'}${tier.pending.length > HL_PEND_CAP ? ` (${tier.pending.length} parties)` : ''}</p>${pendRows}`
-      : '';
-    return `<div class="coach-hl-tier">
-      <h4 class="coach-hl-tier-head"><span class="stat-pill ${m.cls}">${m.mark}</span> ${m.plural}</h4>
-      ${gallery}${pendNote}
-    </div>`;
-  }
-
-  function renderHighlights(an) {
-    const b = collectHighlights(an);
-    const brill = renderHlTier('brilliant', b.brilliant);
-    const great = renderHlTier('great', b.great);
-    if (!brill && !great) return '';
-    return `<div class="home-card coach-card" id="coach-highlights">
-      <h3>✨ Tes plus beaux coups</h3>
-      <p class="coach-sub2">Tes coups <b>brillants</b> (!!) et <b>excellents</b> (!) - clique une position pour l'ouvrir dans la partie et juger si le coup mérite vraiment son étiquette.</p>
-      ${brill}${great}
-    </div>`;
-  }
-
-  function bindHighlights() {
-    const host = document.getElementById('coach-highlights');
-    if (!host) return;
-    const wasFlipped = BoardRenderer.isFlipped();
-    host.querySelectorAll('.coach-hl-board').forEach(svg => {
-      BoardRenderer.setFlipped(svg.dataset.flip === '1');
-      BoardRenderer.render(svg, svg.dataset.fen, { from: svg.dataset.from, to: svg.dataset.to });
-    });
-    BoardRenderer.setFlipped(wasFlipped);
-    host.querySelectorAll('.coach-hl-open').forEach(b =>
-      b.addEventListener('click', () => openRecent(b.dataset.uuid, b.dataset.mode)));
-    host.querySelectorAll('.coach-hl-card[data-uuid]').forEach(card => {
-      const go = () => openRecent(card.dataset.uuid, card.dataset.mode,
-        card.dataset.ply != null ? +card.dataset.ply : null);
-      card.addEventListener('click', go);
-      card.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-      });
-    });
-  }
 
   // Replay just the single turning-point position of a game (from Conversion card).
   function bindConversion() {

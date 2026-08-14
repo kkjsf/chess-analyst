@@ -12,11 +12,6 @@ const App = (() => {
   let gameHistory = [];
   let inspectSq = null;
   let lastRenderIndex = -1;
-  // When a game is opened "on" a specific move (coach highlight / mistake card),
-  // the target board index is stashed here and consumed by showAnalysis once the
-  // analysis (fresh engine run or stored report) is ready, so we land on the move
-  // instead of the start position.
-  let pendingGoToIndex = null;
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -359,9 +354,6 @@ const App = (() => {
       await runAnalyze();
     } finally {
       analyzing = false;
-      // If the run bailed before showAnalysis (bad PGN, fetch failure…), drop the
-      // stale jump target so it can't hijack a later manual analysis.
-      pendingGoToIndex = null;
       // Let a service-worker update that arrived mid-run reload now (deferred).
       window.dispatchEvent(new Event('analysis-idle'));
     }
@@ -563,16 +555,13 @@ const App = (() => {
 
     lastRenderIndex = -1;
     unpinBoard();
-    // Land on the requested move when opened from a coach card; else the start.
-    const target = (pendingGoToIndex != null) ? pendingGoToIndex : 0;
-    pendingGoToIndex = null;
-    goTo(target);
+    goTo(0);
   }
 
   // Open a coach game's server-computed report directly in the detailed analyzer
   // — no Stockfish run. rec.report holds the full per-ply analysis + summary
   // embedded by tools/analyze.mjs for the most recent games.
-  function openStoredReport(rec, opts) {
+  function openStoredReport(rec) {
     if (!rec || !rec.report || !rec.report.analysis || !rec.pgn) return false;
     const parsed = deriveHeaderMoves(rec.pgn);
     if (!parsed) return false;
@@ -586,19 +575,15 @@ const App = (() => {
     if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, user);
     saveGame(rec.pgn, header, moves.length);
     hideError();
-    if (opts && typeof opts.goToIndex === 'number') pendingGoToIndex = opts.goToIndex;
     showAnalysis(header, moves, analysis, summary);
     return true;
   }
 
   // Load a PGN into the analyzer and run the engine (the normal flow), used for
-  // coach games that don't embed a server report. opts.goToIndex lands the board
-  // on that move once the fresh analysis is ready (same move sequence → same ply
-  // index, whatever the local vs server classification).
-  function loadPgnAndAnalyze(pgn, opts) {
+  // coach games that don't embed a server report.
+  function loadPgnAndAnalyze(pgn) {
     const input = $('#pgn-input');
     if (input) input.value = pgn;
-    pendingGoToIndex = (opts && typeof opts.goToIndex === 'number') ? opts.goToIndex : null;
     $('#screen-coach').classList.remove('active');
     $('#screen-import').classList.add('active');
     onAnalyze();
