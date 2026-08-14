@@ -3654,19 +3654,20 @@ body.guess-open { overflow: hidden; }
 .ot-detail {
   flex: none;
   display: flex;
-  gap: 16px;
-  align-items: center;
-  padding: 12px 14px;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 14px 16px;
   background: var(--bg-card);
   border: 1px solid #2a3a5c;
   border-radius: 14px;
   min-height: 150px;
 }
+.ot-detail-board { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .ot-detail .ot-dboard {
-  width: 240px;
-  height: 240px;
+  width: 300px;
+  height: 300px;
   flex: none;
-  border-radius: 7px;
+  border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 6px 18px rgba(0,0,0,0.4);
 }
@@ -3686,7 +3687,59 @@ body.guess-open { overflow: hidden; }
 .ot-plan-b { background: #0a0f1a4d; border-left-color: #43526f; }
 .ot-plan-b .ot-plan-side { color: #9fb0cc; }
 .ot-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
-.ot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ot-actions { display: flex; flex-direction: column; gap: 8px; }
+.ot-detail-board .ot-actions { align-self: stretch; width: 100%; }
+.ot-detail-board .ot-link { justify-content: center; }
+
+/* Suites possibles : chips cliquables vers les enfants directs */
+.ot-next-moves { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
+.ot-nm-label { font-size: 10.5px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .4px; margin-right: 2px; }
+.ot-nm {
+  font-size: 12px; color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid #2a3a5c; border-left: 3px solid var(--ot-fam, #6b7a99);
+  padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  transition: border-color .15s, transform .1s;
+}
+.ot-nm b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.ot-nm:hover { border-color: var(--accent); transform: translateY(-1px); }
+.ot-nm:active { transform: scale(.98); }
+
+/* Recherche + autocomplétion */
+.ot-search { position: relative; flex: 1 1 260px; min-width: 190px; max-width: 400px; display: flex; align-items: center; }
+.ot-search-ic { position: absolute; left: 11px; font-size: 13px; opacity: .7; pointer-events: none; }
+.ot-search-input {
+  width: 100%; font-size: 13px; color: var(--text);
+  background: var(--bg-card); border: 1px solid #2a3a5c; border-radius: 10px;
+  padding: 9px 30px 9px 32px; outline: none; transition: border-color .15s;
+}
+.ot-search-input:focus { border-color: var(--accent); }
+.ot-search-input::placeholder { color: var(--text-dim); }
+.ot-search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.ot-search-clear {
+  position: absolute; right: 8px; background: none; border: none; color: var(--text-dim);
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 2px 4px;
+}
+.ot-search-clear:hover { color: var(--text); }
+.ot-suggest {
+  position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 40;
+  background: var(--bg-elevated); border: 1px solid #2a3a5c; border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.5); overflow: hidden auto; max-height: 340px;
+}
+.ot-sug {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border: none; border-bottom: 1px solid #ffffff0a;
+  padding: 8px 11px; cursor: pointer; color: var(--text); font-size: 12.5px;
+}
+.ot-sug:last-child { border-bottom: none; }
+.ot-sug:hover, .ot-sug.active { background: var(--accent); color: #14142a; }
+.ot-sug-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ot-sug-ic { font-size: 15px; flex: none; }
+.ot-sug-lbl { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ot-sug-eco { font-size: 10.5px; opacity: .75; font-variant-numeric: tabular-nums; flex: none; }
+.ot-sug-badge { font-size: 10px; background: #ffffff14; border-radius: 5px; padding: 1px 6px; flex: none; white-space: nowrap; }
+.ot-sug:hover .ot-sug-badge, .ot-sug.active .ot-sug-badge { background: #14142a1f; }
+.ot-sug-empty { padding: 12px; font-size: 12.5px; color: var(--text-dim); text-align: center; }
 .ot-link {
   display: inline-flex;
   align-items: center;
@@ -3729,6 +3782,7 @@ body.guess-open { overflow: hidden; }
   .ot-body .concepts-intro { display: none; }
 
   .ot-toolbar { gap: 7px; }
+  .ot-search { flex-basis: 100%; max-width: none; order: -1; }
   .ot-legend { gap: 5px; }
   .ot-chip { font-size: 11px; padding: 4px 8px; }
   .ot-toolbar-btns { margin-left: 0; }

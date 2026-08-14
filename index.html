@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '181';
+window.APP_VERSION = '182';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -241,7 +241,7 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
 <div class="panel panel-wide" id="panel-tree" hidden>
   <div class="panel-header">
-    <h2>🌳 Arbre des ouvertures</h2>
+    <h2>📖 Ouvertures</h2>
     <button class="panel-close" aria-label="Fermer">&times;</button>
   </div>
   <div class="panel-body ot-body">
@@ -250,6 +250,12 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       <button class="ot-rotate-close" id="ot-rotate-close" type="button" aria-label="Ignorer">&times;</button>
     </div>
     <div class="ot-toolbar">
+      <div class="ot-search">
+        <span class="ot-search-ic">🔍</span>
+        <input class="ot-search-input" id="ot-search" type="search" placeholder="Rechercher une ouverture (nom ou code ECO)…" autocomplete="off" spellcheck="false" />
+        <button class="ot-search-clear" id="ot-search-clear" type="button" aria-label="Effacer" hidden>&times;</button>
+        <div class="ot-suggest" id="ot-suggest" hidden></div>
+      </div>
       <div class="ot-legend" id="ot-legend"></div>
       <div class="ot-toolbar-btns">
         <button class="ot-btn ot-btn-rotate" id="ot-landscape" type="button">⟳ Paysage</button>
@@ -669,19 +675,11 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
-    <button class="learn-tile" data-panel="openings">
+    <button class="learn-tile learn-tile-hero" data-panel="tree">
       <div class="learn-tile-icon">📖</div>
       <div class="learn-tile-txt">
         <span class="learn-tile-title">Ouvertures</span>
-        <span class="learn-tile-sub">Les grandes ouvertures, des plus simples aux plus exigeantes, coup par coup.</span>
-      </div>
-      <div class="learn-tile-arrow">→</div>
-    </button>
-    <button class="learn-tile" data-panel="tree">
-      <div class="learn-tile-icon">🌳</div>
-      <div class="learn-tile-txt">
-        <span class="learn-tile-title">Arbre des ouvertures</span>
-        <span class="learn-tile-sub">Toutes les familles en un coup d'œil, en arbre : pion roi, pion dame, flanc… et un lien direct vers chaque ouverture.</span>
+        <span class="learn-tile-sub">Toutes les familles en arbre - pion roi, pion dame, flanc. Cherche une ouverture, parcours ses coups un par un, et ouvre sa fiche ou son cours quand il existe.</span>
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>

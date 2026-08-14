@@ -4299,5 +4299,5 @@ const App = (() => {
   }
 
   document.addEventListener('DOMContentLoaded', init);
-  return { goTo, refreshHome, openOpeningExplorer, openOpeningByLine, openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing, openStoredReport, loadPgnAndAnalyze };
+  return { goTo, refreshHome, openOpeningExplorer, openOpeningByLine, openingExists: (line) => !!(line && OPENINGS.find(o => o.line === line)), openPanel: (name) => { if (_openPanel) _openPanel(name); }, isAnalyzing: () => analyzing, openStoredReport, loadPgnAndAnalyze };
 })();

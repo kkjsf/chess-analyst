@@ -537,6 +537,13 @@ const OpeningTree = (() => {
     BoardRenderer.setFlipped(prev);
   }
 
+  // fam héritée le long du chemin (le dernier ancêtre qui porte une famille)
+  function famOf(node) {
+    const path = findPath(TREE, node) || [node];
+    let f = null; path.forEach(n => { if (n.fam) f = n.fam; });
+    return f;
+  }
+
   function select(node, fam, card) {
     if (selectedCard) selectedCard.classList.remove('selected');
     if (card) { card.classList.add('selected'); selectedCard = card; }
@@ -548,9 +555,31 @@ const OpeningTree = (() => {
     const famTag = fam ? `<span class="ot-pill" style="background:${famColor(fam)}22;color:${famColor(fam)}">${FAM[fam].name}</span>` : '';
     const eco = node.eco ? `<span class="ot-eco">${node.eco}</span>` : '';
     const ccUrl = node.cc ? `${CC_HUB}/${node.cc}` : CC_HUB;
+
+    // ── Liens adaptatifs : fiche Chess Analyst si elle existe, sinon Chess.com ;
+    // cours lié en bonus (même s'il est ancré sur une ligne parente). ──
+    const line = node.appLine;
+    const ficheExists = (typeof App !== 'undefined' && App.openingExists) ? App.openingExists(line) : false;
+    const courseMatch = (typeof Courses !== 'undefined' && Courses.match) ? Courses.match(line) : null;
+    let actions = '';
+    if (ficheExists) {
+      actions += `<button class="ot-link ot-link-app" id="ot-open-app">${courseMatch ? '♟ Ouvrir la fiche + cours' : '♟ Ouvrir la fiche'}</button>`;
+    } else if (courseMatch) {
+      actions += `<button class="ot-link ot-link-app" id="ot-open-course">🎓 Ouvrir le cours lié</button>`;
+    }
+    actions += `<a class="ot-link ot-link-cc" id="ot-open-cc" href="${ccUrl}" target="_blank" rel="noopener">↗ Voir sur Chess.com</a>`;
+
+    // ── Suites possibles : chips cliquables vers les enfants directs. ──
+    const kids = node.kids || [];
+    const nextRow = kids.length ? `<div class="ot-next-moves"><span class="ot-nm-label">Suites</span>${kids.map((k, i) =>
+      `<button class="ot-nm" data-ki="${i}" style="--ot-fam:${famColor(k.fam || fam)}">${k.mv ? `<b>${k.mv}</b> ` : ''}${k.lbl}</button>`).join('')}</div>` : '';
+
     const detail = document.getElementById('ot-detail');
     detail.innerHTML = `
-      <svg class="ot-dboard" id="ot-dboard" viewBox="0 0 360 360"></svg>
+      <div class="ot-detail-board">
+        <svg class="ot-dboard" id="ot-dboard" viewBox="0 0 360 360"></svg>
+        <div class="ot-actions">${actions}</div>
+      </div>
       <div class="ot-txt">
         <h3>${node.icon || ''} ${node.lbl}</h3>
         <div class="ot-metarow">${famTag}${eco}<span class="ot-path">${moves ? moves.replace(/(\d+\.(?:\.\.)?)/g, '<b>$1</b>') : 'position de départ'}</span></div>
@@ -559,17 +588,38 @@ const OpeningTree = (() => {
           <div class="ot-plan ot-plan-w"><span class="ot-plan-side">♔ Plan des Blancs</span>${node.plans.w}</div>
           <div class="ot-plan ot-plan-b"><span class="ot-plan-side">♚ Plan des Noirs</span>${node.plans.b}</div>
         </div>` : ''}
-        <div class="ot-actions">
-          <button class="ot-link ot-link-app" id="ot-open-app">♟ Ouvrir dans Chess Analyst</button>
-          <a class="ot-link ot-link-cc" id="ot-open-cc" href="${ccUrl}" target="_blank" rel="noopener">↗ Voir sur Chess.com</a>
-        </div>
+        ${nextRow}
       </div>`;
     renderDetailBoard(node.fen);
     const appBtn = document.getElementById('ot-open-app');
-    appBtn.addEventListener('click', () => {
-      if (typeof App !== 'undefined' && App.openOpeningByLine) App.openOpeningByLine(node.appLine);
+    if (appBtn) appBtn.addEventListener('click', () => {
+      if (typeof App !== 'undefined' && App.openOpeningByLine) App.openOpeningByLine(line);
     });
-    if (!node.appLine) appBtn.title = "Aucune fiche dédiée — ouvre la liste des ouvertures";
+    const courseBtn = document.getElementById('ot-open-course');
+    if (courseBtn) courseBtn.addEventListener('click', () => {
+      if (typeof App !== 'undefined' && App.openOpeningByLine) App.openOpeningByLine(courseMatch.key);
+    });
+    detail.querySelectorAll('.ot-nm').forEach(btn => {
+      btn.addEventListener('click', () => navigateTo(kids[+btn.dataset.ki]));
+    });
+  }
+
+  // Déplie les ancêtres d'un nœud, le sélectionne, le centre à l'écran.
+  function navigateTo(node) {
+    if (!node) return;
+    const path = findPath(TREE, node) || [node];
+    const byNode = new Map();
+    document.querySelectorAll('.ot-subtree').forEach(st => byNode.set(st._node, st));
+    path.forEach(n => { const st = byNode.get(n); if (st) st.classList.remove('collapsed'); });
+    const st = byNode.get(node);
+    const card = st ? st.querySelector(':scope > .ot-card') : null;
+    if (card) card.classList.remove('ot-hidden');
+    select(node, famOf(node), card);
+    draw();
+    requestAnimationFrame(() => {
+      draw();
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    });
   }
 
   function buildNode(node, parentFam, depth) {
@@ -634,6 +684,7 @@ const OpeningTree = (() => {
     el.innerHTML = '';
     Object.entries(FAM).forEach(([k, f]) => {
       const c = document.createElement('button'); c.className = 'ot-chip'; c.type = 'button';
+      c.dataset.fam = k;
       c.innerHTML = `<span class="ot-dot" style="background:${f.color}"></span>${f.name}`;
       c.addEventListener('click', () => {
         active.has(k) ? (active.delete(k), c.classList.add('off')) : (active.add(k), c.classList.remove('off'));
@@ -663,12 +714,99 @@ const OpeningTree = (() => {
     cv._panBound = true;
   }
 
+  // ─────────────────────────── Recherche + autocomplétion ───────────────────────────
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  let SEARCH = [], sugItems = [], sugIndex = -1;
+
+  function buildSearchIndex() {
+    SEARCH = [];
+    (function walk(n) {
+      if (n.lbl) {
+        const fam = famOf(n);
+        SEARCH.push({ node: n, lbl: n.lbl, eco: n.eco || '', fam,
+          hay: norm(`${n.lbl} ${n.eco || ''} ${fam ? FAM[fam].name : ''} ${n.mv || ''}`) });
+      }
+      (n.kids || []).forEach(walk);
+    })(TREE);
+  }
+
+  function closeSuggest() {
+    const s = document.getElementById('ot-suggest');
+    if (s) { s.hidden = true; s.innerHTML = ''; }
+    sugItems = []; sugIndex = -1;
+  }
+
+  function ensureFamVisible(fam) {
+    if (!fam || active.has(fam)) return;
+    active.add(fam);
+    const chip = document.querySelector(`.ot-chip[data-fam="${fam}"]`);
+    if (chip) chip.classList.remove('off');
+    applyFilter();
+  }
+
+  function runSearch(q) {
+    const s = document.getElementById('ot-suggest');
+    const clear = document.getElementById('ot-search-clear');
+    if (!s) return;
+    if (clear) clear.hidden = !q;
+    const nq = norm(q.trim());
+    if (!nq) { closeSuggest(); return; }
+    const toks = nq.split(/\s+/);
+    sugItems = SEARCH.filter(e => toks.every(t => e.hay.includes(t))).slice(0, 10);
+    sugIndex = -1;
+    if (!sugItems.length) { s.innerHTML = `<div class="ot-sug-empty">Aucune ouverture trouvée</div>`; s.hidden = false; return; }
+    s.innerHTML = sugItems.map((e, i) => {
+      const fiche = (typeof App !== 'undefined' && App.openingExists) ? App.openingExists(e.node.appLine) : false;
+      const course = (typeof Courses !== 'undefined' && Courses.match) ? Courses.match(e.node.appLine) : null;
+      const badges = `${fiche ? '<span class="ot-sug-badge">📖 fiche</span>' : ''}${course ? '<span class="ot-sug-badge">🎓 cours</span>' : ''}`;
+      const eco = e.eco ? `<span class="ot-sug-eco">${e.eco}</span>` : '';
+      return `<button class="ot-sug" type="button" data-i="${i}"><span class="ot-sug-dot" style="background:${famColor(e.fam)}"></span><span class="ot-sug-ic">${e.node.icon || '♟️'}</span><span class="ot-sug-lbl">${e.lbl}</span>${eco}${badges}</button>`;
+    }).join('');
+    s.hidden = false;
+    s.querySelectorAll('.ot-sug').forEach(b => b.addEventListener('click', () => pick(+b.dataset.i)));
+  }
+
+  function pick(i) {
+    const e = sugItems[i]; if (!e) return;
+    const inp = document.getElementById('ot-search');
+    const clear = document.getElementById('ot-search-clear');
+    if (inp) inp.value = '';
+    if (clear) clear.hidden = true;
+    closeSuggest();
+    ensureFamVisible(e.fam);
+    navigateTo(e.node);
+  }
+
+  function moveSel(d) {
+    if (!sugItems.length) return;
+    sugIndex = (sugIndex + d + sugItems.length) % sugItems.length;
+    document.querySelectorAll('#ot-suggest .ot-sug').forEach((b, i) => b.classList.toggle('active', i === sugIndex));
+  }
+
+  function setupSearch() {
+    const inp = document.getElementById('ot-search'); if (!inp || inp._bound) return;
+    buildSearchIndex();
+    inp.addEventListener('input', () => runSearch(inp.value));
+    inp.addEventListener('focus', () => { if (inp.value.trim()) runSearch(inp.value); });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveSel(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); moveSel(-1); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (sugItems.length) pick(sugIndex >= 0 ? sugIndex : 0); }
+      else if (e.key === 'Escape') { inp.value = ''; closeSuggest(); }
+    });
+    const clear = document.getElementById('ot-search-clear');
+    if (clear) clear.addEventListener('click', () => { inp.value = ''; clear.hidden = true; closeSuggest(); inp.focus(); });
+    document.addEventListener('click', e => { if (!e.target.closest('.ot-search')) closeSuggest(); });
+    inp._bound = true;
+  }
+
   function build() {
     const tree = document.getElementById('ot-tree'); if (!tree) return;
     tree.innerHTML = '';
     tree.appendChild(buildNode(TREE, null, 0));
     tree.classList.toggle('ot-focus-on', focusMode);
     buildLegend();
+    setupSearch();
     enablePan();
     const expand = document.getElementById('ot-expand'), collapse = document.getElementById('ot-collapse');
     if (expand) expand.onclick = () => { document.querySelectorAll('.ot-subtree').forEach(s => s.classList.remove('collapsed')); draw(); };

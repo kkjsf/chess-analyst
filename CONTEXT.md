@@ -21,6 +21,35 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v182 - refonte de la section Ouvertures (arbre = la section, tree-centric)**
+  - User : fusionner l'arbre + les cours + les fiches d'ouverture en UNE seule section « Ouvertures »
+    cohérente. Choix d'IA retenu (via question) : **tout dans l'arbre** - l'arbre EST la section ;
+    fiches et cours sont atteints DEPUIS l'arbre (boutons du panneau détail + résultats de recherche).
+    La grille catalogue de fiches (tuile `openings`) disparaît (redondante : chaque fiche a son nœud).
+    La checklist « Ouvertures à connaître » reste une tuile à part.
+  - **Hub Apprendre** : les 2 tuiles `openings` (grille de fiches) + `tree` (arbre) fusionnées en UNE
+    tuile « 📖 Ouvertures » (`data-panel="tree"`, `learn-tile-hero`). `#panel-openings` reste en DOM
+    comme filet de sécurité (fallback de `openOpeningByLine` quand aucune fiche ne matche) mais n'a
+    plus de point d'entrée. Titre du panneau `#panel-tree` : « 🌳 Arbre des ouvertures » → « 📖 Ouvertures ».
+  - **Recherche + autocomplétion** (`opening-tree.js`) : `<input#ot-search>` injecté dans `.ot-toolbar`
+    (+ `#ot-suggest` dropdown, `#ot-search-clear`). Index `SEARCH` = tous les nœuds TREE (lbl/eco/fam/mv),
+    normalisation accent-insensible (NFD). Suggestions (≤10) avec pastille famille + icône + ECO +
+    badges « 📖 fiche » / « 🎓 cours ». Clavier ↑/↓/Entrée/Échap. À la sélection → `navigateTo(node)` :
+    déplie les ancêtres, `select()`, `scrollIntoView` centré ; `ensureFamVisible()` ré-active la famille
+    si son filtre légende était coupé (les chips portent désormais `data-fam`).
+  - **Panneau détail enrichi** (`select()`), échiquier **240→300px** (mobile min(78vw,300), petit
+    paysage min(100%,200)) : board déplacé dans un wrapper `.ot-detail-board` (board + actions
+    empilées dessous) ; nouvelle rangée **« Suites »** = chips cliquables vers les enfants directs
+    (`.ot-nm`, navigation via `navigateTo`) ; idea/plans/ECO/famille conservés.
+  - **Liens adaptatifs** (piste #4) : si une **fiche** existe (`App.openingExists(line)` - nouvel export)
+    → bouton « ♟ Ouvrir la fiche » (« + cours » si `Courses.match` matche aussi) ; sinon si un **cours**
+    est lié → « 🎓 Ouvrir le cours lié » ; **Chess.com** toujours en secondaire. Plus de bouton fiche
+    désactivé/à vide.
+  - Vérifié en preview (pane masqué → pilotage JS, ouverture synchrone du panneau car rAF gelé) :
+    95 cartes, board 300px, recherche « italienne » → badges fiche+cours → nav OK, « centrale » → cours
+    seul, « C45 » (ECO) → famille Écossaise, chip de suite → nav, fiche → ouvre l'explorer, filtre
+    famille coupé puis « najdorf » → famille ré-activée + carte visible, responsive mobile (recherche
+    pleine largeur order -1, détail empilé, board 293px, 0 overflow), 0 erreur console. APP_VERSION 181→**182**.
 - **v181 - carte Coach « Performance par ouverture »**
   - Nouvelle carte `renderOpeningPerf(an)` (js/coach.js) dans le groupe « Style de jeu & adversaires »
     (avant Profil/Répertoire). Croise tes vraies parties avec leur ouverture : regroupe par famille
