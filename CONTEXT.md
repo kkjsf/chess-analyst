@@ -21,6 +21,57 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v183 - Tactiques & Mats : beaucoup plus d'exercices, en vraies positions, + recherche**
+  - User : « exemples des exercices plus nombreux pour chaque mat ou tactique, et aussi + parlant
+    (dans un contexte donné avec plus de pièces, pas juste les pièces qu'il faut pour une fourchette) ;
+    sois sûr qu'il y ait une illustration principale pour chaque mat et tactique ; ajoute une barre
+    de recherche pour mat et pour tactiques ».
+  - **Exercices : 31 → 75** (46 côté Tactiques, 29 côté Mats). Trois familles, affichées telles quelles
+    dans l'entraînement via des « chips » de contexte au-dessus de l'échiquier :
+    - `mine:` **24 exercices tirés des vraies parties de Simon** (extraits de `coach-data.json`,
+      `analysis.blunderList` : des coups gagnants qu'il a lui-même laissés passer). Chip
+      « 🎮 ta partie - contre X · blitz · 12 mai 2026 » + lien vers la partie chess.com.
+    - `ctx:` **22 exercices « habillés »** : le schéma épuré d'origine, rejoué avec un décor de pièces
+      et de pions équilibré autour (structure de pions, tours, roque) pour qu'il ressemble à une partie.
+    - `demo: true` : les 7 figures pures restantes (géométrie du motif). Sur celles-là, un autre coup
+      gagnant n'est plus traité comme une faute : message « d'autres coups gagnent aussi, cherche la figure ».
+  - **Illustration principale pour tout le monde** : ajout de diagrammes + flèches pour Attraction,
+    Coup intermédiaire, Méthode CCT, Paire de fous, Initiative & tempo, Prophylaxie (et le **Mat de Légal**
+    qui n'avait aucun diagramme : position finale calculée `rn1q1bnr/ppp1kB1p/3p2p1/3NN3/4P3/8/PPPP1PPP/R1BbK2R`).
+  - **Barres de recherche** : composant partagé `.lx-search` (CSS) + compteur `.lx-count`.
+    - Tactiques (`#panel-concepts`) : `#concept-search` filtre les 28 motifs sur nom / nom anglais /
+      catégorie / description (insensible aux accents), masque les en-têtes de catégorie vides,
+      état vide `#concept-empty`, compteur « N motifs - M exercices jouables ».
+    - Mats (overlay `#mate-stage`) : `#mate-search` filtre les 14 figures sur nom / nom anglais / leçon /
+      séquence / groupe, masque les groupes vides, et **la requête survit** à l'aller-retour vers une fiche
+      de mat (variable `query` du module).
+    - Piège CSS corrigé : `.concept`/`.mate-card` posent `display:flex`, qui écrase l'attribut `[hidden]`
+      → règles `.concept[hidden], .concept-cat[hidden], .mate-card[hidden], .mate-group[hidden] { display:none }`.
+  - **Outillage de vérification (nouveau, dans `tools/`)** - tout le contenu ajouté est vérifié hors-ligne :
+    - `tools/sf.cjs` : pilote Stockfish (le build asm.js `js/vendor/stockfish.js`) en Node via les
+      globales `onmessage`/`postMessage` du build Worker. MultiPV + PV complète.
+    - `tools/verify_lessons.cjs` : passe les DEUX catalogues au moteur. Pour chaque exercice : FEN
+      lisible, ligne légale, le coup à trouver **est** le meilleur coup du moteur, la réponse scriptée
+      est une vraie défense, et la ligne gagne (mat, ou gain matériel ≥ 2 / éval ≥ 2,5). Les diagrammes
+      de mat doivent être des mats. Flags respectés : `demo` (figure pure) et `trap` (Légal : la ligne ne
+      mate que si l'adversaire prend la dame). Lancer : `DEPTH=14 node tools/verify_lessons.cjs [mates|tactics]`.
+    - Scripts jetables (scratchpad, non commités) : minage de `coach-data.json` par motif (détecteurs
+      fourchette/clouage/enfilade/découverte/double échec/surcharge/interférence écrits à la main sur le
+      plateau), habillage automatique des schémas épurés, et récupération d'un run interrompu depuis son log.
+  - Note : 4 exercices dont la « tactique » ne gagnait rien (position matériellement perdue, ou gain
+    inférieur à 1 pion) ont été supprimés. Les concepts purement stratégiques (pion isolé, colonne ouverte,
+    rupture, cases faibles, paire de fous, zugzwang, initiative, prophylaxie) restent illustrés mais sans
+    exercice - ce ne sont pas des motifs à calculer. **Restent sans exercice** (mais avec illustration) :
+    `Interférence` (motif trop rare pour être miné dans les parties de Simon) et les 3 entrées de méthode
+    `Méthode CCT`, `Coups forçants`, `Coups candidats` - le minage ciblé pour elles s'est fait tuer deux
+    fois par un « engine timeout » du Stockfish asm.js (ne PAS lancer deux process Stockfish Node en
+    parallèle, ils s'affament). C'est la première chose à reprendre.
+  - `Attraction` et `Moulin` n'ont qu'un exercice chacun (leur schéma épuré `demo`), faute de position
+    équivalente trouvée dans les parties.
+  - Piste écartée : les puzzles Lichess par thème (`/api/puzzle/next?angle=...`, base CC0) auraient donné
+    des positions de vraies parties d'inconnus ; l'API nous a rate-limité (429 après ~4 req/s en parallèle),
+    et les parties de Simon sont de toute façon plus parlantes. Gotcha réseau : `fetch` Node tente l'IPv6
+    de lichess et time out → `require('dns').setDefaultResultOrder('ipv4first')`.
 - **v182 - refonte de la section Ouvertures (arbre = la section, tree-centric)**
   - User : fusionner l'arbre + les cours + les fiches d'ouverture en UNE seule section « Ouvertures »
     cohérente. Choix d'IA retenu (via question) : **tout dans l'arbre** - l'arbre EST la section ;

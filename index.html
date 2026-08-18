@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '182';
+window.APP_VERSION = '183';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 </script>
 </head>
@@ -224,7 +224,14 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
   </div>
   <div class="panel-body">
     <p class="concepts-intro">Lexique des motifs tactiques, des mats classiques, des méthodes de calcul et des concepts stratégiques que l'on retrouve dans presque toutes les parties. Touche un motif pour l'agrandir — et, quand l'icône <b>🎯</b> apparaît, pour <b>t'entraîner</b> à le jouer sur l'échiquier. Flèche <span style="color:#56b886">verte</span> = ligne d'attaque/soutien, <span style="color:#5b8fb9">bleue</span> = pièce qui se déplace, <span style="color:#d36b6b">rouge</span> = coup décisif.</p>
+    <div class="lx-search">
+      <span class="lx-search-ic">🔍</span>
+      <input class="lx-search-input" id="concept-search" type="search" placeholder="Chercher un motif : fourchette, clouage, zwischenzug…" autocomplete="off" spellcheck="false" />
+      <button class="lx-search-clear" id="concept-search-clear" type="button" aria-label="Effacer" hidden>&times;</button>
+    </div>
+    <div class="lx-count" id="concept-count"></div>
     <div class="concepts-grid" id="concepts-list"></div>
+    <p class="lx-credit">Les exercices marqués <b>🎮 ta partie</b> sont des positions de <b>tes propres parties</b> : à chaque fois, un coup gagnant que l'analyse du Coach a repéré et que tu n'as pas joué. Les autres sont des schémas épurés, parfois « habillés » d'un décor de pièces pour ressembler à une vraie partie. Tous ont été vérifiés au moteur : un seul coup gagne.</p>
   </div>
 </div>
 

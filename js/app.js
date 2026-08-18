@@ -3807,16 +3807,18 @@ const App = (() => {
     const host = $('#concepts-list');
     if (!host || typeof BoardRenderer === 'undefined') return;
 
-    let lastCat = null, html = '';
+    let lastCat = null, html = '', catIdx = -1;
     for (const c of CONCEPTS) {
-      if (c.cat !== lastCat) { html += `<h4 class="concept-cat">${c.cat}</h4>`; lastCat = c.cat; }
+      if (c.cat !== lastCat) { catIdx++; html += `<h4 class="concept-cat" data-cat="${catIdx}">${c.cat}</h4>`; lastCat = c.cat; }
       const diagram = c.fen
         ? `<div class="concept-diagram"><svg class="cd-board" viewBox="0 0 360 360"></svg><svg class="cd-arrows" viewBox="0 0 360 360"></svg></div>`
         : '';
       const en = c.en ? ` <span class="concept-en">${c.en}</span>` : '';
-      const train = (c.puzzles && c.puzzles.length) ? ` <span class="concept-train" title="Entraînement disponible">🎯</span>` : '';
-      html += `<div class="concept">${diagram}<div class="concept-body"><span class="concept-name">${c.name}${en}${train}</span><p>${c.desc}</p></div></div>`;
+      const n = (c.puzzles && c.puzzles.length) || 0;
+      const train = n ? ` <span class="concept-train" title="${n} exercice${n > 1 ? 's' : ''}">🎯 ${n}</span>` : '';
+      html += `<div class="concept" data-cat="${catIdx}">${diagram}<div class="concept-body"><span class="concept-name">${c.name}${en}${train}</span><p>${c.desc}</p></div></div>`;
     }
+    html += `<div class="lx-empty" id="concept-empty" hidden>Aucun motif ne correspond.<br><span>Essaie « fourchette », « mat », « pion »…</span></div>`;
     host.innerHTML = html;
 
     const prevFlip = BoardRenderer.isFlipped();
@@ -3831,7 +3833,40 @@ const App = (() => {
     });
     BoardRenderer.setFlipped(prevFlip);
 
+    initConceptSearch(host, cards);
     initConceptModal();
+  }
+
+  // Live filter over the motif catalog (name, English name, category, description).
+  function initConceptSearch(host, cards) {
+    const input = $('#concept-search'), clear = $('#concept-search-clear'), count = $('#concept-count');
+    if (!input) return;
+    const fold = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const hay = CONCEPTS.map(c => fold([c.name, c.en, c.cat, c.desc].join(' ')).replace(/<[^>]+>/g, ''));
+    const total = CONCEPTS.length;
+    const heads = [...host.querySelectorAll('.concept-cat')];
+    const empty = $('#concept-empty');
+
+    const apply = () => {
+      const q = fold(input.value.trim());
+      clear.hidden = !q;
+      const shown = new Set();
+      CONCEPTS.forEach((c, i) => {
+        const ok = !q || hay[i].includes(q);
+        cards[i].hidden = !ok;
+        if (ok) shown.add(cards[i].dataset.cat);
+      });
+      heads.forEach(h => { h.hidden = !!q && !shown.has(h.dataset.cat); });
+      const n = CONCEPTS.filter((_, i) => !cards[i].hidden).length;
+      if (empty) empty.hidden = n > 0;
+      count.innerHTML = q
+        ? `<b>${n}</b> motif${n > 1 ? 's' : ''} sur ${total}`
+        : `${total} motifs — ${CONCEPTS.reduce((a, c) => a + ((c.puzzles && c.puzzles.length) || 0), 0)} exercices jouables`;
+    };
+    input.addEventListener('input', apply);
+    clear.addEventListener('click', () => { input.value = ''; apply(); input.focus(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape' && input.value) { e.stopPropagation(); input.value = ''; apply(); } });
+    apply();
   }
 
   function openConceptModal(c) {
