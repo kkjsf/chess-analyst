@@ -1,0 +1,467 @@
+<title>Cours d'ouverture, refonte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap">
+
+<style>
+/* Palette = celle de l'app (css/style.css), pas une nouvelle. Thème sombre
+   assumé : l'app n'a pas de mode clair, en inventer un ici serait hors-sujet.
+   Le fond est peint explicitement pour que la page tienne sur n'importe quel
+   hôte. */
+:root{
+  --bg:#12172b; --bg-2:#0e1223; --bg-card:#1a2140; --bg-elev:#212a4d; --card-2:#242c52;
+  --accent:#e2b857; --accent-dim:#c9982e;
+  --text:#eef1f7; --text-dim:#9aa4bd; --text-faint:#6b7694;
+  --success:#4ade80; --danger:#f87171; --warning:#fbbf24; --info:#7ba7d6;
+  --line:rgba(255,255,255,.07); --line-str:rgba(255,255,255,.13);
+  --sq-l:#ebd7b2; --sq-d:#ae8a68;
+  --radius:16px;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.page{max-width:1320px; margin:0 auto; padding:0 20px 80px}
+
+/* ── notes de maquette ─────────────────────────────────────────────────── */
+.note{
+  background:var(--bg-2); border:1px solid var(--line-str); border-left:3px solid var(--accent);
+  border-radius:10px; padding:14px 18px; margin:0 0 22px; font-size:14px; color:var(--text-dim);
+}
+.note b{color:var(--text)}
+.note code{font-family:var(--mono); font-size:12.5px; color:var(--accent); background:rgba(226,184,87,.09); padding:1px 5px; border-radius:4px}
+
+header.top{padding:44px 0 26px}
+.eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:0 0 14px}
+h1{font-size:clamp(28px,4.4vw,42px); font-weight:800; letter-spacing:-.022em; line-height:1.1; margin:0 0 12px; text-wrap:balance}
+.sub{font-size:16.5px; color:var(--text-dim); max-width:62ch; margin:0}
+
+h2.sec{
+  font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--text-faint); margin:46px 0 16px; padding-bottom:10px; border-bottom:1px solid var(--line);
+}
+
+/* ── diagnostic avant/après ────────────────────────────────────────────── */
+.diag{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:10px}
+.diag>div{background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px}
+.diag h3{margin:0 0 12px; font-size:14px; font-weight:700; letter-spacing:.04em}
+.diag .bad h3{color:var(--danger)} .diag .good h3{color:var(--success)}
+.diag ul{margin:0; padding-left:18px; font-size:14px; color:var(--text-dim)}
+.diag li{margin-bottom:7px}
+.diag li b{color:var(--text); font-weight:600}
+.diag code{font-family:var(--mono); font-size:12px; color:var(--accent)}
+
+/* ── la maquette ───────────────────────────────────────────────────────── */
+.mock{
+  background:var(--bg-card); border:1px solid var(--line-str); border-radius:var(--radius);
+  overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.42);
+}
+.mock-bar{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:14px 20px; background:var(--bg-2); border-bottom:1px solid var(--line-str);
+}
+.mock-bar .name{font-weight:700; font-size:17px; letter-spacing:-.01em}
+.eco{font-family:var(--mono); font-size:11px; font-weight:600; color:var(--accent);
+  background:rgba(226,184,87,.11); border:1px solid rgba(226,184,87,.26); border-radius:5px; padding:2px 7px}
+.lvl{font-size:12px; color:var(--text-dim)}
+.prog{margin-left:auto; display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text-dim)}
+.prog-track{width:118px; height:6px; border-radius:3px; background:rgba(255,255,255,.09); overflow:hidden}
+.prog-fill{height:100%; width:27%; background:var(--accent); border-radius:3px; transition:width .3s}
+.mock-bar .x{background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;
+  min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;margin:-8px -8px -8px 0}
+
+/* Pas de min-height : reserver 600px puis n'en remplir 178 est exactement le
+   defaut qu'on corrige. La fenetre fait la hauteur de sa plus haute colonne. */
+.grid{display:grid; grid-template-columns:296px minmax(0,1fr) 336px}
+
+/* colonne 1 : l'arbre = la navigation */
+.rail{background:var(--bg-2); border-right:1px solid var(--line); padding:16px 0 20px}
+.rail-h{font-size:11px; font-weight:700; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--text-faint); padding:0 18px 12px}
+.node{
+  position:relative; display:block; width:100%; text-align:left; cursor:pointer;
+  background:none; border:none; color:inherit; font:inherit;
+  padding:8px 16px 8px 0; border-left:2px solid transparent;
+}
+.node:hover{background:rgba(255,255,255,.035)}
+.node.on{background:rgba(226,184,87,.10); border-left-color:var(--accent)}
+.node-in{display:flex; align-items:baseline; gap:9px}
+.san{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text); white-space:nowrap}
+.node.on .san{color:var(--accent)}
+.nname{font-size:12.5px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.node.on .nname{color:var(--text)}
+.tick{margin-left:auto; font-size:11px; color:var(--success); opacity:0; flex-shrink:0}
+.node.seen .tick{opacity:1}
+.d0{padding-left:18px} .d1{padding-left:38px} .d2{padding-left:58px} .d3{padding-left:78px}
+/* le trait de branche : c'est lui qui rend la fourche lisible */
+.node[class*=" d1"]::before,.node[class*=" d2"]::before,.node[class*=" d3"]::before{
+  content:""; position:absolute; left:26px; top:0; bottom:0; width:1px; background:var(--line-str);
+}
+.node.d2::before{left:46px} .node.d3::before{left:66px}
+.node.d1::after,.node.d2::after,.node.d3::after{
+  content:""; position:absolute; left:26px; top:18px; width:8px; height:1px; background:var(--line-str);
+}
+.node.d2::after{left:46px} .node.d3::after{left:66px}
+.tag{font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase;
+  padding:1px 5px; border-radius:4px; flex-shrink:0}
+.t-main{background:rgba(226,184,87,.16); color:var(--accent)}
+.t-trap{background:rgba(248,113,113,.16); color:var(--danger)}
+.t-safe{background:rgba(74,222,128,.14); color:var(--success)}
+.t-key{background:rgba(123,167,214,.16); color:var(--info)}
+
+/* colonne 2 : echiquier */
+.center{padding:20px 22px 24px; display:flex; flex-direction:column; gap:14px; min-width:0}
+.crumb{font-family:var(--mono); font-size:11.5px; color:var(--text-faint); display:flex; flex-wrap:wrap; gap:5px}
+.crumb b{color:var(--text-dim); font-weight:500}
+.board-wrap{width:100%; max-width:430px; margin:0 auto; aspect-ratio:1}
+svg.board{width:100%; height:auto; display:block; border-radius:9px; overflow:hidden}
+.strip{display:flex; flex-wrap:wrap; gap:4px; justify-content:center; max-width:430px; margin:0 auto}
+.mv{font-family:var(--mono); font-size:12px; padding:3px 7px; border-radius:5px;
+  background:rgba(255,255,255,.05); color:var(--text-dim); cursor:pointer; border:1px solid transparent}
+/* Sur un ecran tactile les puces de coups deviennent attrapables ; a la souris
+   elles restent denses, la ligne de coups doit tenir sous l'echiquier. */
+@media (pointer:coarse){
+  .mv{padding:9px 11px; font-size:13px}
+  .mv.num{padding:9px 3px}
+}
+.mv:hover{background:rgba(255,255,255,.1); color:var(--text)}
+.mv.cur{background:rgba(226,184,87,.17); border-color:rgba(226,184,87,.4); color:var(--accent); font-weight:600}
+.mv.num{background:none; color:var(--text-faint); cursor:default; padding-left:2px; padding-right:2px}
+.mv.num:hover{background:none}
+
+/* colonne 3 : tout ce qui concerne CE noeud */
+.side{background:var(--bg-card); border-left:1px solid var(--line); padding:20px 20px 26px}
+.side h3{margin:0 0 4px; font-size:17px; font-weight:700; letter-spacing:-.012em}
+.side .who{font-family:var(--mono); font-size:11px; color:var(--accent); margin:0 0 14px; letter-spacing:.04em}
+.blk{margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--line)}
+.blk:last-child{border-bottom:none; margin-bottom:0; padding-bottom:0}
+.blk-h{font-size:10.5px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--text-faint); margin:0 0 7px}
+.blk p{margin:0 0 8px; font-size:14px; color:var(--text-dim); line-height:1.62}
+.blk p:last-child{margin-bottom:0}
+.blk b{color:var(--text); font-weight:600}
+.callout{border-radius:10px; padding:12px 14px; font-size:13.5px; line-height:1.6}
+.c-trap{background:rgba(248,113,113,.09); border:1px solid rgba(248,113,113,.24); color:var(--text-dim)}
+.c-trap b{color:var(--danger)}
+.c-safe{background:rgba(74,222,128,.08); border:1px solid rgba(74,222,128,.22); color:var(--text-dim)}
+.c-safe b{color:var(--success)}
+.c-tr{background:rgba(123,167,214,.08); border:1px solid rgba(123,167,214,.22); color:var(--text-dim)}
+.c-tr b{color:var(--info)}
+.act{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.btn{font:inherit; font-size:13px; font-weight:600; border-radius:9px; padding:9px 13px; cursor:pointer;
+  border:1px solid var(--line-str); background:rgba(255,255,255,.05); color:var(--text); min-height:38px}
+.btn:hover{background:rgba(255,255,255,.1)}
+.btn.p{background:var(--accent); border-color:var(--accent); color:#1a1a2e}
+.btn.p:hover{background:var(--accent-dim)}
+.qz{margin-top:4px}
+.qz .q{font-size:14px; color:var(--text); font-weight:600; margin:0 0 10px}
+.opt{display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; margin-bottom:6px;
+  padding:9px 12px; border-radius:9px; border:1px solid var(--line-str); background:rgba(255,255,255,.04);
+  color:var(--text-dim); cursor:pointer; min-height:38px}
+.opt:hover{background:rgba(255,255,255,.09); color:var(--text)}
+.opt.ok{border-color:var(--success); background:rgba(74,222,128,.13); color:var(--success); font-weight:600}
+.opt.ko{border-color:var(--danger); background:rgba(248,113,113,.12); color:var(--danger)}
+.qz .exp{font-size:13px; color:var(--text-dim); margin:9px 0 0; padding-left:11px; border-left:2px solid var(--success)}
+
+button:focus-visible,.node:focus-visible,.opt:focus-visible,.mv:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ── responsive : l'arbre devient un fil, le contenu passe dessous ─────── */
+@media (max-width:1080px){
+  .grid{grid-template-columns:1fr}
+  .rail{max-height:none; border-right:none; border-bottom:1px solid var(--line);
+    display:flex; gap:0; overflow-x:auto; overflow-y:hidden; padding:10px 8px}
+  .rail-h{display:none}
+  /* 44px de haut : meme regle que celle appliquee a .panel-close dans l'app.
+     Le fil est defilable au doigt, ses puces doivent etre attrapables. */
+  .node{width:auto; flex-shrink:0; padding:12px 13px!important; min-height:44px; border-left:none;
+    border-bottom:2px solid transparent; border-radius:8px; display:flex; align-items:center}
+  .node.on{border-left-color:transparent; border-bottom-color:var(--accent)}
+  .node::before,.node::after{display:none!important}
+  .node .nname{max-width:110px}
+  .node .tick{margin-left:6px}
+  .side{border-left:none; border-top:1px solid var(--line); max-height:none}
+  .diag{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .page{padding:0 14px 60px}
+  .mock-bar{gap:9px} .prog{width:100%; margin-left:0}
+}
+</style>
+
+<div class="page">
+
+<header class="top">
+  <p class="eyebrow">Maquette / proposition</p>
+  <h1>Le cours d'ouverture, reconstruit autour de l'arbre</h1>
+  <p class="sub">Les six onglets découpent la matière par <em>type de contenu</em>. Cette proposition la découpe par <em>position dans l'arbre</em> : c'est la façon dont une ouverture s'apprend, et ça supprime les redondances au passage.</p>
+</header>
+
+<div class="note">
+  <b>Maquette interactive</b> — clique les branches dans la colonne de gauche, les coups sous l'échiquier, et réponds au quiz de la branche Deux Cavaliers. Contenu et positions repris tels quels de l'app (Partie Italienne, <code>js/courses.js</code>) : rien n'est inventé pour la démo.
+</div>
+
+<h2 class="sec">Ce qui coince aujourd'hui</h2>
+<div class="diag">
+  <div class="bad">
+    <h3>Six onglets, découpés par type</h3>
+    <ul>
+      <li><b>La fourche disparaît.</b> Après 3.Fc4 les Noirs ont trois réponses. « Lignes » les donne en trois séquences plates, « Transpositions » les redonne en trois paragraphes. Nulle part on ne voit que c'est <b>un</b> embranchement.</li>
+      <li><b>Redondance mesurée.</b> <code>Transpositions[0]</code> = « 3…Fc5 » et <code>Lines[0]</code> = « Giuoco Piano » sont la même branche. Idem pour les Deux Cavaliers.</li>
+      <li><b>Sous-menus opaques.</b> « Lignes », « Transpositions », « Plans » : impossible de deviner ce qu'il y a derrière avant d'avoir cliqué les trois.</li>
+      <li><b>Pièges hors-sol.</b> Le Fried Liver arrive après 4.Cg5 dans les Deux Cavaliers, mais vit dans un onglet à part, sans lien avec la branche.</li>
+      <li><b>Espace perdu</b> (mesuré à 1400×900) : la colonne droite fait 560 px de haut et n'est remplie qu'à <b>224 px</b> sur Plans, <b>178 px</b> sur Transpositions, <b>237 px</b> sur Quiz. Soit 60 à 68 % de vide sur quatre onglets sur six.</li>
+    </ul>
+  </div>
+  <div class="good">
+    <h3>Un arbre, du contenu par nœud</h3>
+    <ul>
+      <li><b>L'arbre EST la navigation.</b> La colonne de gauche montre la fourche telle qu'elle est, avec ses traits de branche. Plus de barre d'onglets.</li>
+      <li><b>Zéro doublon.</b> Lignes et Transpositions fusionnent : une branche apparaît une fois, à sa place.</li>
+      <li><b>Le piège est sur son coup.</b> Fried Liver et sa parade …Ca5 deviennent deux nœuds enfants de 4.Cg5. On les rencontre en descendant.</li>
+      <li><b>Un seul libellé à comprendre</b> par nœud : le coup et le nom de la variante. Pas de vocabulaire de menu.</li>
+      <li><b>La colonne droite se remplit</b> : idée, plan, piège et question portent sur la même position, donc ils s'empilent au lieu de se répartir. Mesuré sur les 11 nœuds : <b>82 % de remplissage moyen</b> (62 à 100 %) contre 32 à 42 % sur les trois onglets les plus creux. Les feuilles courtes le restent - un piège tient en un paragraphe - mais la fenêtre ne réserve plus la place qu'elle ne remplit pas.</li>
+      <li><b>La progression devient parlante</b> : « 3 branches sur 11 » plutôt que « 3 onglets sur 6 ».</li>
+    </ul>
+  </div>
+</div>
+
+<h2 class="sec">La maquette</h2>
+
+<div class="mock">
+  <div class="mock-bar">
+    <span class="name">Partie Italienne</span>
+    <span class="eco">C50</span>
+    <span class="lvl">👍 Idéale pour débuter</span>
+    <span class="prog"><span id="ptxt">1 branche sur 11</span><span class="prog-track"><span class="prog-fill" id="pfill" style="width:9%"></span></span></span>
+    <button class="x" aria-label="Fermer">&times;</button>
+  </div>
+
+  <div class="grid">
+    <nav class="rail" id="rail" aria-label="Variations"><div class="rail-h">Les variations</div></nav>
+
+    <div class="center">
+      <div class="crumb" id="crumb"></div>
+      <div class="board-wrap"><svg class="board" id="board" viewBox="0 0 360 360" role="img" aria-label="Position"></svg></div>
+      <div class="strip" id="strip"></div>
+    </div>
+
+    <aside class="side" id="side" aria-live="polite"></aside>
+  </div>
+</div>
+
+<h2 class="sec">Ce que ça change concrètement</h2>
+<div class="note">
+  <p style="margin:0 0 10px"><b>Les onglets disparaissent, rien ne se perd.</b> « Présentation » devient le nœud racine. « Lignes » et « Transpositions » deviennent l'arbre. « Plans » descend sur les positions types, là où le plan s'applique. « Pièges » descend sur les coups qui les déclenchent. « Quiz » se disperse en une question par branche, posée juste après l'avoir lue.</p>
+  <p style="margin:0 0 10px"><b>La transposition se montre au lieu de se raconter.</b> Le Pianissimo et les Deux Cavaliers calmes arrivent à la même position — les deux FEN sont identiques à la pendule près. Un lien <code>⇄</code> entre les deux nœuds le prouve mieux qu'un paragraphe.</p>
+  <p style="margin:0"><b>Coût de mise en œuvre :</b> la structure existe déjà. <code>course.lines[].sans</code> et <code>notes[]</code> donnent les nœuds et leur texte, <code>traps[]</code> a déjà les FEN, <code>quiz[]</code> les questions. Il manque un champ <code>parent</code> (ou un préfixe de coups) pour raccrocher chaque élément à sa branche, et <code>js/opening-tree.js</code> n'exporte que <code>render</code> : lui faire exposer ses nœuds éviterait la troisième représentation des mêmes ouvertures.</p>
+</div>
+
+</div>
+
+<script>
+/* ────────────────────────────────────────────────────────────────────────
+   Données : l'Italienne telle qu'elle est dans js/courses.js, réorganisée en
+   arbre. Chaque nœud porte TOUT ce qui le concerne, au lieu d'être éclaté
+   entre Lignes / Transpositions / Pièges / Quiz.
+   ──────────────────────────────────────────────────────────────────────── */
+const NODES = [
+ { id:'tabiya', d:0, san:'3.Fc4', name:'La tabiya', tag:null,
+   fen:'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
+   path:['e4','e5','Cf3','Cc6','Fc4'], who:'Trait aux Noirs',
+   title:"Le fou sort en c4",
+   idea:"<b>Le coup-signature de l'Italienne</b> : le fou vise <b>f7</b>, la seule case du camp noir que le roi défend tout seul.",
+   plan:"Sortir vite, roquer, et <b>seulement ensuite</b> pousser au centre. Peu de théorie, des idées limpides : c'est l'ouverture idéale pour apprendre les trois principes de base.",
+   fork:"Les Noirs ont maintenant <b>trois réponses</b>. Elles mènent à des parties très différentes — descends chacune."
+ },
+ { id:'bc5', d:1, san:'3…Fc5', name:'Giuoco Piano', tag:['t-main','principale'],
+   fen:'r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+   path:['e4','e5','Cf3','Cc6','Fc4','Fc5'], who:'Trait aux Blancs',
+   title:"Les Noirs copient",
+   idea:"Le fou noir vise <b>f2</b>, la case miroir. Position symétrique, jeu tranquille et sain.",
+   plan:"Préparer d4 par <b>c3</b>, pour bâtir le duo de pions e4 + d4."
+ },
+ { id:'pianissimo', d:2, san:'4.c3 → 7.O-O', name:'Pianissimo', tag:['t-key','position type'],
+   fen:'r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQ1RK1 w - - 2 7',
+   path:['e4','e5','Cf3','Cc6','Fc4','Fc5','c3','Cf6','d3','d6','O-O','O-O'], who:'Trait aux Blancs',
+   title:"La position type",
+   idea:"<b>d3</b> soutient e4 sans ouvrir le centre : jeu lent et sain plutôt que le d4 tranchant.",
+   plan:"C'est ici que le plan compte plus que les coups. Place tes pièces <b>avant</b> d'attaquer : Cbd2-f1-g3, Fb3, Te1, h3.",
+   trans:{to:'calm', txt:"Les Deux Cavaliers calmes arrivent <b>exactement ici</b> par un autre ordre de coups. Les deux positions sont identiques."}
+ },
+ { id:'evans', d:2, san:'4.b4!?', name:'Gambit Evans', tag:null,
+   fen:'r1bqk1nr/pppp1ppp/2n5/2b1p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R b KQkq b3 0 4',
+   path:['e4','e5','Cf3','Cc6','Fc4','Fc5','b4'], who:'Trait aux Noirs',
+   title:"Le pion b offert",
+   idea:"Les Blancs donnent le pion b pour <b>gagner des temps</b> contre le fou c5 et bâtir un gros centre.",
+   plan:"Après …Fxb4 c3 Fa5, la poussée <b>d4</b> déploie le centre gratuitement : forte initiative pour un pion.",
+   next:{fen:'r1bqk1nr/pppp1ppp/2n5/b3p3/2BPP3/2P2N2/P4PPP/RNBQK2R b KQkq d3 0 6', label:'après 6.d4'}
+ },
+ { id:'nf6', d:1, san:'3…Cf6', name:'Deux Cavaliers', tag:null,
+   fen:'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+   path:['e4','e5','Cf3','Cc6','Fc4','Cf6'], who:'Trait aux Blancs',
+   title:"Les Noirs contre-attaquent",
+   idea:"Au lieu de copier, les Noirs attaquent <b>tout de suite e4</b>. Plus combatif que 3…Fc5.",
+   plan:"Deux routes : la calme (4.d3) ou la tranchante (4.Cg5, qui frappe f7).",
+   quiz:{ q:"Après 4.Cg5 d5 5.exd5, quel coup tombe dans le Fried Liver ?",
+          opts:['5…Cxd5','5…Ca5','5…Cb8','5…b5'], answer:0,
+          exp:"5…Cxd5 permet 6.Cxf7 ! On joue 5…Ca5 pour chasser le fou c4." }
+ },
+ { id:'calm', d:2, san:'4.d3', name:'la route calme', tag:null,
+   fen:'r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQ1RK1 w - - 1 7',
+   path:['e4','e5','Cf3','Cc6','Fc4','Cf6','d3','Fc5','O-O','d6','c3','O-O'], who:'Trait aux Blancs',
+   title:"On défend e4 sans se lancer",
+   idea:"L'approche calme : on tient e4 sans entrer dans 4.Cg5, plus risquée à retenir.",
+   plan:"Les Noirs ressortent le fou en c5 et on retombe sur une position d'Italienne classique.",
+   trans:{to:'pianissimo', txt:"<b>Même position que le Pianissimo</b>, atteinte par l'autre ordre de coups. C'est ça, une transposition."}
+ },
+ { id:'ng5', d:2, san:'4.Cg5!?', name:"l'attaque sur f7", tag:null,
+   fen:'r1bqkb1r/pppp1ppp/2n2n2/4p1N1/2B1P3/8/PPPP1PPP/RNBQK2R b KQkq - 5 4',
+   path:['e4','e5','Cf3','Cc6','Fc4','Cf6','Cg5'], who:'Trait aux Noirs',
+   title:"Le cavalier saute sur f7",
+   idea:"Cavalier et fou frappent <b>f7</b> ensemble. Les Noirs doivent jouer d5 pour se dégager.",
+   plan:"Après 4…d5 5.exd5, tout se joue sur la reprise. Les deux coups possibles mènent à des mondes opposés — descends les deux."
+ },
+ { id:'fried', d:3, san:'5…Cxd5??', name:'Fried Liver', tag:['t-trap','piège'],
+   fen:'r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6',
+   path:['e4','e5','Cf3','Cc6','Fc4','Cf6','Cg5','d5','exd5','Cxd5'], who:'Trait aux Blancs',
+   title:"La reprise qui perd",
+   trap:"<b>6.Cxf7 !</b> Le sacrifice attire le roi au centre : après 6…Rxf7 7.Df3+, le roi noir est en grand danger et ne pourra plus jamais roquer.",
+   drill:"Cxf7"
+ },
+ { id:'na5', d:3, san:'5…Ca5!', name:'la bonne défense', tag:['t-safe','parade'],
+   fen:'r1bqkb1r/ppp2ppp/2n2n2/3Pp1N1/2B5/8/PPPP1PPP/RNBQK2R b KQkq - 0 5',
+   path:['e4','e5','Cf3','Cc6','Fc4','Cf6','Cg5','d5','exd5'], who:'Trait aux Noirs',
+   title:"Ne reprends pas en d5",
+   safe:"<b>5…Ca5 !</b> attaque le fou c4 et désamorce tout le Fried Liver. Tu rendras le pion d5 plus tard, sans danger.",
+   drill:"Ca5"
+ },
+ { id:'be7', d:1, san:'3…Fe7', name:'Défense hongroise', tag:null,
+   fen:'r1bqk1nr/ppppbppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+   path:['e4','e5','Cf3','Cc6','Fc4','Fe7'], who:'Trait aux Blancs',
+   title:"Le choix modeste",
+   idea:"Passive mais <b>parfaitement solide</b>. Les Noirs renoncent à contester le centre pour ne prendre aucun risque.",
+   plan:"Occupe le centre par d4 : tu as plus d'espace, à toi d'en faire quelque chose."
+ },
+ { id:'f7', d:1, san:'⚠ Cxf7', name:"si l'adversaire tarde à roquer", tag:['t-trap','piège'],
+   fen:'r1bqk2r/1pp2ppp/p1np1n2/2b1p1N1/2B1P3/2PP4/PP3PPP/RNBQK2R w KQkq - 0 7',
+   path:['…','Cg5'], who:'Trait aux Blancs',
+   title:"La fourchette en f7",
+   trap:"Si le roi noir traîne au centre et que ton cavalier atteint g5, <b>Cxf7 !</b> gagne : le roi ne peut pas reprendre (ton fou c4 tient f7) et tu fourches la <b>dame</b> et la <b>tour</b>.",
+   drill:"Cxf7"
+ }
+];
+
+/* ── rendu de l'échiquier depuis une FEN ── */
+const GLYPH={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
+function drawBoard(fen){
+  const rows=fen.split(' ')[0].split('/');
+  let s='';
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const light=(r+c)%2===0;
+      s+=`<rect x="${c*45}" y="${r*45}" width="45" height="45" fill="${light?'var(--sq-l)':'var(--sq-d)'}"/>`;
+    }
+  }
+  rows.forEach((row,r)=>{
+    let c=0;
+    for(const ch of row){
+      if(ch>='1'&&ch<='8'){c+=+ch;continue}
+      const white=ch===ch.toUpperCase();
+      const g=GLYPH[ch.toLowerCase()];
+      s+=`<text x="${c*45+22.5}" y="${r*45+33}" text-anchor="middle" font-size="35"
+            fill="${white?'#fff':'#1e1e28'}" stroke="${white?'#1e1e28':'#00000055'}" stroke-width="${white?1:.6}"
+            style="paint-order:stroke">${g}</text>`;
+      c++;
+    }
+  });
+  document.getElementById('board').innerHTML=s;
+}
+
+/* ── état ── */
+const seen=new Set(['tabiya']);
+let cur='tabiya';
+
+function byId(id){return NODES.find(n=>n.id===id)}
+
+function renderRail(){
+  const rail=document.getElementById('rail');
+  rail.querySelectorAll('.node').forEach(n=>n.remove());
+  for(const n of NODES){
+    const b=document.createElement('button');
+    b.className=`node d${n.d}${n.id===cur?' on':''}${seen.has(n.id)?' seen':''}`;
+    b.setAttribute('aria-current',n.id===cur?'true':'false');
+    b.innerHTML=`<span class="node-in"><span class="san">${n.san}</span>`+
+      `<span class="nname">${n.name}</span>`+
+      (n.tag?`<span class="tag ${n.tag[0]}">${n.tag[1]}</span>`:'')+
+      `<span class="tick">✓</span></span>`;
+    b.onclick=()=>go(n.id);
+    rail.appendChild(b);
+  }
+}
+
+function renderCrumb(n){
+  const el=document.getElementById('crumb');
+  el.innerHTML=n.path.map((m,i)=>{
+    const num=i%2===0?`<b>${i/2+1}.</b>`:'';
+    return num+' '+m;
+  }).join(' ');
+}
+
+function renderStrip(n){
+  const el=document.getElementById('strip');
+  el.innerHTML=n.path.map((m,i)=>
+    (i%2===0?`<span class="mv num">${i/2+1}.</span>`:'')+
+    `<button class="mv${i===n.path.length-1?' cur':''}">${m}</button>`
+  ).join('');
+}
+
+function renderSide(n){
+  const s=document.getElementById('side');
+  let h=`<h3>${n.title}</h3><p class="who">${n.who}</p>`;
+  if(n.idea) h+=`<div class="blk"><p class="blk-h">L'idée du coup</p><p>${n.idea}</p></div>`;
+  if(n.plan) h+=`<div class="blk"><p class="blk-h">Le plan</p><p>${n.plan}</p></div>`;
+  if(n.fork) h+=`<div class="blk"><p class="blk-h">L'embranchement</p><p>${n.fork}</p></div>`;
+  if(n.trap) h+=`<div class="blk"><p class="blk-h">Le piège</p><div class="callout c-trap">${n.trap}</div>`+
+    (n.drill?`<div class="act"><button class="btn p">🎯 Jouer ${n.drill}</button></div>`:'')+`</div>`;
+  if(n.safe) h+=`<div class="blk"><p class="blk-h">La parade</p><div class="callout c-safe">${n.safe}</div>`+
+    (n.drill?`<div class="act"><button class="btn p">🎯 Jouer ${n.drill}</button></div>`:'')+`</div>`;
+  if(n.trans){const t=byId(n.trans.to);
+    h+=`<div class="blk"><p class="blk-h">Transposition</p><div class="callout c-tr">${n.trans.txt}</div>`+
+       `<div class="act"><button class="btn" onclick="go('${n.trans.to}')">⇄ Voir ${t.name}</button></div></div>`;}
+  if(n.next) h+=`<div class="blk"><p class="blk-h">La suite</p>`+
+    `<div class="act"><button class="btn" onclick="peek('${n.next.fen}')">▶ ${n.next.label}</button></div></div>`;
+  if(n.quiz) h+=`<div class="blk"><p class="blk-h">Vérifie</p><div class="qz" id="qz"></div></div>`;
+  h+=`<div class="act"><button class="btn">🔍 Explorer d'ici</button><button class="btn">♟ Rejouer la ligne</button></div>`;
+  s.innerHTML=h;
+  if(n.quiz) renderQuiz(n.quiz);
+}
+
+function renderQuiz(q){
+  const el=document.getElementById('qz');
+  el.innerHTML=`<p class="q">${q.q}</p>`+q.opts.map((o,i)=>`<button class="opt" data-i="${i}">${o}</button>`).join('');
+  el.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.i;
+    el.querySelectorAll('.opt').forEach(x=>{x.disabled=true;
+      if(+x.dataset.i===q.answer)x.classList.add('ok');
+      else if(+x.dataset.i===i)x.classList.add('ko');});
+    el.insertAdjacentHTML('beforeend',`<p class="exp">${q.exp}</p>`);
+  });
+}
+
+function peek(fen){drawBoard(fen)}
+
+function go(id){
+  cur=id; seen.add(id);
+  const n=byId(id);
+  drawBoard(n.fen); renderCrumb(n); renderStrip(n); renderSide(n); renderRail();
+  const pct=Math.round(seen.size/NODES.length*100);
+  document.getElementById('pfill').style.width=pct+'%';
+  document.getElementById('ptxt').textContent=
+    `${seen.size} branche${seen.size>1?'s':''} sur ${NODES.length}`;
+}
+
+go('tabiya');
+</script>

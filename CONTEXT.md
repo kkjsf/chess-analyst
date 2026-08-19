@@ -27,6 +27,16 @@
   l'existant et réécrit les tableaux `puzzles` des catalogues, rejouable). Vérification moteur :
   `sf.cjs` + `verify_lessons.cjs` (`DEPTH=14 node tools/verify_lessons.cjs [mates|tactics]`).
   Ne JAMAIS lancer deux process Stockfish asm.js en parallèle (ils s'affament).
+- **`_mockups/opening-course-mockup.html` (2026-08-19)** - maquette INTERACTIVE proposant de
+  remplacer les 6 onglets du cours d'ouverture (Presentation / Lignes / Plans / Pieges /
+  Transpositions / Quiz) par l'ARBRE des variantes comme navigation, chaque noeud portant tout
+  ce qui le concerne. Repond a 4 reproches du user : la fourche disparait, redondances
+  (`Transpositions[0]` = `Lines[0]` = la meme branche), sous-menus opaques, espace mal utilise
+  (mesure : colonne droite remplie a 32-42 % sur Plans/Transpo/Quiz a 1400x900, contre 82 %
+  en moyenne dans la maquette). Contenu reel de l'Italienne, 11 noeuds, positions calculees.
+  NON implemente. Pre-requis identifie : ajouter un champ `parent` aux traps/quiz pour les
+  raccrocher a leur branche, et faire exporter ses noeuds a `js/opening-tree.js` (il n'expose
+  que `render`, d'ou une 3e representation des memes ouvertures).
 - Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
