@@ -17,8 +17,12 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '184';
+window.APP_VERSION = '185';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
+// The script list itself lives in js/app-scripts.js so sw.js can precache
+// exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
+// defined before the loader at the end of the body runs.
+document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>');
 </script>
 </head>
 <body>
@@ -744,11 +748,10 @@ document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '
 
 <script>
 // Load every app script in order, versioned by the single APP_VERSION constant.
+// The list comes from js/app-scripts.js — the same one sw.js precaches.
 // document.write during initial parse keeps the exact synchronous, in-order,
 // blocking semantics of static <script> tags.
-['js/chess.min.js', 'js/board.js', 'js/engine.js', 'js/openings.js',
- 'js/analysis.js', 'js/training.js', 'js/guess.js',
- 'js/tactics.js', 'js/mates.js', 'js/courses.js', 'js/opening-tree.js', 'js/replay.js', 'js/coach.js', 'js/app.js']
+window.APP_SCRIPTS
   .forEach(function (src) { document.write('<script src="' + src + '?v=' + APP_VERSION + '"><\/script>'); });
 </script>
 <script>

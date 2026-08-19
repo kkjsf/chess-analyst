@@ -1291,30 +1291,15 @@ const Coach = (() => {
         </table>
         ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touche son nom pour la revoir.</div>` : ''}`;
     }
-    // Adherence to the taught repertoire (js/repertoire.js): did you actually
-    // play your prepared moves in real games?
-    let adh = '';
-    if (typeof Repertoire !== 'undefined' && Repertoire.adherence) {
-      const a = Repertoire.adherence(an);
-      if (a.known >= 5) {
-        const p = pct(a.followed, a.known);
-        const devs = a.deviations.slice(0, 3).map(d =>
-          `<div class="coach-rep-dev">vs <b>${esc(d.opp)}</b> : dévié au coup ${d.moveNo} — joué <b>${esc(d.played)}</b>, ton répertoire dit <b>${esc(d.expected)}</b>.</div>`).join('');
-        adh = `<div class="coach-rep-adh">
-          <div class="coach-rep-adh-head">🗺️ Fidélité à ton répertoire : <b>${p}%</b> <span>(${a.followed}/${a.known} coups connus sur ${a.gamesKnown} parties)</span></div>
-          ${devs}
-          <button class="btn-secondary coach-rep-open">🗺️ Réviser mon répertoire</button>
-        </div>`;
-      } else {
-        adh = `<div class="coach-rep-adh">
-          <div class="coach-rep-adh-head">🗺️ Un répertoire simple (un seul schéma, les deux couleurs) t'attend dans l'onglet Apprendre.</div>
-          <button class="btn-secondary coach-rep-open">🗺️ Découvrir mon répertoire</button>
-        </div>`;
-      }
-    }
+    // NOTE: a "fidélité à ton répertoire" block used to sit here, driven by
+    // js/repertoire.js. That module was dropped from index.html when v159-169
+    // replaced « Mon répertoire » with the « Ouvertures à connaître » checklist,
+    // so the block was guarded by `typeof Repertoire !== 'undefined'` and had
+    // silently rendered nothing ever since — and its button called
+    // App.openPanel('repertoire'), a panel that no longer exists either.
+    // Removed with the module rather than revived: the checklist supersedes it.
     return `<div class="home-card coach-card" id="coach-repertoire">
       <h3>📖 Répertoire d'ouvertures</h3>
-      ${adh}
       <p class="coach-sub2">Touche le nom d'une ouverture pour la rejouer sur l'échiquier, ou ↗ pour l'ouvrir sur Chess.com.</p>
       ${table('w', 'Avec les Blancs')}
       ${table('b', 'Avec les Noirs')}
@@ -1331,10 +1316,6 @@ const Coach = (() => {
           [], 'Explore les premiers coups de cette ouverture.'
         );
       }));
-    const open = $('#coach-repertoire .coach-rep-open');
-    if (open) open.addEventListener('click', () => {
-      if (typeof App !== 'undefined' && App.openPanel) App.openPanel('repertoire');
-    });
   }
 
   function renderWeakness(an) {

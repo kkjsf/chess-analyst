@@ -2,7 +2,8 @@ const Openings = (() => {
   const DB = [
     // King's Pawn
     ['e4 e5 Nf3 Nc6 Bb5', 'C60', 'Partie Espagnole (Ruy Lopez)'],
-    ['e4 e5 Nf3 Nc6 Bb5 a6', 'C68', 'Ruy Lopez — variante Morphy'],
+    // C70, pas C68 : C68 est réservé à la variante d'échange (après 4.Fxc6).
+    ['e4 e5 Nf3 Nc6 Bb5 a6', 'C70', 'Ruy Lopez — défense Morphy'],
     ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O', 'C88', 'Ruy Lopez — système fermé'],
     ['e4 e5 Nf3 Nc6 Bc4', 'C50', 'Partie Italienne'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5', 'C50', 'Giuoco Piano'],
@@ -21,7 +22,10 @@ const Openings = (() => {
     ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3', 'B90', 'Sicilienne Najdorf / Classique'],
     ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6', 'B90', 'Sicilienne Najdorf'],
     ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6', 'B76', 'Sicilienne Dragon'],
-    ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 e5', 'B57', 'Sicilienne Sveshnikov'],
+    // ...e5 joué APRÈS ...d6 = Boleslavsky, pas Sveshnikov. La vraie Sveshnikov
+    // part de 2...Cc6 et se joue sans ...d6 (ligne suivante).
+    ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 e5', 'B58', 'Sicilienne — variante Boleslavsky'],
+    ['e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5', 'B33', 'Sicilienne Sveshnikov'],
     ['e4 c5 Nf3 Nc6 d4 cxd4 Nxd4', 'B44', 'Sicilienne ouverte'],
     ['e4 c5 Nf3 e6', 'B40', 'Sicilienne — variante française'],
     ['e4 c5 Nf3 e6 d4 cxd4 Nxd4 Nf6 Nc3 d6', 'B80', 'Sicilienne Scheveningen'],

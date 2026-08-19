@@ -738,7 +738,12 @@ const Analyzer = (() => {
         if (g.moves().length === 0) {
           evals.push({ score: g.in_checkmate() ? -30000 : 0, bestMove: null, pv: '', mate: g.in_checkmate() ? 0 : null });
         } else {
-          evals.push(await StockfishEngine.evaluate(positions[i], depth));
+          // A dead engine must cost us this position, not the whole game: push
+          // null so THIS move takes the heuristic path while the 40 positions
+          // already searched keep their real evaluations.
+          let ev = null;
+          try { ev = await StockfishEngine.evaluate(positions[i], depth); } catch (_) { ev = null; }
+          evals.push(ev);
         }
       }
       if (onProgress) {
