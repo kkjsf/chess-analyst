@@ -105,6 +105,10 @@
     scriptée qui n'est pas la meilleure défense, moteur peu convaincu sur une figure où le gain est
     matériel) - rien de bloquant. Rejeu indépendant des 141 lignes avec la résolution SAN de l'app :
     0 problème, tous les mats notés `#` matent vraiment.
+  - **Déployé** le 19/08/2026 (commit `f50eb85`, rebase sur le chore coach-data puis push
+    `origin main`) : live vérifié sur https://kkjsf.github.io/chess-analyst/ (v184, 95 + 46
+    exercices, flèches de menaces OK, 0 erreur console). Pages met ~30 s à basculer.
+    Un `.gitignore` a été créé au passage (il n'y en avait aucun) pour la base `.zst` de 304 Mo.
 - **v183 - Tactiques & Mats : beaucoup plus d'exercices, en vraies positions, + recherche**
   - User : « exemples des exercices plus nombreux pour chaque mat ou tactique, et aussi + parlant
     (dans un contexte donné avec plus de pièces, pas juste les pièces qu'il faut pour une fourchette) ;
