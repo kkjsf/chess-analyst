@@ -32,17 +32,8 @@ const Replay = (() => {
     } catch (_) { return null; }
   }
 
-  function pvToFr(fen, pvStr, max) {
-    if (!pvStr) return [];
-    const g = new Chess(fen); const out = [];
-    for (const uci of pvStr.trim().split(/\s+/)) {
-      if (out.length >= (max || 4)) break;
-      let m; try { m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' }); } catch (_) { m = null; }
-      if (!m) break;
-      out.push(fr(m.san));
-    }
-    return out;
-  }
+  // Convertisseur PV partagé (js/freeplay.js).
+  const pvToFr = (fen, pvStr, max) => FreePlay.pvToFr(fen, pvStr, max || 4);
 
   // Éval en centipions au point de vue de mon camp (Stockfish rapporte le score
   // du trait). +100000 ≈ je mate, -100000 ≈ je me fais mater.

@@ -18,6 +18,9 @@ self.APP_SCRIPTS = [
   // (seeOn / netGain / threats) to tell a real fork from a hanging piece.
   'js/tactics.js',
   'js/analysis.js',
+  // Fond commun du mode « Continuer à jouer » (explorateur, entraînement,
+  // tactiques). Après analysis.js, dont il utilise toFrench.
+  'js/freeplay.js',
   'js/training.js',
   'js/guess.js',
   'js/mates.js',

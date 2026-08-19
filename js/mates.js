@@ -53,6 +53,33 @@ const Mates = (() => {
       ] },
 
     // ══════════ ② mats de base ══════════
+    { id: 'roi-dame', group: 'base', icon: '👑', name: 'Roi + dame contre roi', en: 'King and queen mate',
+      lesson: `Le mat qu'il faut savoir <b>les yeux fermés</b> : c'est celui qui conclut la plupart des parties gagnées, et le seul qu'on rate vraiment souvent. La méthode tient en deux temps.<br><br>
+      <b>1. Rétrécir la boîte.</b> Ne donne pas d'échecs au hasard. Place ta dame à <b>un saut de cavalier</b> du roi adverse : il ne peut alors bouger que dans une zone qui rétrécit à chaque coup. Répète jusqu'à ce qu'il soit collé au bord.<br>
+      <b>2. Amener ton roi.</b> La dame seule ne mate jamais : il faut ton roi en face, à deux cases (l'<b>opposition</b>), pour couvrir les cases de fuite. Puis la dame se pose juste devant, protégée par ton roi.<br><br>
+      <b>⚠ Le piège du pat</b> : si le roi adverse n'a plus de coup et n'est <b>pas</b> en échec, c'est nulle et tu perds la partie gagnée. Avant chaque coup de dame, demande-toi : « lui reste-t-il une case ? » Dans le doute, avance ton roi plutôt que ta dame.`,
+      seq: null,
+      fen: '7k/6Q1/6K1/8/8/8/8/8',
+      arrows: [{ from: 'g7', to: 'h8', color: R }, { from: 'g6', to: 'g7', color: G }],
+      puzzles: [
+        { fen: '7k/8/6K1/Q7/8/8/8/8 w - - 0 1', sol: ['Qa8#'], demo: true, hint: `Ton roi en g6 tient déjà g7 et h7 : il ne reste au roi noir que h8 et g8. Ferme la dernière rangée.` },
+        { fen: '8/8/8/Q7/8/K7/8/k7 w - - 0 1', sol: ['Qc3+', 'Kb1', 'Qb2#'], demo: true, hint: `Le roi noir est au coin, ton roi couvre déjà a2 et b2. Chasse-le d'une case avec un échec, puis pose la dame devant lui — ton roi la protège.` },
+      ] },
+
+    { id: 'roi-tour', group: 'base', icon: '🏰', name: 'Roi + tour contre roi', en: 'King and rook mate',
+      lesson: `Plus difficile que la dame, parce que la tour ne couvre que des lignes droites : <b>ton roi fait la moitié du travail</b>.<br><br>
+      <b>1. Couper.</b> Pose la tour sur une rangée (ou une colonne) que le roi adverse ne peut plus franchir. Il est enfermé d'un côté du plateau.<br>
+      <b>2. Réduire.</b> Avance ton roi. Quand les deux rois se font face à <b>deux cases d'écart</b> (l'opposition), le roi adverse est en zugzwang : il doit reculer. Tu avances alors la ligne de coupe d'un cran.<br>
+      <b>3. Mater.</b> Une fois le roi collé au bord et l'opposition prise, la tour donne échec le long du bord : ton roi couvre les trois cases de fuite, la tour couvre la ligne. Mat.<br><br>
+      Le coup qui manque le plus souvent aux débutants n'est pas un coup de tour, c'est le <b>coup d'attente du roi</b> pour reprendre l'opposition.`,
+      seq: null,
+      fen: 'k6R/8/1K6/8/8/8/8/8',
+      arrows: [{ from: 'h8', to: 'a8', color: R }, { from: 'b6', to: 'a7', color: G }, { from: 'b6', to: 'b7', color: G }],
+      puzzles: [
+        { fen: 'k7/8/1K6/8/8/8/7R/8 w - - 0 1', sol: ['Rh8#'], demo: true, hint: `Ton roi en b6 couvre déjà a7 et b7. Il ne reste que la 8ᵉ rangée : donne l'échec depuis loin, hors de portée du roi noir.` },
+        { fen: 'k7/7R/2K5/8/8/8/8/8 w - - 0 1', sol: ['Kb6', 'Kb8', 'Rh8#'], demo: true, hint: `La tour coupe déjà la 7ᵉ rangée. Ne joue pas la tour : prends d'abord l'<b>opposition</b> avec ton roi, le roi noir n'aura plus qu'une case.` },
+      ] },
+
     { id: 'couloir', group: 'base', icon: '🚪', name: 'Mat du couloir', en: 'Back-rank mate',
       lesson: `Le roi roqué est <b>emprisonné sur sa rangée par ses propres pions</b> (f7-g7-h7). Une tour ou une dame qui arrive sur la dernière rangée donne un mat sans appel. C'est le mat le plus fréquent en partie rapide. <b>Prévention</b> : ouvre une « lucarne » d'avance en poussant h3 (ou g3) pour donner de l'air à ton roi.`,
       seq: null,

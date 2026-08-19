@@ -13,19 +13,118 @@
 
 **Fichiers clés:**
 - `index.html` - app principale.
-- `js/`, `css/` - logique et styles.
+- `js/`, `css/` - logique et styles. `js/app-scripts.js` = LISTE des scripts, source unique
+  lue par `index.html` et par `sw.js` (elles avaient divergé). `js/freeplay.js` = fond commun
+  du mode « Continuer a jouer ». Le worker Stockfish est dans `js/vendor/` (le build wasm
+  resout `stockfish.wasm` relativement au worker).
 - `sw.js`, `manifest.json` - PWA.
 - `coach-data.json` - contenu de coaching généré (~680 KB). Certains items de correctness ne se reflètent qu'après une RE-RUN complète du coach.
+- `tools/test_core.cjs` - 39 tests unitaires du coeur logique (`node tools/test_core.cjs`,
+  ou `npm test` dans `tools/`). Tourne aussi en CI avant l'analyse serveur.
 - `tools/` - scripts utilitaires. Chaîne de contenu des leçons (v184) : `mine_lichess.cjs`
   (streame `lichess_db_puzzle.csv.zst`, gitignoré, → pool JSONL) → `pick_lichess.cjs` (choisit les
   exercices par motif : thème + motif visible + gain qui tient) → `inject_puzzles.cjs` (audite
   l'existant et réécrit les tableaux `puzzles` des catalogues, rejouable). Vérification moteur :
   `sf.cjs` + `verify_lessons.cjs` (`DEPTH=14 node tools/verify_lessons.cjs [mates|tactics]`).
   Ne JAMAIS lancer deux process Stockfish asm.js en parallèle (ils s'affament).
-- Prototypes/mockups (non prod): `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
+- Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v185-v190 - Revue de code complète : 21 constats, tous corrigés**
+  - User : « fais une revue complète et vois ce qui peut être amélioré (théorie échecs, code, UI) »,
+    puis « fais tous les autres correctifs ». Revue conduite en INSTRUMENTANT l'app servie en local
+    (pas seulement en lisant le code) : les constats les plus lourds sont reproduits, pas déduits.
+  - **F1 - course sur les réponses du moteur** (`js/engine.js`). Un `go` produit exactement un
+    `bestmove`, mais rien ne les appariait : une recherche abandonnée sur `EVAL_TIMEOUT` émettait
+    quand même son bestmove et l'appel SUIVANT le ramassait. Toutes les évaluations se décalaient
+    d'une position (repro : 5/8/16/0 ms au lieu de ~800 ms chacune), et l'une recevait un
+    `{score:0, lines:[]}` qui n'est PAS null - donc pas de repli heuristique : un ★ Meilleur à
+    100 % de précision gratuit. Chaque recherche a un `searchId`, les `evaluate()` sont sérialisées
+    (`chain`), et un `stop` garde son créneau (`DRAIN_TIMEOUT`) jusqu'à encaisser le bestmove avorté.
+  - **F2 - le build WASM était livré mais jamais chargé.** Le worker importait `stockfish.js`
+    (asm.js, 1,58 Mo) alors que `stockfish.wasm` dormait à côté depuis mai. Mesuré à conditions
+    égales (MultiPV 3, 3 s) : **141 844 -> 1 117 863 n/s, profondeur 13 -> 17**, soit ~8x.
+    ATTENTION : le worker DOIT vivre dans `js/vendor/` : le build wasm demande « stockfish.wasm »
+    en chemin nu relatif au worker (son `locateFile` rend le nom verbatim, il ignore
+    `scriptDirectory`). asm.js reste en repli sans WebAssembly et n'est plus précaché.
+  - **F3 - MultiPV 3 -> 5.** `analysis.js` note le coup joué depuis sa ligne DANS la recherche
+    pré-coup ; hors du top N il retombe sur le chemin bruité, ce qui est le cas le plus fréquent
+    à 350 Elo.
+  - **F4 - effort moteur tracé par partie** (`engineEffort`) et affiché (« analyse rapide
+    (navigateur) » vs « analyse complète ») : serveur à depth 20 et navigateur à movetime 600
+    alimentaient les mêmes courbes sans que rien ne le dise.
+  - **F5 - l'onglet Analyser utilisait encore le détecteur de fourchette géométrique.** C'était
+    littéralement la plainte qui avait déclenché la v184, corrigée dans les exercices mais pas dans
+    l'écran principal. `detectFork` s'appuie désormais sur `Tactics.threats` + `netGain >= 2`.
+    Même coup Dd5 : l'ancien annonçait « fourchette cavalier + dame », le nouveau voit **-9**.
+    `tactics.js` passe avant `analysis.js`, et `analyze.mjs` installe le global `Tactics`.
+  - **F6 - `netGain` était aveugle à la promotion et au pat.** Promotion imparable -> 0 (donc
+    « Pion passé » ne pouvait avoir AUCUN exercice, le sélecteur exigeant netGain >= 2) ; laisser
+    l'adversaire faire dame ne coûtait rien ; un pat était indistinguable de « rien ne se passe ».
+    La promotion compte des trois côtés (le coup jugé via `threats.promoted`, ma suite, la défense
+    adverse) et `threats` expose `stalemate`, que la phrase française nomme avant tout le reste.
+  - **F7 - trois définitions incompatibles des phases** cohabitaient (ply<20/50 pour les stats,
+    ply<10 et « 6 derniers coups » pour les textes) : le 12e demi-coup était « ouverture » pour la
+    statistique et « milieu de jeu » pour le commentaire. Une seule `phaseOf(fen, ply, bookDepth)`,
+    déduite de la POSITION. ATTENTION : les deux signaux sont MONOTONES (matériel <= 26 pts hors
+    pions ; droit de roque) - compter les mineures développées, qui semblait naturel, remettait une
+    Espagnole « en ouverture » au 10e coup sur la retraite Breyer ...Cb8.
+  - **F8 - la précision était la moyenne arithmétique** des précisions par coup : une gaffe unique
+    se noyait dans quarante coups faciles (95 %). Moyenne pondérée par la volatilité + moyenne
+    harmonique, comme Chess.com : 39 parfaits + 1 grosse gaffe -> **66 %**, un jeu régulier ne
+    bouge pas.
+  - **F9 - nomenclature** : ...e5 après ...d6 = Boleslavsky (B58), pas Sveshnikov ; la vraie
+    Sveshnikov (B33, via ...Cc6) manquait ; 3...a6 = défense Morphy en C70 (C68 = variante
+    d'échange).
+  - **F10 - les « mats de base » ne contenaient AUCUN des deux mats de base.** Ajout de
+    **Roi + dame contre roi** et **Roi + tour contre roi** (méthode de la boîte qui rétrécit,
+    opposition, avertissement pat), 4 exercices, positions vérifiées (légalité, unicité, lignes
+    forcées). A nécessité `altMate` : sur le DERNIER coup d'un exercice de mat, **tout coup qui
+    mate est accepté** - sinon impossible d'ajouter ces mats, où plusieurs coups matent presque
+    toujours. Le corrigé cite alors le mat trouvé par l'élève.
+  - **F11 - 8 motifs sur 28 sans aucun exercice** (Coups candidats, Pion isolé, Colonne ouverte,
+    Rupture de pions, Cases faibles, Paire de fous, Initiative & tempo, Prophylaxie). Ce n'est pas
+    un oubli du pipeline : ce sont des thèmes STRATÉGIQUES et la base Lichess n'étiquette que des
+    tactiques - `pick_lichess.cjs` ne trouvera jamais rien. Marqués `study: true`, chip
+    « 📖 à lire » dans la liste et note explicative dans la fiche.
+  - **F12 - `js/repertoire.js` n'était chargé par personne** et `coach.js` le testait derrière un
+    `typeof !== 'undefined'` : le bloc « fidélité au répertoire » ne s'affichait jamais, en silence,
+    et son bouton ouvrait un panneau supprimé en v159-169. **Supprimé** plutôt que ressuscité (la
+    checklist « Ouvertures à connaître » le remplace) : 247 lignes JS + 30 de CSS orphelin.
+  - **F13 - le precache du SW ne correspondait pas aux scripts chargés** : `courses.js` et
+    `opening-tree.js` chargés mais jamais cachés (onglet Apprendre cassé au premier lancement
+    hors ligne), `repertoire.js` caché mais jamais chargé. La liste vit dans **`js/app-scripts.js`**,
+    lue par `index.html` ET par `sw.js`. `cache.addAll` (atomique : un 404 jetait tout) remplacé
+    par un `add` par entrée.
+  - **F14 - « Continuer à jouer » existait en trois exemplaires** + `pvToFr` en cinq copies, déjà
+    divergentes. Nouveau **`js/freeplay.js`** : `pvToFr` / `evalWhite` / `terminalHtml` /
+    `statusHtml` / `analyze`. Les trois UI restent chez elles (DOM, boutons et extras différents -
+    app.js suit la théorie, tactics.js peint les menaces) : seule la logique échecs/moteur est
+    mutualisée. Fusionner les UI aurait été une réécriture à risque pour un gain cosmétique.
+  - **F15 - aucun test unitaire sur le coeur logique.** `tools/test_core.cjs`, **39 tests**
+    (seeOn / netGain / threats / detectFork / phaseOf / précision / ouvertures / dictionnaire),
+    sans moteur, une seconde, branché sur la CI avant l'analyse. `npm test` dans `tools/`.
+  - **F16 - 970 Ko en 14 scripts strictement sérialisés** (`document.write`). Ajout de
+    `<link rel="preload">` pour tous : **15 requêtes en parallèle** au lieu d'une chaîne de 14,
+    sans toucher à l'ordre d'exécution. Le lazy-loading par onglet a été écarté volontairement :
+    le SW masque déjà le coût après la première visite, et l'async introduirait des états de
+    chargement et des races dans une app sans build.
+  - **F17 - le mot « Excellent » désignait DEUX catégories de coups** : le glyphe `!` dans l'app et
+    le glyphe `✔` dans la légende rapide, la légende étant la seule fausse sur les deux lignes.
+    Quatre copies du dictionnaire existaient. Une seule désormais, **`Analyzer.MOVE_TYPES`**, d'où
+    les deux légendes de l'aide sont générées au chargement. « □ Forcé » y figure enfin.
+  - **F18/F19/F20 - accessibilité** : `h1` (la hiérarchie démarrait en h2), `role="tablist"` +
+    `aria-selected` synchronisé, `aria-live` sur la progression et le retour d'exercice,
+    `:focus-visible` global (il y avait 4 règles de focus pour 51 boutons), `.panel-close`
+    30x32 -> **44x44**, glyphes de légende 9,5 -> 11 px. ATTENTION : le constat « les modales n'ont
+    pas `role=dialog` » était FAUX - elles l'avaient déjà sur leur boîte interne, l'audit avait
+    interrogé l'overlay.
+  - **F21** - les 5 maquettes obsolètes passent dans `_mockups/` (versionnées, donc servies
+    publiquement par Pages).
+  - **Piège de dev rencontré** : le SW est cache-first sur les `?v=`, et le cache HTTP du navigateur
+    garde aussi `fichier.js?v=N`. Éditer sans bumper `APP_VERSION` fait tourner du code périmé et
+    donne de fausses vérifications. Bumper à chaque passe de vérif.
 - **v184 - Menaces affichées, « continuer à jouer », et exercices refaits sur la base Lichess**
   - User : « affiche les flèches de menaces sur les tactiques (ex. les menaces causées par une
     fourchette) et permets de continuer à jouer comme sur les ouvertures ; la tactique ne marche

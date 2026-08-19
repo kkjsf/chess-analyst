@@ -1125,20 +1125,8 @@ const Training = (() => {
     try { StockfishEngine.init().catch(() => {}); } catch (_) {}
   }
 
-  function pvLineFr(startFen, pvUci, maxPlies) {
-    if (!pvUci) return [];
-    const out = [];
-    try {
-      const g = new Chess(startFen);
-      for (const u of pvUci.trim().split(/\s+/)) {
-        if (out.length >= maxPlies) break;
-        const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] || 'q' });
-        if (!m) break;
-        out.push(enToFr(m.san));
-      }
-    } catch (_) {}
-    return out;
-  }
+  // Convertisseur PV partagé (js/freeplay.js) : il en existait cinq copies.
+  const pvLineFr = (startFen, pvUci, maxPlies) => FreePlay.pvToFr(startFen, pvUci, maxPlies);
 
   async function maybeContinuation(afterFen, bestFr, token) {
     if (typeof StockfishEngine === 'undefined' || !StockfishEngine.isReady()) return;
@@ -1237,23 +1225,12 @@ const Training = (() => {
 
   // White-relative eval (engine scores are side-to-move relative). Mate scores
   // are encoded as ±(30000 - n) with res.mate = signed mate distance.
-  function fmtEvalWhite(res, stm) {
-    if (res.mate != null) {
-      const mateW = stm === 'w' ? res.mate : -res.mate;
-      return (mateW > 0 ? 'Mat en ' : 'Mat en ') + Math.abs(mateW) + (mateW > 0 ? ' (Blancs)' : ' (Noirs)');
-    }
-    const w = (stm === 'w' ? res.score : -res.score) / 100;
-    return (w >= 0 ? '+' : '') + w.toFixed(1);
-  }
+  const fmtEvalWhite = (res, stm) => FreePlay.evalWhite(res, stm);
 
   function exploreStatusHtml(fen, res) {
     const stm = fen.split(' ')[1] === 'w' ? 'w' : 'b';
-    try {
-      const g = new Chess(fen);
-      if (g.in_checkmate()) return `♚ <b>Échec et mat.</b> Position finale — annule pour explorer une autre suite.`;
-      if (g.in_stalemate()) return `<b>Pat</b> — nulle. Annule pour explorer une autre suite.`;
-      if (g.in_draw()) return `<b>Nulle</b> (matériel / répétition). Annule pour explorer une autre suite.`;
-    } catch (_) {}
+    const term = FreePlay.terminalHtml(fen, 'Annule pour explorer une autre suite.');
+    if (term) return term;
     const turn = stm === 'w' ? 'Blancs' : 'Noirs';
     const head = `🔍 <b>Exploration</b> — trait aux <b>${turn}</b>.`;
     if (res && res.noEngine) return head + ` <span class="train-cont">Moteur indisponible — joue librement, sans suggestion.</span>`;

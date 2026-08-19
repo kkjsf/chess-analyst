@@ -189,7 +189,7 @@ const Tactics = (() => {
         { fen: '4R2r/2p2pk1/pp1q1np1/3P4/8/P2B1Q2/1PP2PPP/4R1K1 b - - 0 24', sol: ['Qxh2+', 'Kf1', 'Qh1+', 'Ke2', 'Rxe8+'], real: `Lichess · niveau 1363`, game: 'https://lichess.org/Yc1zWYu0', lvl: 'soutenue', hint: `Un échec de dame. Le motif : une ligne d'échecs se calcule jusqu'au bout.` },
         { fen: '4Q3/pp3rqk/8/2B1b3/6r1/2P2P2/PP3K2/3R4 w - - 0 41', sol: ['Rh1+', 'Kg6', 'Qe6+', 'Qf6', 'Qxg4+'], real: `Lichess · niveau 1555`, game: 'https://lichess.org/aOgrDcVL/black', lvl: 'soutenue', hint: `Un échec de tour. Le motif : une ligne d'échecs se calcule jusqu'au bout.` },
       ] },
-    { cat: '🧠 Méthode & calcul', name: 'Coups candidats', en: 'Candidate moves',
+    { cat: '🧠 Méthode & calcul', name: 'Coups candidats', study: true, en: 'Candidate moves',
       desc: `Avant de calculer, dresse la <b>liste des 2-4 coups les plus prometteurs</b> (les « candidats »), puis examine-les un par un. Évite de tomber amoureux du premier coup vu : compare-les avant de te décider. Le diagramme vient d'une de tes parties : trois coups s'y valent presque (flèches bleues) - …h6, …Cxd5 et …Fe6. Aucun ne gagne quoi que ce soit : c'est exactement le genre de position où il faut lister ses candidats, puis les comparer un par un.`,
       fen: 'r1bq1rk1/1pp2ppp/p1np1n2/2bNp3/P1B1P3/3P1N2/1PP2PPP/R1BQ1RK1',
       arrows: [{ from: 'h7', to: 'h6', color: B }, { from: 'f6', to: 'd5', color: B }, { from: 'c8', to: 'e6', color: B }] },
@@ -216,19 +216,19 @@ const Tactics = (() => {
         { fen: '2r1k2r/1p1n1p2/p3Rq1Q/1p6/8/P1PP3P/2P2PP1/5RK1 b - - 0 23', sol: ['fxe6'], mine: `contre P_krazy · rapide · 29 juillet 2026`, game: 'https://www.chess.com/game/live/172248806458', hint: `Une capture au pion. Le motif : un pion qui file vers la promotion vaut une pièce.` },
         { fen: '1rbq1rk1/2p2p1p/3p1p2/1pbBp3/1nP1P3/1P1P1N2/5PPP/R1BQ1RK1 b - c3 0 13', sol: ['c6'], positional: true, mine: `contre Balddarkhorse · par correspondance · 10 août 2026`, game: 'https://www.chess.com/game/daily/1010656384', hint: `Un coup de pion, sans échec ni capture, qui met le fou dans le collimateur. Le motif : un pion qui file vers la promotion vaut une pièce.` },
       ] },
-    { cat: '♟ Concepts stratégiques', name: 'Pion isolé', en: 'Isolated pawn',
+    { cat: '♟ Concepts stratégiques', name: 'Pion isolé', study: true, en: 'Isolated pawn',
       desc: `Un pion sans pion ami sur les colonnes adjacentes (ici d4, sans pion en c ni e). Il ne peut être défendu par un pion : faiblesse à long terme, mais il offre souvent des cases actives et de l'initiative à court terme.`,
       fen: '6k1/8/2p1p3/8/3P4/8/8/6K1', arrows: [] },
-    { cat: '♟ Concepts stratégiques', name: 'Colonne ouverte & avant-poste', en: 'Open file & outpost',
+    { cat: '♟ Concepts stratégiques', name: 'Colonne ouverte & avant-poste', study: true, en: 'Open file & outpost',
       desc: `Une <b>colonne ouverte</b> (sans pion) est l'autoroute des tours : la tour d1 contrôle toute la colonne d. Un <b>avant-poste</b> est une case avancée protégée par un pion et inattaquable par un pion adverse — idéale pour un cavalier (d5, soutenu par e4).`,
       fen: '3r2k1/1p3p2/8/3N4/4P3/8/8/3R2K1', arrows: [{ from: 'd1', to: 'd8', color: G }, { from: 'e4', to: 'd5', color: B }] },
-    { cat: '♟ Concepts stratégiques', name: 'Rupture de pions', en: 'Pawn break',
+    { cat: '♟ Concepts stratégiques', name: 'Rupture de pions', study: true, en: 'Pawn break',
       desc: `Une <b>rupture</b> est une poussée de pion qui attaque la chaîne adverse pour <b>ouvrir des lignes</b> ou libérer ses pièces. Dans les positions fermées, c'est la rupture (…d5, …f5, c4-c5…) qui crée le jeu : sans elle, on étouffe.`,
       fen: '6k1/pp3ppp/2p5/3p4/3P4/2P5/PP3PPP/6K1', arrows: [{ from: 'c3', to: 'c4', color: G }] },
-    { cat: '♟ Concepts stratégiques', name: 'Cases faibles & trou', en: 'Weak squares',
+    { cat: '♟ Concepts stratégiques', name: 'Cases faibles & trou', study: true, en: 'Weak squares',
       desc: `Une <b>case faible</b> ne peut plus être défendue par un pion (les pions qui la couvraient ont avancé ou disparu). Un <b>trou</b> dans le camp adverse est une invitation : installes-y une pièce, idéalement un cavalier, durablement.`,
       fen: '6k1/pp3ppp/8/3N4/8/8/PP3PPP/6K1', arrows: [{ from: 'd5', to: 'd5', color: B }] },
-    { cat: '♟ Concepts stratégiques', name: 'Paire de fous', en: 'Bishop pair',
+    { cat: '♟ Concepts stratégiques', name: 'Paire de fous', study: true, en: 'Bishop pair',
       desc: `Posséder ses <b>deux fous</b> quand l'adversaire n'en a qu'un (ou aucun) : un avantage durable dans les positions ouvertes, où les fous balaient tout l'échiquier de loin. Sur le diagramme, les fous b2 et d3 visent chacun une diagonale vers le roque noir (g7 et h7) : les cavaliers, eux, ne couvrent rien à distance.`,
       fen: 'r2q1rk1/pp3ppp/2n2n2/8/8/3B4/PB3PPP/R2Q1RK1',
       arrows: [{ from: 'b2', to: 'g7', color: G }, { from: 'd3', to: 'h7', color: G }] },
@@ -241,11 +241,11 @@ const Tactics = (() => {
         { fen: '8/8/3p1p2/3P1P1k/p1p1P1p1/P1P3K1/8/8 b - - 1 61', sol: ['Kg5', 'e5', 'fxe5'], real: `Lichess · niveau 1302`, game: 'https://lichess.org/rWAfK4UE', lvl: 'moyenne', hint: `Un coup de roi, sans échec ni capture. Le motif : l'obligation de jouer dégrade la position.` },
         { fen: '8/8/5k2/4p1pK/4r2p/5P1P/8/8 w - - 0 47', sol: ['fxe4', 'g4', 'Kxg4'], real: `Lichess · niveau 1613`, game: 'https://lichess.org/sJUdeAvc/black', lvl: 'soutenue', hint: `Une capture au pion. Le motif : l'obligation de jouer dégrade la position.` },
       ] },
-    { cat: '♟ Concepts stratégiques', name: 'Initiative & tempo', en: 'Initiative & tempo',
+    { cat: '♟ Concepts stratégiques', name: 'Initiative & tempo', study: true, en: 'Initiative & tempo',
       desc: `L'<b>initiative</b>, c'est dicter le jeu en enchaînant les menaces ; l'adversaire ne fait que réagir. Un <b>tempo</b> est une unité de temps (un coup) : gagner un tempo, c'est avancer son jeu <i>en menaçant</i>. Sur le diagramme, la poussée <b>d5</b> (bleu) gagne un temps : elle attaque le cavalier c6 (vert), qui doit reculer — les Blancs continuent de mener la danse.`,
       fen: 'r1bq1rk1/ppp2ppp/2n2n2/8/3P4/2N2N2/PP3PPP/R1BQ1RK1',
       arrows: [{ from: 'd4', to: 'd5', color: B }, { from: 'd5', to: 'c6', color: G }] },
-    { cat: '♟ Concepts stratégiques', name: 'Prophylaxie', en: 'Prophylaxis',
+    { cat: '♟ Concepts stratégiques', name: 'Prophylaxie', study: true, en: 'Prophylaxis',
       desc: `Jouer un coup qui <b>empêche le plan adverse</b> avant même qu'il ne se déclenche. L'art de « penser pour l'adversaire » : repérer son idée, puis l'étouffer (Kmoch, Nimzowitsch). Sur le diagramme, les Noirs rêvent de …Fg4 pour clouer le cavalier f3 (bleu) ; le petit <b>h3</b> (rouge) interdit la case et le plan meurt avant de naître.`,
       fen: 'r1bq1rk1/ppp2ppp/2n2n2/8/8/2N2N2/PPP2PPP/R1BQ1RK1',
       arrows: [{ from: 'c8', to: 'g4', color: B }, { from: 'h2', to: 'h3', color: R }] },
@@ -721,16 +721,37 @@ const Tactics = (() => {
     };
   }
 
+  // Sur le DERNIER coup d'un exercice de mat, tout coup qui mate est la bonne
+  // réponse : « trouve le mat » ne veut pas dire « devine lequel des deux mats
+  // j'ai écrit dans le script ». Sans ça, impossible d'ajouter les mats de base
+  // (roi + dame, roi + tour), où plusieurs coups matent presque toujours.
+  function altMate(from, to) {
+    const sol = list[idx].sol;
+    if (ply !== sol.length - 1) return null;              // pas le coup final
+    if (String(sol[ply]).indexOf('#') < 0) return null;   // pas un exercice de mat
+    let g, m = null;
+    try { g = new Chess(game.fen()); m = g.move({ from, to, promotion: 'q' }); } catch (_) { m = null; }
+    if (!m || !g.in_checkmate()) return null;
+    return { from, to, promotion: m.promotion };
+  }
+
   function tryMove(from, to) {
     if (free) { freeMove(from, to); return; }
     const exp = expectedMove();
     const fb = $('#tac-feedback');
     if (!exp || from !== exp.from || to !== exp.to) {
+      const alt = altMate(from, to);
+      if (alt) { advance(alt, true); return; }
       // illegal or simply not the solution
       let legal = false;
       try { const g = new Chess(game.fen()); legal = !!g.move({ from, to, promotion: 'q' }); } catch (_) {}
+      const isMateEx = String(list[idx].sol[list[idx].sol.length - 1]).indexOf('#') >= 0;
       fb.className = 'guess-feedback wrong';
       if (!legal) fb.innerHTML = "⚠️ Coup illégal. Clique la pièce, puis sa case d'arrivée.";
+      // Sur un exercice de mat, tout mat est accepté (voir altMate) : si on
+      // arrive ici, c'est que le coup NE mate PAS. Le dire, plutôt que de
+      // parler de « figure du motif ».
+      else if (isMateEx && ply === list[idx].sol.length - 1) fb.innerHTML = "❌ Ce coup ne mate pas — le roi a encore une case, ou la pièce qui mate n'est pas protégée. Cherche le coup qui ferme <b>toutes</b> les fuites.";
       else if (list[idx].demo) fb.innerHTML = "↩️ Ce n'est pas le coup <b>du motif</b> — sur un schéma épuré, d'autres coups gagnent aussi : cherche la figure elle-même.";
       else fb.innerHTML = "❌ Ce n'est pas le coup. Réessaie — pense É-C-M (échecs, captures, menaces).";
       return;
@@ -738,9 +759,10 @@ const Tactics = (() => {
     advance(exp);
   }
 
-  function advance(move) {
+  function advance(move, altSan) {
     const before = game.fen();
-    game.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' });
+    const done = game.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' });
+    if (altSan === true) altSan = done ? done.san : null;
     BoardRenderer.render($('#tac-board'), game.fen(), { from: move.from, to: move.to });
     // Ce que le coup vient de créer : flèches + phrase, tout de suite, pendant
     // que la figure est encore sur le plateau.
@@ -748,7 +770,7 @@ const Tactics = (() => {
     if (lastThreats) lastThreats.final = ply + 1 >= list[idx].sol.length;
     const shown = paintThreats();
     ply++;
-    if (ply >= list[idx].sol.length) { finishSolved(); return; }
+    if (ply >= list[idx].sol.length) { finishSolved(altSan); return; }
     // opponent's forced reply
     locked = true;
     const reply = expectedMove();
@@ -802,11 +824,16 @@ const Tactics = (() => {
     if (b) b.classList.toggle('active', threatsOn);
   }
 
-  function finishSolved() {
+  function finishSolved(playedSan) {
     locked = true;
     const fb = $('#tac-feedback');
+    const scripted = list[idx].sol.map(sanToFr).join(' ');
     fb.className = 'guess-feedback right';
-    fb.innerHTML = `✅ Résolu — <b>${list[idx].sol.map(sanToFr).join(' ')}</b>`;
+    // Si l'élève a trouvé un AUTRE mat que celui du script, c'est le sien qu'on
+    // affiche : lui répondre « Résolu - Da8# » quand il a joué Dd8# est absurde.
+    fb.innerHTML = playedSan
+      ? `✅ Résolu — <b>${sanToFr(playedSan)}</b> <span class="tac-alt">(le corrigé donnait ${scripted}, ton mat en vaut un autre)</span>`
+      : `✅ Résolu — <b>${scripted}</b>`;
     endButtons();
   }
 
@@ -928,38 +955,10 @@ const Tactics = (() => {
     BoardRenderer.drawArrows($('#tac-arrows'), freeBest
       ? [{ from: freeBest.slice(0, 2), to: freeBest.slice(2, 4), color: B, opacity: 0.9, width: 7 }] : []);
   }
-  function pvToFr(fen, pvStr, max) {
-    if (!pvStr) return [];
-    const g = new Chess(fen); const out = [];
-    for (const uci of pvStr.trim().split(/\s+/)) {
-      if (out.length >= (max || 5)) break;
-      let m; try { m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined }); } catch (_) { m = null; }
-      if (!m) break;
-      out.push(sanToFr(m.san));
-    }
-    return out;
-  }
+  // Ligne d'état sous l'échiquier : logique partagée dans js/freeplay.js, seul
+  // le libellé du retour arrière est propre aux exercices.
   function freeStatusHtml(fen, res) {
-    const stm = fen.split(' ')[1] === 'w' ? 'w' : 'b';
-    try {
-      const g = new Chess(fen);
-      if (g.in_checkmate()) return `♚ <b>Échec et mat.</b> Annule pour essayer une autre suite.`;
-      if (g.in_stalemate()) return `<b>Pat</b> - nulle. Annule pour essayer une autre suite.`;
-      if (g.in_draw()) return `<b>Nulle</b> (matériel / répétition). Annule pour essayer une autre suite.`;
-    } catch (_) {}
-    const head = `Trait aux <b>${stm === 'w' ? 'Blancs' : 'Noirs'}</b>.`;
-    if (!res) return head + ` Moteur indisponible - joue librement, sans suggestion.`;
-    let ev;
-    if (res.mate != null) {
-      const mw = stm === 'w' ? res.mate : -res.mate;
-      ev = 'Mat en ' + Math.abs(mw) + (mw > 0 ? ' (Blancs)' : ' (Noirs)');
-    } else {
-      const w = (stm === 'w' ? res.score : -res.score) / 100;
-      ev = (w >= 0 ? '+' : '') + w.toFixed(1);
-    }
-    const pv = pvToFr(fen, res.pv, 5);
-    return `${head} Éval <b>${ev}</b>.` + (pv[0] ? ` Meilleur : <b>${pv[0]}</b> <span class="oe-sugg">(flèche bleue)</span>.` : '')
-      + (pv.length > 1 ? `<div class="oe-explore-pv">Suite : ${pv.join(' ')}</div>` : '');
+    return FreePlay.statusHtml(fen, res, 'Annule pour essayer une autre suite.');
   }
   async function analyzeFree(fen, myToken) {
     freeBest = null;

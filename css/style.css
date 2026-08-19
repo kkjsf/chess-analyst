@@ -4137,3 +4137,17 @@ body.guess-open { overflow: hidden; }
 /* Effort moteur derrière une précision : « analyse rapide (navigateur) » vs
    « analyse complète ». Les deux chiffres ne sont pas comparables. */
 .acc-effort { font-size: 10.5px; color: var(--text-dim); opacity: .75; margin-top: 2px; }
+
+/* Motif stratégique sans exercice jouable : dit dans la liste, expliqué dans la
+   fiche. Ce n'est pas un manque de contenu, c'est une autre nature de contenu. */
+.concept-study {
+  font-size: 11px; font-weight: 600; color: var(--text-dim);
+  background: rgba(255,255,255,.06); border-radius: 6px; padding: 1px 6px; margin-left: 6px;
+}
+.concept-study-note {
+  font-size: 13px; line-height: 1.6; color: var(--text-dim);
+  background: rgba(255,255,255,.04); border-radius: 10px; padding: 10px 12px; margin: 0;
+}
+
+/* Mat alternatif trouvé par l'élève : on cite son coup, le corrigé en second. */
+.tac-alt { font-size: 12px; font-weight: 400; color: var(--text-dim); }

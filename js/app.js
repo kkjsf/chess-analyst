@@ -1350,38 +1350,9 @@ const App = (() => {
     // dessine son meilleur coup (flèche bleue) + éval relative aux Blancs et suite.
     let exploring = false, exHist = [], exToken = 0, exStartIdx = 0, exBookArrow = null;
 
-    function pvToFr(fen, pvStr, max) {
-      if (!pvStr) return [];
-      const g = new Chess(fen); const out = [];
-      for (const uci of pvStr.trim().split(/\s+/)) {
-        if (out.length >= (max || 5)) break;
-        let m; try { m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined }); } catch (_) { m = null; }
-        if (!m) break;
-        out.push((typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(m.san) : m.san);
-      }
-      return out;
-    }
-    function exEvalWhite(res, stm) {
-      if (res.mate != null) { const mw = stm === 'w' ? res.mate : -res.mate; return 'Mat en ' + Math.abs(mw) + (mw > 0 ? ' (Blancs)' : ' (Noirs)'); }
-      const w = (stm === 'w' ? res.score : -res.score) / 100;
-      return (w >= 0 ? '+' : '') + w.toFixed(1);
-    }
-    function exStatusHtml(fen, res) {
-      const stm = fen.split(' ')[1] === 'w' ? 'w' : 'b';
-      try {
-        const g = new Chess(fen);
-        if (g.in_checkmate()) return `♚ <b>Échec et mat.</b> Annule pour explorer une autre suite.`;
-        if (g.in_stalemate()) return `<b>Pat</b> — nulle. Annule pour explorer une autre suite.`;
-        if (g.in_draw()) return `<b>Nulle</b> (matériel / répétition). Annule pour explorer une autre suite.`;
-      } catch (_) {}
-      const turn = stm === 'w' ? 'Blancs' : 'Noirs';
-      const head = `Trait aux <b>${turn}</b>.`;
-      if (!res) return head + ` Moteur indisponible — joue librement, sans suggestion.`;
-      const pv = pvToFr(fen, res.pv, 5);
-      const best = pv[0] || '';
-      return `${head} Éval <b>${exEvalWhite(res, stm)}</b>.` + (best ? ` Meilleur : <b>${best}</b> <span class="oe-sugg">(flèche bleue)</span>.` : '')
-        + (pv.length > 1 ? `<div class="oe-explore-pv">Suite : ${pv.join(' ')}</div>` : '');
-    }
+    // Ligne d'état sous l'échiquier : logique partagée dans js/freeplay.js
+    // (elle existait à l'identique ici, dans training.js et dans tactics.js).
+    const exStatusHtml = (fen, res) => FreePlay.statusHtml(fen, res);
 
     // ── Suivi de la théorie pendant l'exploration ──
     // exStartIdx = le coup de la ligne d'où l'on a repris la main. On compare la
@@ -3833,7 +3804,12 @@ const App = (() => {
         : '';
       const en = c.en ? ` <span class="concept-en">${c.en}</span>` : '';
       const n = (c.puzzles && c.puzzles.length) || 0;
-      const train = n ? ` <span class="concept-train" title="${n} exercice${n > 1 ? 's' : ''}">🎯 ${n}</span>` : '';
+      // Les concepts stratégiques n'ont pas de position « à trouver » : le dire
+      // dans la liste, sinon on ouvre 8 fiches sur 28 pour découvrir qu'elles
+      // n'ont pas de bouton d'entraînement.
+      const train = n
+        ? ` <span class="concept-train" title="${n} exercice${n > 1 ? 's' : ''}">🎯 ${n}</span>`
+        : (c.study ? ` <span class="concept-study" title="Concept à comprendre, sans exercice">📖 à lire</span>` : '');
       html += `<div class="concept" data-cat="${catIdx}">${diagram}<div class="concept-body"><span class="concept-name">${c.name}${en}${train}</span><p>${c.desc}</p></div></div>`;
     }
     html += `<div class="lx-empty" id="concept-empty" hidden>Aucun motif ne correspond.<br><span>Essaie « fourchette », « mat », « pion »…</span></div>`;
@@ -3877,9 +3853,11 @@ const App = (() => {
       heads.forEach(h => { h.hidden = !!q && !shown.has(h.dataset.cat); });
       const n = CONCEPTS.filter((_, i) => !cards[i].hidden).length;
       if (empty) empty.hidden = n > 0;
+      const exos = CONCEPTS.reduce((a, c) => a + ((c.puzzles && c.puzzles.length) || 0), 0);
+      const study = CONCEPTS.filter(c => c.study).length;
       count.innerHTML = q
         ? `<b>${n}</b> motif${n > 1 ? 's' : ''} sur ${total}`
-        : `${total} motifs — ${CONCEPTS.reduce((a, c) => a + ((c.puzzles && c.puzzles.length) || 0), 0)} exercices jouables`;
+        : `${total} motifs — ${exos} exercices jouables${study ? ` · ${study} concepts à lire` : ''}`;
     };
     input.addEventListener('input', apply);
     clear.addEventListener('click', () => { input.value = ''; apply(); input.focus(); });
@@ -3913,6 +3891,11 @@ const App = (() => {
           if (overlay._release) { overlay._release(); overlay._release = null; }
           Tactics.start(c.puzzles, c.name);
         };
+      } else if (c.study) {
+        // Pas un oubli du pipeline : ces motifs sont STRATÉGIQUES, et la base de
+        // puzzles Lichess n'étiquette que des tactiques. Autant l'assumer.
+        actions.hidden = false;
+        actions.innerHTML = `<p class="concept-study-note">📖 Concept à comprendre, pas de position à trouver : il n'y a pas ici un coup gagnant unique, mais un plan à reconnaître. Repère-le dans tes propres parties, onglet Coach.</p>`;
       } else {
         actions.hidden = true;
         actions.innerHTML = '';

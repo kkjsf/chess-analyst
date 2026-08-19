@@ -17,12 +17,34 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '186';
+window.APP_VERSION = '190';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
 // defined before the loader at the end of the body runs.
 document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>');
+</script>
+<script>
+// Fetch every app script IN PARALLEL, right now, while the parser is still in
+// <head>. The loader at the end of the body still writes them in order and they
+// still execute in order — preload only changes WHEN the bytes are fetched, not
+// when they run, so the semantics are untouched.
+//
+// Without this, the 14 document.write'd tags are strictly serialised: the
+// browser cannot even see script N+1 before script N has arrived and run. On a
+// phone over 4G that is 14 round-trips one after the other for ~970 KB.
+// The service worker hides it after the first visit; this fixes the first one.
+(function () {
+  var head = document.getElementsByTagName('head')[0];
+  var all = ['css/style.css'].concat(window.APP_SCRIPTS || []);
+  for (var i = 0; i < all.length; i++) {
+    var l = document.createElement('link');
+    l.rel = 'preload';
+    l.as = /\.css$/.test(all[i]) ? 'style' : 'script';
+    l.href = all[i] + '?v=' + APP_VERSION;
+    head.appendChild(l);
+  }
+})();
 </script>
 </head>
 <body>
