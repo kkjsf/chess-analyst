@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '185';
+window.APP_VERSION = '186';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -26,6 +26,11 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
 </script>
 </head>
 <body>
+
+<!-- La hierarchie de titres demarrait en h2 : un lecteur d'ecran n'avait
+     aucun titre de page. Visuellement masque, l'identite est deja portee
+     par la barre de marque. -->
+<h1 class="sr-only">Chess Analyst - analyse tes parties d'echecs</h1>
 
 <!-- ═══════ PANELS (opened from the Apprendre hub) ═══════ -->
 
@@ -52,18 +57,10 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     <div class="guide-block">
       <div class="guide-icon">🏷️</div>
       <h3>Comprendre les couleurs</h3>
-      <ul class="guide-badges">
-        <li><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span> Un sacrifice de pièce gagnant</li>
-        <li><span class="info-badge great"><i class="mv-mark mv-great">!</i> Très bon</span> Le seul bon coup de la position</li>
-        <li><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span> Le coup #1 du moteur</li>
-        <li><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Excellent</span> Presque aussi bon que le meilleur coup</li>
-        <li><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span> Un bon coup, sans être optimal</li>
-        <li><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span> Coup d'ouverture reconnu</li>
-        <li><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span> Petit écart, avantage grignoté</li>
-        <li><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Coup manqué</span> Un gain laissé passer</li>
-        <li><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span> Coup coûteux, avantage perdu</li>
-        <li><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span> Erreur grave, la position bascule</li>
-      </ul>
+      <!-- Remplie au chargement depuis Analyzer.MOVE_TYPES (voir js/app.js,
+           fillMoveLegends). Écrite à la main, cette liste avait fini par
+           appeler « Excellent » un autre glyphe que le reste de l'app. -->
+      <ul class="guide-badges" id="legend-badges"></ul>
     </div>
     <div class="guide-block">
       <div class="guide-icon">📊</div>
@@ -162,18 +159,9 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       Chaque coup est noté sur les <b>points espérés perdus</b> (pp) : ta chance de gain (0 à 1) juste avant le coup, moins celle juste après. C'est le même « Expected Points Model » que la Revue de partie de Chess.com. Les catégories sont testées de haut en bas — la première qui correspond gagne.</p>
       <table class="notation-table move-doc-table">
         <thead><tr><th>Type</th><th>Critère</th><th>Définition</th></tr></thead>
-        <tbody>
-          <tr><td><span class="info-badge brilliant"><i class="mv-mark mv-brilliant">!!</i> Brillant</span></td><td>&lt; 0,05 pp + sacrifice</td><td>Un sacrifice de pièce gagnant (≥ une mineure donnée), qui reste fort, sans être perdant après ni déjà totalement gagnant avant.</td></tr>
-          <tr><td><span class="info-badge miss"><i class="mv-mark mv-miss">✗</i> Coup manqué</span></td><td>≥ 0,10 pp + gain lâché</td><td>Tu étais gagnant (≥ 70 % de chances) et tu retombes sous 55 %. Remplace Erreur/Gaffe quand c'est un gain raté.</td></tr>
-          <tr><td><span class="info-badge blunder"><i class="mv-mark mv-blunder">??</i> Gaffe</span></td><td>≥ 0,20 pp</td><td>Erreur grave, la position bascule.</td></tr>
-          <tr><td><span class="info-badge mistake"><i class="mv-mark mv-mistake">?</i> Erreur</span></td><td>0,10 – 0,20 pp</td><td>Coup coûteux, l'avantage change de camp.</td></tr>
-          <tr><td><span class="info-badge book"><i class="mv-mark mv-book">📖</i> Théorique</span></td><td>ouverture connue, &lt; 0,10 pp</td><td>Coup d'ouverture reconnu ; prioritaire sur « Imprécision » dans la théorie connue.</td></tr>
-          <tr><td><span class="info-badge inaccuracy"><i class="mv-mark mv-inaccuracy">?!</i> Imprécision</span></td><td>0,05 – 0,10 pp</td><td>Petit écart, l'avantage se grignote.</td></tr>
-          <tr><td><span class="info-badge good"><i class="mv-mark mv-good">✓</i> Bon</span></td><td>0,02 – 0,05 pp</td><td>Un bon coup, sans être optimal.</td></tr>
-          <tr><td><span class="info-badge great"><i class="mv-mark mv-great">!</i> Excellent</span></td><td>&lt; 0,02 pp + seul coup</td><td>Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée. (Le « Great Move » de Chess.com.)</td></tr>
-          <tr><td><span class="info-badge best"><i class="mv-mark mv-best">★</i> Meilleur</span></td><td>&lt; 0,02 pp, coup n°1 (ou équivalent)</td><td>Le coup n°1 du moteur, ou un coup qui l'égale à ≤ 8 cp près (perte quasi nulle). Le mat est toujours classé ici.</td></tr>
-          <tr><td><span class="info-badge excellent"><i class="mv-mark mv-excellent">✔</i> Très bien</span></td><td>&lt; 0,02 pp</td><td>Presque optimal, sans être exactement le coup n°1.</td></tr>
-        </tbody>
+        <!-- Remplie au chargement depuis Analyzer.MOVE_TYPES (js/app.js,
+             fillMoveLegends), pour ne plus pouvoir diverger de l'app. -->
+        <tbody id="legend-table"></tbody>
       </table>
 
       <p><b>Le modèle des points espérés (Expected Points)</b><br>
@@ -374,7 +362,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       </div>
       <div id="progress-container" class="progress-container" hidden>
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        <div class="progress-text" id="progress-text">Chargement...</div>
+        <div class="progress-text" id="progress-text" role="status" aria-live="polite">Chargement...</div>
       </div>
       <div id="import-error" class="import-error" hidden></div>
     </section>
@@ -549,6 +537,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
         <div class="acc-meta">
           <div class="acc-label" id="acc-hero-label">Ta précision</div>
           <div class="acc-grade" id="acc-hero-grade"></div>
+          <div class="acc-effort" id="acc-hero-effort" hidden></div>
           <div class="acc-elo" id="acc-hero-elo"></div>
         </div>
       </div>
@@ -722,24 +711,24 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
 </div>
 
 <!-- ═══════ BOTTOM TAB BAR ═══════ -->
-<nav class="tabbar" id="tabbar">
+<nav class="tabbar" id="tabbar" role="tablist" aria-label="Sections de l'application">
   <div class="tabbar-brand" aria-hidden="true">
     <span class="tb-mark">♟</span>
     <span class="tb-word">Chess Analyst</span>
   </div>
-  <button class="tab active" data-tab="analyser" aria-label="Analyser">
+  <button class="tab active" data-tab="analyser" role="tab" aria-selected="true" aria-label="Analyser">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M7.5 11.7 9.6 9.2l1.9 1.9 2.4-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span>Analyser</span>
   </button>
-  <button class="tab" data-tab="coach" aria-label="Coach">
+  <button class="tab" data-tab="coach" role="tab" aria-selected="false" aria-label="Coach">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
     <span>Coach</span>
   </button>
-  <button class="tab" data-tab="apprendre" aria-label="Apprendre">
+  <button class="tab" data-tab="apprendre" role="tab" aria-selected="false" aria-label="Apprendre">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 6.5C10 5 6.5 4.6 3.5 5v13c3-.4 6.5 0 8.5 1.5 2-1.5 5.5-1.9 8.5-1.5V5c-3-.4-6.5 0-8.5 1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 6.5v13" stroke="currentColor" stroke-width="1.7"/></svg>
     <span>Apprendre</span>
   </button>
-  <button class="tab" data-tab="entrainer" aria-label="Entraîner">
+  <button class="tab" data-tab="entrainer" role="tab" aria-selected="false" aria-label="Entraîner">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="13.5" r="7" stroke="currentColor" stroke-width="1.7"/><circle cx="10.5" cy="13.5" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M10.5 13.5 20 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.5 4H20v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span>Entraîner</span>
     <span class="tab-badge" id="tab-train-badge" hidden></span>

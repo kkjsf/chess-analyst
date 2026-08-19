@@ -888,7 +888,7 @@ const Training = (() => {
         <svg class="train-board" viewBox="0 0 360 360" id="train-board"></svg>
         <svg class="train-board" viewBox="0 0 360 360" id="train-arrows"></svg>
       </div>
-      <div class="train-feedback" id="train-feedback"></div>
+      <div class="train-feedback" id="train-feedback" role="status" aria-live="polite"></div>
       <div class="train-actions" id="train-actions">
         <button class="train-btn ghost" id="puz-hint">💡 Indice</button>
         <button class="train-btn ghost" id="puz-reveal">Voir la solution</button>

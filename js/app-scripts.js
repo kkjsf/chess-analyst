@@ -14,10 +14,12 @@ self.APP_SCRIPTS = [
   'js/board.js',
   'js/engine.js',
   'js/openings.js',
+  // tactics.js before analysis.js: analysis.js reads the board through Tactics
+  // (seeOn / netGain / threats) to tell a real fork from a hanging piece.
+  'js/tactics.js',
   'js/analysis.js',
   'js/training.js',
   'js/guess.js',
-  'js/tactics.js',
   'js/mates.js',
   'js/courses.js',
   'js/opening-tree.js',

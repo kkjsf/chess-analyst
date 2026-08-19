@@ -6,5 +6,8 @@
   "description": "Server-side bulk analysis for Chess Analyst Coach",
   "dependencies": {
     "chess.js": "0.12.1"
+  },
+  "scripts": {
+    "test": "node test_core.cjs"
   }
 }

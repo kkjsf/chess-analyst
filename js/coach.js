@@ -1606,21 +1606,24 @@ const Coach = (() => {
     const q = { brilliant: 0, great: 0, best: 0, excellent: 0, good: 0, book: 0, forced: 0, ok: 0, inaccuracy: 0, miss: 0, mistake: 0, blunder: 0, moveCount: 0 };
     an.forEach(g => { const m = g.analysis.moveQuality; if (!m) return; for (const k in q) q[k] += m[k] || 0; });
     if (!q.moveCount) return '';
-    const order = [
-      { k: 'brilliant', l: 'Brillant', c: '#67d4e8' },
-      { k: 'great', l: 'Excellent', c: '#7ba7d6' },
-      { k: 'best', l: 'Meilleur', c: '#56b886' },
-      { k: 'excellent', l: 'Très bien', c: '#86d99a' },
-      { k: 'good', l: 'Bon', c: '#b9cf8f' },
-      { k: 'book', l: 'Théorique', c: '#cdab72' },
-      { k: 'forced', l: 'Forcé', c: '#8a8aa0' },
-      { k: 'ok', l: 'Correct', c: '#8a8aa0' },
-      { k: 'inaccuracy', l: 'Imprécision', c: '#e2b857' },
-      { k: 'miss', l: 'Coup manqué', c: '#e0574a' },
-      { k: 'mistake', l: 'Erreur', c: '#e08a4b' },
-      { k: 'blunder', l: 'Gaffe', c: '#d36b6b' }
-    ];
-    const GLYPH = { brilliant: '!!', great: '!', best: '★', excellent: '✔', good: '✓', book: '📖', forced: '□', ok: '·', inaccuracy: '?!', miss: '✗', mistake: '?', blunder: '??' };
+    // Ordre, libellés et glyphes viennent d'Analyzer.MOVE_TYPES — cette carte
+    // était la troisième copie du dictionnaire et pouvait diverger de l'app.
+    // Seules les couleurs sont propres au Coach. « ok » n'est pas un type de
+    // l'analyseur : c'est le reliquat des vieux enregistrements sans type.
+    const COLOR = {
+      brilliant: '#67d4e8', great: '#7ba7d6', best: '#56b886', excellent: '#86d99a',
+      good: '#b9cf8f', book: '#cdab72', forced: '#8a8aa0', ok: '#8a8aa0',
+      inaccuracy: '#e2b857', miss: '#e0574a', mistake: '#e08a4b', blunder: '#d36b6b'
+    };
+    const types = Analyzer.MOVE_TYPES;
+    const order = [];
+    const GLYPH = { ok: '·' };
+    for (const t of types) {
+      GLYPH[t.k] = t.mark;
+      order.push({ k: t.k, l: t.label, c: COLOR[t.k] });
+      // « Correct » se range juste après « Forcé », comme avant.
+      if (t.k === 'forced') order.push({ k: 'ok', l: 'Correct', c: COLOR.ok });
+    }
     const total = q.moveCount;
     // Stacked overview bar (true proportions).
     const bar = `<div class="coach-bar coach-bar-tall">` + order.map(o =>

@@ -41,6 +41,10 @@ const UA = 'chess-analyst-coach/1.0 (+https://github.com/kkjsf/chess-analyst)';
 const { Chess } = require('chess.js');
 globalThis.Chess = Chess;
 globalThis.Openings = require('../js/openings.js');
+// analysis.js reads the board through Tactics (SEE / netGain / threats) to tell
+// a real fork from a piece that simply hangs. Without this global the server
+// analysis would silently stop flagging forks while the browser kept doing it.
+globalThis.Tactics = require('../js/tactics.js');
 // StockfishEngine global is set after the engine is built (below), before analysis.
 const Analyzer = require('../js/analysis.js');
 

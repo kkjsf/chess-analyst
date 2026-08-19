@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon bilan 10 min - Chess Analyst</title>
+<style>
+  :root{
+    --bg:#1a1a2e; --bg-card:#16213e; --bg-elevated:#1c2a4a;
+    --accent:#e2b857; --accent-dim:#c9982e;
+    --text:#e8e8e8; --text-dim:#8892a4;
+    --success:#4ade80; --danger:#f87171; --warning:#fbbf24;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Segoe UI",system-ui,sans-serif;
+    line-height:1.5; padding:28px 18px 60px;
+  }
+  .wrap{max-width:860px;margin:0 auto}
+  header.top{text-align:center;margin-bottom:26px}
+  header.top .crown{font-size:38px}
+  h1{font-size:26px;font-weight:700;margin:6px 0 2px}
+  h1 .accent{color:var(--accent)}
+  .sub{color:var(--text-dim);font-size:14px}
+  section{
+    background:var(--bg-card);border-radius:var(--radius);
+    padding:20px 22px;margin-bottom:18px;
+    border:1px solid rgba(226,184,87,.10);
+  }
+  h2{font-size:16px;letter-spacing:.4px;text-transform:uppercase;
+     color:var(--accent);margin-bottom:16px;font-weight:600}
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .tile{background:var(--bg-elevated);border-radius:12px;padding:16px 14px;text-align:center}
+  .tile .big{font-size:30px;font-weight:800;line-height:1.1}
+  .tile .lbl{font-size:12px;color:var(--text-dim);margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+  .red{color:var(--danger)} .green{color:var(--success)} .gold{color:var(--accent)} .amber{color:var(--warning)}
+  /* chart */
+  .chart-note{color:var(--text-dim);font-size:13px;margin-top:10px}
+  svg{width:100%;height:auto;display:block}
+  .legend{display:flex;gap:18px;justify-content:center;font-size:12px;color:var(--text-dim);margin-top:8px;flex-wrap:wrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  /* diagnostics */
+  .diag{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+  .diag:last-child{border-bottom:none}
+  .diag .ico{font-size:26px;flex:0 0 34px;text-align:center}
+  .diag .body b{color:var(--text)}
+  .diag .body .ev{display:inline-block;margin-top:5px;font-size:12px;color:var(--accent);
+     background:rgba(226,184,87,.10);border-radius:6px;padding:2px 8px}
+  .diag .body p{color:var(--text-dim);font-size:14px;margin-top:3px}
+  /* insight */
+  .insight{background:linear-gradient(135deg,rgba(248,113,113,.12),rgba(226,184,87,.08));
+     border:1px solid rgba(248,113,113,.3)}
+  .insight .kpi{display:flex;gap:26px;justify-content:center;margin:12px 0;flex-wrap:wrap}
+  .insight .kpi div{text-align:center}
+  .insight .kpi .n{font-size:30px;font-weight:800}
+  .insight .kpi .l{font-size:12px;color:var(--text-dim)}
+  /* plan */
+  .plan{display:grid;gap:12px}
+  .step{display:flex;gap:14px;align-items:flex-start;background:var(--bg-elevated);
+     border-radius:12px;padding:14px 16px}
+  .step .num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent);color:#1a1a2e;
+     font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .step .txt{flex:1}
+  .step .txt b{color:var(--text)}
+  .step .txt p{color:var(--text-dim);font-size:14px;margin-top:2px}
+  .step a.btn{display:inline-block;margin-top:8px;font-size:13px;text-decoration:none;
+     color:var(--accent);border:1px solid var(--accent-dim);border-radius:8px;padding:5px 12px;
+     transition:.15s}
+  .step a.btn:hover{background:var(--accent);color:#1a1a2e}
+  footer{text-align:center;color:var(--text-dim);font-size:12px;margin-top:24px}
+  footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="crown">♟️</div>
+    <h1>Mon bilan <span class="accent">10 minutes</span></h1>
+    <div class="sub">nimokaji &middot; 53 parties &middot; mai → 11 août 2026</div>
+  </header>
+
+  <!-- STATS -->
+  <section>
+    <h2>Le bilan brut</h2>
+    <div class="tiles">
+      <div class="tile"><div class="big"><span class="green">23</span><span style="color:var(--text-dim)">/</span><span class="red">29</span><span style="color:var(--text-dim)">/</span><span class="gold">1</span></div><div class="lbl">V / D / N</div></div>
+      <div class="tile"><div class="big gold">≈337</div><div class="lbl">niveau réel (266-423)</div></div>
+      <div class="tile"><div class="big amber">15</div><div class="lbl">mats subis</div></div>
+      <div class="tile"><div class="big red">2,2</div><div class="lbl">gaffes / défaite</div></div>
+      <div class="tile"><div class="big">43%</div><div class="lbl">de victoires</div></div>
+    </div>
+  </section>
+
+  <!-- RATING CHART -->
+  <section>
+    <h2>Calibrage, puis oscillation</h2>
+    <svg id="chart" viewBox="0 0 820 240" preserveAspectRatio="none" aria-label="Courbe Elo"></svg>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--success)"></span>Victoire</span>
+      <span><span class="dot" style="background:var(--danger)"></span>Défaite</span>
+      <span><span class="dot" style="background:var(--accent)"></span>Nulle</span>
+    </div>
+    <p class="chart-note">La descente 760→350 du début n'est <b>pas</b> un effondrement : c'est l'<b>Elo provisoire</b> qui se calibre sur tes 8 premières parties (chess.com te pose haut, puis corrige par paliers). Ton vrai niveau tourne autour de <b class="gold">337</b>, dans une bande 266-423. À l'intérieur de cette bande, ce sont les <b>séries de tilt</b> qui te font plonger (plus bas atteint : 266 en cours de séance le 05/08) - mais le même 05/08, tu es <b class="green">remonté à 295</b> en gagnant 4 des 7 parties, puis le 06/08 tu es <b class="green">monté à 323</b> en enchaînant encore 3 victoires - soit <b class="green">6 gains d'affilée</b> depuis le plus-bas. Et ça n'a pas retombé : le 10/08 tu as encaissé 2 défaites d'entrée (retour à 306), puis tu as <b class="green">aligné 4 victoires</b> pour repasser à 339, et le 11/08 tu as fini à <b class="green">346</b> - ton plus haut de toute la période stable. Tu n'es donc pas "de pire en pire" : tu oscilles dans ta bande, et depuis 10 jours tu es clairement dans le haut de cette bande.</p>
+
+    <div style="margin-top:16px;background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.28);border-radius:12px;padding:14px 16px">
+      <div style="font-size:13px;color:var(--warning);text-transform:uppercase;letter-spacing:.5px;font-weight:600;margin-bottom:8px">Les glissades du 30-31 juillet &amp; 4 août... et le rebond des 5-6</div>
+      <div style="display:flex;gap:8px;font-size:15px;font-weight:800;flex-wrap:wrap;align-items:center">
+        <span style="color:var(--text-dim);font-size:12px;font-weight:600">30/07</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span>
+        <span style="color:var(--text-dim)">&nbsp;&middot;&nbsp;</span>
+        <span style="color:var(--text-dim);font-size:12px;font-weight:600">31/07</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span>
+        <span style="color:var(--text-dim)">&nbsp;&middot;&nbsp;</span>
+        <span style="color:var(--text-dim);font-size:12px;font-weight:600">04/08</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span>
+        <span style="color:var(--text-dim)">&nbsp;&middot;&nbsp;</span>
+        <span style="color:var(--success);font-size:12px;font-weight:600">05/08</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span>
+        <span style="color:var(--text-dim)">&nbsp;&middot;&nbsp;</span>
+        <span style="color:var(--success);font-size:12px;font-weight:600">06/08</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span>
+        <span style="color:var(--text-dim)">&nbsp;&middot;&nbsp;</span>
+        <span style="color:var(--text-dim);font-size:12px;font-weight:600">10/08</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span>
+        <span style="color:var(--text-dim)">&nbsp;&middot;&nbsp;</span>
+        <span style="color:var(--success);font-size:12px;font-weight:600">11/08</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="red">D</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span><span style="color:var(--text-dim)">→</span>
+        <span class="green">V</span>
+      </div>
+      <p style="color:var(--text-dim);font-size:14px;margin-top:8px">
+        <b style="color:var(--text)">30-31 juillet : 7 parties, finies 2-5.</b> Là, oui, une soirée qui s'éternise, et un <b style="color:var(--text)">plafond de parties par session</b> l'aurait coupée avant la spirale. <b style="color:var(--text)">Le 4 août, c'est un autre problème :</b> 2 parties seulement, perdues toutes les deux (mat, puis abandon) - aucun stop-loss ne t'aurait épargné ça, tu avais déjà arrêté côté volume. Ce ne sont pas du tilt, ce sont <b style="color:var(--text)">deux bourdes sèches</b> : le levier ici, c'est la vigilance anti-gaffe, pas le stop-loss.
+      </p>
+      <p style="color:var(--text-dim);font-size:14px;margin-top:10px;background:rgba(74,222,128,.08);border-left:3px solid var(--success);border-radius:0 8px 8px 0;padding:10px 12px">
+        <b class="green">Et le 5 août, tu as fait l'inverse.</b> 7 parties encore, mais finies <b style="color:var(--text)">4-3</b>. Tu as touché ton plus-bas absolu (266) en milieu de séance, et au lieu de plonger tu as <b style="color:var(--text)">enchaîné 3 victoires pour remonter à 295</b>. <b class="green">Le 6 août, tu as prolongé :</b> 3 victoires de plus, jusqu'à 323 - soit 6 gains d'affilée depuis le plus-bas. Et c'est exactement la bonne leçon en action : deux adversaires ont sorti la dame trop tôt (2.Dh5), tu n'as pas paniqué, tu as développé calmement (2...Cc6, ...Cf6) et puni dans les deux cas (un mat, un abandon). <b class="green">Le 10-11 août, rebelote et encore mieux :</b> après 2 défaites sèches en ouverture de séance le 10/08, tu as répondu par <b style="color:var(--text)">4 victoires d'affilée</b> puis, le 11/08, 2 de plus (une seule défaite au temps entre les deux) - jusqu'à <b style="color:var(--text)">346, ton plus haut de la période stable</b>. Preuve que la variance joue dans les deux sens - et que le vrai travail durable, c'est de <b style="color:var(--text)">réduire les bourdes</b> (indépendant du nombre de parties), pas juste de compter tes défaites.
+      </p>
+    </div>
+  </section>
+
+  <!-- KILLER INSIGHT -->
+  <section class="insight">
+    <h2>Le vrai problème</h2>
+    <p style="text-align:center">Ta précision est <b>identique</b> que tu gagnes ou que tu perdes :</p>
+    <div class="kpi">
+      <div><div class="n green">84%</div><div class="l">précision en victoire</div></div>
+      <div><div class="n red">83%</div><div class="l">précision en défaite</div></div>
+    </div>
+    <p style="text-align:center;color:var(--text-dim);font-size:14px">
+      Tu ne joues pas mieux quand tu gagnes : l'adversaire a juste gaffé plus que toi.
+      À ton niveau, les échecs sont un <b style="color:var(--text)">jeu de qui gaffe le moins</b>.
+      Progresser = réduire tes propres bourdes, pas apprendre des finesses.
+    </p>
+  </section>
+
+  <!-- DIAGNOSTIC -->
+  <section>
+    <h2>Pourquoi tu fais autant d'erreurs</h2>
+
+    <div class="diag">
+      <div class="ico">👁️</div>
+      <div class="body">
+        <b>Tu ne regardes pas la menace adverse</b>
+        <span class="ev">thème n°1, loin devant</span>
+        <p>Tu joues ton plan sans voir son coup. Résultat direct : 15 échec et mat encaissés sur 29 défaites.</p>
+      </div>
+    </div>
+
+    <div class="diag">
+      <div class="ico">⏱️</div>
+      <div class="body">
+        <b>Tu te sabordes tôt</b>
+        <span class="ev">37% des grosses fautes avant le coup 10</span>
+        <p>Le point de bascule médian de tes parties est le coup ~10. La partie est souvent pliée avant même le milieu de jeu.</p>
+      </div>
+    </div>
+
+    <div class="diag">
+      <div class="ico">🎲</div>
+      <div class="body">
+        <b>Tu comptes sur une ouverture que l'adversaire doit accepter</b>
+        <span class="ev">exemple concret : ta partie du 31/07</span>
+        <p>Tu prévoyais l'Italienne, mais elle n'existe que si Noir joue 1…e5. Là il a joué 1…d5 (Scandinave), et tu as improvisé 2.f3 au lieu du simple 2.exd5. Le souci n'est pas de connaître l'Italienne à fond : c'est de n'avoir <b style="color:var(--text)">aucune réponse quand Noir dévie</b>.</p>
+      </div>
+    </div>
+
+    <div class="diag">
+      <div class="ico">🩸</div>
+      <div class="body">
+        <b>Tu t'accroches en position perdue</b>
+        <span class="ev">défaites : 69 coups &nbsp;vs&nbsp; victoires : 52</span>
+        <p>Tu continues à jouer des positions déjà mortes. Ça nourrit le tilt et enchaîne les défaites.</p>
+      </div>
+    </div>
+
+    <div class="diag">
+      <div class="ico">✅</div>
+      <div class="body">
+        <b>Ce n'est PAS un problème de temps</b>
+        <span class="ev">10,8 s/coup &middot; quasi jamais en zeitnot</span>
+        <p>Tu as tout le temps de vérifier, tu ne le fais pas. Seule dérive : tes finales bâclées à 5 s/coup alors que la pendule est pleine.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPENING DECLIC -->
+  <section class="insight" style="background:linear-gradient(135deg,rgba(74,222,128,.10),rgba(226,184,87,.07));border:1px solid rgba(74,222,128,.28)">
+    <h2 style="color:var(--success)">Le déclic : l'ouverture, ce n'est pas du par-cœur</h2>
+    <p style="font-size:14px;color:var(--text-dim);margin-bottom:14px">
+      Tu ne peux pas « jouer l'Italienne » tout seul : il faut que Noir joue 1…e5. Dès qu'il dévie, ton plan tombe. Ce qu'il te faut, ce n'est pas 20 coups par cœur, c'est <b style="color:var(--text)">une seule réponse simple à chacun de ses 1ers coups</b>, puis les principes.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px">
+      <thead><tr style="color:var(--accent);text-align:left"><th style="padding:6px 8px">Noir joue…</th><th style="padding:6px 8px">Tu réponds</th><th style="padding:6px 8px">Idée</th></tr></thead>
+      <tbody>
+        <tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="padding:6px 8px">1…e5</td><td style="padding:6px 8px"><b>2.Cf3, 3.Fc4</b></td><td style="padding:6px 8px;color:var(--text-dim)">Ton Italienne ✓</td></tr>
+        <tr style="border-top:1px solid rgba(255,255,255,.07);background:rgba(74,222,128,.06)"><td style="padding:6px 8px">1…d5 <span style="color:var(--text-dim)">(Scandinave)</span></td><td style="padding:6px 8px"><b class="green">2.exd5</b> puis 2…Dxd5 <b>3.Cc3</b></td><td style="padding:6px 8px;color:var(--text-dim)">Prends le pion, puis attaque la dame (temps gagné)</td></tr>
+        <tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="padding:6px 8px">1…c5 <span style="color:var(--text-dim)">(Sicilienne)</span></td><td style="padding:6px 8px"><b>2.Cf3, 3.d4</b></td><td style="padding:6px 8px;color:var(--text-dim)">Ouvre le centre, développe</td></tr>
+        <tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="padding:6px 8px">1…e6 <span style="color:var(--text-dim)">(Française)</span></td><td style="padding:6px 8px"><b>2.d4, 3.Cc3</b></td><td style="padding:6px 8px;color:var(--text-dim)">Gros centre de pions</td></tr>
+        <tr style="border-top:1px solid rgba(255,255,255,.07)"><td style="padding:6px 8px">1…c6 <span style="color:var(--text-dim)">(Caro-Kann)</span></td><td style="padding:6px 8px"><b>2.d4, 3.Cc3</b></td><td style="padding:6px 8px;color:var(--text-dim)">Même idée, gros centre</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:14px;color:var(--text-dim);margin-top:14px">
+      <b style="color:var(--text)">Et si tu ne connais pas ?</b> 4 réflexes qui remplacent tout le par-cœur : ① prends le matériel laissé gratuit &nbsp;② occupe le centre &nbsp;③ sors cavaliers puis fous, puis roque &nbsp;④ ne bouge pas 2× la même pièce et évite les coups de pion sur l'aile (f3, g4…). Ta partie du 31/07 viole ③ et ④ dès le coup 2.
+    </p>
+  </section>
+
+  <!-- PLAN -->
+  <section>
+    <h2>Ton plan d'entraînement</h2>
+    <div class="plan">
+
+      <div class="step">
+        <div class="num">1</div>
+        <div class="txt">
+          <b>Règle anti-gaffe : 10 s avant chaque coup</b>
+          <p>« Qu'est-ce qu'il menace ? Mon coup laisse-t-il une pièce en prise, un échec, un mat ? » Passer de 2,2 à 1 gaffe/partie suffit à inverser ton bilan. C'est LE levier.</p>
+          <a class="btn" href="index.html">🛡️ Entraîne-toi dans l'onglet Vigilance</a>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">2</div>
+        <div class="txt">
+          <b>Stop-loss anti-tilt (2 règles)</b>
+          <p>2 défaites d'affilée = tu arrêtes. ET jamais plus de 3 parties par session. Les deux combinés coupent les deux schémas de tilt (la série de défaites ET la soirée qui s'éternise, comme hier).</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">3</div>
+        <div class="txt">
+          <b>15 min de tactique par jour</b>
+          <p>Motifs de base : fourchette, clouage, enfilade, mat en 1-2. Tes fautes sont de la tactique élémentaire, pas du positionnel.</p>
+          <a class="btn" href="index.html">🧩 Onglet Puzzles</a>
+          <a class="btn" href="index.html">📊 Onglet Motifs</a>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">4</div>
+        <div class="txt">
+          <b>Apprends la réponse, pas la ligne</b>
+          <p>Mémorise juste le tableau ci-dessus : ta réaction au 1er coup de Noir (surtout 2.exd5 contre la Scandinave). Rejoue chaque ouverture surprise dans l'arbre de l'app jusqu'à ce que le 2e coup devienne automatique.</p>
+          <a class="btn" href="index.html">🌳 Onglet Apprendre → Arbre des ouvertures</a>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="num">5</div>
+        <div class="txt">
+          <b>Ralentis en finale</b>
+          <p>Tu as toujours du temps sur la pendule. Bosse les finales de base : Roi+Tour vs Roi, Roi+Pion vs Roi.</p>
+          <a class="btn" href="index.html">♚ Onglet Finales</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    Analyse générée à partir de tes 53 parties 10 min &middot;
+    Ouvre le <a href="index.html">Chess Analyst</a> pour rejouer tes parties et bosser tes fautes.
+  </footer>
+
+</div>
+
+<script>
+  const ratings = [760,643,550,547,492,436,389,354,392,360,339,370,397,423,397,373,349,371,392,371,352,371,354,337,353,338,352,338,325,312,299,312,299,288,277,288,277,266,276,285,295,305,314,323,314,306,315,323,331,339,331,339,346];
+  const results = "LLLDLLLLWLLWWWLLLWWLLWLLWLWLLLLWLLLWLLWWWWWWLLWWWWLWW".split("");
+  const W=820,H=240,padL=42,padR=14,padT=18,padB=26;
+  const min=258,max=780;
+  const x=i=>padL+(W-padL-padR)*i/(ratings.length-1);
+  const y=v=>padT+(H-padT-padB)*(1-(v-min)/(max-min));
+  const col={W:"#4ade80",L:"#f87171",D:"#e2b857"};
+  let svg="";
+  // real-level band 266-423
+  svg+=`<rect x="${padL}" y="${y(423)}" width="${W-padL-padR}" height="${y(266)-y(423)}" fill="rgba(226,184,87,.07)"/>`;
+  svg+=`<line x1="${padL}" y1="${y(337)}" x2="${W-padR}" y2="${y(337)}" stroke="rgba(226,184,87,.45)" stroke-width="1" stroke-dasharray="4 4"/>`;
+  svg+=`<text x="${W-padR}" y="${y(337)-5}" fill="#c9982e" font-size="10" text-anchor="end">niveau réel ~337</text>`;
+  // calibration zone (first 8 games = provisional Elo)
+  svg+=`<rect x="${x(0)}" y="${padT}" width="${x(7)-x(0)}" height="${H-padT-padB}" fill="rgba(255,255,255,.04)"/>`;
+  svg+=`<text x="${(x(0)+x(7))/2}" y="${padT+12}" fill="#8892a4" font-size="10" text-anchor="middle">calibrage (Elo provisoire)</text>`;
+  // gridlines + labels
+  for(let g=400;g<=700;g+=100){
+    svg+=`<line x1="${padL}" y1="${y(g)}" x2="${W-padR}" y2="${y(g)}" stroke="rgba(255,255,255,.06)"/>`;
+    svg+=`<text x="6" y="${y(g)+4}" fill="#8892a4" font-size="11">${g}</text>`;
+  }
+  // area path
+  let line="M"+x(0)+" "+y(ratings[0]);
+  ratings.forEach((v,i)=>{ if(i) line+=" L"+x(i)+" "+y(v); });
+  svg+=`<path d="${line}" fill="none" stroke="#e2b857" stroke-width="2.5" stroke-linejoin="round"/>`;
+  // points
+  ratings.forEach((v,i)=>{
+    svg+=`<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="${col[results[i]]}" stroke="#16213e" stroke-width="1.5"/>`;
+  });
+  // start/low/end labels
+  svg+=`<text x="${x(0)}" y="${y(760)-10}" fill="#f87171" font-size="13" font-weight="700" text-anchor="middle">760</text>`;
+  svg+=`<text x="${x(37)}" y="${y(266)+18}" fill="#f87171" font-size="13" font-weight="700" text-anchor="middle">266</text>`;
+  svg+=`<text x="${x(52)}" y="${y(346)-10}" fill="#4ade80" font-size="13" font-weight="700" text-anchor="end">346</text>`;
+  document.getElementById("chart").innerHTML=svg;
+</script>
+</body>
+</html>

@@ -45,28 +45,30 @@ const App = (() => {
   // Canonical move-classification taxonomy, mirroring Chess.com's Game Review.
   // label = French name shown to the user, cls = CSS modifier (badge + move cell
   // share the same suffix), mark = the classical annotation glyph.
-  // mark = the glyph shown on the move, matching Chess.com's Game Review icons:
-  // !! Brilliant · ! Great · ★ Best · ✔ Excellent · ✓ Good · 📖 Book ·
-  // □ Forced · ?! Inaccuracy · ✗ Miss · ? Mistake · ?? Blunder.
-  const MOVE_CLASS = {
-    brilliant:  { label: 'Brillant',          cls: 'brilliant',  mark: '!!' },
-    great:      { label: 'Excellent',         cls: 'great',      mark: '!' },
-    best:       { label: 'Meilleur',          cls: 'best',       mark: '★' },
-    excellent:  { label: 'Très bien',         cls: 'excellent',  mark: '✔' },
-    good:       { label: 'Bon',               cls: 'good',       mark: '✓' },
-    book:       { label: 'Théorique',         cls: 'book',       mark: '📖' },
-    forced:     { label: 'Forcé',             cls: 'forced',     mark: '□' },
-    inaccuracy: { label: 'Imprécision',       cls: 'inaccuracy', mark: '?!' },
-    miss:       { label: 'Coup manqué',       cls: 'miss',       mark: '✗' },
-    mistake:    { label: 'Erreur',            cls: 'mistake',    mark: '?' },
-    blunder:    { label: 'Gaffe',             cls: 'blunder',    mark: '??' }
-  };
+  // Glyphe + libellé + classe CSS de chaque type de coup. Source unique dans
+  // js/analysis.js (Analyzer.MOVE_TYPES), qui alimente aussi les deux légendes
+  // de l'écran d'aide et la répartition du Coach — elles avaient divergé.
+  const MOVE_CLASS = Analyzer.MOVE_CLASS;
   const markSpan = (type) => {
     const m = MOVE_CLASS[type];
     return m && m.mark ? ` <span class="mv-mark mv-${m.cls}">${m.mark}</span>` : '';
   };
 
+  // Les deux légendes de l'écran d'aide, écrites depuis Analyzer.MOVE_TYPES.
+  // Tenues à la main, elles avaient fini par appeler « Excellent » deux glyphes
+  // différents et par oublier « □ Forcé », pourtant produit par l'analyseur.
+  function fillMoveLegends() {
+    const types = Analyzer.MOVE_TYPES || [];
+    const badge = (t) => `<span class="info-badge ${t.k}"><i class="mv-mark mv-${t.k}">${t.mark}</i> ${t.label}</span>`;
+    const ul = $('#legend-badges');
+    if (ul) ul.innerHTML = types.map(t => `<li>${badge(t)} ${t.desc}</li>`).join('');
+    const tb = $('#legend-table');
+    if (tb) tb.innerHTML = types.map(t =>
+      `<tr><td>${badge(t)}</td><td>${t.crit}</td><td>${t.desc}</td></tr>`).join('');
+  }
+
   function init() {
+    fillMoveLegends();
     bindEvents();
     wireTabSync();
     loadRecent();
@@ -2020,6 +2022,16 @@ const App = (() => {
     grade.style.color = col;
     $('#acc-opp-label').textContent = oppLabel;
     $('#acc-opp-num').textContent = oppAcc;
+    // Dire à quel effort moteur ce chiffre a été obtenu. L'analyse serveur
+    // cherche à depth 20, celle du navigateur à ~1,5 s par position : les deux
+    // précisions ne sont pas comparables, et rien ne le disait.
+    const eff = $('#acc-hero-effort');
+    if (eff) {
+      const e = summary.engineEffort || '';
+      const quick = /movetime/.test(e);
+      eff.textContent = quick ? 'analyse rapide (navigateur)' : e ? 'analyse complète' : '';
+      eff.hidden = !e;
+    }
     hero.hidden = false;
   }
 
@@ -3362,7 +3374,13 @@ const App = (() => {
   }
 
   function setTab(name) {
-    $$('.tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    $$('.tabbar .tab').forEach(t => {
+      const on = t.dataset.tab === name;
+      t.classList.toggle('active', on);
+      // L'onglet actif ne doit pas exister qu'en couleur : sans aria-selected,
+      // un lecteur d'écran annonce quatre boutons identiques.
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
   }
 
   function syncTabbar() {

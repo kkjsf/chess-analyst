@@ -119,47 +119,42 @@ const Analyzer = (() => {
     return board;
   }
 
-  function sqToRC(sq) { return [8 - +sq[1], sq.charCodeAt(0) - 97]; }
-  function rcToSq(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
-  function detectForkAfterMove(fenAfter, toSquare, moverColor) {
-    const board = parseFenBoard(fenAfter);
-    const [r, c] = sqToRC(toSquare);
-    const piece = board[r][c];
-    if (!piece) return null;
-    const opp = moverColor === 'w' ? 'b' : 'w';
-    const targets = [];
-
-    function scan(dirs, maxDist) {
-      for (const [dr, dc] of dirs) {
-        for (let s = 1; s <= maxDist; s++) {
-          const nr = r + dr * s, nc = c + dc * s;
-          if (nr < 0 || nr > 7 || nc < 0 || nc > 7) break;
-          const t = board[nr][nc];
-          if (t) {
-            if (t.color === opp && (PIECE_VALUES[t.type] >= 3 || t.type === 'k')) targets.push({ type: t.type, square: rcToSq(nr, nc) });
-            break;
-          }
-        }
-      }
-    }
-
-    if (piece.type === 'n') scan([[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]], 1);
-    if (piece.type === 'p') {
-      const dir = moverColor === 'w' ? -1 : 1;
-      scan([[dir,-1],[dir,1]], 1);
-    }
-    if (piece.type === 'b' || piece.type === 'q') scan([[-1,-1],[-1,1],[1,-1],[1,1]], 7);
-    if (piece.type === 'r' || piece.type === 'q') scan([[-1,0],[1,0],[0,-1],[0,1]], 7);
-
-    // Returns { names, squares, forkSquare } so callers can both name the forked
-    // pieces and draw an arrow to each. null when fewer than two pieces are hit.
-    if (targets.length >= 2) return {
-      names: targets.map(t => t.type === 'k' ? 'roi' : PIECE_NAMES_FR[t.type]),
-      squares: targets.map(t => t.square),
-      forkSquare: toSquare
+  // A fork worth telling the user about. Built on the v184 board reader in
+  // js/tactics.js rather than on raw geometry: the old version called it a fork
+  // as soon as two enemy pieces sat on the moved piece's lines, whether or not
+  // the forking piece was itself hanging and whether or not the targets were
+  // defended. That is exactly the false positive the user complained about
+  // ("une fourchette royale reprise au coup d'après par un fou n'en est pas
+  // une") — fixed in the training exercises in v184, but the game analysis kept
+  // drawing gold fork rays on moves that simply hang a piece.
+  //
+  // Two conditions now, both from Tactics:
+  //  - the moved piece attacks ≥ 2 enemy pieces *profitably* (each target
+  //    survives a static exchange, `threats` filters them on SEE);
+  //  - the whole thing still nets ≥ 2 pawns AFTER the opponent's best defence
+  //    (`net`), so a fork that gets recaptured next move is not a fork.
+  //
+  // Returns { names, squares, forkSquare, net } — same shape as before, so the
+  // callers that name the victims and draw one ray each are unchanged.
+  const FORK_MIN_NET = 2;
+  function detectFork(fenBefore, fenAfter, move) {
+    if (typeof Tactics === 'undefined' || !Tactics.threats) return null;
+    let t;
+    try { t = Tactics.threats(fenBefore, fenAfter, { from: move.from, to: move.to }); }
+    catch (_) { return null; }
+    if (!t) return null;
+    // Only what the piece that just moved hits itself — a discovered attack is a
+    // different motif and is described elsewhere.
+    const hits = t.checks.concat(t.direct).filter(x => x.from === move.to);
+    if (hits.length < 2) return null;
+    if (!t.mate && t.net < FORK_MIN_NET) return null;
+    return {
+      names: hits.map(h => h.t === 'k' ? 'roi' : PIECE_NAMES_FR[h.t]),
+      squares: hits.map(h => h.sq),
+      forkSquare: move.to,
+      net: t.net
     };
-    return null;
   }
 
   function analyzeStructure(fen) {
@@ -219,14 +214,12 @@ const Analyzer = (() => {
       }
 
       if (oppMove.san.includes('+')) {
-        const oppColor = madeMove.color === 'w' ? 'b' : 'w';
-        const fork = detectForkAfterMove(g.fen(), oppMove.to, oppColor);
+        const fork = detectFork(fenAfter, g.fen(), oppMove);
         if (fork) return `L'adversaire menace une fourchette avec échec sur ${fork.names.join(' et ')}.`;
         return 'Ce coup expose le roi à un échec dangereux.';
       }
 
-      const oppColor = madeMove.color === 'w' ? 'b' : 'w';
-      const fork = detectForkAfterMove(g.fen(), oppMove.to, oppColor);
+      const fork = detectFork(fenAfter, g.fen(), oppMove);
       if (fork) return `L'adversaire menace une fourchette sur ${fork.names.join(' et ')}.`;
     } catch (_) {}
 
@@ -313,7 +306,7 @@ const Analyzer = (() => {
       const side = isWhite ? 'Blancs' : 'Noirs';
       const otherSide = isWhite ? 'Noirs' : 'Blancs';
       const sanFr = toFrench(madeMove.san);
-      const phase = i < 10 ? 'opening' : (i > totalMoves - 6 ? 'endgame' : 'middle');
+      const phase = phaseOf(prevFen, i);
 
       let type = 'neutral';
       let tipFr = '';
@@ -478,10 +471,35 @@ const Analyzer = (() => {
     return null;
   }
 
+  // ── Les types de coups, source unique ──────────────────────────────────────
+  // Le glyphe, le libellé, la classe CSS et le critère de CHAQUE type, en un
+  // seul endroit. Il y en avait quatre : MOVE_CLASS dans app.js, deux légendes
+  // écrites à la main dans index.html, et un couple ordre/GLYPH dans coach.js.
+  // Elles avaient divergé sur le point le plus visible : le mot « Excellent »
+  // désignait le glyphe ! dans l'app et le glyphe ✔ dans la légende rapide.
+  // Les libellés retenus sont ceux du Game Review de Chess.com en français.
+  //
+  // L'ordre du tableau est l'ordre d'affichage, du meilleur au pire.
+  const MOVE_TYPES = [
+    { k: 'brilliant',  mark: '!!', label: 'Brillant',     crit: '< 0,05 pp + sacrifice',            desc: 'Un sacrifice de pièce gagnant (≥ une mineure donnée), qui reste fort, sans être perdant après ni déjà totalement gagnant avant.' },
+    { k: 'great',      mark: '!',  label: 'Excellent',    crit: '< 0,02 pp + seul coup',            desc: 'Le coup n°1 alors que le 2ᵉ meilleur est bien pire (écart ≥ 1,5 pion), dans une position disputée.' },
+    { k: 'best',       mark: '★',  label: 'Meilleur',     crit: '< 0,02 pp, coup n°1 (ou équivalent)', desc: "Le coup n°1 du moteur, ou un coup qui l'égale à quelques centièmes de pion près." },
+    { k: 'excellent',  mark: '✔',  label: 'Très bien',    crit: '< 0,02 pp',                        desc: "Presque optimal, sans être exactement le coup n°1." },
+    { k: 'good',       mark: '✓',  label: 'Bon',          crit: '0,02 – 0,05 pp',                   desc: 'Un bon coup, sans être optimal.' },
+    { k: 'book',       mark: '📖', label: 'Théorique',    crit: 'ouverture connue, < 0,10 pp',      desc: "Coup d'ouverture reconnu ; prioritaire sur « Imprécision » dans la théorie connue." },
+    { k: 'forced',     mark: '□',  label: 'Forcé',        crit: 'un seul coup légal',               desc: "Il n'y avait rien d'autre à jouer : ni mérite, ni faute, et donc pas compté comme un bon coup." },
+    { k: 'inaccuracy', mark: '?!', label: 'Imprécision',  crit: '0,05 – 0,10 pp',                   desc: "Petit écart, l'avantage se grignote." },
+    { k: 'miss',       mark: '✗',  label: 'Coup manqué',  crit: '≥ 0,10 pp + gain lâché',           desc: 'Tu étais gagnant (≥ 70 % de chances) et tu retombes à l\'équilibre sans pour autant te mettre en danger.' },
+    { k: 'mistake',    mark: '?',  label: 'Erreur',       crit: '0,10 – 0,20 pp',                   desc: "Coup coûteux, l'avantage change de camp." },
+    { k: 'blunder',    mark: '??', label: 'Gaffe',        crit: '≥ 0,20 pp',                        desc: 'Erreur grave, la position bascule.' }
+  ];
+  const MOVE_CLASS = {};
+  for (const t of MOVE_TYPES) MOVE_CLASS[t.k] = { label: t.label, cls: t.k, mark: t.mark };
+
   function generateSummary(results, moves) {
     const stats = {
-      w: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, forced: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 },
-      b: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, forced: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0 }
+      w: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, forced: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0, accs: [], plies: [] },
+      b: { brilliants: 0, best: 0, great: 0, excellent: 0, good: 0, book: 0, forced: 0, inaccuracies: 0, misses: 0, mistakes: 0, blunders: 0, totalCpLoss: 0, totalWinLoss: 0, totalAcc: 0, moveCount: 0, accs: [], plies: [] }
     };
     let keyMoment = null;
 
@@ -495,6 +513,9 @@ const Analyzer = (() => {
       stats[side].totalCpLoss += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       stats[side].totalWinLoss += r.winPctLoss || 0;
       stats[side].totalAcc += winLossToAccuracy(r.winPctLoss);
+      // Gardés pour la moyenne pondérée/harmonique plus bas.
+      stats[side].accs.push(winLossToAccuracy(r.winPctLoss));
+      stats[side].plies.push(i);
 
       if (r.type === 'brilliant') stats[side].brilliants++;
       if (r.type === 'best') stats[side].best++;
@@ -523,18 +544,71 @@ const Analyzer = (() => {
       }
     }
 
+    // Courbe des chances de gain (vue des Blancs), reconstruite depuis les évals
+    // stockées — elle sert à mesurer la volatilité locale de chaque position.
+    const winSeries = results.map(r => typeof r.eval === 'number' ? cpToWinPct(r.eval) : 0.5);
+
     for (const side of ['w', 'b']) {
       const s = stats[side];
       s.acpl = s.moveCount > 0 ? Math.round(s.totalCpLoss / s.moveCount) : 0;
-      s.accuracy = s.moveCount > 0 ? Math.round(s.totalAcc / s.moveCount) : 100;
+      s.accuracy = s.moveCount > 0
+        ? Math.round(blendedAccuracy(s.accs, volatilityWeights(winSeries, s.plies)))
+        : 100;
+      delete s.accs; delete s.plies;
     }
 
     const opening = moves ? Openings.detect(moves.map(m => m.san || m)) : null;
 
-    return { stats, keyMoment, opening };
+    return { stats, keyMoment, opening, engineEffort: results.engineEffort || null };
   }
 
-  function phaseOfPly(i) { return i < 20 ? 'opening' : i < 50 ? 'middle' : 'endgame'; }
+  // ── Phase de jeu ───────────────────────────────────────────────────────────
+  // UNE seule définition, déduite de la POSITION. Il y en avait trois
+  // incompatibles dans ce fichier (ply<20/50 pour les stats, ply<10 et
+  // « 6 derniers coups » pour les textes), si bien que le 12e demi-coup était
+  // « ouverture » pour la statistique et « milieu de jeu » pour le commentaire.
+  //
+  // Compter les coups n'a de toute façon pas de sens échiquéen : une Française
+  // fermée est encore en ouverture au 25e coup, une Scandinave échangée est en
+  // finale au 20e. On regarde donc le matériel et le développement.
+  //   finale    : matériel hors pions ≤ 26 pts sur l'échiquier (62 au départ),
+  //               soit en gros dames échangées + une tour et une mineure par camp
+  //   ouverture : encore dans le livre, ou développement à peine entamé
+  //   milieu    : le reste
+  //
+  // Les deux signaux utilisés sont MONOTONES, pour qu'une partie ne puisse pas
+  // revenir en arrière : le matériel ne fait que baisser, et un droit de roque
+  // perdu ne revient jamais. Compter les pièces mineures encore sur leur case de
+  // départ, ce qui semblait naturel, ne l'est pas : une retraite Breyer (…Cb8)
+  // remettait la partie « en ouverture » au 10e coup.
+  const ENDGAME_MATERIAL = 26;
+  const OPENING_PLY_CAP = 20;
+
+  function nonPawnMaterial(fen) {
+    let total = 0;
+    // Les chiffres et les « / » ne sont pas dans PIECE_VALUES, le roi y vaut 0.
+    for (const ch of (fen || '').split(' ')[0]) {
+      const t = ch.toLowerCase();
+      if (t !== 'p' && PIECE_VALUES[t]) total += PIECE_VALUES[t];
+    }
+    return total;
+  }
+
+  // Un camp peut-il encore roquer ? Tant que les rois ne sont pas à l'abri, on
+  // est encore dans les tâches d'ouverture.
+  function someoneCanCastle(fen) {
+    const rights = (fen || '').split(' ')[2];
+    return !!rights && rights !== '-';
+  }
+
+  function phaseOf(fen, ply, bookDepth) {
+    // Sans FEN (vieux enregistrements), on retombe sur l'ancien découpage.
+    if (!fen) return ply < 20 ? 'opening' : ply < 50 ? 'middle' : 'endgame';
+    if (nonPawnMaterial(fen) <= ENDGAME_MATERIAL) return 'endgame';
+    if (bookDepth && ply < bookDepth) return 'opening';
+    if (ply < OPENING_PLY_CAP && someoneCanCastle(fen)) return 'opening';
+    return 'middle';
+  }
 
   function parseBaseSeconds(tc) {
     if (!tc) return 0;
@@ -563,7 +637,7 @@ const Analyzer = (() => {
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (!r.move || r.move.color !== side) continue;
-      const ph = phaseOfPly(i);
+      const ph = phaseOf(r.fenBefore, i);
       if (i >= 2 && typeof spent[i] === 'number') { sum += spent[i]; cnt++; phaseSec[ph].t += spent[i]; phaseSec[ph].c++; }
       if (typeof clocks[i] === 'number' && clocks[i] < ttThreshold) { ttMoves++; ttPly[i] = true; }
     }
@@ -597,7 +671,7 @@ const Analyzer = (() => {
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (!r.move || r.move.color !== side) continue;
-      const phase = phaseOfPly(i);
+      const phase = phaseOf(r.fenBefore, i);
 
       if (typeof r.eval === 'number') {
         const ue = Math.max(-1000, Math.min(1000, side === 'w' ? r.eval : -r.eval));
@@ -657,6 +731,12 @@ const Analyzer = (() => {
 
     return {
       analyzedAt: Date.now(),
+      // Effort moteur qui a produit ces chiffres. Deux qualités très différentes
+      // atterrissent dans le même jeu de données : le serveur cherche à
+      // --depth 20 avec un Stockfish natif, « Analyser ici » à movetime 600 dans
+      // le navigateur. Sans cette étiquette, une partie analysée localement
+      // paraissait simplement plus propre que les autres dans les tendances.
+      engineEffort: (summary && summary.engineEffort) || null,
       accuracy: us.accuracy,
       acpl: us.acpl,
       blunders: us.blunders,
@@ -709,6 +789,9 @@ const Analyzer = (() => {
 
   async function analyzeGameAsync(chess, moves, onProgress, movetime) {
     const depth = movetime || 'movetime 1500';
+    // Étiquette d'effort transportée jusqu'aux stats de partie (voir
+    // computeGameStats.engineEffort) : le serveur et le navigateur ne
+    // produisent pas la même qualité d'analyse.
     const game = new Chess();
 
     const positions = [game.fen()];
@@ -753,6 +836,7 @@ const Analyzer = (() => {
     }
 
     const results = [];
+    results.engineEffort = depth;
     for (let i = 0; i < moves.length; i++) {
       const madeMove = madeMovesArr[i];
       if (!madeMove) {
@@ -765,7 +849,7 @@ const Analyzer = (() => {
       const isWhite = madeMove.color === 'w';
       const sanFr = toFrench(madeMove.san);
       const side = isWhite ? 'Blancs' : 'Noirs';
-      const phase = i < 10 ? 'opening' : (i > moves.length - 6 ? 'endgame' : 'middle');
+      const phase = phaseOf(positions[i], i, bookDepth);
 
       const evalBefore = evals[i];
       const evalAfter = evals[i + 1];
@@ -1011,7 +1095,7 @@ const Analyzer = (() => {
         tipFr = enriched ? `${enriched}${ed}` : `Coup correct.${ed}`;
       }
 
-      const forkTargets = detectForkAfterMove(newFen, madeMove.to, madeMove.color);
+      const forkTargets = detectFork(positions[i], newFen, madeMove);
       if (forkTargets && type !== 'blunder' && type !== 'mistake') {
         tipFr += ` Fourchette sur ${forkTargets.names.join(' et ')} !`;
       }
@@ -1029,8 +1113,7 @@ const Analyzer = (() => {
           if (tm) {
             const tFr = toFrench(tm.san);
             const opp = isWhite ? 'les Noirs' : 'les Blancs';
-            const oppColor = isWhite ? 'b' : 'w';
-            const threatFork = detectForkAfterMove(tg.fen(), tm.to, oppColor);
+            const threatFork = detectFork(newFen, tg.fen(), tm);
             const moveArrow = { from: tu.slice(0, 2), to: tu.slice(2, 4), color: '#e0574a', opacity: 0.9, width: 6, threat: true };
             if (threatFork) {
               const chk = tm.san.includes('+') ? ' avec échec' : '';
@@ -1163,6 +1246,41 @@ const Analyzer = (() => {
       103.1668 * Math.exp(-0.04354 * ((winPctLoss || 0) * 100)) - 3.1669));
   }
 
+  // Volatilité locale de la courbe d'évaluation autour de chaque coup : un coup
+  // joué dans une position tranchante pèse plus lourd qu'un coup joué dans une
+  // position morte où tout se vaut. Écart-type des chances de gain sur une
+  // fenêtre glissante, borné pour qu'aucun coup ne domine ni ne disparaisse.
+  function volatilityWeights(winSeries, plies) {
+    const w = Math.max(2, Math.min(8, Math.ceil(winSeries.length / 10)));
+    return plies.map(i => {
+      const lo = Math.max(0, i - w), hi = Math.min(winSeries.length - 1, i + 1);
+      const seg = winSeries.slice(lo, hi + 1);
+      if (seg.length < 2) return 1;
+      const m = seg.reduce((a, v) => a + v, 0) / seg.length;
+      const sd = Math.sqrt(seg.reduce((a, v) => a + (v - m) * (v - m), 0) / seg.length);
+      return Math.max(0.5, Math.min(12, sd * 100));
+    });
+  }
+
+  // Précision d'une partie. PAS la moyenne arithmétique des précisions par coup :
+  // une seule gaffe se noierait dans quarante coups faciles, et une partie perdue
+  // sur une bourde unique affichait 88 %. Comme Chess.com, on combine
+  //   - une moyenne PONDÉRÉE par la volatilité (les moments qui comptent pèsent),
+  //   - une moyenne HARMONIQUE (qui punit franchement les valeurs basses),
+  // et on prend la moyenne des deux.
+  function blendedAccuracy(accs, weights) {
+    if (!accs || !accs.length) return 100;
+    let sumW = 0, sumWA = 0, sumInv = 0;
+    for (let i = 0; i < accs.length; i++) {
+      const a = Math.max(accs[i], 1); // borne basse : évite 1/0 dans l'harmonique
+      const w = weights && weights[i] ? weights[i] : 1;
+      sumWA += a * w; sumW += w; sumInv += 1 / a;
+    }
+    const weighted = sumW ? sumWA / sumW : 100;
+    const harmonic = accs.length / sumInv;
+    return Math.max(0, Math.min(100, (weighted + harmonic) / 2));
+  }
+
   function describeEval(cpWhite) {
     if (cpWhite >= 29000) return 'Mat forcé pour les Blancs.';
     if (cpWhite <= -29000) return 'Mat forcé pour les Noirs.';
@@ -1222,7 +1340,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase, explainBadMove, detectForkAfterMove };
+  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase, explainBadMove, detectFork, phaseOf, MOVE_TYPES, MOVE_CLASS };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

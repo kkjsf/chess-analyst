@@ -371,19 +371,44 @@ const Tactics = (() => {
     return val;
   }
 
-  // Bilan matériel réel du coup, en pions : l'adversaire choisit sa MEILLEURE
-  // défense (y compris reprendre la pièce qui menace), puis on encaisse au mieux.
-  // C'est ce chiffre qui dit si une « fourchette » en est vraiment une : si la
-  // reprise annule tout, il tombe à zéro. 1000 = mat.
+  // Ce que rapporte VRAIMENT un coup qui vient d'être joué : l'adversaire choisit
+  // sa MEILLEURE défense (reprise comprise), puis on encaisse au mieux. Si la
+  // reprise annule tout, une « fourchette » tombe à zéro et n'en est pas une.
+  // Mesure sur 2 demi-coups, donc volontairement conservatrice : un gain qui
+  // demande 3 coups pour se matérialiser ne sera pas compté.
+  //   1000 = mat. -1000 = sa défense me mate. Pat = 0 (voir isStalemate).
+  //
+  // Une promotion compte des deux côtés : sans ça, pousser un pion à dame
+  // rapportait 0 (donc « Pion passé » ne pouvait avoir aucun exercice, le
+  // sélecteur exigeant netGain ≥ 2) et laisser l'adversaire faire dame en
+  // réponse ne coûtait rien.
+  const PROMO_GAIN = (promo) => (VAL[promo] || VAL.q) - VAL.p;
+
+  // Ce que me rapporte MON coup `my` depuis la position `g2` (plateau `b2`),
+  // capture et/ou promotion, une fois la reprise adverse déduite.
+  function moveValue(g2, b2, me, my) {
+    if (!my.promotion) return my.captured ? seeOn(b2, my.to, me) : 0;
+    // Promotion : on simule, puis on regarde ce que l'adversaire récupère sur
+    // la case d'arrivée (la neuve dame se fait souvent reprendre aussitôt).
+    let g3, done = null;
+    try { g3 = new Chess(g2.fen()); done = g3.move({ from: my.from, to: my.to, promotion: my.promotion }); }
+    catch (_) { done = null; }
+    if (!done) return 0;
+    const taken = my.captured ? VAL[my.captured] : 0;
+    const backOn = seeOn(boardOf(g3.fen()), my.to, other(me));
+    return taken + PROMO_GAIN(my.promotion) - Math.max(0, backOn);
+  }
+
   function netGain(fenAfter) {
     let g;
     try { g = new Chess(fenAfter); } catch (_) { return 0; }
     if (g.in_checkmate()) return 1000;
     const replies = g.moves({ verbose: true });
-    if (!replies.length) return 0; // pat
+    if (!replies.length) return 0; // pat — nulle, aucun matériel en jeu
     let worst = Infinity;
     for (const r of replies) {
       let bal = r.captured ? -VAL[r.captured] : 0;
+      if (r.promotion) bal -= PROMO_GAIN(r.promotion); // il fait dame en défense
       let g2, played = null;
       try { g2 = new Chess(fenAfter); played = g2.move({ from: r.from, to: r.to, promotion: r.promotion || 'q' }); } catch (_) { played = null; }
       if (!played) continue; // défense injouable : elle ne compte pas dans le pire cas
@@ -393,14 +418,23 @@ const Tactics = (() => {
       let best = 0;
       for (const my of g2.moves({ verbose: true })) {
         if (my.san.indexOf('#') >= 0) { best = 1000; break; } // mat au coup suivant
-        if (!my.captured) continue;
-        const gain = seeOn(b2, my.to, me);
+        if (!my.captured && !my.promotion) continue;
+        const gain = moveValue(g2, b2, me, my);
         if (gain > best) best = gain;
       }
       bal += best;
       if (bal < worst) worst = bal;
     }
     return worst === Infinity ? 0 : worst;
+  }
+
+  // Le coup vient-il de mettre l'adversaire PAT ? netGain rend 0 dans ce cas,
+  // comme pour « rien ne se passe » — or c'est la nulle, ce qui est un désastre
+  // quand on gagnait et un sauvetage quand on perdait. Les appelants doivent
+  // pouvoir le nommer.
+  function isStalemate(fenAfter) {
+    try { const g = new Chess(fenAfter); return !g.in_checkmate() && g.moves().length === 0; }
+    catch (_) { return false; }
   }
 
   // Menaces créées par le coup { from, to } : ce que la pièce qui vient de jouer
@@ -481,10 +515,20 @@ const Tactics = (() => {
       if (was && was.c === foe && !(now && now.c === foe && now.t === was.t)) taken += VAL[was.t];
       if (now && now.c === foe && !(was && was.c === foe && was.t === now.t)) taken -= VAL[now.t];
     }
+    // Promotion faite PAR ce coup : un pion partait, autre chose est arrivé.
+    // netGain regarde la position APRÈS, où la dame est déjà là, donc il ne la
+    // crédite pas — sans ce terme, a8=D valait 0.
+    let promoted = 0;
+    const wasP = at(bB, sq2rc(move.from).r, sq2rc(move.from).c);
+    if (wasP && wasP.t === 'p' && mover.t !== 'p') promoted = VAL[mover.t] - VAL.p;
+
+    const stalemate = !mate && isStalemate(fenAfter);
     return {
       mover: { sq: move.to, t: mover.t, color: me },
-      checks, direct, discovered, behind, recapture, mate,
-      net: mate ? 1000 : Math.max(taken, 0) + netGain(fenAfter),
+      checks, direct, discovered, behind, recapture, mate, stalemate, promoted,
+      // Un pat vaut la nulle, pas « +3 de matériel » : on ne laisse pas le
+      // matériel encaissé raconter une victoire quand la partie est finie.
+      net: mate ? 1000 : stalemate ? 0 : Math.max(taken, 0) + promoted + netGain(fenAfter),
       count: checks.length + direct.length + discovered.length + behind.length,
     };
   }
@@ -492,8 +536,12 @@ const Tactics = (() => {
   // Phrase française qui décrit les menaces trouvées (affichée sous l'échiquier).
   // `final` = le coup termine la solution : on ose alors conclure sur le gain.
   function threatSentence(t, final) {
-    if (!t || (!t.count && !t.mate)) return '';
+    if (!t) return '';
     if (t.mate) return '♚ <b>Échec et mat</b> : ni fuite, ni parade, ni capture.';
+    // Le pat passe AVANT le décompte des menaces : la partie est finie, peu
+    // importe ce que la pièce attaque encore.
+    if (t.stalemate) return '⚠ <b>Pat</b> : l\'adversaire n\'a plus aucun coup légal et n\'est pas en échec. La partie est <b>nulle</b>, quel que soit le matériel.';
+    if (!t.count) return '';
     const named = (x) => FR_PIECE[x.t] + ' <b>' + x.sq + '</b>';
     const own = t.checks.filter(c => c.from === t.mover.sq);
     const disco = t.checks.filter(c => c.from !== t.mover.sq);
@@ -599,7 +647,7 @@ const Tactics = (() => {
         <svg viewBox="0 0 360 360" id="tac-board"></svg>
         <svg viewBox="0 0 360 360" id="tac-arrows" class="arrow-overlay"></svg>
       </div>
-      <div class="guess-feedback" id="tac-feedback">Clique ta pièce, puis sa case d'arrivée.</div>
+      <div class="guess-feedback" id="tac-feedback" role="status" aria-live="polite">Clique ta pièce, puis sa case d'arrivée.</div>
       <div class="tac-threats" id="tac-threats" hidden></div>
       <div class="guess-nav" id="tac-nav">
         <button class="train-btn ghost" id="tac-hint">💡 Indice</button>
@@ -929,7 +977,7 @@ const Tactics = (() => {
     setHtml(freeStatusHtml(fen, res));
   }
 
-  return { CATALOG, start, sanToFr, threats, threatSentence, netGain, seeOn, boardOf, attackersOf, attacksFrom };
+  return { CATALOG, start, sanToFr, threats, threatSentence, netGain, isStalemate, seeOn, boardOf, attackersOf, attacksFrom };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Tactics;
