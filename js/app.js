@@ -1500,13 +1500,23 @@ const App = (() => {
     document.addEventListener('keydown', onKey);
 
     // ───────────────────── Lesson mode (catalog courses) ─────────────────────
-    // When the opening carries a `course` (js/courses.js), wrap the explorer in a
-    // sectioned lesson: Présentation → Lignes → Plans → Pièges → Transpositions →
-    // Quiz. Openings without a course keep the flat single-line view above.
+    // Le cours est l'ARBRE des variantes, pas six onglets.
+    //
+    // Avant : Présentation / Lignes / Plans / Pièges / Transpositions / Quiz.
+    // Le découpage se faisait par TYPE de contenu, avec trois conséquences :
+    //  - l'embranchement disparaissait. Après 3.Fc4 les Noirs ont trois réponses ;
+    //    « Lignes » les donnait à plat et « Transpositions » redonnait LES MÊMES
+    //    en prose. Nulle part on ne voyait que c'était UN choix ;
+    //  - les pièges flottaient loin du coup qui les déclenche (le Fried Liver
+    //    arrive après 4.Cg5 dans les Deux Cavaliers, il vivait dans un onglet à part) ;
+    //  - la colonne droite était remplie à 32-42 % sur Plans / Transpositions / Quiz.
+    //
+    // Maintenant : un rail à gauche montre l'arbre (dérivé des `lines[].sans` par
+    // Courses.buildBranches, rien n'a été ressaisi), et chaque noeud porte TOUT ce
+    // qui le concerne — l'idée, le plan, ses pièges, sa question.
     function setupLesson(course) {
-      const navEl = $('#opening-lesson-nav');
+      const railEl = $('#opening-branch-rail');
       const progEl = $('#opening-lesson-progress');
-      const pickerEl = $('#opening-lesson-picker');
       const bodyEl = $('#opening-lesson-body');
       const boardEl = modal.querySelector('.opening-modal-board');
       const controlsEl = modal.querySelector('.opening-modal-controls');
@@ -1514,23 +1524,48 @@ const App = (() => {
 
       detailsEl.hidden = true; detailsEl.innerHTML = '';
 
+      const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const has = (a) => Array.isArray(a) && a.length;
-      const sections = [];
-      sections.push({ key: 'presentation', label: '📖 Présentation' });
-      if (has(course.lines)) sections.push({ key: 'lignes', label: '♟ Lignes' });
-      if (opening.plans || opening.structure) sections.push({ key: 'plans', label: '🎯 Plans' });
-      if (has(course.traps) || opening.mistakes) sections.push({ key: 'pieges', label: '🪤 Pièges' });
-      if (has(course.transpositions) || has(opening.deviations)) sections.push({ key: 'transpo', label: '🔀 Transpositions' });
-      if (has(course.quiz)) sections.push({ key: 'quiz', label: '✅ Quiz' });
 
+      const branches = Courses.buildBranches(course);
+      // Un cours sans `lines` n'a pas d'arbre à montrer : on retombe sur la vue
+      // plate, qui reste correcte pour ces entrées.
+      if (!branches.length) { railEl.hidden = true; return; }
+
+      const traps = Courses.spread(course.traps, branches);
+      const quizzes = Courses.spread(course.quiz, branches);
       const visited = new Set();
-      let current = null;
+      let cur = 0;
 
-      navEl.hidden = false; progEl.hidden = false;
-      navEl.innerHTML = sections.map(s =>
-        `<button class="ol-tab" data-key="${s.key}">${s.label}</button>`).join('');
-      navEl.querySelectorAll('.ol-tab').forEach(btn =>
-        btn.addEventListener('click', () => showSection(btn.dataset.key)));
+      // Numérotation française : ply 5 → « 3.Fc4 », ply 6 → « 3…Fc5 ».
+      const num = (ply) => Math.ceil(ply / 2) + (ply % 2 ? '.' : '…');
+      const frSan = (san) => (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(san) : san;
+      const mv = (ply, sans) => num(ply) + frSan(sans[ply - 1]);
+      function labelOf(b) {
+        if (b.depth === 0) return mv(b.plyEnd, b.sans);          // la tabiya
+        if (b.plyStart === b.plyEnd) return mv(b.plyEnd, b.sans); // un seul coup
+        return mv(b.plyStart, b.sans) + ' → ' + mv(b.plyEnd, b.sans);
+      }
+
+      railEl.hidden = false;
+      progEl.hidden = false;
+
+      function renderRail() {
+        railEl.innerHTML =
+          `<div class="obr-head">Les variantes</div>` +
+          branches.map((b, i) => {
+            const tags = [];
+            if (b.depth === 0) tags.push('<span class="obr-tag t-base">départ</span>');
+            if (traps[i].length) tags.push(`<span class="obr-tag t-trap">${traps[i].length} piège${traps[i].length > 1 ? 's' : ''}</span>`);
+            return `<button class="obr-node d${Math.min(b.depth, 3)}${i === cur ? ' on' : ''}${visited.has(i) ? ' seen' : ''}"
+              data-i="${i}" aria-current="${i === cur ? 'true' : 'false'}">
+              <span class="obr-san">${esc(labelOf(b))}</span>
+              <span class="obr-name">${esc(b.name || (b.depth === 0 ? (opening.name || '') : ''))}</span>
+              ${tags.join('')}<span class="obr-tick">✓</span></button>`;
+          }).join('');
+        railEl.querySelectorAll('.obr-node').forEach(btn =>
+          btn.addEventListener('click', () => show(+btn.dataset.i)));
+      }
 
       function markDone() {
         let set = [];
@@ -1538,158 +1573,165 @@ const App = (() => {
         if (!set.includes(opening.line)) { set.push(opening.line); try { localStorage.setItem(doneKey, JSON.stringify(set)); } catch (_) {} }
       }
       function updateProgress() {
-        const pct = Math.round((visited.size / sections.length) * 100);
-        const all = visited.size >= sections.length;
+        const pct = Math.round((visited.size / branches.length) * 100);
         progEl.querySelector('span').style.width = pct + '%';
-        progEl.classList.toggle('ol-complete', all);
-        if (all) markDone();
+        progEl.classList.toggle('ol-complete', visited.size >= branches.length);
+        progEl.title = `${visited.size} branche${visited.size > 1 ? 's' : ''} sur ${branches.length}`;
+        if (visited.size >= branches.length) markDone();
       }
 
-      function setBoardVisible(v) {
-        boardActive = v;
-        boardEl.hidden = !v;
-        controlsEl.hidden = !v;
-        evalEl.hidden = !v || !(rich || opening.showEval);
-        explEl.hidden = !v;
-      }
+      // Le corps du noeud : tout ce qui concerne CETTE position, empilé.
+      function renderBody(i) {
+        const b = branches[i];
+        const root = b.depth === 0;
+        let h = '';
 
-      // Section renderers ------------------------------------------------------
-      const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const heading = b.name || (root ? (opening.name || 'Le départ') : labelOf(b));
+        h += `<div class="ob-title">${esc(heading)}${b.eco ? ` <span class="ob-eco">${esc(b.eco)}</span>` : ''}</div>`;
 
-      // Text-only sections (Plans / Pièges / Transpositions) keep the board
-      // visible, frozen on the tabiya, so the prose always has a position to
-      // refer to. The board is a static reference here (not draggable).
-      function freezeBoardOnTabiya() {
-        setBoardVisible(true);
-        loadLine(opening.courseLine || opening.line, null);
-        idx = positions.length - 1; renderStep(false);
-        controlsEl.hidden = true; boardActive = false;
-        explEl.hidden = true;
-      }
+        // L'idée : l'intro du cours sur la tabiya, sinon la note du coup qui
+        // ouvre la branche — elle est déjà écrite, ligne par ligne.
+        const opener = b.notes.find(n => n);
+        const idea = root ? (course.intro || opening.idea) : opener;
+        if (idea) h += `<div class="ob-blk"><p class="ob-h">${root ? 'Idée maîtresse' : 'L\'idée du coup'}</p><p>${idea}</p></div>`;
 
-      function renderPresentation() {
-        setBoardVisible(true);
-        pickerEl.hidden = true; bodyEl.hidden = true;
-        loadLine(opening.courseLine || opening.line, null);
-        idx = positions.length - 1; renderStep(false); // freeze on the tabiya
-        controlsEl.hidden = true; boardActive = false;
-        explEl.hidden = false;
-        explEl.innerHTML = `<b>Idée maîtresse.</b> ${course.intro || opening.idea || ''}`;
-      }
-
-      function renderLignes() {
-        setBoardVisible(true);
-        bodyEl.hidden = true;
-        const lines = course.lines;
-        pickerEl.hidden = lines.length < 2;
-        if (lines.length >= 2) {
-          pickerEl.innerHTML = lines.map((l, i) =>
-            `<button class="ol-line-btn" data-i="${i}">${esc(l.name)}</button>`).join('');
-          pickerEl.querySelectorAll('.ol-line-btn').forEach(btn =>
-            btn.addEventListener('click', () => selectLine(+btn.dataset.i)));
+        // Les plans restent sur la tabiya : ils valent pour toute l'ouverture.
+        // Repliés par défaut — la tabiya porte déjà l'idée, la fourche, ses
+        // pièges et sa question ; tout déplier d'un coup en fait un mur.
+        if (root && (opening.plans || opening.structure)) {
+          let inner = '';
+          if (opening.plans) inner += `<p><b>Blancs :</b> ${opening.plans.w}</p><p><b>Noirs :</b> ${opening.plans.b}</p>`;
+          if (opening.structure) inner += `<p><b>Structure :</b> ${opening.structure}</p>`;
+          h += `<details class="ob-blk ob-fold"><summary><span class="ob-h">Plans typiques</span></summary>${inner}</details>`;
         }
-        selectLine(0);
-      }
-      function selectLine(i) {
-        const l = course.lines[i];
-        pickerEl.querySelectorAll('.ol-line-btn').forEach((b, j) => b.classList.toggle('active', j === i));
-        loadLine(l.sans.join(' '), l.notes);
-      }
+        if (root && opening.mistakes) {
+          h += `<div class="ob-blk"><p class="ob-h">Erreur fréquente</p><div class="ob-callout warn">${opening.mistakes}</div></div>`;
+        }
 
-      function renderPlans() {
-        freezeBoardOnTabiya();
-        pickerEl.hidden = true; bodyEl.hidden = false;
-        let h = '';
-        if (opening.plans) h += `<div class="ol-section"><h5>🎯 Plans typiques</h5><p><b>Blancs :</b> ${opening.plans.w}</p><p><b>Noirs :</b> ${opening.plans.b}</p></div>`;
-        if (opening.structure) h += `<div class="ol-section"><h5>🧱 Structure de pions</h5><p>${opening.structure}</p></div>`;
-        bodyEl.innerHTML = h;
-      }
+        // L'embranchement, nommé pour ce qu'il est. Remplace l'onglet
+        // « Transpositions », qui redisait en prose ce que l'arbre montre.
+        const kids = branches.filter(x => x.depth === b.depth + 1 &&
+          x.lines.some(l => b.lines.indexOf(l) >= 0));
+        if (kids.length > 1) {
+          h += `<div class="ob-blk"><p class="ob-h">L'embranchement</p>` +
+            `<p>${kids.length} suites possibles. Chacune mène à une partie différente :</p>` +
+            `<div class="ob-forks">` + kids.map(k =>
+              `<button class="ob-fork" data-i="${branches.indexOf(k)}">
+                 <b>${esc(labelOf(k))}</b>${k.name ? `<span>${esc(k.name)}</span>` : ''}</button>`).join('') +
+            `</div></div>`;
+        }
 
-      function renderPieges() {
-        freezeBoardOnTabiya();
-        pickerEl.hidden = true; bodyEl.hidden = false;
-        let h = '';
-        if (opening.mistakes) h += `<div class="ol-section ol-warn"><h5>⚠️ Erreur fréquente</h5><p>${opening.mistakes}</p></div>`;
-        (course.traps || []).forEach((t, i) => {
-          const btn = has(t.sol) && t.fen
-            ? `<button class="train-btn good ol-trap-drill" data-i="${i}">🎯 Essayer ce coup</button>` : '';
-          h += `<div class="ol-trap"><div class="ol-trap-title">${esc(t.title)}</div><div class="ol-trap-hint">${t.hint}</div>${btn}</div>`;
+        // Les coups de la branche ne sont PAS relistés ici : leurs notes
+        // s'affichent sous l'échiquier pendant le pas-à-pas (◀ ▶), ce qui rend
+        // l'échiquier utile au lieu de le laisser figé sur une position morte,
+        // et évite de raconter en texte ce qu'on peut montrer.
+        if (b.plyEnd > b.plyStart) {
+          h += `<div class="ob-blk"><p class="ob-h">Les coups</p>` +
+            `<p>Utilise <b>◀ ▶</b> sous l'échiquier : le commentaire de chaque coup s'affiche au fur et à mesure.</p></div>`;
+        }
+
+        // Les pièges, sur le coup qui les déclenche.
+        traps[i].forEach((t, k) => {
+          const drill = has(t.sol) && t.fen
+            ? `<button class="train-btn good ob-drill" data-i="${i}" data-k="${k}">🎯 Essayer ce coup</button>` : '';
+          h += `<div class="ob-blk"><p class="ob-h">Piège</p>` +
+            `<div class="ob-callout trap"><b>${esc(t.title)}</b><br>${t.hint}</div>${drill}</div>`;
         });
+
+        // Une question par branche, posée juste après l'avoir lue.
+        if (quizzes[i].length) h += `<div class="ob-blk"><p class="ob-h">Vérifie</p><div class="ob-quiz" id="ob-quiz"></div></div>`;
+
+        // Les transpositions que l'arbre ne montre PAS. Celles dont le libellé est
+        // un coup déjà présent dans la fourche sont retirées : c'était le doublon
+        // le plus visible (l'ancien onglet « Transpositions » redonnait en prose
+        // « 3…Fc5 » et « 3…Cf6 », que l'embranchement affiche maintenant juste
+        // au-dessus). Restent les vraies déviations hors arbre.
+        if (root) {
+          const shown = new Set(branches.filter(x => x.depth > 0)
+            .map(x => mv(x.plyStart, x.sans).replace(/\s+/g, '')));
+          const items = (has(course.transpositions) ? course.transpositions : opening.deviations || [])
+            .filter(d => !shown.has(String(d.label).replace(/\s+/g, '')));
+          if (has(items)) h += `<details class="ob-blk ob-fold"><summary><span class="ob-h">Si l'adversaire sort de l'arbre</span></summary>` +
+            items.map(d => `<p><b>${esc(d.label)} :</b> ${d.note}</p>`).join('') + `</details>`;
+        }
+
         bodyEl.innerHTML = h;
-        bodyEl.querySelectorAll('.ol-trap-drill').forEach(btn => btn.addEventListener('click', () => {
-          const t = course.traps[+btn.dataset.i];
+        bodyEl.hidden = false;
+
+        bodyEl.querySelectorAll('.ob-fork').forEach(btn =>
+          btn.addEventListener('click', () => show(+btn.dataset.i)));
+        bodyEl.querySelectorAll('.ob-drill').forEach(btn => btn.addEventListener('click', () => {
+          const t = traps[+btn.dataset.i][+btn.dataset.k];
           if (t && t.fen && has(t.sol) && typeof Tactics !== 'undefined' && Tactics.start) {
             Tactics.start([{ fen: t.fen, sol: t.sol, hint: t.hint }], t.title.replace(/^[^\wÀ-ÿ]+\s*/, ''));
           }
         }));
+        if (quizzes[i].length) renderQuiz(quizzes[i]);
       }
 
-      function renderTranspo() {
-        freezeBoardOnTabiya();
-        pickerEl.hidden = true; bodyEl.hidden = false;
-        const items = has(course.transpositions) ? course.transpositions : opening.deviations;
-        bodyEl.innerHTML = `<div class="ol-section"><h5>🔀 Si l'adversaire ne suit pas la ligne</h5>` +
-          items.map(d => `<p><b>${esc(d.label)} :</b> ${d.note}</p>`).join('') + `</div>`;
-      }
-
-      function renderQuiz() {
-        freezeBoardOnTabiya();
-        pickerEl.hidden = true; bodyEl.hidden = false;
-        const qs = course.quiz;
-        let cur = 0, score = 0;
+      function renderQuiz(qs) {
+        const host = $('#ob-quiz');
+        let k = 0, score = 0;
         function draw() {
-          if (cur >= qs.length) {
-            bodyEl.innerHTML = `<div class="ol-quiz-result"><span class="ol-quiz-icon">${score === qs.length ? '🎉' : score >= qs.length / 2 ? '👍' : '📖'}</span><p><b>${score} / ${qs.length}</b></p><button class="train-btn good ol-quiz-retry">Recommencer</button></div>`;
-            bodyEl.querySelector('.ol-quiz-retry').addEventListener('click', () => { cur = 0; score = 0; draw(); });
-            markDone(); updateProgress();
+          if (k >= qs.length) {
+            host.innerHTML = `<div class="ol-quiz-result"><span class="ol-quiz-icon">${score === qs.length ? '🎉' : '📖'}</span><p><b>${score} / ${qs.length}</b></p><button class="train-btn good ob-retry">Recommencer</button></div>`;
+            host.querySelector('.ob-retry').addEventListener('click', () => { k = 0; score = 0; draw(); });
             return;
           }
-          const q = qs[cur];
-          bodyEl.innerHTML = `<div class="ol-quiz"><div class="ol-quiz-prog">${cur + 1} / ${qs.length}</div><p class="ol-quiz-q">${q.q}</p><div class="ol-quiz-opts">${q.opts.map((o, i) => `<button class="quiz-opt" data-i="${i}">${esc(o)}</button>`).join('')}</div><div class="ol-quiz-fb" hidden></div></div>`;
-          bodyEl.querySelectorAll('.quiz-opt').forEach(b => b.addEventListener('click', () => answer(+b.dataset.i)));
+          const q = qs[k];
+          host.innerHTML = `<p class="ol-quiz-q">${q.q}</p><div class="ol-quiz-opts">` +
+            q.opts.map((o, j) => `<button class="quiz-opt" data-j="${j}">${esc(o)}</button>`).join('') +
+            `</div><div class="ol-quiz-fb" hidden></div>`;
+          host.querySelectorAll('.quiz-opt').forEach(b => b.addEventListener('click', () => answer(+b.dataset.j)));
         }
-        function answer(i) {
-          const q = qs[cur];
-          const ok = i === q.answer;
+        function answer(j) {
+          const q = qs[k], ok = j === q.answer;
           if (ok) score++;
-          const fb = bodyEl.querySelector('.ol-quiz-fb');
+          const fb = host.querySelector('.ol-quiz-fb');
           fb.hidden = false;
           fb.className = 'ol-quiz-fb ' + (ok ? 'correct' : 'wrong');
           fb.innerHTML = `<b>${ok ? 'Correct !' : 'Raté !'}</b> ${q.explain}`;
-          bodyEl.querySelectorAll('.quiz-opt').forEach(b => {
+          host.querySelectorAll('.quiz-opt').forEach(b => {
             b.disabled = true;
-            if (+b.dataset.i === q.answer) b.classList.add('correct');
-            if (+b.dataset.i === i && !ok) b.classList.add('wrong');
+            if (+b.dataset.j === q.answer) b.classList.add('correct');
+            if (+b.dataset.j === j && !ok) b.classList.add('wrong');
           });
-          setTimeout(() => { cur++; draw(); }, 2000);
+          setTimeout(() => { k++; draw(); }, 2000);
         }
         draw();
       }
 
-      const RENDERERS = {
-        presentation: renderPresentation, lignes: renderLignes, plans: renderPlans,
-        pieges: renderPieges, transpo: renderTranspo, quiz: renderQuiz
-      };
-
-      function showSection(key) {
-        current = key;
-        visited.add(key);
-        navEl.querySelectorAll('.ol-tab').forEach(b =>
-          b.classList.toggle('active', b.dataset.key === key));
-        (RENDERERS[key] || renderPresentation)();
+      function show(i) {
+        cur = i; visited.add(i);
+        const b = branches[i];
+        // L'échiquier suit l'arbre : on charge le chemin complet du noeud et on
+        // s'arrête sur sa position, les flèches ◀ ▶ rejouant la branche.
+        boardEl.hidden = false; controlsEl.hidden = false; boardActive = true;
+        evalEl.hidden = !(rich || opening.showEval);
+        explEl.hidden = false;
+        loadLine(b.sans.join(' '), b.allNotes);
+        // On se pose sur le PREMIER coup de la branche (celui qui la définit),
+        // pas sur sa fin : c'est de là qu'on veut avancer. La tabiya, elle, se
+        // montre entière.
+        idx = b.depth === 0 ? positions.length - 1 : b.plyStart;
+        renderStep(false);
+        renderBody(i);
+        renderRail();
         updateProgress();
+        // Sur mobile le rail est un fil horizontal : garder le noeud actif visible.
+        const on = railEl.querySelector('.obr-node.on');
+        if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }
 
-      showSection('presentation');
+      show(0);
     }
 
     idx = 0;
     modal.classList.add('visible');
     modal._release = trapFocus(modal.querySelector('.opening-modal'));
     // Reset lesson chrome (hidden for flat/legacy openings).
-    $('#opening-lesson-nav').hidden = true;
+    $('#opening-branch-rail').hidden = true;
     $('#opening-lesson-progress').hidden = true;
-    $('#opening-lesson-picker').hidden = true;
     $('#opening-lesson-body').hidden = true;
     modal.querySelector('.opening-modal-board').hidden = false;
     modal.querySelector('.opening-modal-controls').hidden = false;

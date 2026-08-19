@@ -34,13 +34,48 @@
   (`Transpositions[0]` = `Lines[0]` = la meme branche), sous-menus opaques, espace mal utilise
   (mesure : colonne droite remplie a 32-42 % sur Plans/Transpo/Quiz a 1400x900, contre 82 %
   en moyenne dans la maquette). Contenu reel de l'Italienne, 11 noeuds, positions calculees.
-  NON implemente. Pre-requis identifie : ajouter un champ `parent` aux traps/quiz pour les
+  IMPLEMENTE en v191-v195 (voir ci-dessus). Pre-requis identifie a l'epoque : champ `parent` aux traps/quiz pour les
   raccrocher a leur branche, et faire exporter ses noeuds a `js/opening-tree.js` (il n'expose
   que `render`, d'ou une 3e representation des memes ouvertures).
 - Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v191-v195 - Cours d'ouverture : l'ARBRE remplace les six onglets**
+  - User : « pas 100% convaincu par les cours sur les ouvertures, on retrouve pas la logique des
+    embranchements / variantes de l'arbre, y'a des redondances, sous-menus pas très clairs
+    (lignes, transpositions, pièges), l'espace est mal utilisé ». Maquette validée d'abord
+    (`_mockups/opening-course-mockup.html`), puis implémentée.
+  - Les six onglets (Présentation / Lignes / Plans / Pièges / Transpositions / Quiz) découpaient la
+    matière par TYPE de contenu. Une ouverture se structure par POSITION dans l'arbre : tout
+    découlait de là.
+  - **`Courses.buildBranches(course)`** dérive l'arbre des `lines[].sans` par un trie. Là où deux
+    lignes divergent, il y a une fourche ; les suites forcées sont repliées en un noeud (sinon
+    25 à 35 entrées par cours). **Rien n'a été ressaisi** : la structure était déjà dans les
+    données. 9 cours -> 37 noeuds, 3 à 5 par cours, la bonne fourche à chaque fois.
+  - **`Courses.spread(items, branches)`** répartit pièges et questions. Champ `at:` = index de
+    ligne, posé sur **32 des 48 éléments** d'après le texte existant, qui nomme sa branche
+    (« Dans les Deux Cavaliers… »). Sans `at`, l'élément vaut pour toute l'ouverture et reste sur
+    la tabiya - donc ne rien poser ne peut pas régresser.
+    ⚠️ La répartition est GLOBALE, pas noeud par noeud : une ligne traverse plusieurs noeuds
+    (« 3…a6 » PUIS « 4.Fa4 → 8…O-O » sont tous deux de la ligne 0), un filtre local faisait
+    apparaître 7 pièges deux fois. On prend le noeud le plus PROFOND qui porte la ligne.
+  - **Redondance supprimée** : les entrées de `transpositions` dont le libellé est un coup déjà
+    présent dans la fourche sont retirées à l'affichage. C'était le doublon le plus visible
+    (`Transpositions[0]` = « 3…Fc5 » = `Lines[0]` = « Giuoco Piano »). Restent les vraies
+    déviations hors arbre (« 3…Fe7 », « Ordre des coups »).
+  - **Les notes de coup passent sur le pas-à-pas** : `loadLine(sans, b.allNotes)` au lieu de
+    relister les coups en texte. L'échiquier redevient utile (il était figé sur une position
+    morte) et le contenu par noeud fond. On atterrit sur le PREMIER coup de la branche, pas sur
+    sa fin.
+  - **Espace** : colonne droite remplie à 32-42 % sur Plans/Transpo/Quiz avant. Après, contenu
+    médian par branche **477 px** (205 à 962). La tabiya concentre le niveau ouverture
+    (995-1669 px) ; ses deux blocs secondaires (Plans, déviations hors arbre) sont repliables.
+  - **50 lignes de CSS mort** retirées (`.ol-tab`, `.ol-line-btn`, `.opening-lesson-picker`) :
+    l'arbre remplace à la fois la barre d'onglets et le sélecteur de ligne.
+  - Vérifié : 9 cours parcourus noeud par noeud, 0 erreur console ; pas-à-pas commenté OK ;
+    ouverture SANS cours (`e4 c5`) garde la vue plate, pas de régression ; 390 px sans
+    débordement, rail en fil horizontal défilable, noeuds à 44 px.
 - **v185-v190 - Revue de code complète : 21 constats, tous corrigés**
   - User : « fais une revue complète et vois ce qui peut être amélioré (théorie échecs, code, UI) »,
     puis « fais tous les autres correctifs ». Revue conduite en INSTRUMENTANT l'app servie en local

@@ -580,35 +580,10 @@ html, body {
 }
 
 /* ─────────────────────── Cours d'ouverture (lesson mode) ─────────────────── */
-.opening-lesson-nav {
-  width: 100%;
-  max-width: 760px;
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  margin-bottom: 8px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-}
-.ol-tab {
-  flex: 0 0 auto;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: var(--text-dim);
-  padding: 6px 11px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.ol-tab:hover { color: var(--text); border-color: var(--accent-dim); }
-.ol-tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #1a1a2e;
-}
+/* L'ancienne barre d'onglets (.opening-lesson-nav / .ol-tab) et le sélecteur
+   de ligne (.opening-lesson-picker / .ol-line-btn) ont disparu avec la refonte
+   du cours : l'arbre des variantes (.opening-branch-rail, plus bas) fait les
+   deux à la fois. */
 .opening-lesson-progress {
   width: 100%;
   max-width: 760px;
@@ -627,27 +602,6 @@ html, body {
   transition: width 0.25s ease;
 }
 .opening-lesson-progress.ol-complete span { background: var(--success); }
-.opening-lesson-picker {
-  width: 100%;
-  max-width: 760px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-  margin-bottom: 10px;
-}
-.ol-line-btn {
-  background: var(--bg-elevated);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: var(--text-dim);
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.ol-line-btn:hover { color: var(--text); border-color: var(--accent-dim); }
-.ol-line-btn.active { border-color: var(--accent); color: var(--accent); }
 .opening-lesson-body {
   width: 100%;
   max-width: 760px;
@@ -4151,3 +4105,126 @@ body.guess-open { overflow: hidden; }
 
 /* Mat alternatif trouvé par l'élève : on cite son coup, le corrigé en second. */
 .tac-alt { font-size: 12px; font-weight: 400; color: var(--text-dim); }
+
+/* ═══════ Cours d'ouverture : l'arbre comme navigation ═══════
+   Remplace la barre d'onglets (.opening-lesson-nav / .ol-tab), qui découpait la
+   matière par TYPE de contenu et faisait disparaître l'embranchement. Le rail
+   montre l'arbre dérivé des lignes du cours ; chaque noeud porte son idée, ses
+   pièges et sa question. */
+.opening-branch-rail {
+  flex: 0 0 250px; background: var(--bg-2); border-right: 1px solid var(--line);
+  padding: 14px 0 16px; overflow-y: auto;
+}
+.obr-head {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--text-dim); padding: 0 16px 10px; opacity: .8;
+}
+.obr-node {
+  position: relative; display: block; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: none; color: inherit; font: inherit;
+  padding: 8px 14px 8px 0; border-left: 2px solid transparent; min-height: 40px;
+}
+.obr-node:hover { background: rgba(255,255,255,.04); }
+.obr-node.on { background: rgba(226,184,87,.10); border-left-color: var(--accent); }
+.obr-san { font-size: 12.5px; font-weight: 700; color: var(--text); margin-right: 7px; white-space: nowrap; }
+.obr-node.on .obr-san { color: var(--accent); }
+.obr-name { font-size: 12px; color: var(--text-dim); }
+.obr-node.on .obr-name { color: var(--text); }
+.obr-tick { float: right; font-size: 11px; color: var(--success); opacity: 0; }
+.obr-node.seen .obr-tick { opacity: 1; }
+.obr-tag {
+  display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; padding: 1px 5px; border-radius: 4px; margin-left: 6px; vertical-align: 1px;
+}
+.obr-tag.t-base { background: rgba(226,184,87,.15); color: var(--accent); }
+.obr-tag.t-trap { background: rgba(248,113,113,.15); color: var(--danger); }
+/* Le trait de branche : c'est lui qui rend la fourche lisible d'un coup d'oeil. */
+.obr-node.d0 { padding-left: 16px; }
+.obr-node.d1 { padding-left: 34px; }
+.obr-node.d2 { padding-left: 52px; }
+.obr-node.d3 { padding-left: 70px; }
+.obr-node.d1::before, .obr-node.d2::before, .obr-node.d3::before {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-str);
+}
+.obr-node.d1::before { left: 23px; } .obr-node.d2::before { left: 41px; } .obr-node.d3::before { left: 59px; }
+.obr-node.d1::after, .obr-node.d2::after, .obr-node.d3::after {
+  content: ""; position: absolute; top: 19px; width: 7px; height: 1px; background: var(--line-str);
+}
+.obr-node.d1::after { left: 23px; } .obr-node.d2::after { left: 41px; } .obr-node.d3::after { left: 59px; }
+
+/* Corps du noeud : tout ce qui concerne CETTE position, empilé. */
+.ob-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 12px; }
+.ob-eco { font-size: 11px; font-weight: 600; color: var(--accent); background: rgba(226,184,87,.11);
+  border-radius: 5px; padding: 2px 6px; vertical-align: 2px; }
+.ob-blk { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.ob-blk:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.ob-h { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-dim); margin: 0 0 6px; opacity: .85; }
+.ob-blk p { margin: 0 0 7px; font-size: 13.5px; line-height: 1.6; color: var(--text-dim); }
+.ob-blk p:last-child { margin-bottom: 0; }
+.ob-blk b { color: var(--text); }
+.ob-callout { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+.ob-callout.trap { background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.22); }
+.ob-callout.trap b { color: var(--danger); }
+.ob-callout.warn { background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.22); }
+.ob-steps { margin: 0; padding-left: 18px; }
+.ob-steps li { font-size: 13px; line-height: 1.6; color: var(--text-dim); margin-bottom: 5px; }
+.ob-steps li b { color: var(--accent); font-weight: 700; }
+/* L'embranchement, montré comme un choix et non raconté en prose. */
+.ob-forks { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ob-fork { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: rgba(255,255,255,.05); border: 1px solid var(--line-str); border-radius: 9px;
+  padding: 9px 12px; color: var(--text); min-height: 40px; }
+.ob-fork:hover { background: rgba(226,184,87,.12); border-color: rgba(226,184,87,.35); }
+.ob-fork b { font-size: 13px; font-weight: 700; }
+.ob-fork span { display: block; font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+.ob-drill { margin-top: 9px; }
+
+/* Sous 900px le rail devient un fil horizontal au-dessus de l'échiquier. */
+@media (max-width: 900px) {
+  .opening-branch-rail {
+    flex: 0 0 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--line);
+    display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 8px;
+  }
+  .obr-head { display: none; }
+  .obr-node {
+    width: auto; flex: 0 0 auto; padding: 9px 12px !important; min-height: 44px;
+    border-left: none; border-bottom: 2px solid transparent; border-radius: 8px;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .obr-node.on { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .obr-node::before, .obr-node::after { display: none !important; }
+  .obr-tick { float: none; }
+}
+
+/* Desktop : le rail devient la 1re des trois colonnes (arbre / échiquier /
+   contenu du noeud). La fenêtre s'élargit pour les loger sans écraser
+   l'échiquier, et la colonne de lecture se resserre : à 680px de large elle
+   dépassait les 75 caractères confortables. */
+@media (min-width: 900px) {
+  .opening-modal-header { max-width: 1420px; }
+  .opening-modal-main { max-width: 1420px; gap: 26px; }
+  .opening-modal-right { max-width: 460px; }
+  .opening-branch-rail {
+    position: sticky; top: 4px; align-self: flex-start;
+    max-height: calc(100vh - 130px);
+    background: transparent; border-right: 1px solid var(--line);
+    border-radius: 0; padding: 0 14px 0 0;
+  }
+  .obr-head { padding-left: 2px; }
+  .obr-node.d0 { padding-left: 2px; }
+  .obr-node.d1 { padding-left: 20px; }
+  .obr-node.d2 { padding-left: 38px; }
+  .obr-node.d3 { padding-left: 56px; }
+  .obr-node.d1::before { left: 9px; }  .obr-node.d2::before { left: 27px; }  .obr-node.d3::before { left: 45px; }
+  .obr-node.d1::after  { left: 9px; }  .obr-node.d2::after  { left: 27px; }  .obr-node.d3::after  { left: 45px; }
+}
+
+/* Blocs secondaires de la tabiya, repliés par défaut. */
+.ob-fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; min-height: 32px; }
+.ob-fold > summary::-webkit-details-marker { display: none; }
+.ob-fold > summary::after { content: "▾"; font-size: 11px; color: var(--text-dim); transition: transform .15s; }
+.ob-fold[open] > summary::after { transform: rotate(180deg); }
+.ob-fold > summary .ob-h { margin: 0; }
+.ob-fold > summary:hover .ob-h { color: var(--text); }
+.ob-fold > p:first-of-type { margin-top: 8px; }

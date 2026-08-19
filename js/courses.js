@@ -60,13 +60,13 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 1,
           title: '🍖 Le Fried Liver (Cxf7)',
           hint: `Dans les Deux Cavaliers, après 4.Cg5 d5 5.exd5, si les Noirs reprennent 5…Cxd5?? le sacrifice 6.Cxf7! attire le roi au centre : après 6…Rxf7 7.Df3+ le roi noir est en grand danger. Joue Cxf7.`,
           fen: 'r1bqkb1r/ppp2ppp/2n5/3np1N1/2B5/8/PPPP1PPP/RNBQK2R w KQkq - 0 6',
           sol: ['Nxf7']
         },
-        {
+        { at: 1,
           title: '🛡️ La bonne défense : …Ca5',
           hint: `Toujours après 4.Cg5 d5 5.exd5 : ne reprends PAS en d5. Joue 5…Ca5 ! qui attaque le fou c4 et évite tout le Fried Liver. Tu rendras le pion d5 plus tard, sans danger.`,
           fen: 'r1bqkb1r/ppp2ppp/2n2n2/3Pp1N1/2B5/8/PPPP1PPP/RNBQK2R b KQkq - 0 5',
@@ -91,12 +91,12 @@ const Courses = (() => {
           opts: ['f7', 'd5', 'h7', 'a7'], answer: 0,
           explain: `f7 n'est défendue que par le roi : c'est la cible classique de l'Italienne.`
         },
-        {
+        { at: 0,
           q: `Dans l'Italienne calme (Pianissimo), pourquoi jouer d3 plutôt que d4 ?`,
           opts: [`Pour un jeu lent et solide en soutenant e4`, `Parce que d4 serait illégal`, `Pour préparer le grand roque`, `Pour attaquer f7 immédiatement`], answer: 0,
           explain: `d3 garde le centre fermé : on manœuvre tranquillement avant d'attaquer.`
         },
-        {
+        { at: 1,
           q: `Deux Cavaliers, après 4.Cg5 d5 5.exd5 : quel coup tombe dans le Fried Liver ?`,
           opts: ['5…Cxd5', '5…Ca5', '5…Cb8', '5…b5'], answer: 0,
           explain: `5…Cxd5?? permet 6.Cxf7 ! On joue 5…Ca5 pour chasser le fou c4.`
@@ -138,7 +138,7 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 1,
           title: '💡 Le coup libérateur …d5 / d4',
           hint: `Dans les positions fermées du Pianissimo, la rupture …d5 (Noirs) ou d4 (Blancs) est le grand plan. Joue-la seulement une fois roqué et bien développé : ouvrir le centre trop tôt profite au camp le mieux placé.`
         },
@@ -149,8 +149,8 @@ const Courses = (() => {
       ],
       quiz: [
         { q: `À quoi sert le coup d3 dans le Pianissimo ?`, opts: [`Fermer le centre pour un jeu de manœuvre`, `Attaquer f7 tout de suite`, `Préparer le grand roque`, `Empêcher le roque noir`], answer: 0, explain: `d3 soutient e4 sans ouvrir le jeu : on joue lentement, sur la compréhension.` },
-        { q: `Quelle est la manœuvre de cavalier typique des Blancs ?`, opts: [`Cb1-d2-f1-g3`, `Cf3-h4-f5`, `Cb1-c3-d5`, `Cf3-d2-b3`], answer: 0, explain: `Le cavalier dame rejoint l'aile roi par d2-f1-g3, après avoir joué Te1.` },
-        { q: `Quel est le grand plan d'égalisation des Noirs ?`, opts: [`La rupture …d5`, `Le fianchetto …g6`, `L'attaque …h5-h4`, `Le grand roque`], answer: 0, explain: `Bien préparée, …d5 conteste le centre et libère les pièces noires.` }
+        { at: 0, q: `Quelle est la manœuvre de cavalier typique des Blancs ?`, opts: [`Cb1-d2-f1-g3`, `Cf3-h4-f5`, `Cb1-c3-d5`, `Cf3-d2-b3`], answer: 0, explain: `Le cavalier dame rejoint l'aile roi par d2-f1-g3, après avoir joué Te1.` },
+        { at: 1, q: `Quel est le grand plan d'égalisation des Noirs ?`, opts: [`La rupture …d5`, `Le fianchetto …g6`, `L'attaque …h5-h4`, `Le grand roque`], answer: 0, explain: `Bien préparée, …d5 conteste le centre et libère les pièces noires.` }
       ]
     },
 
@@ -204,21 +204,21 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 2,
           title: '💰 Le pion e5 est empoisonné',
           hint: `Beaucoup croient que 4.Fxc6 dxc6 5.Cxe5 « gagne » le pion e5. C'est faux : 5…Dd4 ! fourche le cavalier e5 et le pion e4, et les Noirs récupèrent tout. Joue Dd4.`,
           fen: 'r1bqkbnr/1pp2ppp/p1p5/4N3/4P3/8/PPPP1PPP/RNBQK2R b KQkq - 0 5',
           sol: ['Qd4']
         },
-        {
+        { at: 0,
           title: `🚢 Le piège de l'Arche de Noé`,
           hint: `Un fou blanc trop gourmand peut se faire piéger à l'aile dame : après …b5 puis …c5-c4, les pions a6/b5/c4 emprisonnent le fou en b3 s'il n'a plus la case c2. C'est le plus vieux piège de l'Espagnole : garde toujours une sortie à ton fou.`
         }
       ],
       quiz: [
         { q: `Pourquoi jouer 3.Fb5 ?`, opts: [`Pour attaquer le défenseur du pion e5`, `Pour donner échec`, `Pour préparer f4`, `Pour clouer la dame`], answer: 0, explain: `Le fou attaque le cavalier c6, qui défend e5 : une pression durable sur le centre.` },
-        { q: `Après 4.Fxc6 dxc6 5.Cxe5, les Blancs gagnent-ils le pion ?`, opts: [`Non, 5…Dd4 le récupère`, `Oui, c'est gratuit`, `Oui, mais c'est risqué`, `Non, c'est illégal`], answer: 0, explain: `5…Dd4 fourche le Ce5 et le pion e4 : les Noirs reprennent tout.` },
-        { q: `Quel est le grand plan des Blancs dans l'Espagnole fermée ?`, opts: [`c3 puis d4`, `Fxc6 immédiat`, `L'attaque h4-h5`, `Le grand roque`], answer: 0, explain: `c3 + d4 bâtit le centre ; le cavalier b1 rejoint souvent l'aile roi par d2-f1-g3.` }
+        { at: 2, q: `Après 4.Fxc6 dxc6 5.Cxe5, les Blancs gagnent-ils le pion ?`, opts: [`Non, 5…Dd4 le récupère`, `Oui, c'est gratuit`, `Oui, mais c'est risqué`, `Non, c'est illégal`], answer: 0, explain: `5…Dd4 fourche le Ce5 et le pion e4 : les Noirs reprennent tout.` },
+        { at: 0, q: `Quel est le grand plan des Blancs dans l'Espagnole fermée ?`, opts: [`c3 puis d4`, `Fxc6 immédiat`, `L'attaque h4-h5`, `Le grand roque`], answer: 0, explain: `c3 + d4 bâtit le centre ; le cavalier b1 rejoint souvent l'aile roi par d2-f1-g3.` }
       ]
     },
 
@@ -255,7 +255,7 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 0,
           title: `⚡ Ne prends pas trop vite : 5.Cxc6 ? Df6 !`,
           hint: `Après 4…Fc5, si les Blancs jouent 5.Cxc6 ?, 5…Df6 ! attaque à la fois f2 et le cavalier c6. Les Noirs récupèrent la pièce avec un excellent jeu. Joue Df6.`,
           fen: 'r1bqk1nr/pppp1ppp/2N5/2b5/4P3/8/PPP2PPP/RNBQKB1R b KQkq - 0 5',
@@ -264,8 +264,8 @@ const Courses = (() => {
       ],
       quiz: [
         { q: `Quelle est l'idée de 3.d4 dans l'Écossaise ?`, opts: [`Ouvrir le centre sans grande théorie`, `Sacrifier un pion`, `Préparer le roque long`, `Clouer le cavalier c6`], answer: 0, explain: `On échange un pion central pour un jeu clair et actif.` },
-        { q: `Après 4…Fc5, pourquoi 5.Cxc6 est-il imprécis ?`, opts: [`5…Df6 ! reprend la pièce et attaque f2`, `Cela perd le roque`, `C'est illégal`, `Cela donne la dame`], answer: 0, explain: `Df6 vise f2 et le cavalier c6 : les Noirs récupèrent tout.` },
-        { q: `Variante Mieses : le coup critique blanc après 5.Cxc6 dxc6 ?`, opts: [`6.e5 chasse le cavalier f6`, `6.Fg5`, `6.Dd8+`, `6.f4`], answer: 0, explain: `6.e5 gagne de l'espace et chasse le Cf6 ; les Noirs répondent …De7.` }
+        { at: 0, q: `Après 4…Fc5, pourquoi 5.Cxc6 est-il imprécis ?`, opts: [`5…Df6 ! reprend la pièce et attaque f2`, `Cela perd le roque`, `C'est illégal`, `Cela donne la dame`], answer: 0, explain: `Df6 vise f2 et le cavalier c6 : les Noirs récupèrent tout.` },
+        { at: 1, q: `Variante Mieses : le coup critique blanc après 5.Cxc6 dxc6 ?`, opts: [`6.e5 chasse le cavalier f6`, `6.Fg5`, `6.Dd8+`, `6.f4`], answer: 0, explain: `6.e5 gagne de l'espace et chasse le Cf6 ; les Noirs répondent …De7.` }
       ]
     },
 
@@ -315,19 +315,19 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 0,
           title: '🛑 Pourquoi 3.Cf3 avant tout',
           hint: `Après 2…exf4, les Blancs jouent 3.Cf3 en priorité pour empêcher 3…Dh4+. Sans ce coup (par ex. 3.Fc4 ?!), 3…Dh4+ 4.Rf1 prive les Blancs du roque et gêne durablement leur roi. L'ordre des coups compte.`
         },
-        {
+        { at: 0,
           title: '⚔️ Le danger des lignes …g5',
           hint: `Si les Noirs gardent le pion par 3…g5, les Blancs disposent d'attaques violentes (gambits Muzio/Kieseritzky) où ils sacrifient encore du matériel pour foncer sur f7. À ton niveau, la défense moderne 3…d5 est bien plus sûre.`
         }
       ],
       quiz: [
         { q: `Que sacrifient les Blancs avec 2.f4 ?`, opts: [`Le pion f, pour ouvrir la colonne f et attaquer`, `Un cavalier`, `Rien, c'est un piège`, `La qualité`], answer: 0, explain: `On donne un pion contre l'initiative et une attaque sur f7.` },
-        { q: `Pourquoi jouer 3.Cf3 dans le gambit accepté ?`, opts: [`Pour empêcher 3…Dh4+`, `Pour attaquer d5`, `Pour préparer le grand roque`, `Pour reprendre le pion f4`], answer: 0, explain: `Cf3 contrôle h4 : sans lui, …Dh4+ priverait les Blancs du roque.` },
-        { q: `La défense la plus sûre pour les Noirs après 2…exf4 3.Cf3 ?`, opts: [`3…d5, la défense moderne`, `3…g5, tout garder`, `3…Dh4+`, `3…f3`], answer: 0, explain: `…d5 rend le pion pour un développement sain et évite les attaques sauvages des lignes …g5.` }
+        { at: 0, q: `Pourquoi jouer 3.Cf3 dans le gambit accepté ?`, opts: [`Pour empêcher 3…Dh4+`, `Pour attaquer d5`, `Pour préparer le grand roque`, `Pour reprendre le pion f4`], answer: 0, explain: `Cf3 contrôle h4 : sans lui, …Dh4+ priverait les Blancs du roque.` },
+        { at: 0, q: `La défense la plus sûre pour les Noirs après 2…exf4 3.Cf3 ?`, opts: [`3…d5, la défense moderne`, `3…g5, tout garder`, `3…Dh4+`, `3…f3`], answer: 0, explain: `…d5 rend le pion pour un développement sain et évite les attaques sauvages des lignes …g5.` }
       ]
     },
 
@@ -365,13 +365,13 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 0,
           title: '💥 Le piège classique : 3…Cxe4 ?',
           hint: `Ne reprends JAMAIS e4 avant d'avoir chassé le cavalier ! Après 3.Cxe5 Cxe4 ?? 4.De2 ! (menace le cavalier et cloue la colonne e), si 4…Cf6 ?? alors 5.Cc6+ ! est un échec à la découverte de la dame e2 qui gagne la dame noire. Joue Cc6+.`,
           fen: 'rnbqkb1r/pppp1ppp/5n2/4N3/8/8/PPPPQPPP/RNB1KB1R w KQkq - 2 5',
           sol: ['Nc6+']
         },
-        {
+        { at: 0,
           title: `✅ Le bon ordre : …d6 d'abord`,
           hint: `Après 3.Cxe5, la clé est de jouer 3…d6 pour chasser le cavalier, PUIS 4…Cxe4 en sécurité. Ne prends pas e4 tout de suite. Joue d6.`,
           fen: 'rnbqkb1r/pppp1ppp/5n2/4N3/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 0 3',
@@ -380,8 +380,8 @@ const Courses = (() => {
       ],
       quiz: [
         { q: `Quelle est l'idée de la Petrov (2…Cf6) ?`, opts: [`Contre-attaquer e4 au lieu de défendre e5`, `Préparer le grand roque`, `Attaquer f2`, `Gagner un pion`], answer: 0, explain: `La symétrie neutralise l'initiative blanche : une défense de sang-froid visant l'égalité.` },
-        { q: `Après 3.Cxe5, quel est le bon coup ?`, opts: [`3…d6 pour chasser le cavalier d'abord`, `3…Cxe4 tout de suite`, `3…De7`, `3…Fc5`], answer: 0, explain: `3…Cxe4 ?? tombe sur 4.De2 ! On joue d'abord 3…d6, puis …Cxe4 en sécurité.` },
-        { q: `Après 3.Cxe5 Cxe4 ?? 4.De2 Cf6 ??, que jouent les Blancs ?`, opts: [`5.Cc6+ gagne la dame`, `5.Dxe4`, `5.Cf3`, `5.d4`], answer: 0, explain: `5.Cc6+ est un échec à la découverte (dame e2) qui gagne la dame noire en d8.` }
+        { at: 0, q: `Après 3.Cxe5, quel est le bon coup ?`, opts: [`3…d6 pour chasser le cavalier d'abord`, `3…Cxe4 tout de suite`, `3…De7`, `3…Fc5`], answer: 0, explain: `3…Cxe4 ?? tombe sur 4.De2 ! On joue d'abord 3…d6, puis …Cxe4 en sécurité.` },
+        { at: 0, q: `Après 3.Cxe5 Cxe4 ?? 4.De2 Cf6 ??, que jouent les Blancs ?`, opts: [`5.Cc6+ gagne la dame`, `5.Dxe4`, `5.Cf3`, `5.d4`], answer: 0, explain: `5.Cc6+ est un échec à la découverte (dame e2) qui gagne la dame noire en d8.` }
       ]
     },
 
@@ -438,19 +438,19 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 0,
           title: '🎯 Gambit accepté ? La poussée e5 !',
           hint: `Si les Noirs prennent le pion par 3…exf4 au lieu de contester par …d5, ne reprends pas f4 : joue 4.e5 ! Le pion chasse le cavalier f6 et te donne un centre écrasant avec une longueur d'avance. Joue e5.`,
           fen: 'rnbqkb1r/pppp1ppp/5n2/8/4Pp2/2N5/PPPP2PP/R1BQKBNR w KQkq - 0 4',
           sol: ['e5']
         },
-        {
+        { at: 1,
           title: '⚡ Si 3…Cxe4 : la double menace Dh5 !',
           hint: `Après 3.Fc4, si les Noirs grignotent le pion par 3…Cxe4 ?, joue 4.Dh5 ! : la dame menace le mat en f7 (épaulée par le fou c4) ET, après …g6 5.Dxe5+, de fourcher le roi et le cavalier e4. Les Noirs n'ont que l'unique 4…Cd6. Joue Dh5.`,
           fen: 'rnbqkb1r/pppp1ppp/8/4p3/2B1n3/2N5/PPPP1PPP/R1BQK1NR w KQkq - 0 4',
           sol: ['Qh5']
         },
-        {
+        { at: 0,
           title: `🛡️ La règle d'or : …d5 contre le gambit`,
           hint: `Face au Gambit Viennois (3.f4), la réponse saine des Noirs n'est pas de garder le pion (3…exf4) mais de frapper au centre par 3…d5 ! : ça ouvre les lignes pour les pièces noires et neutralise l'attaque avant qu'elle ne démarre. Le plan d'égalisation à retenir.`
         }
@@ -462,8 +462,8 @@ const Courses = (() => {
       ],
       quiz: [
         { q: `Quel coup définit l'Ouverture Viennoise ?`, opts: ['2.Cc3', '2.Cf3', '2.Fc4', '2.f4'], answer: 0, explain: `2.Cc3 développe le cavalier dame et surprotège e4 avant de lancer f4.` },
-        { q: `Contre le Gambit Viennois (3.f4), la meilleure réponse des Noirs ?`, opts: ['3…d5', '3…exf4', '3…Cc6', '3…d6'], answer: 0, explain: `3…d5 ! contre-frappe au centre ; garder le pion par 3…exf4 laisse 4.e5 avec un fort avantage blanc.` },
-        { q: `Pourquoi développer le cavalier roi en e2 plutôt qu'en f3 ?`, opts: [`Pour garder f4 disponible et ne pas gêner le fou g2`, `Parce que Cf3 est illégal`, `Pour attaquer la dame`, `Pour préparer le grand roque`], answer: 0, explain: `Cge2 renforce c3 et laisse la colonne f + le fou fianchetto libres ; Cf3 bloquerait le pion f.` }
+        { at: 0, q: `Contre le Gambit Viennois (3.f4), la meilleure réponse des Noirs ?`, opts: ['3…d5', '3…exf4', '3…Cc6', '3…d6'], answer: 0, explain: `3…d5 ! contre-frappe au centre ; garder le pion par 3…exf4 laisse 4.e5 avec un fort avantage blanc.` },
+        { at: 0, q: `Pourquoi développer le cavalier roi en e2 plutôt qu'en f3 ?`, opts: [`Pour garder f4 disponible et ne pas gêner le fou g2`, `Parce que Cf3 est illégal`, `Pour attaquer la dame`, `Pour préparer le grand roque`], answer: 0, explain: `Cge2 renforce c3 et laisse la colonne f + le fou fianchetto libres ; Cf3 bloquerait le pion f.` }
       ]
     },
 
@@ -523,7 +523,7 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 1,
           title: `⚡ Contre 3…Dd6 : le saut Cb5 !`,
           hint: `Après 3…Dd6, joue 4.Cb5 ! : le cavalier attaque la dame et menace surtout la fourchette Cxc7+ (roi + tour a8). Les Noirs doivent défendre précisément (4…Ca6 ou 4…Dd8). Un temps gagné et un piège posé. Joue Cb5.`,
           fen: 'rnb1kbnr/ppp1pppp/3q4/8/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4',
@@ -601,13 +601,13 @@ const Courses = (() => {
         }
       ],
       traps: [
-        {
+        { at: 1,
           title: `⚡ Ce5 puis dxe5 : la fourchette de pion !`,
           hint: `Ton fou est en g3 (plus en f4) et ton cavalier saute en e5. Si l'adversaire prend le cavalier (…Cxe5 ?), reprends avec le pion : <b>dxe5 !</b> Le pion attaque À LA FOIS le fou d6 et le cavalier f6, et il est défendu par le fou g3 : tu gagnes une pièce. Joue dxe5.`,
           fen: 'r1bq1rk1/ppp2ppp/3bpn2/3pn3/3P4/4P1B1/PPPN1PPP/R2QKB1R w KQ - 0 8',
           sol: ['dxe5']
         },
-        {
+        { at: 0,
           title: `🎯 Le schéma d'attaque : Ce5, Fd3, Dc1-h6`,
           hint: `Dès que l'adversaire roque du côté roi, le Londres a une attaque toute prête : cavalier en e5, fou en d3 (visant h7), dame en c1 puis h6, et parfois le sacrifice grec Fxh7+ suivi de Cg5+ et Dh5. Mémorise ce schéma : c'est là que le système devient tranchant.`
         },
@@ -623,8 +623,8 @@ const Courses = (() => {
       ],
       quiz: [
         { q: `Pourquoi joue-t-on Ff4 AVANT e3 au Système de Londres ?`, opts: [`Pour ne pas enfermer le fou derrière la chaîne de pions`, `Pour attaquer la dame`, `Parce que e3 serait illégal avant`, `Pour préparer le grand roque`], answer: 0, explain: `Le fou de cases sombres doit sortir hors de la chaîne e3-d4 ; joué après e3, il resterait mauvais en c1.` },
-        { q: `Après 4…Db6 (qui attaque b2), quelle défense garde le fou f4 ET les dames pour jouer le gain ?`, opts: ['5.Dc1', '5.Db3 (propose l\'échange)', '5.b3 (affaiblit)', '5.dxc5'], answer: 0, explain: `5.Dc1 protège b2 sans rien lâcher ; Db3 mène souvent à l'échange des dames et à l'égalité.` },
-        { q: `Quel est le schéma d'attaque typique du Londres contre un roque adverse ?`, opts: [`Ce5, Fd3, Dc1-h6 et parfois Fxh7+`, `Roque long et pion h`, `Échanger toutes les pièces`, `Pousser a4-a5`], answer: 0, explain: `Le fou d3 vise h7, le cavalier e5 renforce, la dame vient en h6 : schéma standard, avec le sacrifice grec Fxh7+ en embuscade.` }
+        { at: 2, q: `Après 4…Db6 (qui attaque b2), quelle défense garde le fou f4 ET les dames pour jouer le gain ?`, opts: ['5.Dc1', '5.Db3 (propose l\'échange)', '5.b3 (affaiblit)', '5.dxc5'], answer: 0, explain: `5.Dc1 protège b2 sans rien lâcher ; Db3 mène souvent à l'échange des dames et à l'égalité.` },
+        { at: 0, q: `Quel est le schéma d'attaque typique du Londres contre un roque adverse ?`, opts: [`Ce5, Fd3, Dc1-h6 et parfois Fxh7+`, `Roque long et pion h`, `Échanger toutes les pièces`, `Pousser a4-a5`], answer: 0, explain: `Le fou d3 vise h7, le cavalier e5 renforce, la dame vient en h6 : schéma standard, avec le sacrifice grec Fxh7+ en embuscade.` }
       ]
     }
 
@@ -650,7 +650,100 @@ const Courses = (() => {
     return best;
   }
 
-  return { get, has, match, COURSES };
+  // ─────────────────── L'arbre des variantes, dérivé ───────────────────
+  // Les six onglets (Présentation / Lignes / Plans / Pièges / Transpositions /
+  // Quiz) découpaient la matière par TYPE de contenu. Résultat : l'embranchement
+  // disparaissait (« Lignes » donnait les branches à plat, « Transpositions »
+  // redonnait LES MÊMES en prose), et les pièges flottaient loin du coup qui les
+  // déclenche.
+  //
+  // On dérive l'arbre des `lines[].sans` par un trie : là où deux lignes
+  // divergent, il y a une fourche. Les suites forcées (un seul enfant) sont
+  // repliées en un seul noeud, sinon un cours ferait 25 à 35 entrées.
+  // Rien à ressaisir : la structure était déjà dans les données.
+  function buildBranches(course) {
+    const lines = (course && course.lines) || [];
+    if (!lines.length) return [];
+
+    const root = { san: null, ply: 0, kids: [], lines: [] };
+    lines.forEach((L, li) => {
+      let cur = root;
+      (L.sans || []).forEach((san, i) => {
+        let k = cur.kids.find(x => x.san === san);
+        if (!k) { k = { san, ply: i + 1, kids: [], lines: [] }; cur.kids.push(k); }
+        if (k.lines.indexOf(li) < 0) k.lines.push(li);
+        cur = k;
+      });
+    });
+
+    // Note d'un demi-coup : la première non vide parmi les lignes qui y passent
+    // (une même position peut être commentée dans une ligne et pas dans l'autre).
+    const noteAt = (lineIdxs, ply) => {
+      for (const li of lineIdxs) {
+        const n = lines[li].notes && lines[li].notes[ply - 1];
+        if (n) return n;
+      }
+      return '';
+    };
+
+    const out = [];
+    (function emit(node, depth) {
+      const chain = [];
+      let n = node;
+      if (n.san) chain.push(n);
+      while (n.kids.length === 1) { n = n.kids[0]; chain.push(n); }
+      const li = n.lines;
+      out.push({
+        depth,
+        // Chemin complet depuis le coup 1, pour poser la position.
+        sans: lines[li[0]].sans.slice(0, n.ply),
+        plyStart: chain.length ? chain[0].ply : 1,
+        plyEnd: n.ply,
+        lines: li.slice(),
+        // Un nom propre seulement si le noeud appartient à UNE seule ligne :
+        // « 3…Fc5 » est partagé par le Giuoco Piano et l'Evans, le nommer
+        // d'après l'un des deux serait faux.
+        name: li.length === 1 ? lines[li[0]].name : '',
+        eco: li.length === 1 ? lines[li[0]].eco : '',
+        notes: chain.map(c => noteAt(li, c.ply)),
+        // Notes de TOUT le chemin, pour que l'échiquier les affiche coup par
+        // coup pendant le pas-à-pas (loadLine les indexe par ply - 1).
+        allNotes: lines[li[0]].sans.slice(0, n.ply).map((_, k) => noteAt(li, k + 1)),
+        leaf: n.kids.length === 0
+      });
+      n.kids.forEach(k => emit(k, depth + 1));
+    })(root, 0);
+
+    return out;
+  }
+
+  // Répartit pièges et questions sur les noeuds de l'arbre. `at` est un index de
+  // ligne ; sans `at`, l'élément vaut pour toute l'ouverture et reste sur la
+  // tabiya.
+  //
+  // La décision est GLOBALE, pas noeud par noeud : une ligne traverse plusieurs
+  // noeuds (« 3…a6 » puis « 4.Fa4 → 8…O-O » appartiennent tous deux à la ligne 0),
+  // et filtrer localement ferait apparaître le même piège deux fois. On prend
+  // donc, pour chaque élément, le noeud le PLUS PROFOND qui porte sa ligne :
+  // c'est là que le piège se produit vraiment.
+  //
+  // Rend un tableau parallèle à `branches` : items[i] = ce qui revient au noeud i.
+  function spread(items, branches) {
+    const out = branches.map(() => []);
+    for (const it of items || []) {
+      if (typeof it.at !== 'number') { if (out.length) out[0].push(it); continue; }
+      let best = -1;
+      for (let i = 0; i < branches.length; i++) {
+        const b = branches[i];
+        if (b.lines.indexOf(it.at) < 0) continue;
+        if (best < 0 || b.depth > branches[best].depth) best = i;
+      }
+      out[best < 0 ? 0 : best].push(it);
+    }
+    return out;
+  }
+
+  return { get, has, match, COURSES, buildBranches, spread };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Courses;

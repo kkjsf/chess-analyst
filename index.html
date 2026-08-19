@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '190';
+window.APP_VERSION = '195';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -330,6 +330,11 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       <button class="opening-modal-close" id="opening-modal-close" aria-label="Fermer">&times;</button>
     </div>
     <div class="opening-modal-main">
+      <!-- L'arbre des variantes EST la navigation du cours : il remplace la
+           barre d'onglets (Présentation / Lignes / Plans / Pièges /
+           Transpositions / Quiz), qui découpait la matière par type et faisait
+           disparaître l'embranchement. Masqué pour les ouvertures sans cours. -->
+      <nav class="opening-branch-rail" id="opening-branch-rail" hidden aria-label="Variantes"></nav>
       <div class="opening-modal-left">
         <div class="opening-modal-board">
           <svg id="opening-modal-svg" viewBox="0 0 360 360" width="280" height="280"></svg>
@@ -342,9 +347,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
         </div>
       </div>
       <div class="opening-modal-right">
-        <nav class="opening-lesson-nav" id="opening-lesson-nav" hidden></nav>
         <div class="opening-lesson-progress" id="opening-lesson-progress" hidden><span></span></div>
-        <div class="opening-lesson-picker" id="opening-lesson-picker" hidden></div>
         <div class="opening-modal-explanation" id="opening-modal-explanation"></div>
         <div class="opening-modal-eval" id="opening-modal-eval" hidden></div>
         <div class="opening-lesson-body" id="opening-lesson-body" hidden></div>
