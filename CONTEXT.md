@@ -16,11 +16,95 @@
 - `js/`, `css/` - logique et styles.
 - `sw.js`, `manifest.json` - PWA.
 - `coach-data.json` - contenu de coaching généré (~680 KB). Certains items de correctness ne se reflètent qu'après une RE-RUN complète du coach.
-- `tools/` - scripts utilitaires.
+- `tools/` - scripts utilitaires. Chaîne de contenu des leçons (v184) : `mine_lichess.cjs`
+  (streame `lichess_db_puzzle.csv.zst`, gitignoré, → pool JSONL) → `pick_lichess.cjs` (choisit les
+  exercices par motif : thème + motif visible + gain qui tient) → `inject_puzzles.cjs` (audite
+  l'existant et réécrit les tableaux `puzzles` des catalogues, rejouable). Vérification moteur :
+  `sf.cjs` + `verify_lessons.cjs` (`DEPTH=14 node tools/verify_lessons.cjs [mates|tactics]`).
+  Ne JAMAIS lancer deux process Stockfish asm.js en parallèle (ils s'affament).
 - Prototypes/mockups (non prod): `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v184 - Menaces affichées, « continuer à jouer », et exercices refaits sur la base Lichess**
+  - User : « affiche les flèches de menaces sur les tactiques (ex. les menaces causées par une
+    fourchette) et permets de continuer à jouer comme sur les ouvertures ; la tactique ne marche
+    que s'il ne peut y avoir reprise (une fourchette royale reprise au coup d'après par un fou n'en
+    est pas une) ; globalement les exemples de mats et de puzzles tactiques ne sont pas tous très
+    bons ». Il a lui-même pointé la base de puzzles Lichess et l'a téléchargée dans le dossier.
+  - **Nouveau module de lecture du plateau dans `js/tactics.js`** (indépendant de chess.js, exporté
+    pour l'outillage) : `attacksFrom` / `attackersOf` (rayons X compris) / `seeOn` (échange statique
+    SEE) / `netGain` / `threats` / `threatSentence`.
+    - `netGain(fen)` = **le juge de paix demandé par le user** : l'adversaire joue sa MEILLEURE
+      défense (reprise incluse), puis on encaisse au mieux ; en pions, 1000 = mat. Une fourchette
+      reprise au coup suivant tombe à 0 ou en négatif et n'est plus traitée comme une tactique.
+    - `threats(fenAvant, fenApres, coup)` rend `checks` / `direct` (ce que la pièce attaque avec
+      profit, filtré au SEE) / `discovered` (lignes démasquées en partant) / `behind` (la pièce
+      coincée DERRIÈRE la cible : clouage si elle vaut strictement plus, enfilade si le roi est
+      devant) / `recapture` / `net`.
+  - **Flèches de menace dans l'entraînement** (`#tac-threats` + `paintThreats`), donc aussi bien
+    pour les Tactiques que pour les Mats (les deux passent par `Tactics.start`) : dès que l'élève
+    trouve le coup, l'échiquier montre **rouge = échec, vert = ce que la pièce attaque, bleu = ce
+    qu'elle démasque**, et une phrase nomme les pièces puis conclut sur le gain réel
+    (« Le cavalier d2 fait échec au roi f1, attaque la dame f3. L'adversaire ne peut pas tout
+    sauver : le coup gagne +6 au bas mot. »). Les flèches restent 1,5 s avant la réponse adverse,
+    et un bouton bascule **👁 Menaces** les rappelle en fin d'exercice.
+  - **« 🔍 Continuer à jouer »** en fin d'exercice, calqué sur l'exploration libre des ouvertures :
+    on rejoue les DEUX camps, Stockfish indique son meilleur coup (flèche bleue) + éval + suite,
+    avec ↶ Annuler / ⟳ Départ / ✕ Revenir à l'exercice. Les menaces s'affichent aussi sur les coups
+    libres.
+  - **Contenu refait sur la base de puzzles Lichess** (CC0, `lichess_db_puzzle.csv.zst`, 304 Mo,
+    **gitignoré** - à retélécharger sur https://database.lichess.org/#puzzles). Pipeline en 3 passes,
+    dans `tools/` :
+    1. `mine_lichess.cjs` : streame l'archive zstd (⚠️ elle commence par un *skippable frame*
+       que `node:zlib` refuse : lire à partir de l'octet **12**) et filtre large (Elo 600-1750,
+       popularité ≥ 90, ≥ 800 parties, ≤ 6 demi-coups, thèmes utiles) → pool de **26 476** puzzles.
+    2. `pick_lichess.cjs` : choisit, motif par motif, 4 exercices (3 pour les mats) sur **trois**
+       critères cumulés - thème Lichess, **motif réellement visible** (`threats` doit retrouver la
+       figure), et **gain qui tient** (`netGain` ≥ 2). Tranches de difficulté (facile / moyenne /
+       soutenue), tri par popularité, dédoublonnage global (un puzzle ne sert qu'à un seul motif).
+       Les figures de mat que Lichess n'étiquette pas (h7 grec, g7, Lolli, Damiano, baiser de la
+       mort) sont reconnues **géométriquement** sur la position finale, plateau normalisé en miroir
+       pour que le camp qui mate soit toujours « les Blancs ».
+    3. `inject_puzzles.cjs` : audite l'existant, réécrit les tableaux `puzzles` des deux catalogues
+       (rejouable sans dupliquer : les entrées Lichess sont régénérées).
+  - **Résultat du ménage** (l'audit est la réponse chiffrée au point 2 du user) :
+    - **13 exercices de tactique supprimés parce qu'ils ne gagnent rien**, dont 9 tirés de ses
+      propres parties : le clouage `Bb4` (net **-1**, la dame reprend le fou), la fourchette `Nxc2`
+      (+1), la découverte `d5` (-1), `Bxd4` (+1), la surcharge `Rxf7` (**-2**), l'enfilade `Qh4+` (0),
+      les coups tranquilles `Bf4` (0) et `Nb5` (+1), l'attaque double `Qxb7` (+1) ; plus la démo
+      d'Attraction (échange dame contre dame, net 0), et la fourchette `Bxf7+` (net +1) débusquée
+      après correction du SEE (ci-dessous).
+    - **22 exercices « habillés »** (schéma épuré + décor artificiel, v183) supprimés : remplacés par
+      de vraies parties.
+    - Au plus 2 positions « ta partie » par motif, dédoublonnées par partie + premier coup.
+  - **75 → 141 exercices** (95 tactiques + 46 mats). Chaque motif a maintenant des positions de
+    vraies parties avec chip « 🌍 vraie partie - Lichess · niveau 1162 ↗ » + « difficulté moyenne ».
+    Les 4 entrées qui n'avaient AUCUN exercice en ont : Interférence, Méthode CCT, Coups forçants,
+    Zugzwang.
+  - **Bug chess.js corrigé** : en mode `sloppy`, `bxc3` est lu comme un coup de FOU, donc toutes les
+    prises de pion sur la colonne b échouaient (2 exercices de mat de Boden plantaient à la réponse
+    adverse). `sanToMove` (app) et `playSan` (outils) résolvent désormais le SAN sur la liste exacte
+    des coups légaux avant de retomber sur `sloppy`.
+  - **Deux pièges de l'échange statique, corrigés en cours de route** (à ne pas réintroduire) :
+    1. `seeOn` rendait `VAL.k` (100) quand la cible était un roi : dès qu'un ROI reprenait, la
+       récursion croyait que l'adversaire « reprenait le roi » pour 100, et le gain explosait
+       (`Nxd7` du Desperado annoncé à +9 au lieu de +6, la fourchette `Bxf7+` de ses parties à +7 au
+       lieu de +1). On ne gagne pas un roi -> retour 0.
+    2. `netGain` sortait de la boucle dès qu'une défense annulait le gain (`worst <= 0`) : la valeur
+       rendue était alors un MAJORANT, pas le minimum. Le seuil restait juste, mais le chiffre
+       affiché à l'élève était faux. Boucle complète désormais (~37 ms par appel, largement tenable :
+       un appel par coup joué, et le minage n'évalue que les candidats déjà triés).
+  - **Vérificateur durci** : `tools/verify_lessons.cjs` remplace l'ancien test « matériel ≥ 2 OU éval
+    ≥ 2,5 » (qui laissait passer les fourchettes reprises) par `matériel + netGain ≥ 2`, et signale en
+    WARN les positions où le moteur n'est pas convaincu. Deux mats ne se départagent plus : sur un
+    schéma où tout mate, « le moteur mate un demi-coup plus vite » n'est plus une erreur de contenu.
+    Lancer `DEPTH=14 node tools/verify_lessons.cjs [mates|tactics] [motif…]`.
+  - **Résultat de la passe moteur (DEPTH=14, Stockfish asm.js, ~25 min)** : **141 exercices vérifiés,
+    0 FAIL, 13 WARN**. Les WARN sont tous sur les vieux schémas épurés (coup ex aequo, réponse
+    scriptée qui n'est pas la meilleure défense, moteur peu convaincu sur une figure où le gain est
+    matériel) - rien de bloquant. Rejeu indépendant des 141 lignes avec la résolution SAN de l'app :
+    0 problème, tous les mats notés `#` matent vraiment.
 - **v183 - Tactiques & Mats : beaucoup plus d'exercices, en vraies positions, + recherche**
   - User : « exemples des exercices plus nombreux pour chaque mat ou tactique, et aussi + parlant
     (dans un contexte donné avec plus de pièces, pas juste les pièces qu'il faut pour une fourchette) ;

@@ -2362,7 +2362,7 @@ body.guess-open { overflow: hidden; }
 .guess-feedback.right { color: var(--success); }
 .guess-feedback.wrong { color: var(--danger); }
 .guess-feedback.shown { color: var(--accent); }
-.guess-nav { display: flex; justify-content: center; margin: 8px 0; }
+.guess-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 8px 0; }
 .guess-empty { text-align: center; padding: 40px 16px; font-size: 16px; line-height: 1.7; }
 .guess-empty span { font-size: 13px; color: var(--text-dim); }
 .guess-final { font-size: 28px; color: var(--accent); display: inline-block; margin: 6px 0; }
@@ -2388,6 +2388,23 @@ body.guess-open { overflow: hidden; }
 }
 .tac-chip.real { color: var(--accent); background: rgba(226,184,87,0.13); }
 .tac-chip a { color: inherit; text-decoration: none; }
+/* Menaces créées par le coup joué : la phrase sous l échiquier fait écho aux
+   flèches (vert = ce que la pièce attaque, bleu = ce qu elle démasque,
+   rouge = échec, ambre = la pièce coincée derrière). */
+.tac-threats {
+  margin: 0 auto 10px; max-width: 560px; padding: 9px 12px;
+  background: #ffffff08; border: 1px solid var(--line); border-radius: 10px;
+  font-size: 12.5px; line-height: 1.6; color: var(--text-dim); text-align: center;
+}
+.tac-threats b { color: var(--text); }
+.tac-th-title {
+  display: block; font-weight: 700; font-size: 10.5px; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
+}
+.tac-th-ok { color: var(--success); }
+.tac-th-warn { color: var(--warning); }
+.train-btn.ghost.active { background: rgba(226,184,87,0.16); color: var(--accent); }
+
 .mate-intro { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 6px 0 18px; }
 .mate-intro b { color: var(--text); }
 .mate-group { margin-bottom: 22px; }

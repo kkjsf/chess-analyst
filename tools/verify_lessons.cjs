@@ -35,6 +35,14 @@ function material(fen) {
   for (const row of g.board()) for (const sq of row) if (sq) (sq.color === 'w' ? w += VAL[sq.type] : b += VAL[sq.type]);
   return g.turn() === 'w' ? w - b : b - w;
 }
+// chess.js « sloppy » lit « bxc3 » comme un coup de fou : on résout d'abord le
+// SAN sur la liste exacte des coups légaux.
+function playSan(g, san) {
+  const exact = g.moves({ verbose: true }).filter(m => m.san === san)[0];
+  if (exact) return g.move({ from: exact.from, to: exact.to, promotion: exact.promotion });
+  try { return g.move(san, { sloppy: true }); } catch (_) { return null; }
+}
+
 const args = process.argv.slice(2);
 const only = args.filter(a => !['mates', 'tactics'].includes(a));
 const wants = (k) => !args.includes('mates') && !args.includes('tactics') ? true : args.includes(k);
@@ -87,7 +95,7 @@ async function checkPuzzle(label, p, opts) {
     const fen = g.fen();
     const san = p.sol[i];
     let m;
-    try { m = g.move(san, { sloppy: true }); } catch (e) { m = null; }
+    m = playSan(g, san);
     if (!m) { log(`FAIL ${label} · coup illégal « ${san} » (ply ${i}) — position ${fen}`); fail++; return; }
     const uci = m.from + m.to + (m.promotion || '');
     const lines = await analyse(fen, { depth: DEPTH, multipv: 3 });
@@ -99,11 +107,14 @@ async function checkPuzzle(label, p, opts) {
       if (p.demo) { notes.push(`ply${i} démo (${scoreOf(top)})`); continue; }
       if (top.move !== uci) {
         const better = scoreOf(top) - (mine ? scoreOf(mine) : -99);
-        if (!mine || better > 0.3) {
+        // Deux mats ne se départagent pas : sur un schéma où tout mate, « le
+        // moteur mate un demi-coup plus vite » n'est pas une erreur de contenu.
+        const bothMate = mine && scoreOf(top) > 900 && scoreOf(mine) > 900;
+        if (!bothMate && (!mine || better > 0.3)) {
           log(`FAIL ${label} · ply ${i}: le moteur préfère ${top.move} (${scoreOf(top)}) à ${san} (${mine ? scoreOf(mine) : '?'}) — ${fen}`);
           fail++; return;
         }
-        notes.push(`ply${i} ex aequo avec ${top.move}`);
+        notes.push(`ply${i} ex aequo avec ${top.move}${bothMate ? ' (les deux matent)' : ''}`);
       }
       const second = lines[1];
       if (second && top.mate === null) {
@@ -131,11 +142,16 @@ async function checkPuzzle(label, p, opts) {
     const end = await analyse(g.fen(), { depth: DEPTH, multipv: 1 });
     const s = end[0] ? -scoreOf(end[0]) : 0; // from the solver's point of view
     const swing = material(g.fen()) * (g.turn() === startTurn ? 1 : -1) - bal0;
-    const need = p.positional ? 1.5 : 1.8;   // positional motifs win space, not wood
-    if (swing < 2 && s < need) {
-      log(`FAIL ${label} · gain trop faible (matériel ${swing.toFixed(1)}, éval ${s.toFixed(1)}) — ${g.fen()}`); fail++; return;
+    // Le matériel encaissé ne suffit pas : il faut que le gain TIENNE une fois
+    // que l'adversaire a joué sa meilleure défense (reprise comprise). Une
+    // fourchette reprise au coup suivant tombe ici, et c'est le but.
+    const settled = swing + Tactics.netGain(g.fen());
+    const need = p.positional ? 1 : 2;
+    if (settled < need) {
+      log(`FAIL ${label} · la tactique ne rapporte rien (matériel ${swing.toFixed(1)}, après défense ${settled.toFixed(1)}, éval ${s.toFixed(1)}) — ${g.fen()}`); fail++; return;
     }
-    notes.push(`gain ${swing > 0 ? '+' : ''}${swing.toFixed(1)} / éval ${s.toFixed(1)}`);
+    if (s < 0.5 && !p.positional) { notes.push(`moteur peu convaincu (éval ${s.toFixed(1)})`); warn++; }
+    notes.push(`gain ${settled > 0 ? '+' : ''}${settled.toFixed(1)} (brut ${swing.toFixed(1)}) / éval ${s.toFixed(1)}`);
   }
   log(`OK   ${label}${notes.length ? '  [' + notes.join(' ; ') + ']' : ''}`);
 }
