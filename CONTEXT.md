@@ -46,7 +46,7 @@
   Espagnole (seule a 2 niveaux : 3...a6 se subdivise), Scandinave et Gambit du Roi (3 soeurs a
   plat). Toucher 3...Fc5 montre une branche SANS piege ni question, ce qui illustre que chaque
   noeud ne porte que ce qui le concerne.
-  NON implemente. Le bloc CSS `@media (max-width: 900px)` du rail est a REMPLACER, pas a corriger :
+  IMPLEMENTE en v196-v199 (voir ci-dessus). Le bloc CSS `@media (max-width: 900px)` du rail a ete REMPLACE, pas corrige :
   c'est un changement de navigation. `buildBranches` / `spread` ne bougent pas.
   ⚠️ Lecon de recette : ma validation mobile de la v195 verifiait « pas de debordement, cibles a
   44px ». Bons criteres pour un formulaire, inutiles pour un arbre - il fallait mesurer la part
@@ -65,6 +65,39 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v196-v199 - Cours d'ouverture : deux écrans sur mobile**
+  - User : « marche très bien sur desktop, beaucoup moins sur l'app mobile », puis validation de la
+    maquette `_mockups/opening-mobile-mockup.html`, avec la consigne « garde bien l'accès facile à
+    la recherche et autocomplétion des ouvertures ».
+  - Le rail devenait un fil horizontal sous 900px. Mesuré à 390px sur la v195 : **25 % de l'arbre
+    visible**, **0 noeud sur 5** entièrement lisible sans défilement latéral, **12 px d'indentation
+    pour tous** (traits de branche désactivés, la fourche disparaissait), échiquier **non collant**
+    qui sortait du champ dès qu'on lisait.
+  - Deux écrans, pilotés par les classes **`m-map`** et **`m-branch`** sur `.opening-modal` (le
+    desktop les ignore, ses trois colonnes ne bougent pas) :
+    - **carte** = l'arbre en pleine largeur, indentation réelle 18/40/62 px et traits de branche ;
+    - **branche** = `.opening-modal-left` en `position: sticky`, qui se replie en **`m-compact`**
+      au-delà de 26 px de défilement (échiquier 343 → 104 px, le commentaire du coup passe à côté).
+  - **`#opening-sibs`** : barre des branches sœurs collée en bas (sœur = même profondeur ET même
+    parent, le parent étant le noeud précédent le plus proche de profondeur n-1).
+  - **Recherche préservée** : la recherche + autocomplétion vit sur l'écran d'arbre, DERRIÈRE la
+    modale (`#ot-search`, `js/opening-tree.js`). Un bouton **🔍** sur l'écran carte ferme la modale
+    et met le focus dans le champ - sinon chercher une autre ouverture aurait coûté trois gestes.
+  - `#opening-modal-explanation` **déplacé dans la colonne gauche**, sous l'échiquier : c'est du
+    coup courant qu'il parle, et sur mobile il doit rester collé à la position.
+  - ⚠️ **Trois pièges CSS rencontrés, à ne pas réintroduire** :
+    1. les règles de base de `.opening-modal-back/.opening-modal-search` étaient APRÈS la media
+       query : à spécificité égale la dernière gagne, les boutons restaient invisibles ;
+    2. `.m-map .obr-node { padding: ... }` en raccourci écrasait le `padding-left` des `.d1/.d2`
+       (plus spécifique), l'indentation retombait à 0 - les profondeurs sont redéclarées dans le
+       bloc `m-map` ;
+    3. déplacer le commentaire dans la colonne gauche lui a fait hériter d'un `max-width: 760px`
+       qui élargissait la colonne et réduisait la lecture desktop à **145 px** ; la colonne gauche
+       est désormais bornée à `var(--ex-board)`.
+  - Vérifié à 390 px : 5/5 noeuds visibles (contre 0/5), indentation 18/40/62, cibles ≥ 56 px, pas
+    de débordement, échiquier collant qui reste à l'écran, 3 sœurs, 2 pièges sur la bonne branche,
+    0 erreur console. Espagnole (fourche imbriquée), Scandinave et Londres vérifiées aussi.
+    Desktop inchangé : rail 250 / échiquier 518 / lecture 366.
 - **v191-v195 - Cours d'ouverture : l'ARBRE remplace les six onglets**
   - User : « pas 100% convaincu par les cours sur les ouvertures, on retrouve pas la logique des
     embranchements / variantes de l'arbre, y'a des redondances, sous-menus pas très clairs

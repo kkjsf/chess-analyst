@@ -392,11 +392,16 @@ html, body {
   }
   .opening-modal-left {
     flex: 0 0 auto;
-    width: auto;
+    /* Bornée à la largeur de l'échiquier. Le commentaire du coup vit maintenant
+       dans cette colonne, et sa max-width de 760px l'élargissait au point de
+       réduire la colonne de lecture à 145px. */
+    width: var(--ex-board);
+    max-width: var(--ex-board);
     position: sticky;
     top: 4px;
     gap: 14px;
   }
+  .opening-modal-left .opening-modal-explanation { max-width: 100%; }
   .opening-modal-right {
     flex: 1 1 auto;
     align-items: stretch;
@@ -4180,22 +4185,118 @@ body.guess-open { overflow: hidden; }
 .ob-fork span { display: block; font-size: 12px; color: var(--text-dim); margin-top: 1px; }
 .ob-drill { margin-top: 9px; }
 
-/* Sous 900px le rail devient un fil horizontal au-dessus de l'échiquier. */
-@media (max-width: 900px) {
-  .opening-branch-rail {
-    flex: 0 0 auto; width: 100%; border-right: none; border-bottom: 1px solid var(--line);
-    display: flex; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 8px;
-  }
-  .obr-head { display: none; }
-  .obr-node {
-    width: auto; flex: 0 0 auto; padding: 9px 12px !important; min-height: 44px;
-    border-left: none; border-bottom: 2px solid transparent; border-radius: 8px;
-    display: flex; align-items: center; gap: 6px; white-space: nowrap;
-  }
-  .obr-node.on { border-left-color: transparent; border-bottom-color: var(--accent); }
-  .obr-node::before, .obr-node::after { display: none !important; }
-  .obr-tick { float: none; }
+/* Retour vers la carte + raccourci recherche. Cachés sur desktop, où l'arbre est
+   déjà à l'écran en permanence et où la modale se ferme d'un seul geste.
+   Déclarés AVANT la media query : à spécificité égale, la dernière règle gagne. */
+.opening-modal-back, .opening-modal-search {
+  display: none; background: none; border: none; color: var(--text-dim);
+  cursor: pointer; border-radius: 10px; flex-shrink: 0;
+  min-width: 44px; min-height: 44px; align-items: center; justify-content: center;
 }
+.opening-modal-back { font-size: 26px; line-height: 1; margin-left: -8px; }
+.opening-modal-search { font-size: 17px; }
+.opening-modal-back:hover, .opening-modal-search:hover { background: rgba(255,255,255,.07); color: var(--text); }
+
+/* ═══════ MOBILE : deux écrans plutôt qu'un empilement ═══════
+   Sous 900 px, le rail devenait un fil horizontal. Mesuré à 390 px, ça donnait
+   25 % de l'arbre visible d'un coup, 0 nœud sur 5 entièrement lisible sans
+   défilement latéral, 12 px d'indentation pour TOUS les nœuds (traits de
+   branche désactivés, donc la fourche disparaissait) et un échiquier non
+   collant qui sortait du champ dès qu'on lisait.
+   On ne peut pas loger l'arbre, l'échiquier et le contenu sur 390 px : on
+   choisit lequel occupe l'écran. `.m-map` montre l'arbre, `.m-branch` la fiche. */
+@media (max-width: 899px) {
+  /* :not([hidden]) sinon un `display` explicite neutralise l'attribut hidden et
+     les deux boutons resteraient visibles sur le mauvais écran. */
+  .opening-modal-back:not([hidden]), .opening-modal-search:not([hidden]) { display: inline-flex; }
+
+  /* --- écran CARTE : l'arbre en pleine largeur, sa vraie indentation --- */
+  .opening-modal.m-map .opening-modal-left,
+  .opening-modal.m-map .opening-modal-right,
+  .opening-modal.m-map .opening-sibs { display: none !important; }
+  .opening-modal.m-map .opening-branch-rail {
+    display: block; width: 100%; flex: 1 1 auto;
+    border-right: none; padding: 4px 0 20px;
+  }
+  /* Le raccourci `padding` effacerait le padding-left des profondeurs (il est
+     plus spécifique que `.d1`) : on ne touche donc pas à la gauche ici, et on
+     redéclare chaque niveau juste en dessous, à spécificité suffisante. */
+  .opening-modal.m-map .obr-node {
+    min-height: 56px; padding-top: 11px; padding-right: 34px; padding-bottom: 11px;
+    display: block; border-left: none;
+  }
+  .opening-modal.m-map .obr-node.d0 { padding-left: 18px; }
+  .opening-modal.m-map .obr-node.d1 { padding-left: 40px; }
+  .opening-modal.m-map .obr-node.d2 { padding-left: 62px; }
+  .opening-modal.m-map .obr-node.d3 { padding-left: 84px; }
+  .opening-modal.m-map .obr-node.d1::before { left: 27px; }
+  .opening-modal.m-map .obr-node.d2::before { left: 49px; }
+  .opening-modal.m-map .obr-node.d3::before { left: 71px; }
+  .opening-modal.m-map .obr-node.on { background: rgba(226,184,87,.09); }
+  .opening-modal.m-map .obr-san { display: block; margin-bottom: 1px; }
+  .opening-modal.m-map .obr-name { display: block; }
+  .opening-modal.m-map .obr-tag { margin: 5px 5px 0 0; }
+  .opening-modal.m-map .obr-tick { float: right; }
+  /* Le chevron dit que la ligne ouvre un écran, pas qu'elle déplie une section. */
+  .opening-modal.m-map .obr-node::after {
+    content: "›"; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: 17px; width: auto; height: auto; background: none;
+  }
+  /* Le chevron occupe ::after, donc le trait horizontal de branche passe sur
+     ::before, doublé par un dégradé : trait vertical + ergot. */
+  .opening-modal.m-map .obr-node.d1::before,
+  .opening-modal.m-map .obr-node.d2::before,
+  .opening-modal.m-map .obr-node.d3::before {
+    width: 10px; background:
+      linear-gradient(var(--line-str), var(--line-str)) 0 0 / 1px 100% no-repeat,
+      linear-gradient(var(--line-str), var(--line-str)) 0 27px / 10px 1px no-repeat;
+  }
+
+  /* --- écran BRANCHE : échiquier collant, contenu dessous --- */
+  .opening-modal.m-branch .opening-branch-rail { display: none !important; }
+  .opening-modal.m-branch .opening-modal-left {
+    position: sticky; top: -1px; z-index: 6;
+    background: var(--bg-card); padding-bottom: 8px;
+    box-shadow: 0 6px 14px -8px rgba(0,0,0,.8);
+  }
+  /* Replié pendant la lecture : l'échiquier passe à gauche, le commentaire du
+     coup vient à côté. C'est ce qui le garde à l'écran au lieu de le laisser
+     défiler hors du champ. */
+  .opening-modal.m-branch.m-compact .opening-modal-left {
+    display: grid; grid-template-columns: 104px 1fr; gap: 10px;
+    align-items: center; padding-bottom: 8px;
+  }
+  /* Placement explicite : sans ça l'auto-placement met le commentaire SOUS
+     l'échiquier au lieu d'à côté, et on perd l'intérêt du repliement. */
+  .opening-modal.m-branch.m-compact .opening-modal-board {
+    grid-column: 1; grid-row: 1; width: 104px; margin: 0;
+  }
+  .opening-modal.m-branch.m-compact .opening-modal-explanation {
+    grid-column: 2; grid-row: 1; margin: 0; text-align: left;
+    font-size: 12.5px; line-height: 1.5; align-self: center;
+  }
+  .opening-modal.m-branch.m-compact .opening-modal-controls {
+    grid-column: 1 / -1; grid-row: 2; margin: 0;
+  }
+
+  /* Barre des branches sœurs, collée en bas. */
+  .opening-modal.m-branch .opening-sibs {
+    display: flex; position: sticky; bottom: 0; z-index: 6;
+    width: 100%; gap: 1px; background: var(--line-str);
+    border-top: 1px solid var(--line-str); margin-top: 14px;
+  }
+}
+.opening-sibs { display: none; }
+.osib {
+  flex: 1 1 0; min-width: 0; background: var(--bg-2); border: none; color: var(--text-dim);
+  font: inherit; cursor: pointer; padding: 9px 8px; min-height: 54px;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px; text-align: left;
+}
+.osib:disabled { opacity: .35; cursor: default; }
+.osib .k { font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osib .w { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osib.mid { background: var(--bg-card); flex: 0 0 36%; align-items: center; text-align: center; }
+.osib.mid .k { color: var(--accent); }
 
 /* Desktop : le rail devient la 1re des trois colonnes (arbre / échiquier /
    contenu du noeud). La fenêtre s'élargit pour les loger sans écraser

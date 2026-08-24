@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '195';
+window.APP_VERSION = '199';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -325,8 +325,13 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
 <div class="opening-modal-overlay" id="opening-modal">
   <div class="opening-modal" role="dialog" aria-modal="true" aria-labelledby="opening-modal-title">
     <div class="opening-modal-header">
+      <!-- Mobile seulement : le cours se parcourt en deux ecrans (carte / branche),
+           donc il faut un retour vers la carte, et un acces direct a la recherche
+           d'ouvertures qui vit sur l'ecran d'arbre, derriere la modale. -->
+      <button class="opening-modal-back" id="opening-modal-back" aria-label="Revenir aux variantes" hidden>‹</button>
       <h3 id="opening-modal-title"></h3>
       <span class="opening-modal-eco" id="opening-modal-eco"></span>
+      <button class="opening-modal-search" id="opening-modal-search" aria-label="Chercher une autre ouverture" hidden>🔍</button>
       <button class="opening-modal-close" id="opening-modal-close" aria-label="Fermer">&times;</button>
     </div>
     <div class="opening-modal-main">
@@ -345,15 +350,17 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
           <span class="opening-modal-move-label" id="opening-modal-move-label">Position initiale</span>
           <button class="opening-modal-btn" id="opening-modal-next">▶</button>
         </div>
+        <div class="opening-modal-explanation" id="opening-modal-explanation"></div>
       </div>
       <div class="opening-modal-right">
         <div class="opening-lesson-progress" id="opening-lesson-progress" hidden><span></span></div>
-        <div class="opening-modal-explanation" id="opening-modal-explanation"></div>
         <div class="opening-modal-eval" id="opening-modal-eval" hidden></div>
         <div class="opening-lesson-body" id="opening-lesson-body" hidden></div>
         <div class="opening-modal-details" id="opening-modal-details" hidden></div>
         <div class="opening-modal-footer" id="opening-modal-footer"></div>
       </div>
+      <!-- Mobile : passer d'une branche soeur a l'autre sans repasser par la carte. -->
+      <div class="opening-sibs" id="opening-sibs" hidden></div>
     </div>
   </div>
 </div>

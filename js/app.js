@@ -1550,6 +1550,89 @@ const App = (() => {
       railEl.hidden = false;
       progEl.hidden = false;
 
+      // ── Mobile : deux écrans ────────────────────────────────────────────────
+      // Sur 390 px on ne peut pas loger l'arbre, l'échiquier et le contenu
+      // ensemble. `m-map` donne l'écran à l'arbre, `m-branch` à la fiche. Sur
+      // desktop les trois colonnes cohabitent et ces classes ne servent à rien.
+      const modalEl = modal.querySelector('.opening-modal');
+      const sibsEl = $('#opening-sibs');
+      const backEl = $('#opening-modal-back');
+      const searchEl = $('#opening-modal-search');
+      const narrow = () => window.matchMedia('(max-width: 899px)').matches;
+
+      // parent = le noeud précédent le plus proche de profondeur n-1. La liste
+      // est en profondeur d'abord, donc la règle suffit.
+      const parentOf = (i) => {
+        for (let j = i - 1; j >= 0; j--) if (branches[j].depth === branches[i].depth - 1) return j;
+        return -1;
+      };
+      const sibsOf = (i) => branches
+        .map((_, j) => j)
+        .filter(j => branches[j].depth === branches[i].depth && parentOf(j) === parentOf(i));
+
+      function setScreen(mode) {
+        if (!modalEl) return;
+        modalEl.classList.toggle('m-map', mode === 'map');
+        modalEl.classList.toggle('m-branch', mode === 'branch');
+        modalEl.classList.remove('m-compact');
+        if (backEl) backEl.hidden = mode !== 'branch';
+        if (searchEl) searchEl.hidden = mode !== 'map';
+        modalEl.scrollTop = 0;
+      }
+
+      function goMap() {
+        setScreen('map');
+        renderRail();
+        const on = railEl.querySelector('.obr-node.on');
+        if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+      }
+
+      // La recherche d'ouvertures (avec autocomplétion) vit sur l'écran d'arbre,
+      // derrière la modale. Depuis la carte, un seul geste doit y ramener : sans
+      // ça, chercher une AUTRE ouverture demanderait de fermer, retrouver le
+      // champ et le toucher.
+      if (searchEl) searchEl.onclick = () => {
+        cleanup();
+        const inp = document.getElementById('ot-search');
+        if (!inp) return;
+        if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center' });
+        setTimeout(() => { try { inp.focus(); inp.select(); } catch (_) {} }, 60);
+      };
+      if (backEl) backEl.onclick = goMap;
+
+      // L'en-tête se replie dès qu'on lit : l'échiquier passe à 104 px et le
+      // commentaire du coup vient à côté, au lieu de sortir du champ.
+      if (modalEl && !modalEl._obScroll) {
+        modalEl._obScroll = true;
+        modalEl.addEventListener('scroll', () => {
+          if (!modalEl.classList.contains('m-branch')) return;
+          modalEl.classList.toggle('m-compact', modalEl.scrollTop > 26);
+        }, { passive: true });
+      }
+
+      function renderSibs() {
+        if (!sibsEl) return;
+        const sib = sibsOf(cur), k = sib.indexOf(cur);
+        const prev = sib[k - 1], next = sib[k + 1];
+        const cell = (j, dir) => {
+          if (j === undefined) return `<button class="osib" disabled><span class="k">—</span>` +
+            `<span class="w">aucune sœur ${dir < 0 ? 'avant' : 'après'}</span></button>`;
+          const b = branches[j];
+          return `<button class="osib" data-i="${j}">` +
+            `<span class="k">${dir < 0 ? '‹ ' : ''}${esc(labelOf(b))}${dir > 0 ? ' ›' : ''}</span>` +
+            `<span class="w">${esc(b.name || 'variante sœur')}</span></button>`;
+        };
+        sibsEl.hidden = false;
+        sibsEl.innerHTML = cell(prev, -1) +
+          `<button class="osib mid" data-map="1"><span class="k">⤺ variantes</span>` +
+          `<span class="w">${visited.size}/${branches.length} vues</span></button>` +
+          cell(next, 1);
+        sibsEl.querySelectorAll('[data-i]').forEach(btn =>
+          btn.addEventListener('click', () => show(+btn.dataset.i)));
+        const mid = sibsEl.querySelector('[data-map]');
+        if (mid) mid.addEventListener('click', goMap);
+      }
+
       function renderRail() {
         railEl.innerHTML =
           `<div class="obr-head">Les variantes</div>` +
@@ -1717,13 +1800,15 @@ const App = (() => {
         renderStep(false);
         renderBody(i);
         renderRail();
+        renderSibs();
         updateProgress();
-        // Sur mobile le rail est un fil horizontal : garder le noeud actif visible.
-        const on = railEl.querySelector('.obr-node.on');
-        if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        setScreen('branch');
       }
 
-      show(0);
+      // On arrive sur la CARTE en mobile (choisir sa branche avant de lire), et
+      // directement sur la tabiya en desktop, où l'arbre reste visible à gauche.
+      if (narrow()) { cur = 0; visited.add(0); renderRail(); renderSibs(); updateProgress(); goMap(); }
+      else { show(0); }
     }
 
     idx = 0;
@@ -1733,6 +1818,12 @@ const App = (() => {
     $('#opening-branch-rail').hidden = true;
     $('#opening-lesson-progress').hidden = true;
     $('#opening-lesson-body').hidden = true;
+    // Chrome mobile du cours : une ouverture SANS cours n'a pas d'arbre, donc
+    // pas de deuxième écran ni de branches sœurs.
+    $('#opening-sibs').hidden = true;
+    $('#opening-modal-back').hidden = true;
+    $('#opening-modal-search').hidden = true;
+    modal.querySelector('.opening-modal').classList.remove('m-map', 'm-branch', 'm-compact');
     modal.querySelector('.opening-modal-board').hidden = false;
     modal.querySelector('.opening-modal-controls').hidden = false;
     explEl.hidden = false;
