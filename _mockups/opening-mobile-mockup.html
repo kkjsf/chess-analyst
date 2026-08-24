@@ -19,18 +19,20 @@
 body{margin:0;background:var(--bg);color:var(--text);
   font-family:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.6;
   -webkit-font-smoothing:antialiased}
-.page{max-width:1100px;margin:0 auto;padding:0 20px 90px}
+.page{max-width:1180px;margin:0 auto;padding:0 20px 90px}
 
 header.top{padding:44px 0 24px}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
 h1{font-size:clamp(27px,4.4vw,40px);font-weight:800;letter-spacing:-.022em;line-height:1.1;margin:0 0 12px;text-wrap:balance}
 .sub{font-size:16.5px;color:var(--text-dim);max-width:62ch;margin:0}
 h2.sec{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint);
-  margin:44px 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  margin:52px 0 16px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.lede{color:var(--text-dim);font-size:15.5px;max-width:66ch;margin:0 0 22px}
 .note{background:var(--bg-2);border:1px solid var(--line-str);border-left:3px solid var(--accent);
   border-radius:10px;padding:14px 18px;margin:0 0 22px;font-size:14px;color:var(--text-dim)}
 .note b{color:var(--text)}
-.note code{font-family:var(--mono);font-size:12.5px;color:var(--accent);background:rgba(226,184,87,.09);padding:1px 5px;border-radius:4px}
+.note code,.lede code,td code{font-family:var(--mono);font-size:12.5px;color:var(--accent);
+  background:rgba(226,184,87,.09);padding:1px 5px;border-radius:4px}
 
 /* ── diagnostic mesuré ── */
 .meas{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin-bottom:14px}
@@ -40,13 +42,16 @@ h2.sec{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:upperc
 .meas .l b{color:var(--text)}
 
 /* ── téléphones ── */
-.phones{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
-.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:12px}
-.phone-cap{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--text-faint)}
-.phone{width:390px;height:770px;background:var(--bg);border:9px solid #05070f;border-radius:38px;
-  overflow:hidden;position:relative;box-shadow:0 28px 70px rgba(0,0,0,.55);flex-shrink:0}
+.stage{display:flex;gap:34px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.pw{display:flex;flex-direction:column;align-items:center;gap:11px;max-width:390px}
+.pcap{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--text-faint);text-align:center}
+.pcap b{color:var(--accent);font-weight:600}
+.pnote{font-size:13px;color:var(--text-dim);line-height:1.55;text-align:center;max-width:360px}
+.pnote b{color:var(--text)}
+.phone{width:390px;height:748px;background:var(--bg);border:9px solid #05070f;border-radius:38px;
+  overflow:hidden;position:relative;box-shadow:0 26px 66px rgba(0,0,0,.55);flex-shrink:0}
+.phone.sm{height:520px}
 .scr{position:absolute;inset:0;display:flex;flex-direction:column}
-.scr[hidden]{display:none}
 
 /* ── barre du haut ── */
 .bar{display:flex;align-items:center;gap:10px;padding:10px 8px 10px 4px;background:var(--bg-2);
@@ -63,15 +68,15 @@ h2.sec{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:upperc
 .pbar{height:3px;background:rgba(255,255,255,.08);flex-shrink:0}
 .pbar i{display:block;height:100%;background:var(--accent);transition:width .3s}
 
-/* ═══ ÉCRAN 1 : LA CARTE ═══
-   Pleine largeur : l'indentation et les traits de branche tiennent enfin, donc
-   la structure d'arbre se lit. C'est ce que le fil horizontal détruisait. */
+/* ═══ ÉCRAN 1 : LA CARTE ═══ */
 .map{flex:1;overflow-y:auto;padding:6px 0 22px}
 .map-h{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
   color:var(--text-faint);padding:12px 18px 8px}
 .row{position:relative;display:block;width:100%;text-align:left;background:none;border:none;
   color:inherit;font:inherit;cursor:pointer;padding:11px 14px 11px 0;min-height:56px}
-.row:active{background:rgba(255,255,255,.05)}
+.row:hover{background:rgba(255,255,255,.04)}
+.row.on{background:rgba(226,184,87,.09)}
+.row.on .rsan{color:var(--accent)}
 .row.seen .rk{opacity:1}
 .r0{padding-left:18px}.r1{padding-left:40px}.r2{padding-left:62px}
 .row.r1::before,.row.r2::before{content:"";position:absolute;top:0;bottom:0;width:1px;background:var(--line-str)}
@@ -90,12 +95,9 @@ h2.sec{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:upperc
 .tg.quiz{background:rgba(123,167,214,.15);color:var(--info)}
 
 /* ═══ ÉCRAN 2 : LA BRANCHE ═══ */
-/* L'échiquier reste COLLANT et se réduit dès qu'on lit : sans ça, le texte
-   parle d'une position qu'on ne voit plus. */
-.head{background:var(--bg-2);border-bottom:1px solid var(--line-str);flex-shrink:0;
-  transition:padding .18s}
-.hgrid{display:grid;grid-template-columns:1fr;gap:8px;padding:12px 14px;transition:all .18s}
-.bwrap{width:100%;max-width:300px;margin:0 auto;transition:max-width .18s}
+.head{background:var(--bg-2);border-bottom:1px solid var(--line-str);flex-shrink:0}
+.hgrid{display:grid;grid-template-columns:1fr;gap:8px;padding:12px 14px;transition:all .2s}
+.bwrap{width:100%;max-width:290px;margin:0 auto;transition:max-width .2s}
 svg.bd{width:100%;height:auto;display:block;border-radius:8px}
 .hmeta{min-width:0}
 .hmove{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--accent)}
@@ -105,14 +107,12 @@ svg.bd{width:100%;height:auto;display:block;border-radius:8px}
 .step .icobtn{min-height:40px;min-width:40px;font-size:16px;background:rgba(255,255,255,.05)}
 .step .icobtn[disabled]{opacity:.3}
 .step .cnt{font-family:var(--mono);font-size:11.5px;color:var(--text-faint);min-width:52px;text-align:center}
-/* état réduit : l'échiquier passe à gauche, le commentaire à côté */
-.head.small .hgrid{grid-template-columns:104px 1fr;align-items:center;padding:9px 14px}
-.head.small .bwrap{max-width:104px}
-.head.small .step{padding-bottom:8px}
+.head.small .hgrid{grid-template-columns:100px 1fr;align-items:center;padding:9px 14px}
+.head.small .bwrap{max-width:100px}
 
-.body{flex:1;overflow-y:auto;padding:16px 16px 18px;-webkit-overflow-scrolling:touch}
+.body{flex:1;overflow-y:auto;padding:16px 16px 18px}
 .btitle{font-size:19px;font-weight:700;letter-spacing:-.015em;margin:0 0 3px}
-.bsub{font-family:var(--mono);font-size:11px;color:var(--text-faint);margin:0 0 16px}
+.bsub{font-family:var(--mono);font-size:11px;color:var(--text-faint);margin:0 0 16px;line-height:1.5}
 .blk{margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid var(--line)}
 .blk:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
 .bh{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);margin:0 0 7px}
@@ -129,7 +129,7 @@ svg.bd{width:100%;height:auto;display:block;border-radius:8px}
   border:1px solid var(--line-str);border-radius:11px;padding:12px 14px;color:var(--text);min-height:52px;margin-bottom:7px}
 .fork b{font-size:13.5px;font-family:var(--mono)}
 .fork span{display:block;font-size:12.5px;color:var(--text-dim);margin-top:1px}
-.fork:active{background:rgba(226,184,87,.12)}
+.fork:hover{background:rgba(226,184,87,.12);border-color:rgba(226,184,87,.35)}
 .opt{display:block;width:100%;text-align:left;font:inherit;font-size:13.5px;margin-bottom:7px;padding:11px 13px;
   border-radius:10px;border:1px solid var(--line-str);background:rgba(255,255,255,.04);color:var(--text-dim);
   cursor:pointer;min-height:44px}
@@ -137,22 +137,44 @@ svg.bd{width:100%;height:auto;display:block;border-radius:8px}
 .opt.ko{border-color:var(--danger);background:rgba(248,113,113,.11);color:var(--danger)}
 .exp{font-size:13px;color:var(--text-dim);margin:9px 0 0;padding-left:11px;border-left:2px solid var(--success)}
 
-/* Barre des branches SŒURS, collée en bas : c'est le geste qu'on veut sur
-   mobile — comparer 3…Fc5 et 3…Cf6 sans repasser par la carte. */
 .sibs{display:flex;align-items:stretch;gap:1px;background:var(--line-str);
   border-top:1px solid var(--line-str);flex-shrink:0}
 .sib{flex:1;min-width:0;background:var(--bg-2);border:none;color:var(--text-dim);font:inherit;
   font-size:12px;cursor:pointer;padding:10px 8px;min-height:52px;display:flex;flex-direction:column;
   justify-content:center;gap:1px}
-.sib:disabled{opacity:.3}
+.sib:disabled{opacity:.3;cursor:default}
 .sib .k{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text)}
 .sib .w{font-size:10.5px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sib.mid{background:var(--bg-card);flex:0 0 40%}
+.sib.mid{background:var(--bg-card);flex:0 0 38%}
 .sib.mid .k{color:var(--accent)}
+
+/* ── pastilles d'annotation ── */
+.pin{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;
+  background:var(--accent);color:#12172b;font-size:11px;font-weight:800;font-family:var(--mono);
+  vertical-align:1px;margin-right:7px;flex-shrink:0}
+.annots{display:grid;grid-template-columns:repeat(auto-fit,minmax(285px,1fr));gap:12px;margin-top:26px}
+.an{background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;gap:2px;flex-direction:column}
+.an .t{font-size:14px;font-weight:700;display:flex;align-items:flex-start;margin-bottom:5px}
+.an p{margin:0;font-size:13.5px;color:var(--text-dim);line-height:1.58}
+.an p b{color:var(--text)}
+
+/* ── tableau des gestes ── */
+.tbl{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+.tbl th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text-faint);font-weight:700;padding:8px 14px 8px 0;border-bottom:1px solid var(--line-str)}
+.tbl td{padding:11px 14px 11px 0;border-bottom:1px solid var(--line);color:var(--text-dim);vertical-align:top;line-height:1.55}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{color:var(--text);font-weight:600;white-space:nowrap;width:1%}
+.tbl b{color:var(--text)}
 
 button:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-@media (max-width:900px){.phones{gap:28px}.phone{transform:scale(.86);transform-origin:top center;margin-bottom:-100px}}
+@media (max-width:900px){
+  .phone{transform:scale(.84);transform-origin:top center}
+  .pw{margin-bottom:-110px}
+  .phone.sm{margin-bottom:0}
+  .tbl td:first-child{white-space:normal}
+}
 </style>
 
 <div class="page">
@@ -164,6 +186,7 @@ button:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-
 </header>
 
 <h2 class="sec">Pourquoi ça coince aujourd'hui</h2>
+<p class="lede">Mesuré sur la v195 en ligne, à 390×844, sur le cours de l'Italienne.</p>
 <div class="meas">
   <div><div class="n">25 %</div><div class="l">de l'arbre visible d'un coup. Le fil horizontal fait <b>1 272 px</b> de contenu dans <b>320 px</b> d'écran.</div></div>
   <div><div class="n">0 / 5</div><div class="l">nœuds entièrement visibles sans défiler latéralement. On navigue à l'aveugle.</div></div>
@@ -171,32 +194,30 @@ button:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-
   <div><div class="n">2,5</div><div class="l">écrans de défilement vertical (2 128 px), et l'échiquier n'est <b>pas collant</b> : il sort du champ dès qu'on lit.</div></div>
 </div>
 <div class="note">
-  Le dernier point est le plus gênant : on lit un commentaire qui parle d'une position qu'on ne voit plus. Mesuré à 390×844 sur la v195 en ligne. Mon test de recette précédent vérifiait « pas de débordement, cibles à 44 px » : les bons critères pour un formulaire, pas pour un arbre.
+  Le dernier point est le plus gênant : on lit un commentaire qui parle d'une position qu'on ne voit plus. Mon test de recette de la v195 vérifiait « pas de débordement, cibles à 44 px » : les bons critères pour un formulaire, inutiles pour un arbre.
 </div>
 
-<h2 class="sec">Le système proposé</h2>
-<div class="note">
-  <b>Deux écrans au lieu d'un empilement.</b> Sur 390 px on ne peut pas loger l'arbre, l'échiquier et le contenu ensemble : on choisit lequel occupe l'écran. La <b>carte</b> montre l'arbre en pleine largeur, avec sa vraie indentation. Une <b>branche</b> montre l'échiquier collant en haut et son contenu dessous.<br><br>
-  <b>Maquette interactive</b> — touche une branche sur la carte, fais défiler la fiche (l'échiquier se réduit tout seul), utilise ◀ ▶ et la barre des branches sœurs en bas. Contenu réel de l'Italienne, mêmes 5 nœuds que produit l'app en v195.
-</div>
+<h2 class="sec">Le système : deux écrans</h2>
+<p class="lede">Sur 390 px on ne peut pas loger l'arbre, l'échiquier et le contenu ensemble. Plutôt que de tout tasser, on choisit lequel occupe l'écran. Sur un vrai téléphone les deux se remplacent ; ici ils sont côte à côte pour que tu voies les deux d'un coup, et <b>toucher une branche à gauche charge la fiche à droite</b>.</p>
 
-<div class="phones">
-  <div class="phone-wrap">
-    <span class="phone-cap">① la carte · 390 px</span>
-    <div class="phone"><div class="scr" id="s-map">
+<div class="stage">
+  <div class="pw">
+    <span class="pcap">① la carte · <b>touche une branche</b></span>
+    <div class="phone"><div class="scr">
       <div class="bar">
         <button class="icobtn" aria-label="Fermer">✕</button>
         <div class="bar-t"><div class="b1">Partie Italienne <span class="eco">C50</span></div>
-          <div class="b2" id="m-prog">1 branche sur 5 · 👍 idéale pour débuter</div></div>
+          <div class="b2" id="m-prog"></div></div>
       </div>
-      <div class="pbar"><i id="m-fill" style="width:20%"></i></div>
+      <div class="pbar"><i id="m-fill"></i></div>
       <div class="map" id="map"></div>
     </div></div>
+    <p class="pnote"><span class="pin">1</span>L'indentation et les traits de branche tiennent enfin : <b>3…Fc5 et 3…Cf6 sont visiblement un choix</b>, et le Giuoco Piano et l'Evans deux suites de 3…Fc5.</p>
   </div>
 
-  <div class="phone-wrap">
-    <span class="phone-cap">② une branche · 390 px</span>
-    <div class="phone"><div class="scr" id="s-br" hidden>
+  <div class="pw">
+    <span class="pcap">② une branche · <b>fais défiler la fiche</b></span>
+    <div class="phone"><div class="scr">
       <div class="bar">
         <button class="icobtn" id="back" aria-label="Retour à la carte">‹</button>
         <div class="bar-t"><div class="b1" id="d-name"></div><div class="b2" id="d-crumb"></div></div>
@@ -215,30 +236,85 @@ button:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-
       <div class="body" id="body"></div>
       <div class="sibs" id="sibs"></div>
     </div></div>
+    <p class="pnote"><span class="pin">2</span>L'échiquier <b>se réduit au défilement</b> et ne quitte jamais l'écran. <span class="pin">3</span>La barre du bas saute d'une <b>branche sœur</b> à l'autre.</p>
   </div>
 </div>
 
-<h2 class="sec">Ce que ça règle, point par point</h2>
+<div class="annots">
+  <div class="an"><div class="t"><span class="pin">1</span>L'arbre redevient un arbre</div>
+    <p>En pleine largeur, l'indentation passe de 12 px partout à <b>18 / 40 / 62 px</b> selon la profondeur, et les traits de branche reviennent. Les badges <b>« 2 pièges »</b> et <b>« 1 question »</b> disent ce qu'il y a derrière avant de toucher, ce qu'un fil horizontal tronqué ne pouvait pas faire.</p></div>
+  <div class="an"><div class="t"><span class="pin">2</span>L'échiquier ne part plus</div>
+    <p>Il est collant et se réduit tout seul : <b>290 px</b> quand on regarde la position, <b>100 px</b> quand on lit, avec le commentaire du coup à côté. Les flèches ◀ ▶ restent atteignables au pouce pendant toute la lecture.</p></div>
+  <div class="an"><div class="t"><span class="pin">3</span>Les sœurs à un pouce</div>
+    <p>« ‹ 3…Fc5 » et « 3…Cf6 › » en bas d'écran. C'est le geste qu'on fait vraiment en apprenant une ouverture : <b>comparer les réponses possibles</b>. Aujourd'hui il coûte un aller-retour par la carte.</p></div>
+  <div class="an"><div class="t"><span class="pin">4</span>Le piège sur son coup</div>
+    <p>Le Fried Liver et sa parade …Ca5 vivent sur la branche Deux Cavaliers, avec la question qui porte dessus. Touche <b>3…Cf6</b> à gauche pour les voir apparaître, et <b>3…Fc5</b> pour voir la fiche se vider : chaque branche ne porte que ce qui la concerne.</p></div>
+</div>
+
+<h2 class="sec">Les gestes, un par un</h2>
+<table class="tbl">
+  <tr><th>Geste</th><th>Ce qui se passe</th></tr>
+  <tr><td>Toucher une branche</td><td>La fiche remplace la carte. L'échiquier se pose sur le <b>premier coup de la branche</b>, celui qui la définit, pas sur sa fin.</td></tr>
+  <tr><td>Défiler la fiche</td><td>Au-delà de 26 px, l'en-tête se replie : l'échiquier passe à 100 px sur la gauche et le commentaire du coup vient à côté. On récupère <b>270 px</b> de lecture sans perdre la position.</td></tr>
+  <tr><td>◀ ▶</td><td>Avance dans la branche. Le commentaire suit le coup. Le compteur affiche la position dans la branche (<code>3 / 7</code>), pas dans la partie.</td></tr>
+  <tr><td>Barre du bas, gauche / droite</td><td>Branche sœur précédente / suivante, <b>même profondeur, même parent</b>. Grisé quand il n'y en a pas.</td></tr>
+  <tr><td>Barre du bas, centre</td><td>Retour à la carte, avec le compte des branches déjà vues.</td></tr>
+  <tr><td>« ‹ » en haut à gauche</td><td>Retour à la carte, comme le bouton système Android et le retour iOS.</td></tr>
+  <tr><td>Un bloc « L'embranchement »</td><td>Quand la branche se subdivise, ses enfants sont proposés en gros boutons dans la fiche : on descend sans repasser par la carte. Visible sur <b>3…Fc5</b>.</td></tr>
+</table>
+
+<h2 class="sec">Sur d'autres ouvertures</h2>
+<p class="lede">Les arbres n'ont pas tous la même forme, et c'est justement ce que le fil horizontal aplatissait. Trois exemples réels, rendus avec le même composant.</p>
+
+<div class="stage">
+  <div class="pw">
+    <span class="pcap">Espagnole · fourche imbriquée</span>
+    <div class="phone sm"><div class="scr"><div class="bar">
+      <div class="bar-t" style="padding-left:14px"><div class="b1">Partie Espagnole <span class="eco">C60</span></div>
+      <div class="b2">5 branches · 2 niveaux</div></div></div>
+      <div class="map" id="map-esp"></div></div></div>
+    <p class="pnote">Le seul cas à <b>deux niveaux</b> : 3…a6 se subdivise en Fa4 et Fxc6. L'indentation à 62 px le dit sans un mot.</p>
+  </div>
+  <div class="pw">
+    <span class="pcap">Scandinave · trois sœurs à plat</span>
+    <div class="phone sm"><div class="scr"><div class="bar">
+      <div class="bar-t" style="padding-left:14px"><div class="b1">Défense Scandinave <span class="eco">B01</span></div>
+      <div class="b2">4 branches · 1 niveau</div></div></div>
+      <div class="map" id="map-sca"></div></div></div>
+    <p class="pnote">Un choix unique entre <b>trois retraites de dame</b>. La barre des sœurs prend tout son sens ici : on compare Da5, Dd6 et Dd8 d'un pouce.</p>
+  </div>
+  <div class="pw">
+    <span class="pcap">Gambit du Roi · trois réponses</span>
+    <div class="phone sm"><div class="scr"><div class="bar">
+      <div class="bar-t" style="padding-left:14px"><div class="b1">Gambit du Roi <span class="eco">C30</span></div>
+      <div class="b2">4 branches · 1 niveau</div></div></div>
+      <div class="map" id="map-gdr"></div></div></div>
+    <p class="pnote">Accepter, refuser, ou contre-gambiter. Les badges montrent d'emblée que <b>tout le contenu est sur la branche acceptée</b>.</p>
+  </div>
+</div>
+
+<h2 class="sec">Ce que ça règle, et ce que ça ne règle pas</h2>
 <div class="note">
-  <p style="margin:0 0 10px"><b>L'arbre redevient un arbre.</b> En pleine largeur, l'indentation et les traits de branche tiennent : on voit d'un coup d'œil que 3…Fc5 et 3…Cf6 sont un choix, et que le Giuoco Piano et l'Evans sont deux suites de 3…Fc5. C'est exactement ce que le fil horizontal détruisait.</p>
-  <p style="margin:0 0 10px"><b>L'échiquier ne quitte plus l'écran.</b> Il est collant et se réduit tout seul dès qu'on fait défiler la fiche : 300 px pendant qu'on regarde la position, 104 px pendant qu'on lit, avec le commentaire du coup à côté. Le texte parle toujours d'une position visible.</p>
-  <p style="margin:0 0 10px"><b>Ce que ça ne règle pas : la longueur.</b> En lecture (en-tête replié) la zone utile fait 451 px pour 1 127 px de contenu sur la branche Deux Cavaliers, soit <b>2,5 écrans de défilement</b> — à peu près autant qu'aujourd'hui. Le gain n'est pas là : c'est que l'échiquier reste visible pendant ces 2,5 écrans, et que la tabiya, la plus longue, garde ses blocs secondaires repliés.</p>
-  <p style="margin:0 0 10px"><b>Les branches sœurs sont à un pouce.</b> La barre du bas passe de 3…Fc5 à 3…Cf6 sans repasser par la carte. C'est le geste qu'on fait vraiment quand on apprend une ouverture : comparer les réponses possibles.</p>
+  <p style="margin:0 0 10px"><b>Réglé :</b> l'arbre est lisible et navigable ; l'échiquier reste à l'écran pendant toute la lecture ; les branches sœurs sont accessibles au pouce ; les badges annoncent le contenu avant qu'on touche.</p>
+  <p style="margin:0 0 10px"><b>Pas réglé, et je préfère le dire :</b> la longueur. En lecture (en-tête replié) la zone utile fait <b>451 px</b> pour <b>1 127 px</b> de contenu sur la branche Deux Cavaliers, soit <b>2,5 écrans de défilement</b> — à peu près autant qu'aujourd'hui. Le gain n'est pas là : c'est que l'échiquier reste visible pendant ces 2,5 écrans. Réduire vraiment demanderait de couper du contenu, ce qui est une décision éditoriale, pas une décision de mise en page.</p>
   <p style="margin:0"><b>Rien de neuf côté données.</b> Même arbre, mêmes rattachements de pièges et de questions qu'en v195 : c'est une couche de présentation, pas un second modèle à maintenir. Le desktop garde ses trois colonnes.</p>
 </div>
 
 <h2 class="sec">Si tu la valides</h2>
 <div class="note">
-  Le CSS mobile actuel (le bloc <code>@media (max-width: 900px)</code> qui transforme le rail en fil) est à remplacer, pas à corriger : c'est un changement de <b>navigation</b>, pas de mise en forme. Il faut un état « écran courant » dans <code>setupLesson</code>, le bouton retour, la barre des sœurs, et un écouteur de défilement pour réduire l'échiquier. La logique métier (<code>buildBranches</code>, <code>spread</code>) ne bouge pas.
+  Le bloc <code>@media (max-width: 900px)</code> qui transforme le rail en fil est à <b>remplacer</b>, pas à corriger : c'est un changement de navigation, pas de mise en forme. Concrètement, dans <code>setupLesson</code> : un état « écran courant » (carte / branche), le bouton retour, la barre des sœurs (<code>sibsOf</code> = même profondeur et même parent, le parent étant le nœud précédent le plus proche de profondeur <i>n−1</i>), et un écouteur de défilement qui bascule une classe sur l'en-tête. <code>Courses.buildBranches</code> et <code>Courses.spread</code> ne bougent pas.
 </div>
 
 </div>
 
 <script>
-/* Données : les 5 nœuds que Courses.buildBranches produit réellement pour
-   l'Italienne en v195, avec leurs pièges et questions tels que Courses.spread
-   les répartit. Rien n'est inventé pour la démo. */
-const B=[
+/* ─────────────────────────────────────────────────────────────────────────
+   Données : les nœuds que Courses.buildBranches produit RÉELLEMENT en v195,
+   avec les pièges et questions tels que Courses.spread les répartit.
+   L'Italienne est complète (positions + notes) ; les trois autres ne servent
+   qu'à montrer la forme de leur arbre.
+   ───────────────────────────────────────────────────────────────────────── */
+const ITA=[
  {d:0,name:"Partie Italienne",eco:"",ps:1,pe:5,
   sans:["e4","e5","Cf3","Cc6","Fc4"],
   notes:["On prend le centre et on libère le fou-roi et la dame.",
@@ -327,15 +403,51 @@ const B=[
    e:"5…Cxd5 ?? permet 6.Cxf7 ! On joue 5…Ca5 pour chasser le fou c4."}}
 ];
 
-/* parent = le nœud précédent le plus proche dont la profondeur vaut la mienne − 1.
-   L'ordre de la liste est en profondeur d'abord, donc la règle suffit. */
-const parentOf=(i)=>{for(let j=i-1;j>=0;j--) if(B[j].d===B[i].d-1) return j; return -1;};
-const sibsOf=(i)=>B.map((_,j)=>j).filter(j=>B[j].d===B[i].d&&parentOf(j)===parentOf(i));
-const kidsOf=(i)=>B.map((_,j)=>j).filter(j=>parentOf(j)===i);
+/* Cartes seules : forme de l'arbre pour trois autres cours. */
+const ESP=[
+ {d:0,ps:1,pe:5,sans:["e4","e5","Cf3","Cc6","Fb5"],name:"Partie Espagnole",eco:"",nt:0,nq:1},
+ {d:1,ps:6,pe:6,sans:["e4","e5","Cf3","Cc6","Fb5","a6"],name:"",eco:"",nt:0,nq:0},
+ {d:2,ps:7,pe:16,sans:["e4","e5","Cf3","Cc6","Fb5","a6","Fa4","Cf6","O-O","Fe7","Te1","b5","Fb3","d6","c3","O-O"],name:"Espagnole fermée",eco:"C88",nt:1,nq:1},
+ {d:2,ps:7,pe:8,sans:["e4","e5","Cf3","Cc6","Fb5","a6","Fxc6","dxc6"],name:"Variante d'échange",eco:"C68",nt:1,nq:1},
+ {d:1,ps:6,pe:14,sans:["e4","e5","Cf3","Cc6","Fb5","Cf6","O-O","Cxe4","d4","Cd6","Fxc6","dxc6","dxe5","Cf5"],name:"Défense berlinoise",eco:"C67",nt:0,nq:0}
+];
+const SCA=[
+ {d:0,ps:1,pe:5,sans:["e4","d5","exd5","Dxd5","Cc3"],name:"Défense Scandinave",eco:"",nt:2,nq:3},
+ {d:1,ps:6,pe:16,sans:["e4","d5","exd5","Dxd5","Cc3","Da5","d4","Cf6","Cf3","c6","Fc4","Ff5","Fd2","e6","De2","Cbd7"],name:"Principale (3…Da5)",eco:"B01",nt:0,nq:0},
+ {d:1,ps:6,pe:14,sans:["e4","d5","exd5","Dxd5","Cc3","Dd6","d4","Cf6","Cf3","a6","g3","b5","Fg2","Fb7"],name:"Moderne (3…Dd6)",eco:"B01",nt:1,nq:0},
+ {d:1,ps:6,pe:14,sans:["e4","d5","exd5","Dxd5","Cc3","Dd8","d4","Cf6","Cf3","g6","Fc4","Fg7","O-O","O-O"],name:"Solide (3…Dd8)",eco:"B01",nt:0,nq:0}
+];
+const GDR=[
+ {d:0,ps:1,pe:3,sans:["e4","e5","f4"],name:"Gambit du Roi",eco:"",nt:0,nq:1},
+ {d:1,ps:4,pe:12,sans:["e4","e5","f4","exf4","Cf3","d5","exd5","Cf6","Fb5+","c6","dxc6","Cxc6"],name:"Accepté, défense moderne",eco:"C36",nt:2,nq:2},
+ {d:1,ps:4,pe:8,sans:["e4","e5","f4","Fc5","Cf3","d6","Cc3","Cf6"],name:"Gambit refusé (2…Fc5)",eco:"C30",nt:0,nq:0},
+ {d:1,ps:4,pe:6,sans:["e4","e5","f4","d5","exd5","e4"],name:"Contre-gambit Falkbeer",eco:"C31",nt:0,nq:0}
+];
 
 const num=(p)=>Math.ceil(p/2)+(p%2?'.':'…');
 const lab=(b)=>b.d===0?num(b.pe)+b.sans[b.pe-1]
   :(b.ps===b.pe?num(b.pe)+b.sans[b.pe-1]:num(b.ps)+b.sans[b.ps-1]+' → '+num(b.pe)+b.sans[b.pe-1]);
+/* parent = le nœud précédent le plus proche de profondeur n−1. L'ordre de la
+   liste est en profondeur d'abord, donc la règle suffit. */
+const parentOf=(A,i)=>{for(let j=i-1;j>=0;j--) if(A[j].d===A[i].d-1) return j; return -1;};
+const sibsOf=(A,i)=>A.map((_,j)=>j).filter(j=>A[j].d===A[i].d&&parentOf(A,j)===parentOf(A,i));
+const kidsOf=(A,i)=>A.map((_,j)=>j).filter(j=>parentOf(A,j)===i);
+
+/* Rendu d'une carte dans n'importe quel conteneur. `live` = la carte pilote la
+   fiche de droite ; sinon elle est seulement illustrative. */
+function paintMap(host,A,live,cur,seen){
+  host.innerHTML='<div class="map-h">Les variantes</div>'+A.map((b,i)=>{
+    const nt=b.traps?b.traps.length:(b.nt||0), nq=b.quiz?1:(b.nq||0);
+    const tg=[];
+    if(b.d===0) tg.push('<span class="tg base">départ</span>');
+    if(nt) tg.push(`<span class="tg trap">${nt} piège${nt>1?'s':''}</span>`);
+    if(nq) tg.push(`<span class="tg quiz">${nq} question${nq>1?'s':''}</span>`);
+    return `<button class="row r${b.d}${live&&i===cur?' on':''}${live&&seen.has(i)?' seen':''}" data-i="${i}"${live?'':' tabindex="-1"'}>
+      <span class="rtop"><span class="rsan">${lab(b)}</span><span class="rk">✓</span><span class="rchev">›</span></span>
+      ${b.name?`<span class="rname">${b.name}${b.eco?' · '+b.eco:''}</span>`:''}
+      ${tg.length?`<span class="rtags">${tg.join('')}</span>`:''}</button>`;
+  }).join('');
+}
 
 const G={p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
 function draw(fen){
@@ -351,29 +463,19 @@ function draw(fen){
   document.getElementById('bd').innerHTML=s;
 }
 
-const seen=new Set([0]);
-let cur=0, ply=0;
+const seen=new Set([4]);
+let cur=4, ply=5;
 
 function renderMap(){
-  const m=document.getElementById('map');
-  m.innerHTML='<div class="map-h">Les variantes</div>'+B.map((b,i)=>{
-    const tg=[];
-    if(b.d===0) tg.push('<span class="tg base">départ</span>');
-    if(b.traps.length) tg.push(`<span class="tg trap">${b.traps.length} piège${b.traps.length>1?'s':''}</span>`);
-    if(b.quiz) tg.push('<span class="tg quiz">1 question</span>');
-    return `<button class="row r${b.d}${seen.has(i)?' seen':''}" data-i="${i}">
-      <span class="rtop"><span class="rsan">${lab(b)}</span><span class="rk">✓</span><span class="rchev">›</span></span>
-      ${b.name?`<span class="rname">${b.name}${b.eco?' · '+b.eco:''}</span>`:''}
-      ${tg.length?`<span class="rtags">${tg.join('')}</span>`:''}</button>`;
-  }).join('');
-  m.querySelectorAll('.row').forEach(r=>r.onclick=()=>open(+r.dataset.i));
-  document.getElementById('m-fill').style.width=Math.round(seen.size/B.length*100)+'%';
+  paintMap(document.getElementById('map'),ITA,true,cur,seen);
+  document.querySelectorAll('#map .row').forEach(r=>r.onclick=()=>open(+r.dataset.i));
+  document.getElementById('m-fill').style.width=Math.round(seen.size/ITA.length*100)+'%';
   document.getElementById('m-prog').textContent=
-    `${seen.size} branche${seen.size>1?'s':''} sur ${B.length} · 👍 idéale pour débuter`;
+    `${seen.size} branche${seen.size>1?'s':''} sur ${ITA.length} · 👍 idéale pour débuter`;
 }
 
 function renderStep(){
-  const b=B[cur];
+  const b=ITA[cur];
   draw(b.fens[ply]);
   document.getElementById('d-move').textContent=num(ply+1)+b.sans[ply];
   document.getElementById('d-note').innerHTML=b.notes[ply]||'';
@@ -383,15 +485,18 @@ function renderStep(){
 }
 
 function renderBody(){
-  const b=B[cur], i=cur;
-  let h=`<p class="btitle">${b.name||lab(b)}</p><p class="bsub">${b.sans.slice(0,b.pe).map((s,k)=>(k%2?'':num(k+1))+s).join(' ')}</p>`;
+  const b=ITA[cur], i=cur;
+  const path=b.sans.slice(0,b.pe).map((s,k)=>(k%2?'':num(k+1))+s).join(' ');
+  let h=`<p class="btitle">${b.name||lab(b)}</p><p class="bsub">${path}</p>`;
   if(b.idea) h+=`<div class="blk"><p class="bh">${b.d===0?'Idée maîtresse':"L'idée du coup"}</p><p>${b.idea}</p></div>`;
-  const kids=kidsOf(i);
+  const kids=kidsOf(ITA,i);
   if(kids.length>1) h+=`<div class="blk"><p class="bh">L'embranchement</p><p>${kids.length} suites possibles :</p>`+
-    kids.map(k=>`<button class="fork" data-go="${k}"><b>${lab(B[k])}</b>${B[k].name?`<span>${B[k].name}</span>`:''}</button>`).join('')+`</div>`;
+    kids.map(k=>`<button class="fork" data-go="${k}"><b>${lab(ITA[k])}</b>${ITA[k].name?`<span>${ITA[k].name}</span>`:''}</button>`).join('')+`</div>`;
   if(b.pe>b.ps) h+=`<div class="blk"><p class="bh">Les coups</p><p>Utilise <b>◀ ▶</b> en haut : le commentaire suit le coup, et l'échiquier reste visible.</p></div>`;
   b.traps.forEach(t=>h+=`<div class="blk"><p class="bh">Piège</p><div class="co trap"><b>${t.t}</b><br>${t.h}</div><button class="btn p">🎯 Essayer ce coup</button></div>`);
   if(b.quiz) h+=`<div class="blk"><p class="bh">Vérifie</p><div id="qz"></div></div>`;
+  if(!b.traps.length&&!b.quiz&&kids.length<2)
+    h+=`<div class="blk"><p class="bh">Rien d'autre ici</p><p>Cette branche n'a ni piège ni question : <b>chaque nœud ne porte que ce qui le concerne</b>. Touche 3…Cf6 à gauche pour voir une branche chargée.</p></div>`;
   const body=document.getElementById('body');
   body.innerHTML=h; body.scrollTop=0;
   document.getElementById('head').classList.remove('small');
@@ -411,38 +516,37 @@ function quiz(q){
 }
 
 function renderSibs(){
-  const s=sibsOf(cur), k=s.indexOf(cur);
-  const p=s[k-1], n=s[k+1];
+  const s=sibsOf(ITA,cur), k=s.indexOf(cur), p=s[k-1], n=s[k+1];
   document.getElementById('sibs').innerHTML=
     `<button class="sib" ${p===undefined?'disabled':`data-go="${p}"`}>
-       <span class="k">${p===undefined?'—':'‹ '+lab(B[p])}</span><span class="w">${p===undefined?'':(B[p].name||'variante sœur')}</span></button>
-     <button class="sib mid" data-go="map"><span class="k">⤺ carte</span><span class="w">${seen.size}/${B.length} vues</span></button>
+       <span class="k">${p===undefined?'—':'‹ '+lab(ITA[p])}</span><span class="w">${p===undefined?'aucune sœur avant':(ITA[p].name||'variante sœur')}</span></button>
+     <button class="sib mid" data-go="map"><span class="k">⤺ carte</span><span class="w">${seen.size}/${ITA.length} vues</span></button>
      <button class="sib" ${n===undefined?'disabled':`data-go="${n}"`}>
-       <span class="k">${n===undefined?'—':lab(B[n])+' ›'}</span><span class="w">${n===undefined?'':(B[n].name||'variante sœur')}</span></button>`;
-  document.getElementById('sibs').querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>
-    x.dataset.go==='map'?toMap():open(+x.dataset.go));
+       <span class="k">${n===undefined?'—':lab(ITA[n])+' ›'}</span><span class="w">${n===undefined?'aucune sœur après':(ITA[n].name||'variante sœur')}</span></button>`;
+  document.getElementById('sibs').querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>{
+    if(x.dataset.go==='map'){ document.getElementById('map').scrollIntoView({block:'nearest'}); return; }
+    open(+x.dataset.go);
+  });
 }
 
+/* Les deux téléphones restent visibles en permanence : sur un vrai appareil
+   l'un remplace l'autre, ici toucher une branche à gauche recharge la fiche à
+   droite. C'est ce qui permet de juger les deux écrans d'un coup d'œil. */
 function open(i){
-  cur=i; seen.add(i); ply=B[i].ps-1;
-  document.getElementById('s-map').hidden=true;
-  document.getElementById('s-br').hidden=false;
-  document.getElementById('d-name').textContent=B[i].name||lab(B[i]);
-  document.getElementById('d-crumb').textContent='Italienne › '+lab(B[i]);
+  cur=i; seen.add(i); ply=ITA[i].ps-1;
+  document.getElementById('d-name').textContent=ITA[i].name||lab(ITA[i]);
+  document.getElementById('d-crumb').textContent='Italienne › '+lab(ITA[i]);
   renderStep(); renderBody(); renderSibs(); renderMap();
 }
-function toMap(){
-  document.getElementById('s-br').hidden=true;
-  document.getElementById('s-map').hidden=false;
-  renderMap();
-}
 
-document.getElementById('back').onclick=toMap;
-document.getElementById('prev').onclick=()=>{if(ply>B[cur].ps-1){ply--;renderStep()}};
-document.getElementById('next').onclick=()=>{if(ply<B[cur].pe-1){ply++;renderStep()}};
-/* L'échiquier se réduit dès qu'on lit : c'est ce qui le garde à l'écran. */
+document.getElementById('back').onclick=()=>document.getElementById('map').scrollIntoView({block:'nearest'});
+document.getElementById('prev').onclick=()=>{if(ply>ITA[cur].ps-1){ply--;renderStep()}};
+document.getElementById('next').onclick=()=>{if(ply<ITA[cur].pe-1){ply++;renderStep()}};
 document.getElementById('body').addEventListener('scroll',(e)=>
   document.getElementById('head').classList.toggle('small',e.target.scrollTop>26));
 
-renderMap(); open(4); toMap();
+paintMap(document.getElementById('map-esp'),ESP,false);
+paintMap(document.getElementById('map-sca'),SCA,false);
+paintMap(document.getElementById('map-gdr'),GDR,false);
+open(4);
 </script>

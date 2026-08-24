@@ -39,6 +39,13 @@
   barre des **branches soeurs** collee en bas pour passer de 3…Fc5 a 3…Cf6 sans repasser par la
   carte. Honnete : ca ne reduit PAS le defilement (2,5 ecrans, comme avant) - le gain est que
   l'echiquier reste visible pendant ces 2,5 ecrans et que l'arbre redevient lisible.
+  Contenu de la maquette : les DEUX telephones restent visibles en parallele (sur un vrai
+  appareil l'un remplace l'autre ; ici toucher une branche a gauche recharge la fiche a droite,
+  ce qui permet de juger les deux ecrans d'un coup), 4 annotations numerotees, un tableau des
+  7 gestes, et TROIS AUTRES OUVERTURES en exemple pour montrer que la forme de l'arbre varie :
+  Espagnole (seule a 2 niveaux : 3...a6 se subdivise), Scandinave et Gambit du Roi (3 soeurs a
+  plat). Toucher 3...Fc5 montre une branche SANS piege ni question, ce qui illustre que chaque
+  noeud ne porte que ce qui le concerne.
   NON implemente. Le bloc CSS `@media (max-width: 900px)` du rail est a REMPLACER, pas a corriger :
   c'est un changement de navigation. `buildBranches` / `spread` ne bougent pas.
   ⚠️ Lecon de recette : ma validation mobile de la v195 verifiait « pas de debordement, cibles a
