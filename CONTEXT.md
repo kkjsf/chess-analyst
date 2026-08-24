@@ -65,6 +65,17 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v200 - Barres collantes du cours : plus de transparence**
+  - User : « pas terrible la barre en mode transparente sur les variantes, ça fait des
+    superpositions bizarres ». Diagnostic : `.opening-sibs` avait `background: var(--line-str)`,
+    soit **rgba(255,255,255,.12)**, en `position: sticky` avec `z-index: 6` - le contenu
+    defilait donc visiblement au travers. Meme symptome sur l'echiquier collant, dont l'ombre
+    portee floue (`0 6px 14px -8px rgba(0,0,0,.8)`) laissait transparaitre le texte.
+  - Fond PLEIN partout (`--bg-2` pour la barre, `--bg-card` pour l'echiquier), ombre remplacee
+    par un `border-bottom` net, et les traits entre boutons deviennent de vraies
+    `border-left` au lieu d'un `gap` qui laissait passer le fond translucide.
+  - ⚠️ Regle : toute surface `sticky` de cette modale doit avoir un fond OPAQUE. Un `gap` sur un
+    conteneur colle laisse voir ce qui defile dessous.
 - **v196-v199 - Cours d'ouverture : deux écrans sur mobile**
   - User : « marche très bien sur desktop, beaucoup moins sur l'app mobile », puis validation de la
     maquette `_mockups/opening-mobile-mockup.html`, avec la consigne « garde bien l'accès facile à

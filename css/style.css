@@ -4256,8 +4256,10 @@ body.guess-open { overflow: hidden; }
   .opening-modal.m-branch .opening-branch-rail { display: none !important; }
   .opening-modal.m-branch .opening-modal-left {
     position: sticky; top: -1px; z-index: 6;
-    background: var(--bg-card); padding-bottom: 8px;
-    box-shadow: 0 6px 14px -8px rgba(0,0,0,.8);
+    /* Fond PLEIN et separateur NET. Une ombre portee floue laissait voir le
+       texte defiler au travers, ce qui donnait des superpositions sales. */
+    background: var(--bg-card); padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-str);
   }
   /* Replié pendant la lecture : l'échiquier passe à gauche, le commentaire du
      coup vient à côté. C'est ce qui le garde à l'écran au lieu de le laisser
@@ -4282,16 +4284,22 @@ body.guess-open { overflow: hidden; }
   /* Barre des branches sœurs, collée en bas. */
   .opening-modal.m-branch .opening-sibs {
     display: flex; position: sticky; bottom: 0; z-index: 6;
-    width: 100%; gap: 1px; background: var(--line-str);
-    border-top: 1px solid var(--line-str); margin-top: 14px;
+    width: 100%; margin-top: 14px;
+    /* Fond PLEIN : elle etait en rgba(255,255,255,.12) et le contenu defilait
+       visiblement au travers. Les traits entre les boutons sont maintenant de
+       vraies bordures, plus un `gap` qui laissait passer le fond translucide. */
+    background: var(--bg-2);
+    border-top: 1px solid var(--line-str);
   }
 }
 .opening-sibs { display: none; }
 .osib {
-  flex: 1 1 0; min-width: 0; background: var(--bg-2); border: none; color: var(--text-dim);
+  flex: 1 1 0; min-width: 0; background: var(--bg-2); border: none;
+  border-left: 1px solid var(--line-str); color: var(--text-dim);
   font: inherit; cursor: pointer; padding: 9px 8px; min-height: 54px;
   display: flex; flex-direction: column; justify-content: center; gap: 1px; text-align: left;
 }
+.osib:first-child { border-left: none; }
 .osib:disabled { opacity: .35; cursor: default; }
 .osib .k { font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .osib .w { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
