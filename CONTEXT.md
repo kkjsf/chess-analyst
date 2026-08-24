@@ -27,6 +27,23 @@
   l'existant et réécrit les tableaux `puzzles` des catalogues, rejouable). Vérification moteur :
   `sf.cjs` + `verify_lessons.cjs` (`DEPTH=14 node tools/verify_lessons.cjs [mates|tactics]`).
   Ne JAMAIS lancer deux process Stockfish asm.js en parallèle (ils s'affament).
+- **`_mockups/opening-mobile-mockup.html` (2026-08-19)** - maquette INTERACTIVE du cours
+  d'ouverture sur MOBILE. Le systeme v195 marche sur desktop mais pas a 390px, mesure sur le live :
+  seulement **25 % de l'arbre visible** (1 272 px de fil dans 320 px), **0 noeud sur 5**
+  entierement visible sans defiler lateralement, **12 px d'indentation pour tous les noeuds**
+  (profondeur ecrasee, traits de branche desactives : la fourche disparait), **2,5 ecrans** de
+  defilement vertical, et l'echiquier n'est **pas collant** donc il sort du champ des qu'on lit.
+  Proposition : DEUX ECRANS au lieu d'un empilement. (1) la **carte** = l'arbre en pleine largeur,
+  vraie indentation 18/40/62 px et traits de branche ; (2) une **branche** = echiquier COLLANT qui
+  se reduit de 300 a 104 px des qu'on defile (le commentaire passe a cote), contenu dessous, et une
+  barre des **branches soeurs** collee en bas pour passer de 3…Fc5 a 3…Cf6 sans repasser par la
+  carte. Honnete : ca ne reduit PAS le defilement (2,5 ecrans, comme avant) - le gain est que
+  l'echiquier reste visible pendant ces 2,5 ecrans et que l'arbre redevient lisible.
+  NON implemente. Le bloc CSS `@media (max-width: 900px)` du rail est a REMPLACER, pas a corriger :
+  c'est un changement de navigation. `buildBranches` / `spread` ne bougent pas.
+  ⚠️ Lecon de recette : ma validation mobile de la v195 verifiait « pas de debordement, cibles a
+  44px ». Bons criteres pour un formulaire, inutiles pour un arbre - il fallait mesurer la part
+  d'arbre visible et la persistance de l'echiquier.
 - **`_mockups/opening-course-mockup.html` (2026-08-19)** - maquette INTERACTIVE proposant de
   remplacer les 6 onglets du cours d'ouverture (Presentation / Lignes / Plans / Pieges /
   Transpositions / Quiz) par l'ARBRE des variantes comme navigation, chaque noeud portant tout
