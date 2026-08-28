@@ -26,8 +26,15 @@ on:
     branches: [main]
     # Run when the analyzer changes — NOT when coach-data.json is committed
     # (the results commit only touches that file), so there is no loop.
+    # analyze.mjs imports js/analysis.js, js/tactics.js and js/openings.js, so a
+    # change there changes the OUTPUT too and belongs in this list. Note that an
+    # incremental run only grades NEW games: after a classification or metric
+    # change, the existing archive needs a manual dispatch with full=true.
     paths:
       - 'tools/**'
+      - 'js/analysis.js'
+      - 'js/tactics.js'
+      - 'js/openings.js'
       - '.github/workflows/analyze.yml'
 
 permissions:
