@@ -452,9 +452,16 @@ const OpeningTree = (() => {
     ]
   };
 
-  let built = false, selectedCard = null, currentNode = null, landscapeLocked = false, focusMode = true;
+  let built = false, selectedCard = null, currentNode = null, focusMode = true;
   const active = new Set(Object.keys(FAM));
   const famColor = f => f ? FAM[f].color : '#6b7a99';
+
+  // Sur téléphone l'arbre, les filtres de famille et les boutons de dépliage
+  // sont masqués (CSS) : il reste l'échiquier, la recherche, et une descente
+  // niveau par niveau — Ouvertures › Pion roi › Italienne — via le fil
+  // d'Ariane et les « Suites ». Même seuil que le cours d'ouverture (app.js).
+  const MOBILE_MQ = window.matchMedia('(max-width: 899px), (orientation: landscape) and (max-height: 600px)');
+  const isMobile = () => MOBILE_MQ.matches;
 
   // ── Mode Focus : comprime les branches déjà parcourues (la « colonne
   // vertébrale » du chemin) et estompe les branches hors ligne, pour se
@@ -477,48 +484,6 @@ const OpeningTree = (() => {
       else if (desc.has(n)) st.classList.add('ot-deep');   // suites lointaines (mini)
       else st.classList.add('ot-dim');                     // hors-ligne (mini + estompé)
     });
-  }
-
-  // ── Forçage du paysage (Android PWA installée : contourne le WebAPK figé) ──
-  async function lockLandscape() {
-    const so = screen.orientation;
-    if (!so || !so.lock) return false;
-    try { await so.lock('landscape'); return true; }
-    catch (_) {
-      // Certains navigateurs exigent le plein écran avant de verrouiller.
-      try {
-        const el = document.documentElement;
-        if (el.requestFullscreen) { await el.requestFullscreen(); await so.lock('landscape'); return true; }
-      } catch (_) {}
-    }
-    return false;
-  }
-  function unlockOrientation() {
-    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (_) {}
-    if (document.fullscreenElement && document.exitFullscreen) { try { document.exitFullscreen(); } catch (_) {} }
-  }
-  async function toggleLandscape() {
-    const btn = document.getElementById('ot-landscape');
-    if (!landscapeLocked) {
-      const ok = await lockLandscape();
-      if (ok) { landscapeLocked = true; if (btn) btn.textContent = '⟳ Portrait'; setTimeout(draw, 350); }
-      else if (btn) { btn.textContent = 'Rotation indispo'; setTimeout(() => { btn.textContent = '⟳ Paysage'; }, 1900); }
-    } else {
-      unlockOrientation(); landscapeLocked = false; if (btn) { btn.textContent = '⟳ Paysage'; } setTimeout(draw, 350);
-    }
-  }
-  // Déverrouille l'orientation quand le panneau se ferme (ne pas piéger le reste de l'app en paysage).
-  function observePanelClose() {
-    const p = document.getElementById('panel-tree');
-    if (!p || p._otObs) return;
-    const obs = new MutationObserver(() => {
-      if (!p.classList.contains('open') && landscapeLocked) {
-        unlockOrientation(); landscapeLocked = false;
-        const b = document.getElementById('ot-landscape'); if (b) b.textContent = '⟳ Paysage';
-      }
-    });
-    obs.observe(p, { attributes: true, attributeFilter: ['class'] });
-    p._otObs = true;
   }
 
   function findPath(node, target, acc = []) {
@@ -544,10 +509,35 @@ const OpeningTree = (() => {
     return f;
   }
 
+  // Fil d'Ariane (mobile) : Ouvertures › 1.e4 Pion roi › … › position affichée.
+  // Chaque échelon parcouru est cliquable — c'est le seul moyen de remonter une
+  // fois l'arbre masqué.
+  function renderCrumb(node) {
+    const el = document.getElementById('ot-crumb');
+    if (!el) return;
+    const path = findPath(TREE, node) || [node];
+    el.innerHTML =
+      (path.length > 1 ? '<button class="ot-crumb-back" type="button" aria-label="Remonter d\'un niveau">◀</button>' : '') +
+      '<ol class="ot-crumb-list">' + path.map((n, i) => {
+        const lbl = n === TREE ? 'Ouvertures' : `${n.mv ? `<b>${n.mv}</b> ` : ''}${n.lbl}`;
+        return i === path.length - 1
+          ? `<li class="ot-crumb-cur" aria-current="page"><span>${lbl}</span></li>`
+          : `<li><button type="button" data-ci="${i}">${lbl}</button></li>`;
+      }).join('') + '</ol>';
+    const back = el.querySelector('.ot-crumb-back');
+    if (back) back.addEventListener('click', () => navigateTo(path[path.length - 2]));
+    el.querySelectorAll('.ot-crumb-list button').forEach(b => {
+      b.addEventListener('click', () => navigateTo(path[+b.dataset.ci]));
+    });
+    const list = el.querySelector('.ot-crumb-list');
+    if (list) list.scrollLeft = list.scrollWidth;   // garder la fin du chemin visible
+  }
+
   function select(node, fam, card) {
     if (selectedCard) selectedCard.classList.remove('selected');
     if (card) { card.classList.add('selected'); selectedCard = card; }
     currentNode = node;
+    renderCrumb(node);
     applyFocus(node);
     requestAnimationFrame(draw);
     const path = findPath(TREE, node) || [node];
@@ -572,7 +562,7 @@ const OpeningTree = (() => {
     // ── Suites possibles : chips cliquables vers les enfants directs. ──
     const kids = node.kids || [];
     const nextRow = kids.length ? `<div class="ot-next-moves"><span class="ot-nm-label">Suites</span>${kids.map((k, i) =>
-      `<button class="ot-nm" data-ki="${i}" style="--ot-fam:${famColor(k.fam || fam)}">${k.mv ? `<b>${k.mv}</b> ` : ''}${k.lbl}</button>`).join('')}</div>` : '';
+      `<button class="ot-nm" data-ki="${i}" style="--ot-fam:${famColor(k.fam || fam)}"><span class="ot-nm-ic">${k.icon || '♟️'}</span>${k.mv ? `<b>${k.mv}</b> ` : ''}<span class="ot-nm-lbl">${k.lbl}</span><span class="ot-nm-go">›</span></button>`).join('')}</div>` : '';
 
     const detail = document.getElementById('ot-detail');
     detail.innerHTML = `
@@ -615,6 +605,13 @@ const OpeningTree = (() => {
     const card = st ? st.querySelector(':scope > .ot-card') : null;
     if (card) card.classList.remove('ot-hidden');
     select(node, famOf(node), card);
+    // Mobile : l'arbre est masqué, on remonte simplement en haut de la fiche
+    // pour retomber sur l'échiquier de la nouvelle position.
+    if (isMobile()) {
+      const body = document.querySelector('#panel-tree .ot-body');
+      if (body) body.scrollTop = 0;
+      return;
+    }
     draw();
     requestAnimationFrame(() => {
       draw();
@@ -814,10 +811,6 @@ const OpeningTree = (() => {
       document.querySelectorAll('.ot-subtree').forEach(s => { if (s._node && s._node !== TREE && s.querySelector(':scope > .ot-kids')) s.classList.add('collapsed'); });
       draw();
     };
-    const rotClose = document.getElementById('ot-rotate-close');
-    if (rotClose) rotClose.onclick = () => { const h = document.getElementById('ot-rotate-hint'); if (h) h.classList.add('dismissed'); };
-    const lsBtn = document.getElementById('ot-landscape');
-    if (lsBtn) lsBtn.onclick = toggleLandscape;
     const focusBtn = document.getElementById('ot-focus');
     if (focusBtn) focusBtn.onclick = () => {
       focusMode = !focusMode;
@@ -826,16 +819,29 @@ const OpeningTree = (() => {
       applyFocus(currentNode || TREE);
       requestAnimationFrame(draw);
     };
-    observePanelClose();
     window.addEventListener('resize', draw);
     // orientationchange fires before the viewport settles — redraw once it has.
     window.addEventListener('orientationchange', () => setTimeout(draw, 320));
+    // En repassant sur desktop l'arbre réapparaît : ses branches sont dessinées
+    // à partir de positions mesurées, donc il faut les recalculer.
+    MOBILE_MQ.addEventListener('change', () => {
+      if (!isMobile()) requestAnimationFrame(() => { applyFocus(currentNode); draw(); });
+    });
     built = true;
   }
 
   // Appelé à l'ouverture du panneau (panneau déjà visible → layout disponible).
   function render() {
     if (!built) build();
+    if (isMobile()) {
+      // Pas d'arbre à mesurer : on ouvre sur la position de départ, d'où la
+      // descente commence (Ouvertures › Pion roi › …).
+      if (!currentNode) select(TREE, null, document.querySelector('.ot-card.root'));
+      else renderCrumb(currentNode);
+      const body = document.querySelector('#panel-tree .ot-body');
+      if (body) body.scrollTop = 0;
+      return;
+    }
     requestAnimationFrame(() => {
       draw();
       if (!selectedCard) select(TREE, null, document.querySelector('.ot-card.root'));

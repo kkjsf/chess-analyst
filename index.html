@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '200';
+window.APP_VERSION = '201';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -266,10 +266,6 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     <button class="panel-close" aria-label="Fermer">&times;</button>
   </div>
   <div class="panel-body ot-body">
-    <div class="ot-rotate-hint" id="ot-rotate-hint">
-      <span>📱↔️ Tourne ton téléphone en <b>paysage</b> pour explorer l'arbre plus à l'aise.</span>
-      <button class="ot-rotate-close" id="ot-rotate-close" type="button" aria-label="Ignorer">&times;</button>
-    </div>
     <div class="ot-toolbar">
       <div class="ot-search">
         <span class="ot-search-ic">🔍</span>
@@ -279,12 +275,12 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       </div>
       <div class="ot-legend" id="ot-legend"></div>
       <div class="ot-toolbar-btns">
-        <button class="ot-btn ot-btn-rotate" id="ot-landscape" type="button">⟳ Paysage</button>
         <button class="ot-btn ot-btn-focus active" id="ot-focus" type="button" title="Compresse les branches déjà parcourues pour se concentrer sur la ligne en cours">🔎 Focus</button>
         <button class="ot-btn" id="ot-expand" type="button">Tout déplier</button>
         <button class="ot-btn" id="ot-collapse" type="button">Replier</button>
       </div>
     </div>
+    <nav class="ot-crumb" id="ot-crumb" aria-label="Chemin dans les ouvertures" hidden></nav>
     <div class="ot-canvas" id="ot-canvas">
       <div class="ot-content" id="ot-content">
         <svg class="ot-links" id="ot-links"></svg>

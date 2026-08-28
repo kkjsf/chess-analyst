@@ -3728,6 +3728,8 @@ body.guess-open { overflow: hidden; }
 .ot-nm b { color: var(--accent); font-variant-numeric: tabular-nums; }
 .ot-nm:hover { border-color: var(--accent); transform: translateY(-1px); }
 .ot-nm:active { transform: scale(.98); }
+/* Icône et chevron : la puce devient une ligne de liste sur mobile */
+.ot-nm-ic, .ot-nm-go { display: none; }
 
 /* Recherche + autocomplétion */
 .ot-search { position: relative; flex: 1 1 260px; min-width: 190px; max-width: 400px; display: flex; align-items: center; }
@@ -3783,117 +3785,102 @@ body.guess-open { overflow: hidden; }
 .ot-link-cc { background: var(--bg-elevated); color: var(--text); }
 .ot-link-cc:hover { border-color: var(--accent); color: var(--accent); }
 
-/* Bandeau "passe en paysage" — visible seulement sur mobile portrait */
-.ot-rotate-hint { display: none; }
-.ot-rotate-hint.dismissed { display: none !important; }
+/* Fil d'Ariane : mobile seulement — sur desktop l'arbre montre déjà le chemin */
+.ot-crumb { display: none; }
 
-/* Bouton "Paysage" : seulement pertinent sur tactile (force la rotation) */
-.ot-btn-rotate { display: none; background: var(--accent); color: #14142a; border-color: var(--accent); font-weight: 700; }
-.ot-btn-rotate:hover { border-color: var(--accent); color: #14142a; }
-
-/* Cibles tactiles plus larges (chevrons) + bouton rotation visible */
+/* Cibles tactiles plus larges (chevrons de l'arbre) */
 @media (pointer: coarse) {
   .ot-chev { width: 30px; height: 30px; right: -16px; font-size: 13px; }
   .ot-canvas { -webkit-overflow-scrolling: touch; }
-  .ot-btn-rotate { display: inline-flex; align-items: center; }
 }
 
-/* ── Mobile (téléphones) ── */
-@media (max-width: 720px) {
-  .panel-body.ot-body { padding: 10px 12px; gap: 9px; }
-  /* L'intro explicative prend trop de hauteur sur petit écran : le bandeau
-     paysage + les cartes se comprennent seuls. On la masque au profit de l'arbre. */
+/* ══ Mobile : l'échiquier et la descente, rien d'autre ══
+   L'arbre horizontal demandait de faire glisser un canvas pour lire des cartes
+   minuscules ; les filtres de famille, le dépliage et le bandeau « passe en
+   paysage » étaient autant de choses à comprendre avant de voir une position.
+   Sur téléphone il reste donc : la recherche, le fil d'Ariane (Ouvertures ›
+   Pion roi › Italienne), un grand échiquier, et la liste des suites pour
+   descendre d'un niveau. */
+@media (max-width: 899px), (orientation: landscape) and (max-height: 600px) {
+  .ot-canvas,
+  .ot-legend,
+  .ot-toolbar-btns,
   .ot-body .concepts-intro { display: none; }
 
-  .ot-toolbar { gap: 7px; }
-  .ot-search { flex-basis: 100%; max-width: none; order: -1; }
-  .ot-legend { gap: 5px; }
-  .ot-chip { font-size: 11px; padding: 4px 8px; }
-  .ot-toolbar-btns { margin-left: 0; }
-  .ot-btn { font-size: 11.5px; padding: 6px 10px; }
-
-  /* Arbre plus compact : cartes et espacements réduits.
-     align-items:flex-start → la racine se cale en haut-gauche (point d'entrée
-     naturel dans un petit canvas scrollable) au lieu d'être centrée en bas. */
-  .ot-subtree { align-items: flex-start; }
-  .ot-content { padding: 18px 22px; }
-  .ot-kids { gap: 11px; margin-left: 46px; }
-  .ot-card { min-width: 140px; max-width: 200px; padding: 8px 10px; gap: 8px; border-radius: 11px; }
-  .ot-ic { font-size: 21px; width: 32px; height: 32px; border-radius: 8px; }
-  .ot-tt { font-size: 12.5px; }
-  .ot-mv { font-size: 10.5px; }
-
-  /* Détail empilé et compact */
-  .ot-detail { flex-direction: column; align-items: stretch; gap: 9px; min-height: 0; padding: 11px 12px; max-height: 62vh; overflow-y: auto; }
-  .ot-detail .ot-dboard { width: min(78vw, 300px); height: min(78vw, 300px); align-self: center; }
-  .ot-txt h3 { font-size: 15px; }
-  .ot-idea { font-size: 12.5px; }
-  .ot-actions { flex-direction: column; }
-  .ot-link { justify-content: center; padding: 10px 13px; }
-
-  /* Bandeau paysage visible en portrait uniquement */
-  .ot-rotate-hint {
+  .panel-body.ot-body {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    line-height: 1.35;
-    color: var(--text);
-    background: rgba(226,184,87,0.1);
-    border: 1px solid var(--accent-dim);
-    border-radius: 10px;
-    padding: 8px 10px;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px calc(20px + env(safe-area-inset-bottom, 0));
+    overflow-y: auto;   /* l'arbre était le scroller, c'est le panneau maintenant */
   }
-  .ot-rotate-hint b { color: var(--accent); }
-  .ot-rotate-close {
-    margin-left: auto;
+  .ot-toolbar { gap: 8px; }
+  .ot-search { flex: 1 1 auto; min-width: 0; max-width: none; }
+
+  /* Fil d'Ariane — le seul moyen de remonter une fois l'arbre masqué */
+  .ot-crumb { display: flex; align-items: center; gap: 7px; flex: none; }
+  .ot-crumb-back {
     flex: none;
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    font-size: 20px;
-    line-height: 1;
-    padding: 0 4px;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid #2a3a5c;
+    color: var(--accent);
+    font-size: 13px;
     cursor: pointer;
   }
-}
-
-/* Paysage sur petit écran : la hauteur est rare mais la largeur abonde.
-   On bascule en grille — toolbar en haut, ARBRE à gauche (pleine hauteur),
-   DÉTAIL en colonne à droite — pour ne pas gâcher la hauteur avec le détail. */
-@media (orientation: landscape) and (max-height: 600px) {
-  .ot-body .concepts-intro, .ot-rotate-hint { display: none; }
-  .panel-body.ot-body {
-    display: grid;
-    grid-template-columns: 1fr 240px;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 8px;
-    padding: 8px 10px;
+  .ot-crumb-list {
+    display: flex; align-items: center; gap: 2px;
+    list-style: none; margin: 0; padding: 0;
+    min-width: 0; overflow-x: auto;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
-  .ot-toolbar { grid-column: 1 / -1; grid-row: 1; }
-  .ot-canvas { grid-column: 1; grid-row: 2; min-height: 0; }
-  .ot-subtree { align-items: flex-start; }
+  .ot-crumb-list::-webkit-scrollbar { display: none; }
+  .ot-crumb-list li { display: flex; align-items: center; white-space: nowrap; }
+  .ot-crumb-list li + li::before { content: '›'; color: var(--text-dim); font-size: 15px; padding: 0 3px; }
+  .ot-crumb-list button {
+    background: none; border: none; cursor: pointer;
+    font-family: inherit; font-size: 12.5px;
+    color: var(--text-dim); padding: 6px 2px;
+  }
+  .ot-crumb-list button b { font-weight: 700; }
+  .ot-crumb-cur span { font-size: 12.5px; font-weight: 700; color: var(--accent); padding: 6px 2px; }
+
+  /* La fiche EST l'écran : grand échiquier, puis le texte */
   .ot-detail {
-    grid-column: 2; grid-row: 2;
+    flex: none;
     flex-direction: column;
     align-items: stretch;
-    height: 100%;
-    max-height: none;
-    min-height: 0;
-    overflow-y: auto;
-    gap: 8px;
-    padding: 10px;
+    gap: 12px;
+    min-height: 0; max-height: none; overflow: visible;
+    padding: 12px;
   }
-  .ot-detail .ot-dboard { width: min(100%, 200px); height: auto; aspect-ratio: 1; align-self: center; }
-  .ot-txt h3 { font-size: 15px; }
-  .ot-idea { font-size: 12.5px; }
-  .ot-actions { flex-direction: column; }
-  .ot-link { justify-content: center; }
-  /* cartes un peu réduites (la règle ≤720px ne s'applique pas à 812px de large) */
-  .ot-card { min-width: 150px; max-width: 210px; padding: 9px 11px; }
-  .ot-ic { font-size: 22px; width: 34px; height: 34px; }
-  .ot-tt { font-size: 13px; }
-  .ot-kids { gap: 12px; margin-left: 52px; }
+  /* Les deux sous-blocs s'effacent (display:contents) pour que tout le contenu
+     de la fiche soit ordonnable d'un bloc : nom → échiquier → liens → idée →
+     où descendre → plans. */
+  .ot-detail-board, .ot-txt { display: contents; }
+  .ot-detail h3 { order: 1; font-size: 17px; }
+  .ot-metarow { order: 2; margin-bottom: 0; }
+  .ot-detail .ot-dboard { order: 3; width: min(92vw, 62vh, 440px); height: auto; aspect-ratio: 1; align-self: center; }
+  .ot-actions { order: 4; flex-direction: column; }
+  .ot-idea { order: 5; font-size: 13px; margin-bottom: 0; }
+  .ot-next-moves { order: 6; }
+  .ot-plans { order: 7; margin-bottom: 0; }
+  .ot-link { justify-content: center; padding: 11px 13px; font-size: 13px; }
+
+  /* Les suites deviennent la liste de descente : une ligne par variante */
+  .ot-next-moves { flex-direction: column; align-items: stretch; gap: 7px; margin: 2px 0 14px; }
+  .ot-nm-label { font-size: 11px; margin: 0 0 1px; }
+  .ot-nm {
+    display: flex; align-items: center; gap: 9px;
+    width: 100%; min-height: 48px;
+    padding: 9px 11px; border-radius: 11px; border-left-width: 4px;
+    font-size: 13.5px; text-align: left;
+  }
+  .ot-nm-ic { display: block; flex: none; width: 26px; text-align: center; font-size: 19px; }
+  .ot-nm-lbl { flex: 1; min-width: 0; }
+  .ot-nm-go { display: block; flex: none; color: var(--text-dim); font-size: 19px; }
+  .ot-nm:hover { transform: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

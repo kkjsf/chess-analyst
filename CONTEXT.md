@@ -65,6 +65,36 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v201 - Section Ouvertures sur mobile : plus d'arbre, on descend niveau par niveau**
+  - User : « en mode mobile, enlève complètement l'arbre des ouvertures, toutes les fioritures
+    inutiles (le "tourne ton téléphone", les tags ouvertes/semi-ouvertes, les boutons paysage /
+    focus / tout déplier). Concentre-toi sur l'échiquier, la navigation via la search bar ou en
+    descendant : Ouvertures > Pion roi > Italienne. »
+  - Sous **899px** (ou paysage ≤600px de haut) le panneau `#panel-tree` masque en CSS le canvas de
+    l'arbre, la légende des familles et les boutons Focus/Tout déplier/Replier. Il reste : la
+    recherche, un **fil d'Ariane**, un grand échiquier, la liste des suites.
+  - **Fil d'Ariane** `#ot-crumb` (`renderCrumb`, appelé par `select`) : `Ouvertures › 1.e4 Pion roi
+    › … › nœud courant`, chaque échelon cliquable + un bouton ◀ pour remonter d'un cran. C'est le
+    SEUL moyen de remonter une fois l'arbre masqué. Il défile horizontalement (`scrollLeft =
+    scrollWidth` après rendu, pour garder la fin du chemin visible) et n'existe pas sur desktop,
+    où l'arbre montre déjà le chemin.
+  - **Les « Suites » deviennent la descente** : les mêmes puces `.ot-nm` passent en lignes pleine
+    largeur de 48 px (icône du nœud + coup + nom + chevron ›). Deux spans ajoutés au markup
+    (`.ot-nm-ic`, `.ot-nm-go`), masqués sur desktop où la puce reste une chip.
+  - **Ordre de lecture** : `.ot-detail-board` et `.ot-txt` passent en `display: contents` sur
+    mobile, ce qui met tout le contenu de la fiche dans le même flex et le rend ordonnable :
+    nom → ECO/famille → échiquier (`min(92vw, 62vh, 440px)`) → liens → idée → suites → plans.
+  - **Code mort supprimé** : le bandeau « tourne ton téléphone », le bouton ⟳ Paysage et tout le
+    verrouillage d'orientation (`lockLandscape`/`toggleLandscape`/`observePanelClose`, ~40 lignes)
+    - c'était la contournement du problème que cette version supprime. La media query paysage qui
+    remettait l'arbre en grille a disparu avec.
+  - ⚠️ `.panel-body.ot-body` était `overflow: hidden` (le canvas de l'arbre faisait le défilement) ;
+    sur mobile il redevient le scroller (`overflow-y: auto`), sinon la fiche est coupée.
+  - Vérifié en preview à 375×812, 812×375 et 1280×900 : descente Ouvertures → Pion roi → Jeux
+    ouverts → Cavalier roi → Défense de e5 → Italienne, retour ◀ et clic sur un ancêtre, recherche
+    « najdorf » qui atterrit avec le chemin complet, échiquier 345 px, lignes 48 px, aucun
+    débordement horizontal, 0 erreur console ; desktop inchangé (95 cartes, 32 branches tracées,
+    fil d'Ariane masqué, puces en ligne).
 - **v200 - Barres collantes du cours : plus de transparence**
   - User : « pas terrible la barre en mode transparente sur les variantes, ça fait des
     superpositions bizarres ». Diagnostic : `.opening-sibs` avait `background: var(--line-str)`,
