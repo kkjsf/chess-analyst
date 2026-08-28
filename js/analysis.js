@@ -658,20 +658,44 @@ const Analyzer = (() => {
   // coach-data.json by the server analyzer (tools/analyze.mjs) AND in IndexedDB
   // by the in-browser bulk analyzer (js/coach.js). Both callers delegate here so
   // server and client can never diverge. info = { side, pgn, timeClass, timeControl }.
+  // Au-delà de ce seuil (en centipions, vu du joueur) la position est DÉCIDÉE :
+  // presque tous les coups conservent le résultat, donc la précision sature et
+  // ne mesure plus rien. Mesuré sur de vraies parties : ~47 % d'erreurs par coup
+  // entre +2 et +4, mais 5,7 % dès que l'éval dépasse +8. Une phase jouée
+  // essentiellement en position décidée (typiquement la finale, après un gain de
+  // pièce) affichait donc 95 % de précision et se retrouvait couronnée « point
+  // fort », alors qu'elle n'était que facile. D'où un second jeu de compteurs,
+  // restreint aux coups DISPUTÉS, qui est celui qu'on affiche.
+  const CONTESTED_CP = 300;
+
   function computeGameStats(results, summary, info) {
     const side = info.side;
     const us = side === 'w' ? summary.stats.w : summary.stats.b;
     const phaseErrors = { opening: 0, middle: 0, endgame: 0 };
     const phaseAcc = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
     const phaseCp = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
+    // Mêmes compteurs, coups disputés seulement (|éval avant le coup| < 3.0).
+    const phaseAccC = { opening: { total: 0, count: 0 }, middle: { total: 0, count: 0 }, endgame: { total: 0, count: 0 } };
+    const phaseErrC = { opening: 0, middle: 0, endgame: 0 };
     const blunders = [];
     const highlights = [];
     let maxUserEval = null, minUserEval = null, turningPoint = null;
+    // Premier instant où il est gagnant ET au trait : le point de reprise de
+    // l'entraînement à la conversion (« Termine la partie », js/replay.js).
+    let conversionMoment = null;
+    let prevEval = 0; // éval (point de vue des Blancs) AVANT le coup courant
 
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
-      if (!r.move || r.move.color !== side) continue;
+      if (!r.move || r.move.color !== side) { if (typeof r.eval === 'number') prevEval = r.eval; continue; }
       const phase = phaseOf(r.fenBefore, i);
+      const ueBefore = side === 'w' ? prevEval : -prevEval;
+      const contested = Math.abs(ueBefore) < CONTESTED_CP;
+      if (typeof r.eval === 'number') prevEval = r.eval;
+
+      if (!conversionMoment && ueBefore >= CONTESTED_CP && r.fenBefore) {
+        conversionMoment = { ply: i, fen: r.fenBefore, evalCp: Math.round(ueBefore) };
+      }
 
       if (typeof r.eval === 'number') {
         const ue = Math.max(-1000, Math.min(1000, side === 'w' ? r.eval : -r.eval));
@@ -681,6 +705,7 @@ const Analyzer = (() => {
 
       if (r.type === 'blunder' || r.type === 'mistake' || r.type === 'miss') {
         phaseErrors[phase]++;
+        if (contested) phaseErrC[phase]++;
         if (r.fenBefore && r.bestUci) {
           blunders.push({
             ply: i, phase, type: r.type,
@@ -705,6 +730,7 @@ const Analyzer = (() => {
 
       phaseAcc[phase].total += winLossToAccuracy(r.winPctLoss);
       phaseAcc[phase].count++;
+      if (contested) { phaseAccC[phase].total += winLossToAccuracy(r.winPctLoss); phaseAccC[phase].count++; }
       phaseCp[phase].total += Math.min(r.cpLoss || 0, CPLOSS_CAP);
       phaseCp[phase].count++;
 
@@ -745,6 +771,11 @@ const Analyzer = (() => {
       moveCount: us.moveCount,
       phaseErrors,
       phaseAccuracy: phaseAcc,
+      // Coups disputés seulement — le Coach préfère ceux-là quand ils sont là,
+      // et retombe sur les compteurs bruts pour les vieilles parties.
+      phaseAccuracyContested: phaseAccC,
+      phaseErrorsContested: phaseErrC,
+      conversionMoment,
       phaseAcpl: { opening: acplOf('opening'), middle: acplOf('middle'), endgame: acplOf('endgame') },
       moveQuality: mq,
       maxUserEval, minUserEval, turningPoint,

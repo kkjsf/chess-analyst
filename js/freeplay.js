@@ -54,11 +54,18 @@ const FreePlay = (() => {
   }
 
   // La ligne d'état sous l'échiquier : trait, éval, meilleur coup, suite.
-  function statusHtml(fen, res, back) {
+  //
+  // `opts.hints === false` coupe TOUT ce que le moteur sait : ni éval, ni
+  // meilleur coup, ni suite. Sans ça le mode « continuer à jouer » ne peut
+  // servir qu'à explorer, jamais à s'entraîner : on ne s'exerce pas à convertir
+  // une position gagnante en lisant la réponse au-dessus de l'échiquier. C'est
+  // ce que consomme l'entraînement à la conversion (js/convert.js).
+  function statusHtml(fen, res, back, opts) {
     const term = terminalHtml(fen, back);
     if (term) return term;
     const stm = fen.split(' ')[1] === 'w' ? 'w' : 'b';
     const head = `Trait aux <b>${stm === 'w' ? 'Blancs' : 'Noirs'}</b>.`;
+    if (opts && opts.hints === false) return head + ` À toi de trouver — aucune aide affichée.`;
     if (!res) return head + ` Moteur indisponible - joue librement, sans suggestion.`;
     const pv = pvToFr(fen, res.pv, 5);
     return `${head} Éval <b>${evalWhite(res, stm)}</b>.`

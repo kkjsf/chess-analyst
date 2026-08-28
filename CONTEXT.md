@@ -65,6 +65,199 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v202-v204 - LA REVUE PEDAGOGIQUE, IMPLEMENTEE. 12 constats sur 12.**
+  - Suite directe de la revue du 2026-08-28 (entree ci-dessous). Tout est fait, verifie en local sur
+    ses 146 vraies parties, 39 tests unitaires verts.
+  - **D1+D2 - une seule prescription (js/coach.js).** `renderFocus` classait les motifs APRES avoir
+    retire `prise`/`defense`/`fourchette`/`gain`, puis collait « de loin ta fuite n°1 » en dur : la
+    carte la plus visible du Coach ne pouvait afficher que les 5 motifs les plus RARES et prescrivait
+    « Enfilade » (5 % des erreurs) pendant que 30 % étaient des pièces en prise. Nouveau
+    `priorityOf(an)` (mémoïsé par WeakMap) classe TOUS les motifs tactiques ; `positionnel` reste
+    exclu du classement car c'est un fallback, pas un diagnostic. La carte affiche désormais
+    **« Arrête de laisser des pièces en prise »** et absorbe la ventilation vigilance quand le
+    vainqueur est un motif de vigilance ; `renderVigilance` s'efface alors complètement (sinon elle
+    reste, en carte secondaire, sans superlatif ni bouton primaire). « de loin » n'apparaît plus que
+    si la part vaut ≥ 2× celle du second. Ordre du bandeau du haut revu : priorité, mot du coach,
+    (vrai niveau + rythme), Termine la partie, dernières parties.
+  - **D3 - plus de félicitations pour une opposition qui faiblit.** « Ta trajectoire » comparait deux
+    moitiés sans regarder l'adversaire : elle disait « Continue comme ça » sur un bond 31 → 52 % de
+    victoires obtenu contre du **134 points plus faible** (444 → 310), précision plate à 67 %.
+    Elle porte maintenant un avertissement chiffré dès que l'Élo adverse bouge de ≥ 50 points, et
+    « Continue comme ça » ne sort que si le progrès tient debout. « Tes coups forts » ne peut plus
+    être désigné comme « le point qui régresse » (on ne s'entraîne pas à produire des coups
+    brillants) et la phrase finale renvoie à la priorité réelle. **Nouvelle carte « 📏 Ton vrai
+    niveau »** dans le bandeau du haut : son score contre plus fort (**0 % sur 22 parties**) contre
+    plus faible (100 % sur 14) - la ligne la plus honnête du bilan, jusque-là enterrée en bas d'une
+    carte à sept sections. Au passage, `renderTrends` comparait l'adversaire à la **moyenne de
+    période** du joueur (`myAvg`, supprimé) : avec 437 points d'amplitude, un adversaire à 400
+    passait pour « plus fort » même dans les parties jouées à 700. Une seule définition désormais,
+    par partie, partagée par les deux cartes.
+  - **D4 - la précision ne mesure rien en position décidée (js/analysis.js).** Mesuré sur ses
+    parties : 26 % d'erreurs/coup à |éval| < 1,0, 47 % entre 2 et 4, **5,7 % dès |éval| ≥ 8,0**. La
+    finale, qui arrive presque toujours après un +5 (69 parties sur 146), affichait donc 95 % et se
+    faisait couronner « point fort ». `computeGameStats` produit maintenant **`phaseAccuracyContested`
+    + `phaseErrorsContested`** (|éval AVANT le coup| < `CONTESTED_CP` = 300) à côté des compteurs
+    bruts ; côté Coach, `phasePool()` préfère les compteurs disputés et **retombe** sur les bruts,
+    donc rien ne casse avant la re-run. `hasContested()`/`accLabel()` nomment la métrique, et **tant
+    que les compteurs disputés manquent, aucune carte n'annonce de « point fort » de phase** (ni le
+    mot du coach, ni le radar - qui porte une note expliquant pourquoi). ⚠ **Nécessite une re-run
+    complète du coach serveur** pour que les vrais chiffres apparaissent.
+  - **D5 - `positionnel` était un fourre-tout présenté comme un diagnostic (js/training.js).**
+    96 cartes sur 220 (44 %) portent le fallback de `detectMotif`. (1) Renommé
+    **« Non tactique / à classer »** ; (2) la carte « faiblesses tactiques » devient
+    « Répartition de tes ratés tactiques », ses pourcentages portent sur le **total tactique**
+    (Pièce en prise passe de 18 % à 32 %) et le non-classé part dans une note ; (3) ces cartes
+    changent de tâche : au lieu de « trouve LE coup » (où plusieurs coups se valent et l'app
+    répondait « ❌ pas le meilleur coup » à un coup défendable) c'est une **comparaison de 3
+    coups** - le meilleur, celui qu'il avait joué, et un leurre qui laisse du matériel (`buildChoices`
+    / `renderChoiceCard` / `answerChoice`, réutilise `revealSolution` donc explication + SRS +
+    « continuer à jouer » intacts) ; (4) `moveIsEquivalent` ne cherche plus seulement dans les
+    lignes MultiPV (un 4e/6e choix raisonnable était rejeté d'office) : à défaut il **évalue la
+    position obtenue** et compare, ce qui couvre tous les coups légaux.
+  - **D6 - plus de verdict sur 2 parties.** Ouvertures : `MIN_VERDICT = 8` parties pour nommer une
+    ligne forte/faible (avant : « la plus faible : Petrov, 0 % sur **2 parties** »), sinon une note
+    le dit. Tendance du mot du coach : fenêtres de **20** parties au lieu de 10, seuil de 15 points -
+    la version 10 vs 10 couvrait 9 jours avec une marge de ±30.
+  - **M1 - « 🏁 Termine la partie », l'entraînement à la conversion.** Son plus gros gisement (il
+    atteint +2 dans 87 de ses 146 parties et en perd 29) n'avait aucun exercice. Nouveau **mode
+    `convert` de `js/replay.js`** : même coquille que « Rejoue ta défaite », mais **aide coupée** -
+    pas de flèche bleue, pas d'éval, pas de note coup par coup. On mesure toujours en interne (il
+    faut savoir quand l'avantage file) mais le seul retour pendant la partie est **un** avertissement,
+    une seule fois, quand l'éval passe sous `CONV_SLIP` (120) alors qu'on partait de ≥ `CONV_WIN`
+    (300). Bilan de fin : « Converti ! » ou « Reperdue », journalisé. Côté données,
+    `Coach.conversionTargets()` prend les parties `result === 'loss' && maxUserEval >= 300`, avec le
+    nouveau **`conversionMoment`** (1er instant où il est à ≥ +3 ET au trait, produit par
+    analysis.js) et, en attendant la re-run, le **tournant** de la partie. `FreePlay.statusHtml`
+    accepte `opts.hints === false` (il affichait TOUJOURS le meilleur coup et l'éval : c'est ce qui
+    rendait l'exercice impossible). Nouvel onglet **Convertir** dans Entraîner (26 parties listées,
+    triées par avantage max) + carte d'entrée dans le Coach + item de routine.
+  - **M2 - Vigilance entraîne la PAUSE, plus le pile-ou-face.** L'exercice était un oui/non à 50 %
+    de réussite au hasard **qui annonçait lui-même** laquelle des trois vérifications faire. Refait :
+    on **clique la case du danger** (ou « Rien à signaler »), la question est toujours la même donc
+    les deux vérifications doivent tourner à chaque fois, priorité défensive (ta pièce en prise
+    d'abord, sinon la pièce adverse à prendre), et un **délai plancher de 10 s** (`VIG_DELAY_MS`,
+    barre de progression, chip ⏱ pour le couper, mémorisé dans `chess-analyst-vig-delay`) masque
+    les commandes : 50 % de ses erreurs sont des coups joués en moins de 15 s avec plus de la moitié
+    de la pendule. Le 3e type de question (« tu envisages X, d'où vient la punition ? ») se répond
+    aussi par une case. **Nouveau drill « coups 5 à 15 »** (`plyQueue`/`drillPly`, 206 cartes) -
+    48 % de ses erreurs sont là. ⚠ Les cartes stockées portent **`moveNo`**, pas `ply` (d'où
+    `moveNoOf`/`inMoveWindow`).
+  - **M3 - la boucle de retour.** Rien n'enregistrait ce qui avait été travaillé ni quand, donc l'app
+    ne pouvait pas répondre à « je drille depuis trois semaines, est-ce que j'en laisse moins en
+    partie ? ». Journal `chess-analyst-sessions` (`logSession(kind, n, score, motif)`, 400 entrées
+    max, alimenté par les 3 exercices) + carte **« 📶 Est-ce que ça marche ? »** : séances,
+    exercices, taux de réussite au 1er coup, et surtout **gaffes + erreurs pour 100 coups AVANT vs
+    APRES** la première séance (min 5 parties de chaque côté, sinon elle le dit).
+  - **M4 - discipline de séance.** Ses bonnes journées tournent à 73-81 % de précision, les mauvaises
+    à 44-52 %, et ce sont tous des enchaînements de défaites. Carte **« 📅 Tes séances de jeu »**
+    (une ligne par jour : parties, bilan, pastilles V/D, précision, bord coloré) + comparaison
+    mesurée bonnes/mauvaises journées + **alerte 🛑 sur la série de défaites EN COURS** à partir de
+    2 (c'était affiché « 4 D » comme une stat neutre). La routine du jour porte la règle
+    (« 2 défaites d'affilée = stop ») et son pied devient la règle des 15 secondes.
+  - **M5 - carte « ♟ Ton système ».** Le Coach classait les performances par ligne sans jamais dire
+    « réduis ». ⚠ Piège évité : avec les **Noirs**, la « famille » détectée est l'ouverture de
+    l'ADVERSAIRE - recommander « garde l'Attaque Scholar » n'a aucun sens. On ne nomme une ligne que
+    pour les Blancs (Viennoise, 9 parties, 72 %) ; pour les Noirs on donne le conseil structurel
+    (une réponse à 1.e4, une à 1.d4).
+  - **M6 - 5 finales de pions dans le cours (js/mates.js).** Le cours « Mats » devient
+    **« Mats & finales »**, 21 figures. Nouveau groupe ⑤ : **règle du carré** (exercice à coup
+    unique `b6`), **roi devant son pion** (demo `Ke6`), **course de pions** (2 exercices à coup unique
+    `b4`), **pion de tour : la nulle du coin** (demo `Kf6`, la règle qui explique la moitié des
+    « j'étais gagnant et ça a fait nulle »), **idee de Réti** (coup unique `Kg7`). Toutes les
+    positions ont été vérifiées à **depth 28 avec MultiPV sur TOUS les coups légaux** : `b6`, `b4`
+    et `Kg7` sont bien les seuls coups à ne pas jeter le résultat ; les deux autres sont marquées
+    `demo` parce que plusieurs coups gagnent. ⚠ Les lignes multi-coups initiales ont été réduites à
+    un coup : le format `sol` promet une **réponse forcée** aux index impairs, et le roi noir avait
+    trois cases.
+  - **CSS** : `.vig-gate*`, `.train-chip`, `.train-opt-move`, `.conv-*`, `.coach-truth-*`, `.sess-*`,
+    `.coach-kpi*`, `.coach-note*`, `.sys-row`, `.coach-link-btn`, `.coach-flag-warn` (+ media query
+    560px). Aucun débordement horizontal sur les 4 écrans, 0 erreur console.
+  - **⚠ A FAIRE APRES LE DEPLOY : relancer l'analyse complète du coach** (GitHub Actions, workflow
+    `analyze.yml`, non déclenchable en CLI). Sans elle, `phaseAccuracyContested` /
+    `phaseErrorsContested` / `conversionMoment` restent absents de `coach-data.json` : l'app
+    fonctionne (fallbacks en place, et elle DIT que les notes de phase ne sont pas encore
+    recalculées), mais D4 n'affiche pas ses vrais chiffres et « Termine la partie » utilise le
+    tournant de la partie au lieu du premier instant à +3.
+
+- **2026-08-28 - REVUE PEDAGOGIQUE (pas une revue de code) : « est-ce que l'app fait progresser ? »**
+  - Livrable : `revue_pedagogique.html` (racine, NON deploye, a laisser hors de git/Pages) + artifact
+    « Revue pedagogique Chess Analyst ». En francais, palette ardoise/madder/jade, Instrument Serif
+    + Karla. Aucun constat de style de code : la question posee est uniquement pedagogique.
+  - **La these, tiree de `coach-data.json` du 25/08 (146 parties, 88 journalieres + 58 rapides) :**
+    les 5 premieres parties de chaque cadence sont un CLASSEMENT PROVISOIRE (946 -> 758 en une seule
+    partie), donc lire « chute 946->718 / 760->323 » est faux. Depuis le plancher reel : journalier
+    **543 (13/05) -> 718 = +175** sur 82 parties ; rapide **266 (05/08) -> 323 = +57** sur 21. Et
+    l'ecart entre cadences EST le diagnostic : journalier 74,1 % de precision / 4,9 gaffes pour 100
+    coups / ACPL 100 ; rapide 67,1 % / 6,3 / 128. Meme joueur, meme repertoire, **+29 % de gaffes des
+    que la pendule tourne**. Probleme d'attention sous pendule, pas de savoir.
+  - **Le levier chiffre :** il atteint +2 ou mieux dans **87 des 146 parties** (60 %) et en **perd 29**
+    (33 %) ; +5 ou mieux dans 69, en perd 13. **29 de ses 74 defaites sont des parties gagnees** (39 %).
+    En rapide : 14 defaites sur 33, dont 10 depuis +5. Le Coach note deja « Conversion 61/100 » comme
+    point faible et n'offre AUCUN exercice de conversion.
+  - **Anatomie des 645 erreurs** (les 645 `blunderList` rejouees avec chess.js, echange statique sur la
+    case d'arrivee) : 44 % surviennent alors qu'une prise gratuite existait DEJA pour l'adversaire ;
+    33 % offrent du materiel juste apres le coup (dont **141 fois une piece entiere** : C 51, D 33,
+    F 30, T 27) ; 25 % les deux ; **48 % entre les plis 10 et 30**. Cause unique : aucun inventaire des
+    prises avant de jouer. La carte Rythme du Coach le confirme : **50 % des erreurs jouees en < 15 s
+    avec plus de la moitie de la pendule**, et 2 % seulement en zeitnot.
+  - **6 constats « l'app te trompe » (D1-D6), verifies dans le code :**
+    - **D1 (P0)** `renderFocus` (js/coach.js:591) retire `prise`/`defense`/`fourchette`/`gain` du
+      classement puis colle un superlatif code en dur -> la carte la plus visible du Coach affiche
+      « Travaille : **Enfilade** (10 occurrences, 5 %) - c'est de loin ta fuite n°1 ». Elle ne peut
+      STRUCTURELLEMENT jamais montrer la vraie faiblesse, et `FOCUS_HEADLINE` contient des accroches
+      MORTES (« Arrete de laisser des pieces en prise ») pour exactement les motifs que le filtre exclut.
+    - **D2 (P0)** quatre cartes 🎯 a bouton d'action donnent quatre priorites, trois se declarent n°1
+      (Le mot du coach = gaffes ; Vigilance = pieces en prise ; Priorite = enfilade ; Faiblesses
+      tactiques = piece en prise). La seule fausse est celle qui s'appelle « Ta priorite ».
+    - **D3 (P1)** « Ta trajectoire » conclut « Continue comme ca » alors que l'Elo adverse moyen est
+      passe de **444 a 310** entre les deux moities et que la precision est PLATE (67 -> 67 %). Meme
+      confusion derriere « ↓ 41 % mieux qu'avant ». La ligne honnete existe et est enterree en bas
+      d'une carte : **0 % de victoires contre +25 ou plus fort**, 72 % contre plus faible.
+    - **D4 (P1)** « la finale est ton point fort (95 %) » = artefact de saturation WDL. Mesure sur ses
+      parties : taux d'erreur/coup 26 % a |eval| < 1,0 ; 47 % a 2-4 ; **5,7 % des que |eval| >= 8,0**.
+      Ses finales arrivent presque toujours apres un +5 (69/146) et il les joue a **3,4 s/coup** contre
+      13 au milieu. Correctif : precision par phase sur les seuls coups DISPUTES (|eval| < 3,0).
+    - **D5 (P2)** `'positionnel'` est le fallback de `detectMotif` (js/training.js:453) = **96 cartes
+      sur 220, 44 %**. Double degat : le Coach dit a un joueur ~320 que sa faiblesse n°1 est le jeu
+      positionnel ; et 44 % du paquet SRS n'a pas de solution forcante (« Pas le meilleur coup » sur
+      un coup defendable). A noter : `moveIsEquivalent` tolere 30 cp mais cherche le coup dans les
+      lignes MultiPV -> un 4e choix raisonnable est rejete d'office.
+    - **D6 (P2)** verdicts sur echantillons minuscules : « la plus faible : Petrov, 0 % sur **2
+      parties** » ; et la phrase de tendance compare 10 parties a 10 parties sur **9 jours** (5 -> 14
+      aout, marge +/-30 pts). Seuils proposes : 8 parties pour nommer une ouverture faible, 20 par
+      fenetre pour annoncer une tendance.
+  - **6 briques manquantes (M1-M6) :**
+    - **M1 (P0)** « Termine la partie » : charger la position d'une vraie partie perdue au moment du
+      premier +3 et la jouer contre Stockfish. `js/replay.js` + `js/freeplay.js` font deja 90 % du
+      travail ; **il manque un `hints:false`** - FreePlay affiche TOUJOURS la fleche du meilleur coup
+      et l'eval, donc impossible de s'entrainer a convertir. Filtre : `maxUserEval >= 300 &&
+      result === 'loss'`.
+    - **M2 (P0)** entrainer la PAUSE : (a) delai plancher de 10 s sur Vigilance (boutons grises) ;
+      (b) Vigilance passe du oui/non (50 % au hasard, ET la question annonce quelle verification faire)
+      a « **clique la case du danger, ou rien** », mode tire au sort en silence ; (c) mode
+      « coups 5-15 » via `it.ply` (48 % des erreurs).
+    - **M3 (P1)** boucle de retour : le paquet stocke `reps/interval/ease/due` mais RIEN n'enregistre ce
+      qui a ete travaille et quand -> l'app ne peut pas repondre « je drille X depuis 3 semaines,
+      est-ce que j'en laisse moins en partie ? ». Journal de session + une carte Coach. C'est la seule
+      carte qui prouverait que l'app marche.
+    - **M4 (P1)** discipline de seance : bons jours 76-81 % de precision, mauvais **44-52 %** (29/07 :
+      6 parties 2V-4D acc 52 ; 04/08 : 0V-2D acc 44 ; 14/08 : 0V-3D acc 52), tous des enchainements de
+      defaites. Regle d'arret « 2 defaites d'affilee = stop », carte par journee, et la serie de
+      defaites en cours passe en avertissement des 2 (aujourd'hui « 4 D » est une stat neutre).
+    - **M5 (P2)** repertoire : 6+ familles en 29 parties avec les Blancs ; le conseil manquant est
+      « **reduis** » (1.e4 + Viennoise = sa meilleure ligne, 72 % de precision / 6-0-3, plus une reponse
+      a 1.e4 et une a 1.d4). Tension a assumer : le pied de la routine dit « les ouvertures, plus tard »
+      alors que l'arbre + les cours sont la plus grosse piece de l'app (~130 ko de JS).
+    - **M6 (P2)** plus de module de finales : les Mats couvrent bien roi+dame et roi+tour, mais rien sur
+      roi+pion contre roi / regle du carre / quand echanger pour entrer dans une finale gagnee. C'est
+      exactement la technique qui transforme un +5 en victoire.
+  - **Bug de donnees a noter :** `playedSan` de `blunderList` melange **deux notations** - francaise pour
+    445 entrees ("Ce4", "Fxa3", "Db4"), anglaise pour 200 - le champ est donc inexploitable par une
+    machine sans detection de dialecte. `bestUci`, lui, est legal sur les 645 positions.
+  - **README perime :** il annonce 5 onglets dont « Finales » (supprime en v150, remplace par les Mats)
+    et decrit un onglet « Menaces » dans Entrainer qui s'appelle « Vigilance ».
+  - **Rien n'a ete implemente** : revue seule, aucun fichier de l'app touche, APP_VERSION inchangee (201).
+
 - **v201 - Section Ouvertures sur mobile : plus d'arbre, on descend niveau par niveau**
   - User : « en mode mobile, enlève complètement l'arbre des ouvertures, toutes les fioritures
     inutiles (le "tourne ton téléphone", les tags ouvertes/semi-ouvertes, les boutons paysage /

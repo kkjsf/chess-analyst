@@ -22,8 +22,11 @@ const Training = (() => {
     decouverte: 'Attaque à la découverte',
     gain: 'Gain de matériel',
     attaque: 'Attaque / échec',
-    positionnel: 'Jeu positionnel',
-    manoeuvre: 'Jeu positionnel', // legacy alias for decks built before v50
+    // NOT a diagnosis: this is detectMotif's fallback when no tactical
+    // pattern is found. Named for what it is so no card can present it as
+    // "your main weakness is positional play" to a 350-Elo player.
+    positionnel: 'Non tactique / à classer',
+    manoeuvre: 'Non tactique / à classer', // legacy alias for decks built before v50
   };
   const MOTIF_ORDER = ['mat', 'prise', 'defense', 'fourchette', 'clouage', 'enfilade', 'decouverte', 'gain', 'attaque', 'positionnel'];
   const TACTICAL = ['mat', 'prise', 'defense', 'fourchette', 'clouage', 'enfilade', 'decouverte', 'gain', 'attaque'];
@@ -34,6 +37,27 @@ const Training = (() => {
   }
   function save(items) {
     try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (_) {}
+  }
+
+  // ─────────────────── journal des séances ───────────────────
+  // Le paquet SRS sait quand une CARTE est due, mais rien n'enregistrait ce qui
+  // avait été TRAVAILLÉ, ni quand. Sans ça l'app ne peut pas répondre à la seule
+  // question qui compte : « je drille les pièces en prise depuis trois semaines,
+  // est-ce que j'en laisse moins en partie ? ». Un enregistrement par séance,
+  // c'est tout ce dont la carte « Est-ce que ça marche ? » du Coach a besoin.
+  const LOG_KEY = 'chess-analyst-sessions';
+  const LOG_MAX = 400;
+  function loadLog() {
+    try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (_) { return []; }
+  }
+  // kind: 'puzzles' | 'vigilance' | 'conversion' · motif = filtre éventuel
+  function logSession(kind, n, score, motif) {
+    if (!n) return;
+    try {
+      const log = loadLog();
+      log.push({ t: Date.now(), kind, n, score: score == null ? null : score, motif: motif || null });
+      localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(-LOG_MAX)));
+    } catch (_) {}
   }
 
   // ───────────────────────── randomisation ─────────────────────────
@@ -751,6 +775,9 @@ const Training = (() => {
   // Multi-move solution state: the line to play, which step we're on, and the
   // live position after the steps already solved.
   let solLine = [], solStep = 0, liveFen = null, checking = false;
+  let choices = null; // 3-way move comparison, for cards with no forcing answer
+  let plyFilter = false;            // drill « coups 5 à 15 » only
+  let sessN = 0, sessScore = 0;     // score de la séance en cours (journal)
   // Bumped on every puzzle render; a late engine continuation checks it so its
   // text never lands on the next puzzle the user has already moved to.
   let explainToken = 0;
@@ -785,6 +812,7 @@ const Training = (() => {
   // (already warm) for the top lines and accepts the played move when it's within
   // a hair of the best — so a second, equally-winning move isn't marked wrong.
   // Returns false (fall back to exact-match) when the engine isn't ready.
+  const EQUIV_CP = 30; // within ~0.3 pawn of the best line counts as "as good"
   async function moveIsEquivalent(fen, played, wantUci) {
     if (typeof StockfishEngine === 'undefined' || !StockfishEngine.isReady()) return false;
     let res;
@@ -792,16 +820,54 @@ const Training = (() => {
     if (!res || !res.lines || !res.lines.length) return false;
     const playedUci = played.from + played.to + (played.promotion || '');
     if (playedUci === wantUci) return true;
+    const best = res.lines[0].score;
+    // Fast path: the move is one of the MultiPV lines we already have.
     const line = res.lines.find(l => l && l.move === playedUci);
-    if (!line) return false;
-    return (res.lines[0].score - line.score) <= 30; // within ~0.3 pawn of the best line
+    if (line) return (best - line.score) <= EQUIV_CP;
+    // Slow path. MultiPV only reports the top N lines, so a defensible move
+    // ranked N+1 used to be rejected outright even when it was within a hair of
+    // the best — the player got "pas le meilleur coup" on a perfectly good move.
+    // Score the resulting position instead: exact, and covers every legal move.
+    let after;
+    try {
+      const g = new Chess(fen);
+      if (!g.move({ from: played.from, to: played.to, promotion: played.promotion || 'q' })) return false;
+      if (g.in_checkmate()) return true;
+      after = g.fen();
+    } catch (_) { return false; }
+    let res2;
+    try { res2 = await StockfishEngine.evaluate(after, 'movetime 300'); } catch (_) { return false; }
+    if (!res2 || !res2.lines || !res2.lines.length) return false;
+    // res2 is from the OPPONENT's point of view; negate to value it for us.
+    return (best - (-res2.lines[0].score)) <= EQUIV_CP;
   }
 
   function startPuzzles() {
-    queue = motifFilter ? motifQueue(motifFilter) : buildSession();
+    queue = plyFilter ? plyQueue() : motifFilter ? motifQueue(motifFilter) : buildSession();
     qi = 0;
+    sessN = 0; sessScore = 0;
     renderPuzzle();
   }
+
+  // « Coups 5 à 15 » : 48 % de ses erreurs tombent dans cette fenêtre, la sortie
+  // d'ouverture, quand le plateau s'ouvre et que les pièces se touchent pour la
+  // première fois. Assez concentré pour en faire un drill à part.
+  // Les cartes stockées portent `moveNo` (numéro de coup) ; `ply` n'existe que
+  // sur les items fraîchement dérivés par itemsForGames — d'où les deux.
+  const MOVE_LO = 5, MOVE_HI = 15;
+  const moveNoOf = it => (typeof it.moveNo === 'number' ? it.moveNo
+    : typeof it.ply === 'number' ? Math.floor(it.ply / 2) + 1 : 0);
+  const inMoveWindow = it => { const m = moveNoOf(it); return m >= MOVE_LO && m <= MOVE_HI; };
+  function plyQueue() {
+    const now = Date.now();
+    const pool = load().filter(it => isCleanPuzzle(it) && inMoveWindow(it));
+    const due = shuffle(pool.filter(it => (it.due || 0) <= now));
+    const rest = pool.filter(it => (it.due || 0) > now);
+    const ctx = weightContext(rest);
+    const fill = weightedSample(rest, Math.max(0, 20 - due.length), it => cardWeight(it, ctx));
+    return due.concat(shuffle(fill)).slice(0, 20);
+  }
+  function drillPly() { plyFilter = true; motifFilter = null; switchTab('puzzles'); }
 
   // Drill one motif: due cards of that motif first, then biggest mistakes.
   function motifQueue(m) {
@@ -824,13 +890,108 @@ const Training = (() => {
   }
 
   function bannerHtml() {
+    if (plyFilter) return `<div class="train-motif-banner">Filtre : <b>coups 5 à 15</b><button class="train-link" id="puz-all">← toutes les révisions</button></div>`;
     return motifFilter
       ? `<div class="train-motif-banner">Motif : <b>${MOTIF_LABELS[motifFilter] || motifFilter}</b><button class="train-link" id="puz-all">← toutes les révisions</button></div>`
       : '';
   }
+
+  // ─────────────── cartes sans solution forçante (« à classer ») ───────────────
+  // 44% of the deck is detectMotif's fallback: a real mistake, but the engine's
+  // answer is a quiet move and several others are nearly as good. As a
+  // "find the best move" board puzzle those cards punish defensible answers.
+  // Turned into a 3-way comparison instead — same position, same lesson, one
+  // correct answer, and it drills the habit that is actually missing: compare
+  // candidate moves before committing.
+  const CHOICE_MOTIFS = new Set(['positionnel', 'manoeuvre']);
+  function isChoiceCard(it) { return !!it && CHOICE_MOTIFS.has(it.motif); }
+
+  // best move (correct) + the move actually played (wrong, and his own) + a
+  // decoy that hangs material. Falls back to any quiet legal move.
+  function buildChoices(item) {
+    const out = [];
+    let g;
+    try { g = new Chess(item.fen); } catch (_) { return null; }
+    const bestUci = item.bestUci || '';
+    let bestSan = null;
+    try {
+      const m = new Chess(item.fen).move({ from: bestUci.slice(0, 2), to: bestUci.slice(2, 4), promotion: bestUci[4] || 'q' });
+      bestSan = m && m.san;
+    } catch (_) {}
+    if (!bestSan) return null;
+    out.push({ uci: bestUci, san: bestSan, good: true });
+
+    const legal = g.moves({ verbose: true });
+    const playedUci = (() => {
+      const hit = legal.find(m => m.san === item.playedSan || enToFr(m.san) === item.playedSan);
+      return hit ? hit.from + hit.to + (hit.promotion || '') : null;
+    })();
+    if (playedUci && playedUci !== bestUci) {
+      const hit = legal.find(m => m.from + m.to + (m.promotion || '') === playedUci);
+      out.push({ uci: playedUci, san: hit.san, good: false, played: true });
+    }
+
+    // Decoy: a move that leaves its own piece winnable on the arrival square.
+    for (const m of legal) {
+      if (out.length >= 3) break;
+      const u = m.from + m.to + (m.promotion || '');
+      if (out.some(o => o.uci === u)) continue;
+      try {
+        const g2 = new Chess(item.fen);
+        g2.move(m);
+        if (pieceWinnable(g2.fen(), m.to, item.side)) out.push({ uci: u, san: m.san, good: false });
+      } catch (_) {}
+    }
+    // Still short: any other legal move.
+    for (const m of legal) {
+      if (out.length >= 3) break;
+      const u = m.from + m.to + (m.promotion || '');
+      if (out.some(o => o.uci === u)) continue;
+      out.push({ uci: u, san: m.san, good: false });
+    }
+    if (out.length < 2) return null;
+    return shuffle(out);
+  }
+
+  function renderChoiceCard() {
+    const host = $('#train-puzzles');
+    const flip = current.side === 'b';
+    const opts = choices.map((o, i) =>
+      `<button class="train-opt train-opt-move" data-i="${i}">${enToFr(o.san)}</button>`).join('');
+    host.innerHTML = bannerHtml() + `
+      <div class="train-progress">Puzzle ${qi + 1} / ${queue.length}</div>
+      <div class="train-prompt">Trait aux <b>${current.side === 'w' ? 'Blancs' : 'Noirs'}</b>. Pas de tactique ici : <b>compare</b> ces coups et choisis celui qui garde ta position.</div>
+      <div class="train-board-wrap">
+        <svg class="train-board" viewBox="0 0 360 360" id="train-board"></svg>
+        <svg class="train-board" viewBox="0 0 360 360" id="train-arrows"></svg>
+      </div>
+      <div class="train-options train-options-move" id="train-choices">${opts}</div>
+      <div class="train-feedback" id="train-feedback" role="status" aria-live="polite"></div>
+      <div class="train-actions" id="train-actions"></div>
+      <div class="train-context">${puzzleContextHtml(current)}</div>`;
+    board = $('#train-board'); arrows = $('#train-arrows'); selected = null;
+    onMove = null;
+    BoardRenderer.setFlipped(flip);
+    BoardRenderer.render(board, current.fen);
+    $$('#train-choices .train-opt').forEach(b => b.onclick = () => answerChoice(+b.dataset.i));
+    bindBanner();
+  }
+
+  function answerChoice(i) {
+    const box = $('#train-choices');
+    if (!box || box.classList.contains('done')) return;
+    box.classList.add('done');
+    const picked = choices[i];
+    $$('#train-choices .train-opt').forEach((b, j) => {
+      if (choices[j].good) b.classList.add('correct');
+      else if (j === i) b.classList.add('incorrect');
+      b.disabled = true;
+    });
+    revealSolution(!!picked.good);
+  }
   function bindBanner() {
     const pa = $('#puz-all');
-    if (pa) pa.onclick = () => { motifFilter = null; startPuzzles(); };
+    if (pa) pa.onclick = () => { motifFilter = null; plyFilter = false; startPuzzles(); };
   }
 
   // "Coup 21 · tu avais joué Cf3 lors de ta partie contre Bob le 12 mai 2024"
@@ -866,7 +1027,8 @@ const Training = (() => {
       return;
     }
     if (qi >= queue.length) {
-      host.innerHTML = bannerHtml() + `<div class="train-empty">✅ Session terminée — ${queue.length} puzzle${queue.length > 1 ? 's' : ''} révisé${queue.length > 1 ? 's' : ''} !<br><span>${motifFilter ? 'Passe à un autre motif dans l\'onglet Motifs.' : 'Reviens demain pour la prochaine fournée.'}</span></div>`;
+      logSession('puzzles', sessN, sessScore, motifFilter || (plyFilter ? 'ply' : null));
+      host.innerHTML = bannerHtml() + `<div class="train-empty">✅ Session terminée — ${queue.length} puzzle${queue.length > 1 ? 's' : ''} révisé${queue.length > 1 ? 's' : ''}${sessN ? ` · <b>${sessScore}/${sessN}</b> trouvés du premier coup` : ''} !<br><span>${motifFilter ? 'Passe à un autre motif dans l\'onglet Motifs.' : 'Reviens demain pour la prochaine fournée.'}</span></div>`;
       bindBanner();
       return;
     }
@@ -879,6 +1041,10 @@ const Training = (() => {
     solStep = 0;
     liveFen = current.fen;
     checking = false;
+    // Unclassified cards have no forcing answer: compare candidate moves
+    // instead of hunting for "the" move (see buildChoices).
+    choices = isChoiceCard(current) ? buildChoices(current) : null;
+    if (choices) { renderChoiceCard(); return; }
     const multi = solLine.length >= 2;
     const flip = current.side === 'b';
     host.innerHTML = bannerHtml() + `
@@ -975,6 +1141,7 @@ const Training = (() => {
   function revealSolution(correct, altMove) {
     solved = true;
     onMove = null;
+    sessN++; if (correct) sessScore++;
     // Play the whole solution line from the original puzzle position, collecting
     // the SANs, the first move (for the board arrow) and the position right after
     // it (what explainPuzzle reasons about — unchanged single-move behaviour).
@@ -1260,6 +1427,7 @@ const Training = (() => {
 
     const due = buildSession().length;
     const learned = items.filter(it => (it.reps || 0) >= 2).length;
+    const plyCount = items.filter(inMoveWindow).length;
 
     let rows = '';
     for (const m of sorted) {
@@ -1281,17 +1449,21 @@ const Training = (() => {
       <p class="train-advice">⚠️ ${TACTICAL.includes(target) ? 'Ton point faible tactique' : 'Ton motif le plus fréquent'} : <b>${MOTIF_LABELS[target]}</b>.
         <button class="train-btn good" id="motif-drill">S'entraîner sur ce motif ▶</button></p>
       <div class="motif-list">${rows}</div>
+      ${plyCount ? `<p class="train-advice">⏱ <b>La sortie d'ouverture</b> : ${plyCount} de tes erreurs tombent entre le <b>coup 5 et le coup 15</b>, quand le plateau s'ouvre et que les pièces se touchent pour la première fois.
+        <button class="train-btn good" id="motif-ply">S'entraîner sur cette fenêtre ▶</button></p>` : ''}
       <p class="train-note">Touche un motif pour t'entraîner uniquement dessus. Les puzzles te font rejouer tes erreurs en répétition espacée.</p>`;
     const db = $('#motif-drill');
     if (db) db.onclick = () => drillMotif(target);
+    const pb = $('#motif-ply');
+    if (pb) pb.onclick = () => drillPly();
     $$('#train-motifs .motif-row').forEach(b => { b.onclick = () => drillMotif(b.dataset.motif); });
   }
 
   // ───────────────────────── VIGILANCE (anti-gaffe reflex) tab ─────────────────────────
   // Before every move a beginner should scan: is one of MY pieces hanging? can I
-  // win material for free? This drill trains exactly that on your real positions:
-  // a yes/no question, then it reveals and highlights the piece.
-  let vQueue = [], vi = 0, vScore = 0;
+  // win material for free? This drill trains exactly that on your real positions
+  // — by CLICKING the dangerous square, after a floor delay. See the long note
+  // above startVigilance for why it is no longer a yes/no question.
   const PIECE_FR = {
     p: { a: 'Ton', n: 'pion' }, n: { a: 'Ton', n: 'cavalier' }, b: { a: 'Ton', n: 'fou' },
     r: { a: 'Ta', n: 'tour' }, q: { a: 'Ta', n: 'dame' }, k: { a: 'Ton', n: 'roi' }
@@ -1312,27 +1484,56 @@ const Training = (() => {
     } catch (_) { return null; }
   }
 
-  function startVigilance() {
-    const all = load().slice();
-    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
-    vQueue = all.slice(0, 8).map(it => {
-      const r = Math.random();
-      let mode = r < 0.34 ? 'def' : r < 0.67 ? 'off' : 'chk';
-      let planned = null;
-      if (mode === 'chk') {
-        planned = it.playedSan ? sanApply(it.fen, it.playedSan) : null;
-        if (!planned) mode = r < 0.5 ? 'def' : 'off';
+  // ═════════════════ Vigilance : l'inventaire des prises ═════════════════
+  // Cet exercice n'entraîne PAS un motif, il entraîne un GESTE : balayer le
+  // plateau avant de jouer. D'où trois choix de conception :
+  //  1. on ne répond plus oui/non — une pièce ou face donnait 50 % au hasard, et
+  //     l'énoncé annonçait lui-même laquelle des vérifications faire — mais en
+  //     CLIQUANT la case du danger, ou « Rien à signaler » ;
+  //  2. la question est toujours la même, donc les deux vérifications (mes
+  //     pièces en prise / ce que je peux prendre) doivent tourner chaque fois ;
+  //  3. les commandes n'apparaissent qu'après un délai plancher (VIG_DELAY_MS) :
+  //     c'est la pause elle-même qu'il faut installer — 50 % de ses erreurs sont
+  //     des coups joués en moins de 15 s avec la moitié de la pendule intacte.
+  //     Désactivable (chip ⏱), actif par défaut, mémorisé.
+  const VIG_DELAY_MS = 10000;
+  const VIG_DELAY_KEY = 'chess-analyst-vig-delay';
+  const vigDelayOn = () => { try { return localStorage.getItem(VIG_DELAY_KEY) !== '0'; } catch (_) { return true; } };
+  function setVigDelay(on) { try { localStorage.setItem(VIG_DELAY_KEY, on ? '1' : '0'); } catch (_) {} }
+
+  let vQueue = [], vi = 0, vScore = 0, vTimer = null, vAnswered = false, vGateUntil = 0;
+
+  // Une question = une position + la bonne case (null pour « rien »).
+  // 'scan'  : ta pièce en prise d'abord, sinon la pièce adverse à prendre.
+  // 'check' : tu envisages un coup (flèche) — d'où viendrait la punition ?
+  function buildVigQuestion(it) {
+    if (Math.random() < 0.34 && it.playedSan) {
+      const planned = sanApply(it.fen, it.playedSan);
+      if (planned) {
+        const hz = dangerousCheckAfter(it.fen, it.playedSan);
+        return { type: 'check', fen: it.fen, side: it.side, planned,
+          played: enToFr(it.playedSan), answer: hz ? hz.from : null, hazard: hz || null };
       }
-      const hazard = mode === 'def' ? myHanging(it.fen, it.side)
-        : mode === 'off' ? oppHanging(it.fen, it.side)
-        : dangerousCheckAfter(it.fen, it.playedSan);
-      return { fen: it.fen, side: it.side, mode, planned, played: it.playedSan || '', hazard: hazard || null };
-    });
+    }
+    // Priorité défensive : on regarde d'abord ce qui est en prise chez soi.
+    const mine = myHanging(it.fen, it.side);
+    const theirs = mine ? null : oppHanging(it.fen, it.side);
+    const hz = mine || theirs;
+    return { type: 'scan', fen: it.fen, side: it.side,
+      answer: hz ? hz.square : null, hazard: hz || null, mine: !!mine };
+  }
+
+  function startVigilance() {
+    vQueue = shuffle(load().slice()).slice(0, 8).map(buildVigQuestion);
     vi = 0; vScore = 0;
     renderVigilance();
   }
 
+  function clearVigTimer() { if (vTimer) { clearInterval(vTimer); vTimer = null; } }
+  const vGateClosed = () => Date.now() < vGateUntil;
+
   function renderVigilance() {
+    clearVigTimer();
     const host = $('#train-vigilance');
     if (load().length < 4) {
       host.innerHTML = `<div class="train-empty">Pas encore assez de positions.<br><span>Analyse quelques parties : on te fera travailler le réflexe anti-gaffe sur tes vraies positions.</span></div>`;
@@ -1343,75 +1544,99 @@ const Training = (() => {
       const msg = vScore >= 7 ? 'Œil de lynx ! Ce réflexe te fera gagner des parties.'
         : vScore >= 4 ? 'Ça vient — refais une série.'
         : 'Prends l\'habitude : à chaque coup, checke d\'abord les prises.';
+      logSession('vigilance', vQueue.length, vScore);
       host.innerHTML = `<div class="train-empty">Score : <b>${vScore} / ${vQueue.length}</b><br><span>${msg}</span></div>
         <div class="train-actions"><button class="train-btn good" id="vig-again">Nouvelle série</button></div>`;
       $('#vig-again').onclick = startVigilance;
       return;
     }
+    vAnswered = false;
     const q = vQueue[vi];
-    const question = q.mode === 'def'
-      ? 'Une de tes pièces est-elle <b>en prise</b> ?'
-      : q.mode === 'off'
-      ? 'Peux-tu <b>gagner du matériel</b> tout de suite ?'
-      : `Tu envisages <b>${q.played}</b> (flèche). L'adversaire aura-t-il un <b>échec dangereux</b> en réponse ?`;
+    const question = q.type === 'check'
+      ? `Tu envisages <b>${q.played}</b> (flèche bleue). Clique la case <b>d'où viendrait la punition</b>, ou « Rien ».`
+      : `Clique la case du <b>danger le plus grave</b> : une de tes pièces en prise, ou une pièce adverse à prendre. Sinon « Rien ».`;
+    const delay = vigDelayOn();
     host.innerHTML = `
-      <div class="train-progress">Position ${vi + 1} / ${vQueue.length} · Score ${vScore}</div>
+      <div class="train-progress">Position ${vi + 1} / ${vQueue.length} · Score ${vScore}
+        <button class="train-chip${delay ? ' on' : ''}" id="vig-delay-chip" title="Délai de réflexion obligatoire">⏱ ${VIG_DELAY_MS / 1000}s</button>
+      </div>
       <div class="train-prompt">Trait aux <b>${q.side === 'w' ? 'Blancs' : 'Noirs'}</b> (toi). ${question}</div>
       <div class="train-board-wrap">
         <svg class="train-board" viewBox="0 0 360 360" id="vig-board"></svg>
         <svg class="train-board" viewBox="0 0 360 360" id="vig-arrows"></svg>
       </div>
-      <div class="train-options vig-yn" id="vig-options">
-        <button class="train-opt" data-a="yes">Oui</button>
-        <button class="train-opt" data-a="no">Non</button>
+      <div class="vig-gate" id="vig-gate"${delay ? '' : ' hidden'}>
+        <div class="vig-gate-bar"><span id="vig-gate-fill"></span></div>
+        <span class="vig-gate-txt">Regarde d'abord — <b id="vig-gate-n">${VIG_DELAY_MS / 1000}</b>s</span>
+      </div>
+      <div class="train-options vig-yn" id="vig-options"${delay ? ' hidden' : ''}>
+        <button class="train-opt" id="vig-none">Rien à signaler</button>
       </div>
       <div class="train-feedback" id="vig-feedback"></div>`;
+    const vb = $('#vig-board');
     BoardRenderer.setFlipped(q.side === 'b');
-    BoardRenderer.render($('#vig-board'), q.fen);
-    if (q.mode === 'chk' && q.planned)
+    BoardRenderer.render(vb, q.fen);
+    if (q.type === 'check' && q.planned)
       BoardRenderer.drawArrows($('#vig-arrows'), [{ from: q.planned.from, to: q.planned.to, color: '#5b8fb9' }]);
-    $$('#vig-options .train-opt').forEach(b => b.onclick = () => answerVig(b.dataset.a === 'yes'));
+    $('#vig-delay-chip').onclick = () => { setVigDelay(!vigDelayOn()); renderVigilance(); };
+    $('#vig-none').onclick = () => answerVig(null);
+    // Répondre = cliquer une case du plateau. On branche tout de suite (regarder
+    // le plateau fait partie de l'exercice) mais on ignore les clics tant que le
+    // délai plancher court.
+    vb.onclick = (e) => {
+      if (vAnswered || vGateClosed()) return;
+      const sq = BoardRenderer.coordToSquare(vb, e.clientX, e.clientY);
+      if (sq) answerVig(sq);
+    };
+    vGateUntil = 0;
+    if (delay) runVigGate();
   }
 
-  function answerVig(saidYes) {
+  function runVigGate() {
+    vGateUntil = Date.now() + VIG_DELAY_MS;
+    const fill = $('#vig-gate-fill'), num = $('#vig-gate-n');
+    const tick = () => {
+      const left = Math.max(0, vGateUntil - Date.now());
+      if (fill) fill.style.width = (100 * (1 - left / VIG_DELAY_MS)).toFixed(1) + '%';
+      if (num) num.textContent = String(Math.ceil(left / 1000));
+      if (left <= 0) {
+        clearVigTimer();
+        const gate = $('#vig-gate'); if (gate) gate.hidden = true;
+        const opts = $('#vig-options'); if (opts) opts.hidden = false;
+      }
+    };
+    tick();
+    vTimer = setInterval(tick, 200);
+  }
+
+  function answerVig(square) {
+    if (vAnswered) return;
+    vAnswered = true;
+    clearVigTimer();
+    const gate = $('#vig-gate'); if (gate) gate.hidden = true;
     const opts = $('#vig-options');
-    if (opts.classList.contains('done')) return;
-    opts.classList.add('done');
+    if (opts) { opts.hidden = false; opts.classList.add('done'); }
+    const none = $('#vig-none'); if (none) none.disabled = true;
     const q = vQueue[vi];
-    const has = !!q.hazard;
-    const correct = saidYes === has;
+    const correct = (square || null) === (q.answer || null);
     if (correct) vScore++;
-    $$('#vig-options .train-opt').forEach(b => {
-      const isYes = b.dataset.a === 'yes';
-      if (isYes === has) b.classList.add('correct');
-      else if (isYes === saidYes) b.classList.add('incorrect');
-      b.disabled = true;
-    });
-    if (has && q.mode === 'chk') {
-      // Reveal the position AFTER the planned move, with the punishing check drawn.
-      BoardRenderer.render($('#vig-board'), q.planned.afterFen);
-      BoardRenderer.drawArrows($('#vig-arrows'), [{ from: q.hazard.from, to: q.hazard.to, color: '#d36b6b' }]);
-    } else if (has) {
-      BoardRenderer.highlightSquares($('#vig-arrows'), [q.hazard.square], q.mode === 'def' ? '#d36b6b' : '#56b886');
-    }
+    const arrows = $('#vig-arrows');
+    // Montrer la vérité : la bonne case colorée, le clic raté en gris.
+    if (q.answer) BoardRenderer.highlightSquares(arrows, [q.answer], q.type === 'check' ? '#e2b857' : (q.mine ? '#d36b6b' : '#56b886'));
+    if (square && square !== q.answer) BoardRenderer.highlightSquares(arrows, [square], '#8a8aa0');
     let detail;
-    if (has && q.mode === 'def') {
-      const p = PIECE_FR[q.hazard.piece] || { a: 'Ta', n: 'pièce' };
-      detail = ` ${p.a} <b>${p.n}</b> en <b>${q.hazard.square}</b> est en prise — sauve-la ou défends-la avant de jouer autre chose.`;
-    } else if (has && q.mode === 'off') {
-      detail = ` Tu peux prendre <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b> en <b>${q.hazard.square}</b>.`;
-    } else if (has && q.hazard.why === 'mat') {
-      detail = ` Après ${q.played}, <b>${enToFr(q.hazard.san)}</b> serait mat ! Cherche toujours les échecs adverses avant de jouer.`;
-    } else if (has && q.hazard.why === 'fourchette') {
-      detail = ` Après ${q.played}, <b>${enToFr(q.hazard.san)}</b> fait échec ET attaque <b>${OPP_PIECE_FR[q.hazard.piece] || 'une pièce'}</b> — une fourchette : le matériel tombe au coup suivant.`;
-    } else if (has) {
-      detail = ` Après ${q.played}, l'échec <b>${enToFr(q.hazard.san)}</b> gagne <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b>.`;
-    } else if (q.mode === 'def') {
-      detail = ' Rien en prise ici — tu peux suivre ton plan sereinement.';
-    } else if (q.mode === 'off') {
-      detail = ' Rien à gagner de force ici — cherche plutôt à améliorer une pièce.';
+    if (q.type === 'check') {
+      if (q.hazard && q.hazard.why === 'mat') detail = ` Après ${q.played}, <b>${enToFr(q.hazard.san)}</b> serait <b>mat</b> ! Cherche toujours les échecs adverses avant de jouer.`;
+      else if (q.hazard && q.hazard.why === 'fourchette') detail = ` Après ${q.played}, <b>${enToFr(q.hazard.san)}</b> fait échec ET attaque <b>${OPP_PIECE_FR[q.hazard.piece] || 'une pièce'}</b> — une fourchette : le matériel tombe au coup suivant.`;
+      else if (q.hazard) detail = ` Après ${q.played}, l'échec <b>${enToFr(q.hazard.san)}</b> gagne <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b>.`;
+      else detail = ` Pas d'échec dangereux en réponse — de ce côté-là, ${q.played} ne t'expose pas.`;
+    } else if (q.hazard && q.mine) {
+      const pf = PIECE_FR[q.hazard.piece] || { a: 'Ta', n: 'pièce' };
+      detail = ` ${pf.a} <b>${pf.n}</b> en <b>${q.hazard.square}</b> est en prise — sauve-la ou défends-la avant de jouer autre chose.`;
+    } else if (q.hazard) {
+      detail = ` Rien en prise chez toi, mais tu peux prendre <b>${OPP_PIECE_FR[q.hazard.piece] || 'du matériel'}</b> en <b>${q.hazard.square}</b>. La vigilance marche dans les deux sens.`;
     } else {
-      detail = ` Pas d'échec dangereux en réponse — de ce côté-là, ${q.played} ne t'expose pas.`;
+      detail = ' Rien en prise, rien à prendre — tu peux suivre ton plan sereinement.';
     }
     const fb = $('#vig-feedback');
     fb.className = 'train-feedback ' + (correct ? 'right' : 'wrong');
@@ -1427,7 +1652,7 @@ const Training = (() => {
     window.scrollTo(0, 0);
     if (!bound) {
       $('#btn-train-back').onclick = hide;
-      $$('.train-tab').forEach(t => t.onclick = () => { motifFilter = null; switchTab(t.dataset.tab); });
+      $$('.train-tab').forEach(t => t.onclick = () => { motifFilter = null; plyFilter = false; switchTab(t.dataset.tab); });
       bound = true;
     }
     switchTab(tab || 'puzzles');
@@ -1446,7 +1671,49 @@ const Training = (() => {
     $$('.train-panel').forEach(p => p.classList.toggle('active', p.id === 'train-' + tab));
     if (tab === 'puzzles') startPuzzles();
     else if (tab === 'vigilance') startVigilance();
+    else if (tab === 'convert') renderConvert();
     else renderMotifs();
+  }
+
+  // ═══════════════ « Termine la partie » (conversion) ═══════════════
+  // Le levier n°1 de ses données : 33 % des parties où il atteint +2 finissent
+  // en défaite, et 39 % de ses défaites sont des parties déjà gagnées. Le Coach
+  // notait déjà « Conversion » comme son point faible sans proposer un seul
+  // exercice. Ici on recharge la position et on la rejoue contre Stockfish,
+  // aide coupée (voir le mode 'convert' de js/replay.js).
+  const CADENCE_SHORT = { rapid: 'rapide', daily: 'journalière', blitz: 'blitz', bullet: 'bullet' };
+  function renderConvert() {
+    const host = $('#train-convert');
+    if (typeof Coach === 'undefined' || !Coach.conversionTargets) {
+      host.innerHTML = `<div class="train-empty">Bilan du Coach indisponible.<br><span>Ouvre l'onglet Coach une fois pour charger tes parties.</span></div>`;
+      return;
+    }
+    let list = [];
+    try { list = Coach.conversionTargets(); } catch (_) { list = []; }
+    if (!list.length) {
+      host.innerHTML = `<div class="train-empty">Rien à reconvertir pour l'instant.<br><span>Cet exercice se remplit tout seul avec les parties où tu étais gagnant et que tu as perdues.</span></div>`;
+      return;
+    }
+    const rows = list.slice(0, 30).map((t, i) => `
+      <button class="conv-row" data-i="${i}">
+        <span class="conv-adv">+${(t.maxEval / 100).toFixed(1)}</span>
+        <span class="conv-body">
+          <span class="conv-opp">contre ${t.oppName}</span>
+          <span class="conv-meta">${t.date}${t.timeClass ? ' · ' + (CADENCE_SHORT[t.timeClass] || t.timeClass) : ''}${t.ply != null ? ' · coup ' + (Math.floor(t.ply / 2) + 1) : ''}</span>
+        </span>
+        <span class="conv-go">▶</span>
+      </button>`).join('');
+    const done = loadLog().filter(e => e.kind === 'conversion');
+    const wins = done.filter(e => e.score).length;
+    host.innerHTML = `
+      <div class="train-prompt"><b>${list.length} parties</b> que tu menais nettement et que tu as perdues. Reprends la position juste avant que ça bascule, et gagne-la. <b>Aucune aide n'est affichée</b> : ni éval, ni meilleur coup.</div>
+      ${done.length ? `<div class="train-progress">Déjà tenté : <b>${done.length}</b> · converti <b>${wins}</b></div>` : ''}
+      <div class="conv-list">${rows}</div>
+      <p class="train-note">Le chiffre à gauche est ton avantage maximum dans cette partie (+3 = une pièce, +5 = une tour).</p>`;
+    $$('#train-convert .conv-row').forEach(b => b.onclick = () => {
+      const t = list[+b.dataset.i];
+      if (t && typeof Replay !== 'undefined' && Replay.startConversion) Replay.startConversion(t);
+    });
   }
 
   // Open the trainer directly on one motif (used by Coach's focus card).
@@ -1459,5 +1726,5 @@ const Training = (() => {
   // global — chess.min.js is included before this file).
   try { retagDeck(); } catch (_) {}
 
-  return { capture, ingestGame, dueCount, show, showMotif, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, explainPuzzle, MOTIF_LABELS, TACTICAL };
+  return { capture, ingestGame, dueCount, show, showMotif, drillPly, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, explainPuzzle, loadLog, logSession, MOTIF_LABELS, TACTICAL };
 })();

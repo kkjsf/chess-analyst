@@ -15,6 +15,19 @@ const Replay = (() => {
   let busy = false;      // moteur en réflexion / animation → entrées bloquées
   let curEvalMe = null;  // éval (cp, point de vue de mon camp) à mon trait courant
   let myBestUci = null;  // meilleur coup du moteur pour moi (flèche bleue)
+  // 'replay'  = « Rejoue ta défaite » : le moteur montre tout (flèche + éval),
+  //             c'est un bac à sable pour comprendre une gaffe.
+  // 'convert' = « Termine la partie » : MÊME moteur, MAIS aucune aide affichée.
+  //             On ne s'entraîne pas à convertir une position gagnante en lisant
+  //             la réponse au-dessus de l'échiquier. Le seul retour pendant la
+  //             partie est un avertissement quand l'avantage se met à filer.
+  let mode = 'replay';
+  let startEvalMe = null;  // éval à la position de départ (mesurée une fois)
+  let warned = false;      // l'avertissement « ton avantage file » a déjà servi
+  let convDone = false;    // partie terminée : verrouille le bilan
+
+  const CONV_WIN = 300;    // seuil « position gagnante » (une pièce d'avance)
+  const CONV_SLIP = 120;   // sous ce seuil, l'avantage est considéré comme parti
 
   const DEPTH_MY = 12;              // éval + flèche bleue à mon trait
   const REPLY_MT = 'movetime 700';  // force de la réplique de l'ordi
@@ -111,7 +124,12 @@ const Replay = (() => {
   function gameOver() { try { return new Chess(curFen()).game_over(); } catch (_) { return false; } }
 
   // ── entrée publique ──
-  function start(entry) {
+  function start(entry) { return begin(entry, 'replay'); }
+  // « Termine la partie » : même coquille, aide coupée, objectif = gagner.
+  function startConversion(entry) { return begin(entry, 'convert'); }
+
+  function begin(entry, m) {
+    mode = m === 'convert' ? 'convert' : 'replay';
     if (!entry || !entry.fenBefore) return;
     try { if (!new Chess(entry.fenBefore)) return; } catch (_) { return; }
     seedFen = entry.fenBefore;
@@ -124,7 +142,10 @@ const Replay = (() => {
       bestUci: entry.bestUci || '', tip: (entry.tip || '').replace(/<[^>]*>/g, '').trim(),
       moveNo, dot,
     };
+    intro.oppName = entry.oppName || null;
+    intro.date = entry.date || null;
     ensureDom();
+    $('#rp-title').textContent = mode === 'convert' ? 'Termine la partie' : 'Rejoue ta défaite';
     $('#replay-overlay').hidden = false;
     document.body.classList.add('guess-open');
     BoardRenderer.setFlipped(mySide === 'b');
@@ -144,6 +165,7 @@ const Replay = (() => {
     token++;
     hist = [{ fen: seedFen, move: null, by: null }];
     curEvalMe = null; myBestUci = null; busy = false;
+    startEvalMe = null; warned = false; convDone = false;
     renderIntro();
     setVerdict('');
     renderBoard(null);
@@ -166,6 +188,14 @@ const Replay = (() => {
   function renderIntro() {
     const el = $('#rp-intro');
     if (!el) return;
+    if (mode === 'convert') {
+      const vs = intro.oppName ? ` contre <b>${intro.oppName}</b>` : '';
+      const when = intro.date ? ` le ${intro.date}` : '';
+      el.innerHTML = `Tu étais <b>gagnant</b> ici${vs}${when} — et tu as perdu la partie.`
+        + ` <span class="rp-goal">Rejoue-la et gagne. Aucune aide : ni éval, ni flèche, ni meilleur coup.`
+        + ` L'ordi joue la meilleure défense.</span>`;
+      return;
+    }
     const head = intro.moveNo != null ? `Coup ${intro.moveNo}${intro.dot} — ` : '';
     let h = `${head}tu avais joué <b>${intro.playedSan || '?'}</b>.`;
     if (intro.tip) h += ` ${intro.tip}`;
@@ -186,7 +216,9 @@ const Replay = (() => {
 
   function drawMyArrow() {
     const arr = [];
-    if (myBestUci) arr.push({ from: myBestUci.slice(0, 2), to: myBestUci.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 });
+    // Pas de flèche du meilleur coup en mode conversion : c'est justement ce
+    // qu'il faut trouver seul.
+    if (myBestUci && mode !== 'convert') arr.push({ from: myBestUci.slice(0, 2), to: myBestUci.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 });
     BoardRenderer.drawArrows(arrowsSvg, arr);
   }
 
@@ -228,6 +260,14 @@ const Replay = (() => {
     busy = false;
     drawMyArrow();
     renderBoard(null);
+    if (mode === 'convert') {
+      // On MESURE toujours (il faut savoir quand l'avantage file), on n'AFFICHE
+      // rien. startEvalMe est figé au premier passage : c'est la référence du
+      // bilan de fin.
+      if (startEvalMe == null) startEvalMe = curEvalMe;
+      setStatus(`Trait à <b>toi</b>. Trouve le coup — rien n'est affiché.`);
+      return;
+    }
     const best = uciToFr(fen, myBestUci);
     const evalTxt = res ? `Éval <b>${evalWhite(res, fen)}</b>.` : 'Moteur indisponible — joue librement.';
     const bestTxt = best ? ` Meilleur : <b>${best}</b> <span class="rp-hint">(flèche bleue)</span>.` : '';
@@ -308,6 +348,18 @@ const Replay = (() => {
   // le commentaire de analysis.js (pièce en prise, fourchette menacée…).
   function gradeMyMove(isBest, cpLoss, mateForMe, iDeliveredMate, fenAfterMe, myMove, res) {
     if (iDeliveredMate) return { html: '🏆 <b>Échec et mat !</b> Superbe, tu punis la position.', cls: 'right' };
+    // Mode conversion : pas de note coup par coup (ce serait rendre l'aide par
+    // la fenêtre). Un seul retour, et une seule fois : le moment où l'avantage
+    // passe sous le seuil. C'est l'information dont il a besoin, et c'est tout.
+    if (mode === 'convert') {
+      const after = meScore(res, fenAfterMe);
+      if (mateForMe != null && mateForMe < 0) return { html: '🔴 <b>Attention</b> — l\'adversaire a un mat forcé.', cls: 'wrong' };
+      if (!warned && after != null && startEvalMe != null && startEvalMe >= CONV_WIN && after < CONV_SLIP) {
+        warned = true;
+        return { html: '⚠️ <b>Ton avantage vient de filer.</b> Tu peux annuler et chercher autre chose.', cls: 'wrong' };
+      }
+      return { html: '', cls: '' };
+    }
     if (mateForMe != null && mateForMe < 0) {
       const bad = badExplain(fenAfterMe, myMove, res);
       return { html: `🔴 <b>Attention</b> — ce coup permet un mat forcé pour l'adversaire.${bad ? ' ' + bad : ''}`, cls: 'wrong' };
@@ -343,16 +395,30 @@ const Replay = (() => {
   function terminalLine(fen) {
     try {
       const g = new Chess(fen);
+      const converted = (v) => {
+        // Bilan de conversion : gagné = converti. C'est le seul verdict qui
+        // compte, et il est journalisé une seule fois par partie.
+        if (mode !== 'convert') return '';
+        if (!convDone) { convDone = true; logConv(v); }
+        return v
+          ? `<div class="rp-term rp-term-win">✅ <b>Converti !</b> Voilà la partie que tu avais perdue. Refais-en une.</div>`
+          : `<div class="rp-term">❌ <b>Reperdue.</b> Annule quelques coups et cherche où ça a basculé — c'est là qu'est la leçon.</div>`;
+      };
       if (g.in_checkmate()) {
         const loserIsMe = (fen.split(' ')[1] === mySide);
+        if (mode === 'convert') return converted(!loserIsMe);
         return loserIsMe
           ? `<div class="rp-term">♚ Échec et mat contre toi. Annule pour tenter une autre suite.</div>`
           : `<div class="rp-term">🏆 Échec et mat, bien joué ! Annule pour explorer une variante.</div>`;
       }
-      if (g.in_stalemate()) return `<div class="rp-term">Pat — nulle. Annule pour tenter autre chose.</div>`;
-      if (g.in_draw()) return `<div class="rp-term">Nulle (matériel / répétition). Annule pour tenter autre chose.</div>`;
+      if (g.in_stalemate()) return (mode === 'convert' ? converted(false) : `<div class="rp-term">Pat — nulle. Annule pour tenter autre chose.</div>`);
+      if (g.in_draw()) return (mode === 'convert' ? converted(false) : `<div class="rp-term">Nulle (matériel / répétition). Annule pour tenter autre chose.</div>`);
     } catch (_) {}
     return '';
+  }
+
+  function logConv(won) {
+    if (typeof Training !== 'undefined' && Training.logSession) Training.logSession('conversion', 1, won ? 1 : 0);
   }
 
   function terminalComment() {
@@ -361,5 +427,5 @@ const Replay = (() => {
     renderBoard(null);
   }
 
-  return { start, close };
+  return { start, startConversion, close };
 })();

@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '201';
+window.APP_VERSION = '204';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -426,7 +426,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
         </div>
       </div>
       <div class="routine-list" id="routine-list"></div>
-      <p class="routine-foot"><b>Priorité :</b> ne rien laisser en prise · tactique chaque jour · revoir tes parties. Les ouvertures, plus tard.</p>
+      <p class="routine-foot"><b>La règle d'or :</b> après le coup 4, jamais moins de <b>15 secondes</b> par coup. Échecs, prises, menaces — puis joue. La moitié de tes erreurs sont des coups joués en moins de 15 s avec la pendule pleine.</p>
     </section>
 
     <!-- Accès rapides -->
@@ -644,11 +644,13 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
   <div class="train-tabs">
     <button class="train-tab active" data-tab="puzzles">🧩 Puzzles</button>
     <button class="train-tab" data-tab="vigilance">🛡️ Vigilance</button>
+    <button class="train-tab" data-tab="convert">🏁 Convertir</button>
     <button class="train-tab" data-tab="motifs">📊 Motifs</button>
   </div>
   <div class="train-body">
     <div class="train-panel active" id="train-puzzles"></div>
     <div class="train-panel" id="train-vigilance"></div>
+    <div class="train-panel" id="train-convert"></div>
     <div class="train-panel" id="train-motifs"></div>
   </div>
 </div>
@@ -690,8 +692,8 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     <button class="learn-tile" data-panel="mats">
       <div class="learn-tile-icon">👑</div>
       <div class="learn-tile-txt">
-        <span class="learn-tile-title">Mats</span>
-        <span class="learn-tile-sub">Les schémas de mat essentiels (couloir, étouffé, tour + roi…), à rejouer un par un sur l'échiquier.</span>
+        <span class="learn-tile-title">Mats &amp; finales</span>
+        <span class="learn-tile-sub">Les schémas de mat essentiels (couloir, étouffé, tour + roi…) <b>et les cinq règles des finales de pions</b> — celles qui transforment une pièce d'avance en victoire.</span>
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>

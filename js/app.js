@@ -3686,8 +3686,13 @@ const App = (() => {
   const ROUTINE_ITEMS = [
     { key: 'vigilance', icon: '🛡️', label: 'Vigilance - pièces en prise',   action: 'vigilance' },
     { key: 'puzzles',   icon: '🧩', label: 'Puzzles tactiques (tes erreurs)', action: 'train', due: true },
+    { key: 'convert',   icon: '🏁', label: 'Reconvertir une partie gagnée',  action: 'convert' },
     { key: 'review',    icon: '🔎', label: 'Revoir une partie',              action: 'review' },
-    { key: 'rapide',    icon: '♟️', label: 'Une partie en Rapide (pas de bullet !)', action: null },
+    // La règle d'arrêt EST un item de la routine, pas un conseil en pied de
+    // carte : ses journées à deux défaites d'affilée tombent à 44-52 % de
+    // précision contre 76-81 % les bons jours. Ce n'est pas le niveau qui
+    // baisse, c'est l'attention.
+    { key: 'rapide',    icon: '♟️', label: 'Une partie en Rapide - <b>2 défaites d\'affilée = stop</b>', action: null },
   ];
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   function routineTodayKey() { return 'chess-routine-' + isoDay(new Date()); }
@@ -3758,6 +3763,7 @@ const App = (() => {
   function runRoutineAction(action) {
     if (action === 'train') { if (typeof Training !== 'undefined') Training.show(); return; }
     if (action === 'vigilance') { if (typeof Training !== 'undefined') Training.show('vigilance'); return; }
+    if (action === 'convert') { if (typeof Training !== 'undefined') Training.show('convert'); return; }
     if (action === 'review') {
       const ta = $('#pgn-input');
       if (ta) { ta.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); ta.focus(); }

@@ -1,4 +1,4 @@
-// Cours sur les mats — un vrai cours illustré (leçon + diagramme + séquence)
+// Cours sur les mats et les finales de pions — un vrai cours illustré (leçon + diagramme + séquence)
 // suivi d'exercices jouables sur l'échiquier. Remplace l'ancien entraîneur de
 // finales (Chess.com le fait déjà très bien).
 //
@@ -21,6 +21,8 @@ const Mates = (() => {
       intro: `Des schémas qui reviennent sans cesse en partie. Les reconnaître, c'est trouver le mat en un clin d'œil.` },
     { id: 'attaque', title: '④ Les mats sur le roque',
       intro: `Quand les deux camps ont roqué du même côté, l'attaque vise les cases <b>h7</b>, <b>g7</b> et <b>f7</b>. Voici les figures de mat qui couronnent ces attaques.` },
+    { id: 'finales', title: '⑤ Les finales de pions',
+      intro: `Savoir mater ne suffit pas : il faut d'abord <b>arriver</b> à la finale gagnante. Ces cinq règles sont celles qui transforment une pièce d'avance en victoire — et celles qui expliquent pourquoi une partie à +5 finit parfois en nulle.` },
   ];
 
   const MATES = [
@@ -212,6 +214,72 @@ const Mates = (() => {
         { fen: '1k5r/1pp2p2/p4P2/8/4B3/2P2QpP/Pr3qP1/2R1R2K b - - 1 33', sol: ['Rxh3+', 'gxh3', 'Qh2#'], real: `Lichess · niveau 1190`, game: 'https://lichess.org/D8WpGFZU', lvl: 'moyenne', hint: `Le pion g6 verrouille h7 : amène la dame sur la colonne h.` },
         { fen: '2r1brk1/6p1/4p1P1/ppbp1p1R/5B2/2PBP2P/PP3q2/2KQ4 w - - 5 25', sol: ['Rh8+', 'Kxh8', 'Qh5+', 'Kg8', 'Qh7#'], real: `Lichess · niveau 1221`, game: 'https://lichess.org/nMds3cZ9/black', lvl: 'moyenne', hint: `Le pion g6 verrouille h7 : amène la dame sur la colonne h.` },
       ] },
+    // ══════════ ⑤ finales de pions ══════════
+    // Toutes ces positions sont vérifiées par Stockfish (depth 28, MultiPV sur
+    // TOUS les coups légaux). Les exercices sans `demo` ont un coup gagnant
+    // UNIQUE : b6 (le carré), b4 (les deux courses), Kg7 (l'idée de Réti) sont
+    // les seuls coups à ne pas jeter le résultat. Ceux marqués `demo` sont des
+    // figures pures où plusieurs coups gagnent : c'est le geste qui compte.
+    { id: 'carre', group: 'finales', icon: '⬛', name: 'La règle du carré', en: 'Rule of the square',
+      lesson: `La question la plus fréquente d'une finale : <b>le roi rattrape-t-il le pion ?</b> Pas besoin de calculer coup par coup, il y a une règle qui donne la réponse d'un coup d'œil.<br><br>
+      Trace le <b>carré</b> dont un côté va du pion jusqu'à sa case de promotion. Si le roi adverse est <b>dans</b> ce carré (ou peut y entrer au trait), il attrape le pion. S'il est <b>dehors</b>, le pion passe.<br><br>
+      Sur le diagramme, le pion h5 doit franchir h6-h7-h8 : trois cases, donc un carré de 4 sur 4, colonnes <b>e à h</b> et rangées <b>5 à 8</b>. Le roi noir en <b>e6</b> est dedans de justesse : il rattrape. Une seule colonne plus à gauche, en <b>d6</b>, il est dehors et le pion passe.<br><br>
+      <b>⚠ Deux pièges</b> : un pion sur sa case de départ avance de deux cases, donc on trace le carré depuis la <b>troisième</b> rangée ; et un pion de son propre camp sur le chemin du roi peut lui coûter le tempo qui change tout.`,
+      seq: null,
+      fen: '8/8/4k3/7P/8/8/8/7K b - - 0 1',
+      arrows: [{ from: 'e6', to: 'h6', color: G }, { from: 'h5', to: 'h8', color: B }],
+      puzzles: [
+        { fen: '8/8/5k2/1P6/8/8/8/7K w - - 0 1', sol: ['b6'], hint: `Le carré du pion b5 couvre les colonnes b à e. Le roi noir est en f6, donc dehors. Un seul coup gagne — et ce n'est pas un coup de roi.` },
+      ] },
+
+    { id: 'roi-devant', group: 'finales', icon: '🚶', name: 'Le roi devant son pion', en: 'King in front of the pawn',
+      lesson: `Roi + pion contre roi seul, c'est la finale la plus courante du monde — et elle est <b>gagnante ou nulle selon un détail</b> : où est ton roi.<br><br>
+      <b>La règle :</b> pousse ton <b>roi devant le pion</b>, pas le pion devant le roi. Le pion ne se promeut que si le roi lui ouvre la route.<br><br>
+      Sur le diagramme, le roi blanc est en <b>d6</b>, devant son pion d5, et le roi noir doit céder : c'est gagné. Déplace mentalement le roi blanc <b>derrière</b> le pion (d4 avec le pion d5) et la même position devient <b>nulle</b> — le roi noir tient d7/d8 et tu ne passes jamais.<br><br>
+      <b>Le test de l'opposition</b> : quand les deux rois se font face avec une case entre eux et que c'est à l'adversaire de jouer, il doit s'écarter et tu gagnes du terrain. C'est tout le mécanisme de cette finale.`,
+      seq: null,
+      fen: '3k4/8/3K4/3P4/8/8/8/8 w - - 0 1',
+      arrows: [{ from: 'd6', to: 'e6', color: G }, { from: 'd5', to: 'd6', color: B }],
+      puzzles: [
+        { fen: '3k4/8/3K4/3P4/8/8/8/8 w - - 0 1', sol: ['Ke6'], demo: true, hint: `Ne pousse pas le pion : contourne. Écarte-toi d'une colonne pour forcer le roi noir à choisir un côté, puis prends la case devant ton pion.` },
+      ] },
+
+    { id: 'course', group: 'finales', icon: '🏃', name: 'La course de pions', en: 'Pawn race',
+      lesson: `Deux pions passés, chacun court vers sa promotion : celui qui arrive le premier gagne. Ça ne se joue pas à l'instinct, ça se <b>compte</b>.<br><br>
+      <b>La méthode :</b> compte le nombre de coups qu'il te faut pour promouvoir, puis le nombre qu'il lui faut. Le trait vaut un coup. Si tu arrives le premier, <b>pousse, ne touche pas à ton roi</b> — un seul coup de roi et la course est perdue.<br><br>
+      Puis vérifie les deux bonus : ta nouvelle dame donne-t-elle <b>échec</b> (tu gagnes un temps) ? Peut-elle <b>prendre</b> sa dame ou l'arrêter avant la case de promotion ?<br><br>
+      C'est la finale la plus fréquente dans tes parties perdues depuis une position gagnante : à +3 ou +5, la tentation est de ramener le roi « au cas où ». Compte d'abord.`,
+      seq: null,
+      fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1',
+      arrows: [{ from: 'b2', to: 'b8', color: G }, { from: 'g7', to: 'g1', color: R }],
+      puzzles: [
+        { fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1', sol: ['b4'], hint: `Compte : ton pion b2 a besoin de 5 coups (avec le double pas), le sien de 5 aussi — mais c'est à toi. Un seul coup garde l'avance, et ce n'est pas un coup de roi.` },
+        { fen: '8/7k/6p1/8/8/1P6/7K/8 w - - 0 1', sol: ['b4'], hint: `Même compte, un rang de plus pour lui. Pousse, tout de suite.` },
+      ] },
+
+    { id: 'pion-tour', group: 'finales', icon: '🅰️', name: 'Le pion de tour : la nulle du coin', en: 'Rook pawn draw',
+      lesson: `La règle qui explique la moitié des « j'étais gagnant et ça a fait nulle » : <b>un pion de colonne a ou h, avec le roi adverse au coin, est une nulle</b>. Même avec ton roi juste devant, même avec un pion sur la 7ᵉ.<br><br>
+      Sur le diagramme, roi blanc g6, pion h6, roi noir h8 : les Noirs jouent, ils n'ont qu'un coup (Rg8), et c'est nulle. 1…Rg8 2.h7+ Rh8 3.Rh6 — <b>pat</b>. Le roi noir n'a plus de case et n'est pas en échec : la partie est nulle et l'avantage part à la poubelle.<br><br>
+      <b>Ce qu'il faut en faire :</b> quand tu simplifies une position gagnante, ne troque pas vers une finale de pion de tour. Garde un deuxième pion, ou garde une pièce. Et si tu défends, <b>cours vers le coin de son pion de tour</b> : c'est souvent ta seule nulle.`,
+      seq: `1…Rg8 2.h7+ Rh8 3.Rh6 pat`,
+      fen: '7k/8/6KP/8/8/8/8/8 b - - 0 1',
+      arrows: [{ from: 'h8', to: 'g8', color: R }, { from: 'h6', to: 'h7', color: B }],
+      puzzles: [
+        { fen: '6k1/6P1/6K1/8/8/8/8/8 w - - 0 1', sol: ['Kf6'], demo: true, hint: `Ici le pion est sur la colonne g, pas h — donc ça gagne. Mais attention au pat : ne bloque pas le roi noir, écarte ton roi pour lui laisser une case, puis reviens.` },
+      ] },
+
+    { id: 'reti', group: 'finales', icon: '🦅', name: 'Le roi qui court deux lièvres', en: 'Réti manoeuvre',
+      lesson: `L'idée la plus utile — et la plus contre-intuitive — des finales : <b>un roi qui avance en diagonale fait deux choses à la fois</b>. Il se rapproche du pion adverse <i>et</i> du chemin de son propre pion.<br><br>
+      Sur le diagramme, les Blancs semblent perdus : le pion h5 noir file, le roi h8 est à l'autre bout, et le pion c6 est trop loin pour être soutenu. Pourtant les Blancs font nulle, avec un seul coup : <b>Rg7 !</b><br><br>
+      Pourquoi ça marche : si les Noirs poussent le pion, le roi blanc le rattrape en diagonale (Rf6, Re5…) ; s'ils vont vers le pion c6 pour l'arrêter, le roi blanc l'escorte et fait dame. Le roi menace les deux à la fois, donc les Noirs ne peuvent pas s'occuper des deux.<br><br>
+      <b>La leçon :</b> en finale, ne calcule jamais un chemin de roi « tout droit ». La diagonale coûte le même nombre de coups et travaille deux fois.`,
+      seq: null,
+      fen: '7K/8/k1P5/7p/8/8/8/8 w - - 0 1',
+      arrows: [{ from: 'h8', to: 'g7', color: G }, { from: 'g7', to: 'c3', color: B }],
+      puzzles: [
+        { fen: '7K/8/k1P5/7p/8/8/8/8 w - - 0 1', sol: ['Kg7'], hint: `Pousser le pion perd, et courir droit sur le pion h5 aussi. Un seul coup fait les deux métiers en même temps : va en diagonale.` },
+      ] },
+
   ];
 
   // ───────────────────────── overlay ─────────────────────────
@@ -223,7 +291,7 @@ const Mates = (() => {
     o.hidden = true;
     o.innerHTML = `<div class="guess-panel">
       <div class="guess-head"><button class="back-btn" id="mate-close">←</button>
-      <span class="guess-title" id="mate-title">♚ Les mats</span><span class="guess-score" id="mate-head-extra"></span></div>
+      <span class="guess-title" id="mate-title">♚ Mats &amp; finales</span><span class="guess-score" id="mate-head-extra"></span></div>
       <div id="mate-stage"></div></div>`;
     document.body.appendChild(o);
     $('#mate-close').onclick = onBack;
@@ -251,7 +319,7 @@ const Mates = (() => {
 
   function renderMenu() {
     current = null;
-    $('#mate-title').textContent = '♚ Les mats';
+    $('#mate-title').textContent = '♚ Mats & finales';
     $('#mate-head-extra').textContent = `${MATES.length} figures`;
     const exos = MATES.reduce((a, m) => a + (m.puzzles ? m.puzzles.length : 0), 0);
     let html = `<p class="mate-intro">Un mat, c'est un roi en échec qui ne peut <b>ni fuir, ni parer, ni capturer</b>. Voici les figures de mat qui reviennent le plus souvent : apprends à les reconnaître, puis entraîne-toi à les poser sur l'échiquier.</p>

@@ -1,3 +1,6 @@
 # Base de puzzles Lichess (CC0, ~300 Mo) : source du minage d'exercices, à
 # retélécharger au besoin depuis https://database.lichess.org/#puzzles
 lichess_db_puzzle.csv.zst
+
+# Revue pedagogique 2026-08-28 : rapport interne, ne pas servir depuis Pages
+revue_pedagogique.html

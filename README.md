@@ -4,7 +4,7 @@ Analyseur de parties d'echecs pour joueurs debutants/intermediaires. PWA en fran
 
 **[Ouvrir l'app](https://kkjsf.github.io/chess-analyst/)**
 
-L'app s'organise en 5 onglets (barre de navigation en bas) : **Analyser**, **Coach**, **Apprendre**, **Entrainer**, **Finales**.
+L'app s'organise en 4 onglets (barre de navigation en bas, sidebar sur desktop) : **Analyser**, **Coach**, **Apprendre**, **Entrainer**.
 
 ## Analyser
 
@@ -40,8 +40,15 @@ L'app s'organise en 5 onglets (barre de navigation en bas) : **Analyser**, **Coa
 ## Coach
 
 Analyse l'**ensemble** de vos parties Chess.com pour en tirer un bilan global :
-- Taux de victoire, repertoire d'ouvertures, points faibles par phase
-- Profil du joueur (radar) et decomposition des faiblesses tactiques
+- **Une seule prescription** en haut du bilan (« Ta priorite en ce moment »), classee sur tous les motifs sans filtre - les autres cartes montrent leurs chiffres sans se declarer n°1
+- **Ton vrai niveau** : ton score contre des adversaires plus forts que toi, le seul repere qu'une opposition qui faiblit ne peut pas gonfler
+- **Ton rythme** : la part de tes erreurs jouees en moins de 15 s avec la pendule pleine
+- **Termine la partie** : les parties que tu menais nettement et que tu as perdues
+- **Est-ce que ca marche ?** : tes erreurs en partie avant / apres le debut de ton entrainement
+- **Tes seances de jeu** : une ligne par journee (parties, bilan, precision) + la regle d'arret a 2 defaites d'affilee
+- **Ton systeme** : combien d'ouvertures differentes tu joues, et laquelle garder
+- Taux de victoire, repertoire, profil du joueur (radar), faiblesses tactiques
+- Toute comparaison « avant / apres » est normalisee par l'**Elo adverse**, et aucun verdict n'est rendu sous 8 parties (ouverture) ou 20 parties par fenetre (tendance)
 - Entrainement bati sur **vos propres erreurs**
 
 L'analyse tourne **cote serveur** (GitHub Actions), se met a jour automatiquement chaque semaine, et l'app telecharge un petit fichier de resultats (`coach-data.json`). Options manuelles : `⟳ Actualiser`, "Analyser ici" (dans le navigateur, pour quelques parties), ou relance complete serveur. Le bilan est conserve hors-ligne.
@@ -49,18 +56,21 @@ L'analyse tourne **cote serveur** (GitHub Actions), se met a jour automatiquemen
 ## Apprendre
 
 Hub pedagogique regroupant plusieurs panneaux :
-- **Tactiques & concepts** : ~35 motifs illustres (fourchette, clouage, zwischenzug, mats classiques...) avec entrainement 🎯 directement sur l'echiquier
-- **Ouvertures** : explorateur des grandes ouvertures, coup par coup
+- **Tactiques & concepts** : ~35 motifs illustres (fourchette, clouage, zwischenzug...) avec entrainement 🎯 directement sur l'echiquier
+- **Mats & finales** : 21 figures - les schemas de mat essentiels (couloir, etouffe, roi+dame, roi+tour...) et les **5 regles des finales de pions** (regle du carre, roi devant son pion, course de pions, nulle du pion de tour, idee de Reti)
+- **Ouvertures a connaitre** : la check-list de l'essentiel a ce niveau
+- **Ouvertures** : explorateur des grandes ouvertures en arbre, coup par coup
 - **Notation des echecs** : lire/ecrire les coups + quiz
 - **Guide d'utilisation** : import, lecture de l'analyse, couleurs, Coach
 - **Comment ca marche** : Stockfish, Multi-PV, score de precision (WDL) et limites
 
 ## Entrainer
 
-Trainer tactique en trois onglets :
-- **🧩 Puzzles** : exercices tactiques a resoudre sur l'echiquier
-- **👁️ Menaces** : reperer la menace adverse
-- **📊 Motifs** : drills verifies par motif tactique
+Trainer en quatre onglets, tous alimentes par **tes propres erreurs** :
+- **🧩 Puzzles** : tes erreurs en repetition espacee (SM-2). Les cartes sans solution forcante deviennent une **comparaison de 3 coups** plutot qu'un « trouve LE coup »
+- **🛡️ Vigilance** : l'inventaire des prises. Tu **cliques la case** du danger (ou « rien »), apres un **delai plancher de 10 s** - c'est la pause qu'on entraine, pas seulement le motif. Desactivable.
+- **🏁 Convertir** : « Termine la partie ». Reprend une partie que tu menais nettement et que tu as perdue, a la position ou ca a bascule, et la rejoue contre Stockfish **sans aucune aide affichee** (ni eval, ni meilleur coup)
+- **📊 Motifs** : drills par motif tactique, plus une fenetre **« coups 5 a 15 »** (la sortie d'ouverture, ou tombe la moitie des erreurs)
 
 ## Stack technique
 
@@ -86,6 +96,6 @@ Ou ouvrir `index.html` directement (le service worker necessite HTTPS ou localho
 
 Push sur `main` deploie automatiquement via GitHub Pages.
 
-Avant chaque deploy, bumper la version du cache :
-- `sw.js` : `CACHE_NAME`
-- `index.html` : tous les `?v=XX`
+Avant chaque deploy, bumper **uniquement** `window.APP_VERSION` en haut de `index.html` :
+`sw.js` derive `CACHE_NAME` du `?v=`, et tous les assets sont charges avec ce meme `?v=`.
+Le service worker est cache-first, donc il faut bumper a **chaque** edit.

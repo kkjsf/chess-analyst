@@ -380,6 +380,22 @@ const Coach = (() => {
   function fmtIso(iso) { try { return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return iso; } }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // Précision par phase : on prend les compteurs DISPUTÉS quand ils existent
+  // (analysis.js, |éval| < 3.0), sinon les compteurs bruts des parties analysées
+  // avant ce changement — sans quoi tout le bilan tomberait à vide en attendant
+  // la prochaine passe complète du coach serveur. Voir CONTESTED_CP.
+  function phasePool(a, p) {
+    const c = a.phaseAccuracyContested;
+    if (c && c[p] && c[p].count) return c[p];
+    return (a.phaseAccuracy && a.phaseAccuracy[p]) || null;
+  }
+  // Vrai dès qu'au moins une partie du lot porte les compteurs disputés : sert
+  // uniquement à nommer la métrique honnêtement dans l'interface.
+  function hasContested(an) {
+    return an.some(g => { const c = g.analysis && g.analysis.phaseAccuracyContested; return c && ['opening', 'middle', 'endgame'].some(p => c[p] && c[p].count); });
+  }
+  const accLabel = an => hasContested(an) ? 'précision en position disputée' : 'précision';
+
   // Feed every analyzed game's mistakes into the spaced-repetition trainer
   // (Mode entraînement), so the SRS deck draws on your whole archive — not
   // only games opened one-by-one in the analyzer.
@@ -440,19 +456,25 @@ const Coach = (() => {
     };
     const cards = an.length
       ? group('now', 'Vue d\'ensemble', [
+          // La priorité d'abord, et une seule : quatre cartes se déclaraient
+          // « n°1 », dont la plus visible était la seule fausse.
+          renderFocus(an),
           renderNarrative(an),
-          renderRecentGames(anAll),
-          `<div class="coach-hero-row">${renderVigilance(an)}${renderPace(an)}</div>`,
-          renderFocus(an)
+          `<div class="coach-hero-row">${renderVsStronger(an)}${renderPace(an)}</div>`,
+          renderConvertCta(an),
+          renderRecentGames(anAll)
         ]) +
         group('results', 'Résultats & progression', [
           renderTrends(an, allForTc),
           renderProgressStory(an),
+          renderDrillImpact(an),
+          renderSessions(an),
           renderErrorEvolution(an),
           renderProgress(an)
         ]) +
         group('errors', 'Erreurs & faiblesses', [
           renderErrorDetail(an),
+          renderVigilance(an),
           renderMissed(an),
           renderRepeated(an),
           renderTacticalWeakness(an),
@@ -461,6 +483,7 @@ const Coach = (() => {
           renderMoveQuality(an)
         ]) +
         group('style', 'Style de jeu & adversaires', [
+          renderSystem(an),
           renderOpeningPerf(an),
           renderProfile(an),
           renderRepertoire(an),
@@ -478,6 +501,7 @@ const Coach = (() => {
     if (an.length) {
       bindVigilance();
       bindFocus();
+      bindConvertCta();
       bindMissed();
       bindRepeated();
       bindEvolution();
@@ -557,9 +581,9 @@ const Coach = (() => {
       p.v ? `<span style="width:${pct(p.v, total)}%;background:${p.color}"></span>` : '').join('') + `</div>`;
   }
 
-  // Board-awareness leaks — hung pieces, unparried threats, forks. Grouped
-  // into the dedicated "Vigilance tactique" card; the generic focus card below
-  // skips them so the two cards surface different, complementary weaknesses.
+  // Board-awareness leaks — hung pieces, unparried threats, forks. They get a
+  // sub-breakdown of their own inside the priority card, because at this level
+  // they are almost always the top group and the three read as one habit.
   const VIGILANCE_MOTIFS = ['prise', 'defense', 'fourchette'];
   const VIG_META = {
     prise: { label: 'Pièces en prise', color: '#d36b6b' },
@@ -567,39 +591,88 @@ const Coach = (() => {
     fourchette: { label: 'Fourchettes encaissées', color: '#5b8fb9' }
   };
 
-  // ── Ta priorité (single most-impactful thing to fix, with one drill CTA) ──
+  // ── Ta priorité — THE single prescription of the whole dashboard. ──
+  // Every motif is ranked, none filtered out. An earlier version excluded the
+  // vigilance motifs and `gain` "because they have their own cards", then
+  // declared the winner of the leftovers "de loin ta fuite n°1" — so the most
+  // prominent card in Coach could only ever name one of the five RAREST motifs
+  // (it was prescribing Enfilade at 5% while pieces were hanging in 18% of the
+  // reviewed errors). The headlines below now all reachable.
   const FOCUS_HEADLINE = {
     prise: 'Arrête de laisser des pièces en prise',
     defense: 'Réponds aux menaces avant de jouer',
     fourchette: 'Attention aux fourchettes',
     gain: 'Ne rate plus le matériel gratuit',
     attaque: 'Gère mieux échecs et coups forçants',
-    mat: 'Repère les mats — les tiens et ceux de l\'adverse'
+    mat: 'Repère les mats — les tiens et ceux de l\'adverse',
+    clouage: 'Travaille le clouage',
+    enfilade: 'Travaille l\'enfilade',
+    decouverte: 'Travaille l\'attaque à la découverte'
   };
-  function renderFocus(an) {
-    if (typeof Training === 'undefined' || !Training.itemsForGames) return '';
-    // Same drillable set as the trainer — the priority you see is the priority
-    // you'll drill.
+  // Ranks the drillable deck by motif, unfiltered. `lead` is the top motif's
+  // share divided by the runner-up's: only a genuine 2× gap earns "de loin".
+  // Cached per render pass (Coach calls this from several cards).
+  let _prioMemo = new WeakMap();
+  function priorityOf(an) {
+    if (an && _prioMemo.has(an)) return _prioMemo.get(an);
+    const res = _priorityOf(an);
+    if (an) _prioMemo.set(an, res);
+    return res;
+  }
+  function _priorityOf(an) {
+    if (typeof Training === 'undefined' || !Training.itemsForGames) return null;
     const items = Training.itemsForGames(an);
+    const total = items.length;
+    if (!total) return null;
     const counts = {}, cpBy = {};
     items.forEach(it => { counts[it.motif] = (counts[it.motif] || 0) + 1; cpBy[it.motif] = (cpBy[it.motif] || 0) + (it.cpLoss || 0); });
-    const total = items.length;
-    if (!total) return '';
     const tactical = Training.TACTICAL || [];
-    const labels = Training.MOTIF_LABELS || {};
+    // 'positionnel' is detectMotif's FALLBACK, not a diagnosis — a card that
+    // told a 350-Elo player his n°1 weakness is positional play would be both
+    // wrong and useless. It stays out of the ranking (and out of the tactical
+    // percentages, see renderTacticalWeakness).
     const ranked = Object.keys(counts)
-      .filter(k => tactical.includes(k) && !VIGILANCE_MOTIFS.includes(k) && k !== 'gain') // gain has its own "Cadeaux manqués" card
+      .filter(k => tactical.includes(k))
       .sort((a, b) => (counts[b] - counts[a]) || ((cpBy[b] || 0) - (cpBy[a] || 0)));
-    const top = ranked[0];
-    if (!top) return ''; // vigilance motifs are covered by the Vigilance card
-    const n = counts[top];
-    const headline = FOCUS_HEADLINE[top] || ('Travaille : ' + (labels[top] || top));
+    if (!ranked.length) return null;
+    const top = ranked[0], second = ranked[1];
+    const vig = VIGILANCE_MOTIFS.reduce((s, k) => s + (counts[k] || 0), 0);
+    return {
+      motif: top, n: counts[top], total, counts, ranked,
+      lead: second ? counts[top] / counts[second] : Infinity,
+      isVigilance: VIGILANCE_MOTIFS.includes(top),
+      vig, vigGames: new Set(items.filter(it => VIGILANCE_MOTIFS.includes(it.motif)).map(it => it.uuid)).size,
+      vigSub: VIGILANCE_MOTIFS.reduce((o, k) => (o[k] = counts[k] || 0, o), {})
+    };
+  }
+
+  function renderFocus(an) {
+    const p = priorityOf(an);
+    if (!p) return '';
+    const labels = (Training.MOTIF_LABELS) || {};
+    const headline = FOCUS_HEADLINE[p.motif] || ('Travaille : ' + (labels[p.motif] || p.motif));
     const canDrill = typeof Training.showMotif === 'function';
+    // When the leak is a vigilance habit, the three sub-motifs are the same
+    // reflex and belong in the prescription itself.
+    const showVig = p.isVigilance && p.vig >= 2;
+    const rows = showVig ? VIGILANCE_MOTIFS.filter(k => p.vigSub[k] > 0).map(k => {
+      const w = Math.round((p.vigSub[k] / p.vig) * 100);
+      return `<div class="coach-vig-row"><span class="coach-vig-lbl">${VIG_META[k].label}</span>` +
+        `<span class="coach-vig-bar"><span style="width:${w}%;background:${VIG_META[k].color}"></span></span>` +
+        `<span class="coach-vig-n">${p.vigSub[k]}</span></div>`;
+    }).join('') : '';
+    // "de loin" only when the gap is real. Otherwise say what it is: first.
+    const emph = p.lead >= 2 ? ' — c\'est de loin ta fuite n°1' : ', ta fuite n°1';
+    const sub = showVig
+      ? `<b>${p.vig}</b> de tes <b>${p.total}</b> erreurs à réviser (${pct(p.vig, p.total)}%) sont des pièces laissées en prise, des menaces non parées ou des fourchettes encaissées, réparties sur <b>${p.vigGames}</b> parties. Un seul réflexe les couvre toutes.`
+      : `Sur tes <b>${p.total} erreurs à réviser</b>, ce motif revient <b>${p.n} fois</b> (${pct(p.n, p.total)}%)${emph}.`;
     return `<div class="home-card coach-card coach-focus" id="coach-focus">
       <div class="coach-focus-tag">🎯 Ta priorité en ce moment</div>
       <h2 class="coach-focus-head">${headline}</h2>
-      <p class="coach-focus-sub">Sur tes <b>${total} erreurs à réviser</b>, ce motif revient <b>${n} fois</b> (${pct(n, total)}%) — c'est de loin ta fuite n°1.</p>
-      ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${top}">🎯 M'entraîner là-dessus</button>` : ''}
+      <p class="coach-focus-sub">${sub}</p>
+      ${rows ? `<div class="coach-vig-breakdown">${rows}</div>` : ''}
+      ${showVig ? `<p class="coach-vig-tip">💡 Avant <b>chaque</b> coup : « Qu'est-ce que son dernier coup menace ? Un échec, une prise, une fourchette ? » — 5 secondes suffisent.</p>` : ''}
+      ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${p.motif}">🎯 M'entraîner là-dessus</button>` : ''}
     </div>`;
   }
   function bindFocus() {
@@ -611,33 +684,26 @@ const Coach = (() => {
   }
 
   // ── Vigilance tactique: board-awareness leaks (hung pieces + forks) ──
+  // Secondary card. When vigilance IS the priority, renderFocus already carries
+  // the breakdown and the CTA, so this one steps aside entirely — one
+  // prescription per dashboard, not four cards each claiming to be n°1.
   function renderVigilance(an) {
-    if (typeof Training === 'undefined' || !Training.itemsForGames) return '';
-    // Same drillable set as the trainer.
-    const items = Training.itemsForGames(an);
-    const sub = { prise: 0, defense: 0, fourchette: 0 };
-    const gamesHit = new Set();
-    let vig = 0;
-    const total = items.length;
-    items.forEach(it => {
-      if (Object.prototype.hasOwnProperty.call(sub, it.motif)) { sub[it.motif]++; vig++; gamesHit.add(it.uuid); }
-    });
-    if (vig < 2) return '';
-    const topSub = Object.keys(sub).sort((a, b) => sub[b] - sub[a])[0];
-    const canDrill = typeof Training.showMotif === 'function';
-    const rows = VIGILANCE_MOTIFS.filter(k => sub[k] > 0).map(k => {
-      const w = Math.round((sub[k] / vig) * 100);
+    const p = priorityOf(an);
+    if (!p || p.isVigilance || p.vig < 2) return '';
+    const rows = VIGILANCE_MOTIFS.filter(k => p.vigSub[k] > 0).map(k => {
+      const w = Math.round((p.vigSub[k] / p.vig) * 100);
       return `<div class="coach-vig-row"><span class="coach-vig-lbl">${VIG_META[k].label}</span>` +
         `<span class="coach-vig-bar"><span style="width:${w}%;background:${VIG_META[k].color}"></span></span>` +
-        `<span class="coach-vig-n">${sub[k]}</span></div>`;
+        `<span class="coach-vig-n">${p.vigSub[k]}</span></div>`;
     }).join('');
-    return `<div class="home-card coach-card coach-focus coach-vigilance" id="coach-vigilance">
-      <div class="coach-focus-tag">🛡️ Vigilance tactique</div>
-      <h2 class="coach-focus-head">Regarde les menaces avant de jouer</h2>
-      <p class="coach-focus-sub"><b>${vig}</b> de tes <b>${total}</b> erreurs à réviser (${pct(vig, total)}%) sont des pièces laissées en prise ou des fourchettes encaissées, réparties sur <b>${gamesHit.size}</b> parties. C'est de loin ce qui te coûte le plus de points.</p>
+    const canDrill = typeof Training.showMotif === 'function';
+    const topSub = VIGILANCE_MOTIFS.slice().sort((a, b) => p.vigSub[b] - p.vigSub[a])[0];
+    return `<div class="home-card coach-card coach-vigilance" id="coach-vigilance">
+      <h3>🛡️ Vigilance tactique</h3>
+      <p class="coach-note"><b>${p.vig}</b> de tes <b>${p.total}</b> erreurs à réviser (${pct(p.vig, p.total)}%) sont des pièces laissées en prise, des menaces non parées ou des fourchettes encaissées, réparties sur <b>${p.vigGames}</b> parties.</p>
       <div class="coach-vig-breakdown">${rows}</div>
       <p class="coach-vig-tip">💡 Avant <b>chaque</b> coup : « Qu'est-ce que son dernier coup menace ? Un échec, une prise, une fourchette ? » — 5 secondes suffisent.</p>
-      ${canDrill ? `<button class="btn-primary coach-focus-btn" data-motif="${topSub}">🎯 M'entraîner sur ce point</button>` : ''}
+      ${canDrill ? `<button class="coach-link-btn coach-focus-btn" data-motif="${topSub}">Travailler ce point</button>` : ''}
     </div>`;
   }
   function bindVigilance() {
@@ -646,6 +712,214 @@ const Coach = (() => {
       if (typeof Training === 'undefined') return;
       if (Training.showMotif) Training.showMotif(b.dataset.motif); else Training.show();
     });
+  }
+
+  // ── Le vrai niveau : ton score contre plus fort que toi ──
+  // C'est la ligne la plus honnête du bilan et elle était enterrée en bas d'une
+  // carte à sept sections. Un taux de victoire global se laisse gonfler par une
+  // opposition qui faiblit ; le score contre des adversaires plus forts, non.
+  function renderVsStronger(an) {
+    const rated = an.filter(g => g.myRating > 0 && g.oppRating > 0);
+    if (rated.length < 8) return '';
+    const up = rated.filter(g => g.oppRating - g.myRating >= 25);
+    const down = rated.filter(g => g.myRating - g.oppRating >= 25);
+    if (up.length < 4) return '';
+    const sc = pool => pct(pool.filter(g => g.result === 'win').length, pool.length);
+    const upScore = sc(up);
+    const tone = upScore >= 40 ? 'good' : upScore >= 20 ? 'mid' : 'bad';
+    const line = upScore === 0
+      ? `Tu n'as pas encore battu un adversaire plus fort que toi sur cette période. C'est le repère à faire bouger : il ne dépend ni de la cadence, ni de qui tu croises.`
+      : upScore < 25
+        ? `Tu gagnes surtout contre plus faible. Le score contre plus fort est le seul qui ne se laisse pas gonfler par l'adversité du moment.`
+        : `Tu tiens face à plus fort — c'est le signe que ton niveau monte pour de vrai, pas seulement ton classement.`;
+    return `<div class="home-card coach-card coach-truth coach-truth-${tone}" id="coach-truth">
+      <div class="coach-focus-tag">📏 Ton vrai niveau</div>
+      <div class="coach-truth-row">
+        <div class="coach-truth-big"><b>${upScore}%</b><span>contre plus fort (+25)<small>${up.length} parties</small></span></div>
+        <div class="coach-truth-big alt"><b>${down.length ? sc(down) : '–'}%</b><span>contre plus faible (−25)<small>${down.length} parties</small></span></div>
+      </div>
+      <p class="coach-note">${line}</p>
+    </div>`;
+  }
+
+  // ── Séances de jeu : la discipline d'arrêt ──
+  // Ses bons jours tournent à 76-81 % de précision, ses mauvais à 44-52 %, et
+  // les mauvais sont tous des enchaînements de défaites : il continue de jouer
+  // après que ça a commencé à casser. La série de défaites en cours était
+  // affichée comme une statistique neutre.
+  function renderSessions(an) {
+    const days = {};
+    an.forEach(g => {
+      if (!g.endTime) return;
+      const d = new Date(g.endTime * 1000);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      (days[k] = days[k] || []).push(g);
+    });
+    const keys = Object.keys(days).sort().reverse();
+    const multi = keys.filter(k => days[k].length >= 2);
+    if (multi.length < 4) return '';
+    const rows = keys.slice(0, 10).map(k => {
+      const gs = days[k].slice().sort((a, b) => a.endTime - b.endTime);
+      const w = gs.filter(g => g.result === 'win').length;
+      const l = gs.filter(g => g.result === 'loss').length;
+      const acc = Math.round(avg(gs.map(g => g.analysis.accuracy)));
+      const tone = acc >= 70 ? 'good' : acc >= 60 ? 'mid' : 'bad';
+      const d = new Date(k + 'T12:00:00');
+      const label = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      return `<div class="sess-row sess-${tone}">
+        <span class="sess-day">${label}</span>
+        <span class="sess-n">${gs.length}p</span>
+        <span class="sess-wl"><span class="wdl-w">${w}V</span> <span class="wdl-l">${l}D</span></span>
+        <span class="sess-dots">${gs.map(g => `<i class="sess-dot sd-${g.result}"></i>`).join('')}</span>
+        <span class="sess-acc">${acc}%</span>
+      </div>`;
+    }).join('');
+    // Bonnes journées vs mauvaises, mesurées : c'est ça qui rend la règle
+    // d'arrêt crédible plutôt que moralisatrice.
+    const withAcc = multi.map(k => ({ k, acc: avg(days[k].map(g => g.analysis.accuracy)), n: days[k].length,
+      l: days[k].filter(g => g.result === 'loss').length }));
+    const good = withAcc.filter(d => d.l * 2 <= d.n), bad = withAcc.filter(d => d.l * 2 > d.n);
+    const gAcc = good.length ? Math.round(avg(good.map(d => d.acc))) : null;
+    const bAcc = bad.length ? Math.round(avg(bad.map(d => d.acc))) : null;
+    // Série de défaites EN COURS (la plus récente), pas la pire de l'historique.
+    const chrono = an.slice().sort((a, b) => b.endTime - a.endTime);
+    let streak = 0;
+    for (const g of chrono) { if (g.result === 'loss') streak++; else break; }
+    const alert = streak >= 2
+      ? `<div class="coach-flag coach-flag-warn">🛑 <b>${streak} défaites d'affilée</b> en ce moment. Ta règle : deux de suite, tu arrêtes pour aujourd'hui. Rejouer maintenant, c'est offrir des points.</div>`
+      : '';
+    const gap = (gAcc != null && bAcc != null && gAcc - bAcc >= 8)
+      ? `<p class="coach-note">Tes journées gagnantes tournent à <b>${gAcc}%</b> de précision, les perdantes à <b>${bAcc}%</b>. Ce n'est pas une variation de niveau, c'est de la fatigue : au-delà de deux défaites, tu ne joues plus comme toi.</p>`
+      : '';
+    return `<div class="home-card coach-card" id="coach-sessions">
+      <h3>📅 Tes séances de jeu</h3>
+      <p class="coach-sub2">Une ligne par journée : parties jouées, bilan, et précision moyenne du jour.</p>
+      ${alert}
+      <div class="sess-list">${rows}</div>
+      ${gap}
+    </div>`;
+  }
+
+  // ── Est-ce que l'entraînement sert à quelque chose ? ──
+  // La seule carte qui répond à « je drille depuis trois semaines, est-ce que
+  // j'en laisse moins en partie ? ». Le paquet SRS savait quand une carte était
+  // due, mais rien n'enregistrait ce qui avait été TRAVAILLÉ ni quand : c'est le
+  // journal de séances de js/training.js qui rend cette carte possible.
+  function renderDrillImpact(an) {
+    if (typeof Training === 'undefined' || !Training.loadLog) return '';
+    let log = [];
+    try { log = Training.loadLog(); } catch (_) { log = []; }
+    if (!log.length) {
+      return `<div class="home-card coach-card" id="coach-impact">
+        <h3>📶 Est-ce que ça marche ?</h3>
+        <p class="coach-note">Cette carte compare tes erreurs en partie <b>avant</b> et <b>après</b> le début de ton entraînement. Fais une première séance dans <b>Entraîner</b> et elle se remplit toute seule.</p>
+      </div>`;
+    }
+    const first = Math.min(...log.map(e => e.t));
+    const firstDay = new Date(first).toLocaleDateString('fr-FR');
+    const sessions = log.length;
+    const cards = log.reduce((s, e) => s + (e.n || 0), 0);
+    const graded = log.filter(e => e.score != null);
+    const rate = graded.length ? pct(graded.reduce((s, e) => s + e.score, 0), graded.reduce((s, e) => s + e.n, 0)) : null;
+    // Erreurs pour 100 coups avant / après la première séance. C'est la mesure
+    // qui compte : le score aux exercices peut monter sans que le jeu change.
+    const before = an.filter(g => g.endTime * 1000 < first);
+    const after = an.filter(g => g.endTime * 1000 >= first);
+    const rateOf = pool => {
+      const mv = pool.reduce((s, g) => s + (g.analysis.moveCount || 0), 0);
+      if (!mv) return null;
+      const err = pool.reduce((s, g) => s + (g.analysis.blunders || 0) + (g.analysis.mistakes || 0), 0);
+      return err / mv * 100;
+    };
+    const rb = before.length >= 5 ? rateOf(before) : null;
+    const ra = after.length >= 5 ? rateOf(after) : null;
+    let verdict;
+    if (rb == null || ra == null) {
+      verdict = `<p class="coach-note">Il faut au moins 5 parties de chaque côté du <b>${firstDay}</b> pour comparer. Continue à jouer et à t'entraîner, la comparaison arrive.</p>`;
+    } else {
+      const diff = ra - rb;
+      const rel = rb > 0.01 ? Math.round(Math.abs(diff) / rb * 100) : 0;
+      verdict = Math.abs(diff) < 0.3
+        ? `<p class="coach-note">Depuis le <b>${firstDay}</b>, tes gaffes + erreurs sont stables : <b>${rb.toFixed(1)}</b> → <b>${ra.toFixed(1)}</b> pour 100 coups. L'entraînement n'a pas encore mordu sur tes parties — c'est normal au début, garde le rythme.</p>`
+        : diff < 0
+          ? `<p class="coach-note coach-note-good">Depuis le <b>${firstDay}</b>, tes gaffes + erreurs sont passées de <b>${rb.toFixed(1)}</b> à <b>${ra.toFixed(1)}</b> pour 100 coups — <b>${rel}% de moins</b>. C'est exactement ce que l'entraînement doit produire.</p>`
+          : `<p class="coach-note">Depuis le <b>${firstDay}</b>, tes gaffes + erreurs sont montées de <b>${rb.toFixed(1)}</b> à <b>${ra.toFixed(1)}</b> pour 100 coups. Regarde la carte « Tes séances de jeu » : c'est souvent le rythme de jeu, pas le niveau.</p>`;
+    }
+    return `<div class="home-card coach-card" id="coach-impact">
+      <h3>📶 Est-ce que ça marche ?</h3>
+      <div class="coach-kpis">
+        <div class="coach-kpi"><b>${sessions}</b><span>séances</span></div>
+        <div class="coach-kpi"><b>${cards}</b><span>exercices</span></div>
+        ${rate != null ? `<div class="coach-kpi"><b>${rate}%</b><span>trouvés du 1er coup</span></div>` : ''}
+      </div>
+      ${verdict}
+    </div>`;
+  }
+
+  // ── Ton système : le conseil qui manquait sur les ouvertures ──
+  // Le Coach classait les performances par ligne sans jamais dire la seule
+  // chose utile à ce niveau : REDUIS. 6 familles croisées en 29 parties avec
+  // les Blancs, aucune assez jouée pour en tirer une conclusion.
+  function renderSystem(an) {
+    const byColor = (c) => {
+      const fam = {};
+      an.filter(g => g.userColor === c).forEach(g => {
+        const f = frenchOpening(g).family;
+        if (!f || f === 'Inconnue') return;
+        const o = fam[f] || (fam[f] = { n: 0, w: 0, d: 0, acc: 0 });
+        o.n++; o.acc += g.analysis.accuracy || 0;
+        if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++;
+      });
+      const rows = Object.keys(fam).map(name => {
+        const o = fam[name];
+        return { name, n: o.n, score: (o.w + o.d * 0.5) / o.n, acc: Math.round(o.acc / o.n) };
+      });
+      // Le meilleur candidat = le plus joué parmi ceux au score correct, sinon
+      // simplement le plus joué. On ne recommande pas une ligne vue 2 fois.
+      const solid = rows.filter(r => r.n >= 4).sort((a, b) => (b.score - a.score) || (b.n - a.n));
+      return { rows: rows.sort((a, b) => b.n - a.n), pick: solid[0] || null, count: rows.length };
+    };
+    const w = byColor('w'), b = byColor('b');
+    if (w.count < 3 && b.count < 3) return '';
+    const line = (o, ic, lbl, mine) => {
+      if (!o.count) return '';
+      const games = o.rows.reduce((s, r) => s + r.n, 0);
+      const spread = `<b>${o.count} famille${o.count > 1 ? 's' : ''}</b> différente${o.count > 1 ? 's' : ''} en ${games} parties`;
+      // `mine` = c'est TOI qui choisis l'ouverture (les Blancs). Avec les Noirs
+      // la famille détectée est celle que l'ADVERSAIRE a jouée, donc on ne peut
+      // pas te dire « garde celle-là » : ce qui se choisit, c'est ta réponse.
+      const rec = mine
+        ? (o.pick
+            ? `Garde <b>${esc(o.pick.name)}</b> (${o.pick.n} parties, ${o.pick.acc}% de précision) et joue-la à chaque fois.`
+            : `Aucune ligne assez jouée pour en faire ton système : choisis-en une et tiens-la.`)
+        : `Ici la famille est l'ouverture de l'adversaire, pas la tienne : ce qui se choisit, c'est ta <b>réponse</b>. Fixe-en <b>une contre 1.e4</b> et <b>une contre 1.d4</b>, et joue-les toujours.`;
+      return `<div class="sys-row"><span class="sys-ic">${ic}</span><div><b>${lbl}</b> — ${spread}. ${rec}</div></div>`;
+    };
+    return `<div class="home-card coach-card" id="coach-system">
+      <h3>♟ Ton système</h3>
+      <p class="coach-sub2">À ton niveau, l'erreur n'est pas de mal connaître une ouverture, c'est d'en jouer trop. Trois lignes, cinq coups de profondeur, et rien d'autre jusqu'à 800.</p>
+      ${line(w, '♔', 'Avec les Blancs', true)}
+      ${line(b, '♚', 'Avec les Noirs', false)}
+      <p class="coach-note">Une ligne jouée 10 fois t'apprend plus que dix lignes jouées une fois : tu commences à reconnaître les positions au lieu de les découvrir.</p>
+    </div>`;
+  }
+
+  // ── Entrée vers « Termine la partie » ──
+  function renderConvertCta(an) {
+    let list = [];
+    try { list = conversionTargets(); } catch (_) { list = []; }
+    if (list.length < 3) return '';
+    const big = list.filter(t => t.maxEval >= 500).length;
+    return `<div class="home-card coach-card coach-focus" id="coach-convert-cta">
+      <div class="coach-focus-tag">🏁 Termine la partie</div>
+      <h2 class="coach-focus-head">${list.length} parties gagnées puis perdues</h2>
+      <p class="coach-focus-sub">Tu menais nettement dans <b>${list.length}</b> parties que tu as perdues${big ? `, dont <b>${big}</b> avec au moins une tour d'avance` : ''}. Reprends la position juste avant la bascule et gagne-la contre Stockfish — <b>sans aucune aide affichée</b>.</p>
+      <button class="btn-primary coach-focus-btn" id="coach-convert-go">🏁 Reconvertir une partie</button>
+    </div>`;
+  }
+  function bindConvertCta() {
+    const b = $('#coach-convert-go');
+    if (b) b.addEventListener('click', () => { if (typeof Training !== 'undefined') Training.show('convert'); });
   }
 
   // ── Rythme: the anti-blitz card. Parsed once per game from the PGN clocks. ──
@@ -792,7 +1066,7 @@ const Coach = (() => {
     const pa = { opening: { t: 0, c: 0 }, middle: { t: 0, c: 0 }, endgame: { t: 0, c: 0 } };
     let bl = 0, mv = 0;
     an.forEach(g => {
-      ['opening', 'middle', 'endgame'].forEach(p => { if (g.analysis.phaseAccuracy[p]) { pa[p].t += g.analysis.phaseAccuracy[p].total; pa[p].c += g.analysis.phaseAccuracy[p].count; } });
+      ['opening', 'middle', 'endgame'].forEach(p => { const src = phasePool(g.analysis, p); if (src) { pa[p].t += src.total; pa[p].c += src.count; } });
       bl += g.analysis.blunders || 0; mv += g.analysis.moveCount || 0;
     });
     // A phase with no moves must not score 0% and get crowned the "maillon
@@ -801,22 +1075,34 @@ const Coach = (() => {
     const phases = [{ k: 'opening', l: "l'ouverture" }, { k: 'middle', l: 'le milieu de jeu' }, { k: 'endgame', l: 'la finale' }].map(p => ({ ...p, a: pAcc(p.k) })).filter(p => p.a !== null);
     const best = phases.slice().sort((x, y) => y.a - x.a)[0];
     const worst = phases.slice().sort((x, y) => x.a - y.a)[0];
+    const contested = hasContested(an);
     const blRate = mv ? bl / mv * 100 : 0;
     const sorted = an.slice().sort((x, y) => x.endTime - y.endTime);
-    const recent = sorted.slice(-10), prior = sorted.slice(-20, -10);
+    // Une fenêtre de 10 parties a une marge de ±30 points sur le taux de
+    // victoire : « tu marques le pas » changeait de sens d'une semaine à l'autre
+    // sans que rien n'ait bougé dans son jeu. 20 par fenêtre, sinon rien.
+    const TREND_WIN = 20;
+    const recent = sorted.slice(-TREND_WIN), prior = sorted.slice(-2 * TREND_WIN, -TREND_WIN);
     const recentWin = pct(recent.filter(g => g.result === 'win').length, recent.length);
-    const priorWin = prior.length ? pct(prior.filter(g => g.result === 'win').length, prior.length) : null;
+    const priorWin = prior.length >= TREND_WIN ? pct(prior.filter(g => g.result === 'win').length, prior.length) : null;
 
     const s = [];
     s.push(`Sur tes <b>${total} parties</b> analysées, tu l'emportes dans <b>${winPct}%</b> des cas, avec une précision moyenne de <b>${acc}%</b>.`);
     if (w.length && b.length && Math.abs(wP - bP) >= 12)
       s.push(`Tu es nettement plus à l'aise avec les <b>${wP > bP ? 'Blancs' : 'Noirs'}</b> (${Math.max(wP, bP)}% de victoires, contre ${Math.min(wP, bP)}% de l'autre côté) — un répertoire à consolider du côté faible.`);
-    if (best && worst && best.k !== worst.k)
-      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de précision) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
+    // Un « point fort » par phase ne veut rien dire tant qu'on mesure toutes les
+    // positions : la précision sature dès que la partie est décidée, et la finale
+    // — qui arrive presque toujours après un gros gain de matériel — se retrouvait
+    // couronnée alors qu'elle était seulement facile. Sans les compteurs
+    // « position disputée » (analysis.js), on ne désigne que le maillon faible.
+    if (best && worst && best.k !== worst.k && contested)
+      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de ${accLabel(an)}) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
+    else if (worst)
+      s.push(`Ton maillon faible est <b>${worst.l}</b> (${worst.a}% de précision). ${phaseAdvice(worst.k)}`);
     if (blRate > 0)
       s.push(`Tu lâches une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
-    if (priorWin !== null && Math.abs(recentWin - priorWin) >= 10)
-      s.push(`Tendance récente : tu <b>${recentWin > priorWin ? 'progresses' : 'marques le pas'}</b> (${recentWin}% sur tes 10 dernières parties contre ${priorWin}% auparavant).`);
+    if (priorWin !== null && Math.abs(recentWin - priorWin) >= 15)
+      s.push(`Tendance récente : tu <b>${recentWin > priorWin ? 'progresses' : 'marques le pas'}</b> (${recentWin}% sur tes ${TREND_WIN} dernières parties contre ${priorWin}% sur les ${TREND_WIN} d'avant).`);
     s.push(`Concrètement : ouvre le <b>Mode entraînement</b> ci-dessous (tes erreurs y deviennent des exercices) et relis tes parties perdues dans <b>${worst.l}</b>.`);
 
     return `<div class="home-card coach-card coach-narrative" id="coach-word"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
@@ -879,10 +1165,11 @@ const Coach = (() => {
     // by time class
     const classes = {};
     an.forEach(g => { const k = g.timeClass || 'autre'; (classes[k] = classes[k] || []).push(g); });
-    // by opponent strength (relative to own avg rating)
-    const myAvg = avg(an.map(g => g.myRating).filter(Boolean)) || 0;
-    const vsStronger = an.filter(g => g.oppRating && g.oppRating > myAvg + 25);
-    const vsWeaker = an.filter(g => g.oppRating && g.oppRating < myAvg - 25);
+    // by opponent strength, compared PER GAME (his Elo moved 437 points, so a
+    // period average mislabels a 400-rated opponent as "stronger" even for games
+    // played at 700). Same definition as renderVsStronger, one number per fact.
+    const vsStronger = an.filter(g => g.oppRating > 0 && g.myRating > 0 && g.oppRating - g.myRating >= 25);
+    const vsWeaker = an.filter(g => g.oppRating > 0 && g.myRating > 0 && g.myRating - g.oppRating >= 25);
 
     const ratingSvg = ratingChart(an);
 
@@ -920,7 +1207,7 @@ const Coach = (() => {
       ${colorRows}
       <div class="coach-sub">Par cadence</div>
       ${classRows}
-      <div class="coach-sub">Face à l'adversité</div>
+      <div class="coach-sub">Face à l'adversité <small class="coach-row-n">(détaillé en haut du bilan)</small></div>
       <div class="coach-row"><span class="coach-row-label">Plus forts (+25)</span>
         ${donut([{ v: vsStronger.filter(g => g.result === 'win').length, color: '#56b886' }, { v: vsStronger.filter(g => g.result === 'draw').length, color: '#8a8aa0' }, { v: vsStronger.filter(g => g.result === 'loss').length, color: '#d36b6b' }], vsStronger.length)}
         <span class="coach-row-val">${pct(vsStronger.filter(g => g.result === 'win').length, vsStronger.length)}%</span></div>
@@ -1212,6 +1499,11 @@ const Coach = (() => {
       if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++; else o.l++;
     });
     const MIN = 3;
+    // Lister une ouverture dès 3 parties est utile. La NOMMER « la plus fragile »
+    // demande beaucoup plus : sur 2 ou 3 parties le score est du bruit (l'app
+    // conseillait de réviser la Petrov sur la foi de deux défaites). Au-dessous
+    // de MIN_VERDICT on affiche la ligne, sans conclusion.
+    const MIN_VERDICT = 8;
     const ranked = Object.keys(fam)
       .map(name => { const o = fam[name]; return { name, n: o.n, w: o.w, d: o.d, l: o.l, score: (o.w + o.d * 0.5) / o.n }; })
       .filter(r => r.n >= MIN)
@@ -1235,7 +1527,12 @@ const Coach = (() => {
       <p class="coach-sub2">Ton score (V + ½N) par famille d'ouverture sur tes parties analysées — au moins ${MIN} parties par ligne.</p>
       <div class="op-colors">${colorPill(wc, '♔', 'avec les Blancs')}${colorPill(bc, '♚', 'avec les Noirs')}</div>
       <div class="op-list">${ranked.map(barRow).join('')}</div>
-      ${best !== worst ? `<div class="coach-flag">💪 Ta plus rentable : <b>${esc(best.name)}</b> (${Math.round(best.score * 100)}%) · ⚠ la plus fragile : <b>${esc(worst.name)}</b> (${Math.round(worst.score * 100)}%).</div>` : ''}
+      ${(() => {
+        const solid = byScore.filter(r => r.n >= MIN_VERDICT);
+        if (solid.length < 2) return `<div class="coach-note">Pas encore assez de parties par ouverture (${MIN_VERDICT} minimum) pour désigner une ligne forte ou faible — sur 3 ou 4 parties, le score est du hasard.</div>`;
+        const b = solid[0], w = solid[solid.length - 1];
+        return `<div class="coach-flag">💪 Ta plus rentable : <b>${esc(b.name)}</b> (${Math.round(b.score * 100)}% sur ${b.n}p) · ⚠ la plus fragile : <b>${esc(w.name)}</b> (${Math.round(w.score * 100)}% sur ${w.n}p).</div>`;
+      })()}
     </div>`;
   }
 
@@ -1269,7 +1566,7 @@ const Coach = (() => {
         return { name, n: list.length, w, d, l, acc, score, rep, url: pickOpeningUrl(urls, name) };
       }).filter(r => r.n >= 1).sort((a, b) => b.n - a.n);
       if (!rows.length) return '';
-      const worst = rows.filter(r => r.n >= 2).sort((a, b) => a.score - b.score)[0];
+      const worst = rows.filter(r => r.n >= 8).sort((a, b) => a.score - b.score)[0];
       const shown = rows.slice(0, 6);
       // Always surface the flagged weakest opening, even if it's outside the top 6.
       if (worst && !shown.some(r => r.name === worst.name)) shown.push(worst);
@@ -1289,7 +1586,7 @@ const Coach = (() => {
             <td><span class="wdl-w">${r.w}</span>/<span class="wdl-d">${r.d}</span>/<span class="wdl-l">${r.l}</span></td>
             <td>${r.acc}%</td></tr>`).join('')}</tbody>
         </table>
-        ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touche son nom pour la revoir.</div>` : ''}`;
+        ${worst ? `<div class="coach-flag">⚠ La plus faible : <b>${esc(worst.name)}</b> — ${Math.round(worst.score * 100)}% des points sur ${worst.n} parties (${worst.acc}% de précision). Touche son nom pour la revoir.</div>` : `<div class="coach-note">Aucune ligne assez jouée (8 parties) pour en tirer un verdict — les colonnes restent là pour info.</div>`}`;
     }
     // NOTE: a "fidélité à ton répertoire" block used to sit here, driven by
     // js/repertoire.js. That module was dropped from index.html when v159-169
@@ -1327,7 +1624,8 @@ const Coach = (() => {
       const a = g.analysis;
       ['opening', 'middle', 'endgame'].forEach(p => {
         pe[p] += a.phaseErrors[p] || 0;
-        if (a.phaseAccuracy[p]) { pa[p].total += a.phaseAccuracy[p].total; pa[p].count += a.phaseAccuracy[p].count; }
+        const src = phasePool(a, p);
+        if (src) { pa[p].total += src.total; pa[p].count += src.count; }
         if (a.phaseAcpl && typeof a.phaseAcpl[p] === 'number') pc[p].push(a.phaseAcpl[p]);
       });
       totalBlunders += a.blunders || 0;
@@ -1359,7 +1657,7 @@ const Coach = (() => {
 
     return `<div class="home-card coach-card">
       <h3>🎯 Points à travailler</h3>
-      <div class="coach-sub">Précision par phase</div>
+      <div class="coach-sub">Précision par phase <small class="coach-row-n">(${accLabel(an)})</small></div>
       ${phaseRows}
       <p class="coach-cap">ACPL = perte moyenne par coup (en centièmes de pion, 100 = un pion) ; plus c'est bas, mieux c'est.</p>
       <div class="coach-metric-row">
@@ -1423,7 +1721,7 @@ const Coach = (() => {
     let blunders = 0, moves = 0;
     an.forEach(g => {
       const a = g.analysis;
-      ['opening', 'middle', 'endgame'].forEach(p => { if (a.phaseAccuracy[p]) { pa[p].t += a.phaseAccuracy[p].total; pa[p].c += a.phaseAccuracy[p].count; } });
+      ['opening', 'middle', 'endgame'].forEach(p => { const src = phasePool(a, p); if (src) { pa[p].t += src.total; pa[p].c += src.count; } });
       blunders += a.blunders || 0; moves += a.moveCount || 0;
     });
     const accOf = p => pa[p].c ? Math.round(pa[p].t / pa[p].c) : null;
@@ -1452,7 +1750,8 @@ const Coach = (() => {
       <h3>🧭 Ton profil de joueur</h3>
       <p class="coach-sub2">Tes 5 grandes forces, notées sur 100 d'après tes ${an.length} parties analysées.</p>
       ${radarChart(axes)}
-      <p class="coach-cap">Point fort : <b>${strong.k}</b> (${strong.v}/100). Point faible : <b>${weak.k}</b> (${weak.v}/100). ${axisAdvice(weak.k)}</p>
+      <p class="coach-cap">${hasContested(an) ? `Point fort : <b>${strong.k}</b> (${strong.v}/100). ` : ''}Point faible : <b>${weak.k}</b> (${weak.v}/100). ${axisAdvice(weak.k)}</p>
+      ${hasContested(an) ? '' : `<p class="coach-note">Les notes de phase portent sur toutes les positions, y compris celles déjà gagnées — où presque tous les coups sont « précis ». Elles seront recalculées sur les seules positions <b>disputées</b> à la prochaine analyse complète.</p>`}
       <details class="coach-howto">
         <summary>Comment ces notes sont calculées ?</summary>
         <ul>
@@ -1488,20 +1787,31 @@ const Coach = (() => {
     if (!total) return '';
     const labels = Training.MOTIF_LABELS || {}, tactical = Training.TACTICAL || [];
     const rows = Object.keys(counts).map(k => ({ k, n: counts[k] })).sort((a, b) => b.n - a.n);
-    const worst = rows.filter(r => tactical.includes(r.k))[0] || rows[0];
-    const maxN = Math.max(...rows.map(r => r.n), 1);
-    const bars = rows.map(r => `
+    // Percentages are over the TACTICAL total only. 'positionnel' is
+    // detectMotif's fallback (= "no tactical pattern found"), so folding it into
+    // the denominator made every real motif look small and put an unclassified
+    // bucket at the top of a card titled "faiblesses tactiques".
+    const tacTotal = rows.filter(r => tactical.includes(r.k)).reduce((s, r) => s + r.n, 0) || 1;
+    const unclassified = total - tacTotal;
+    const maxN = Math.max(...rows.filter(r => tactical.includes(r.k)).map(r => r.n), 1);
+    const bars = rows.filter(r => tactical.includes(r.k)).map(r => `
       <div class="coach-row">
         <span class="coach-row-label">${labels[r.k] || r.k}</span>
-        <div class="coach-bar"><span style="width:${pct(r.n, maxN)}%;background:${tactical.includes(r.k) ? '#d36b6b' : '#8a8aa0'}"></span></div>
-        <span class="coach-row-val">${r.n} · ${pct(r.n, total)}%</span>
+        <div class="coach-bar"><span style="width:${pct(r.n, maxN)}%;background:#d36b6b"></span></div>
+        <span class="coach-row-val">${r.n} · ${pct(r.n, tacTotal)}%</span>
       </div>`).join('');
+    if (!bars) return '';
+    // The verdict lives in the single priority card; this one only shows the
+    // distribution, and links there instead of competing with it.
+    const p = priorityOf(an);
+    const note = unclassified > 0
+      ? `<p class="coach-cap">Plus <b>${unclassified}</b> erreur${unclassified > 1 ? 's' : ''} sans motif tactique identifiable (${pct(unclassified, total)}% de tes ${total} erreurs) : coups lents ou positions confuses, pas des tactiques ratées.</p>` : '';
     return `<div class="home-card coach-card" id="coach-tactics">
-      <h3>🎯 Tes faiblesses tactiques</h3>
-      <p class="coach-sub2">Répartition de tes <b>${total} erreurs</b> par type. En rouge, les ratés tactiques — les plus coûteux.</p>
+      <h3>🎯 Répartition de tes ratés tactiques</h3>
+      <p class="coach-sub2">Tes <b>${tacTotal} erreurs tactiques</b> par motif.${p ? ` Ta priorité reste <b>${labels[p.motif] || p.motif}</b> (carte du haut).` : ''}</p>
       ${bars}
-      <p class="coach-cap">Ta priorité : <b>${labels[worst.k] || worst.k}</b>. ${motifAdvice(worst.k)}</p>
-      <button class="btn-primary" id="coach-tactics-train">🎯 M'entraîner sur mes erreurs</button>
+      ${note}
+      <button class="coach-link-btn" id="coach-tactics-train">M'entraîner sur mes erreurs</button>
     </div>`;
   }
   function bindTactics() {
@@ -1931,16 +2241,33 @@ const Coach = (() => {
     const acc = rows[0];
     const changed = rows.filter(r => r.sig && r.k !== 'accuracy');
     const gains = changed.filter(r => r.improved).sort((x, y) => y.rel - x.rel);
-    const regr = changed.filter(r => !r.improved).sort((x, y) => y.rel - x.rel);
+    const regr = changed.filter(r => !r.improved && r.k !== 'strong').sort((x, y) => y.rel - x.rel);
     const winE = pct(early.filter(g => g.result === 'win').length, early.length);
     const winL = pct(late.filter(g => g.result === 'win').length, late.length);
+    // Un taux de victoire n'est comparable que si l'ADVERSAIRE est comparable.
+    // Cette carte annonçait « continue comme ça » sur un bond 31 → 52 % obtenu
+    // en affrontant du 134 points plus faible, alors que la précision — le seul
+    // indicateur insensible à l'adversaire — n'avait pas bougé d'un point.
+    const oppOf = pool => { const r = pool.filter(g => g.oppRating > 0); return r.length ? avg(r.map(g => g.oppRating)) : null; };
+    const oppE = oppOf(early), oppL = oppOf(late);
+    const oppDelta = (oppE != null && oppL != null) ? Math.round(oppL - oppE) : null;
+    const oppConfounded = oppDelta != null && Math.abs(oppDelta) >= 50;
 
     const s = [];
     const accWord = Math.abs(acc.diff) < 1.5 ? 'est restée stable' : (acc.improved ? 'a progressé' : 'a reculé');
     s.push(`En comparant tes <b>${late.length}</b> parties les plus récentes aux <b>${early.length}</b> d'avant, ta précision moyenne <b>${accWord}</b> (${fmt(acc.a, 'accuracy')} → ${fmt(acc.b, 'accuracy')}) et ton taux de victoire est passé de <b>${winE}%</b> à <b>${winL}%</b>.`);
+    if (oppConfounded) {
+      s.push(`⚠️ À lire avec prudence : sur la même coupure, l'Elo moyen de tes adversaires a <b>${oppDelta < 0 ? 'baissé' : 'monté'} de ${Math.abs(oppDelta)} points</b> (${Math.round(oppE)} → ${Math.round(oppL)}). ${oppDelta < 0
+        ? "Une partie de ce gain vient donc d'une opposition plus faible, pas de ton jeu. Le repère fiable, c'est la précision."
+        : "Tes résultats sont donc meilleurs qu'ils n'en ont l'air : tu affrontes plus fort."}`);
+    }
     if (gains.length) {
       const g = gains[0];
-      s.push(`Ta plus belle progression, c'est <b>${subj[g.k]}</b> : ${fmt(g.a, g.k)} → ${fmt(g.b, g.k)}${unit(g.k)}. Continue comme ça.`);
+      // « Continue comme ça » seulement si le progrès tient debout : la
+      // précision ne recule pas ET l'opposition ne s'est pas effondrée.
+      const solid = !oppConfounded || oppDelta > 0;
+      const tail = solid && !acc.sig ? ' Continue comme ça.' : (solid && acc.improved ? ' Continue comme ça.' : '');
+      s.push(`Ta plus belle progression, c'est <b>${subj[g.k]}</b> : ${fmt(g.a, g.k)} → ${fmt(g.b, g.k)}${unit(g.k)}.${tail}`);
     }
     if (regr.length) {
       const r = regr[0];
@@ -1949,8 +2276,13 @@ const Coach = (() => {
     if (!gains.length && !regr.length) {
       s.push(`Pour le reste, ton jeu est stable sur la période : pas de bascule nette dans tes gaffes, erreurs ou coups manqués.`);
     }
-    const focus = regr.length ? subj[regr[0].k] : 'tes erreurs les plus fréquentes';
-    s.push(`Le <b>Mode entraînement</b> ci-dessous rejoue précisément ${focus} pour en faire des réflexes.`);
+    // « Tes coups forts » n'est pas un chantier : personne ne s'entraîne à
+    // produire plus de coups brillants. On renvoie vers la priorité réelle.
+    const p = priorityOf(an);
+    const focusLabel = p ? ((Training.MOTIF_LABELS || {})[p.motif] || p.motif) : null;
+    s.push(focusLabel
+      ? `Le <b>Mode entraînement</b> ci-dessous rejoue tes erreurs sur <b>${focusLabel}</b>, ta priorité du moment.`
+      : `Le <b>Mode entraînement</b> ci-dessous rejoue tes propres erreurs pour en faire des réflexes.`);
 
     return `<div class="home-card coach-card coach-narrative" id="coach-story"><h3>🧭 Ta trajectoire</h3><p>${s.join(' ')}</p></div>`;
   }
@@ -2406,5 +2738,34 @@ const Coach = (() => {
     return byFmt;
   }
 
-  return { show, hide, getUser, setUser, accuracyBaseline };
+  // ── « Termine la partie » : les parties GAGNÉES puis perdues ──
+  // Le plus gros gisement de points et le seul qui n'avait aucun exercice : il
+  // atteint +2 ou mieux dans 87 de ses 146 parties et en perd 29. La position
+  // de reprise idéale serait le premier instant où il passe +3 ; tant que le
+  // coach serveur ne le calcule pas (champ `conversionMoment`), on retombe sur
+  // le TOURNANT de la partie — le coup où il a perdu le plus de chances de
+  // gagner —, qui est très exactement le moment où ça a basculé.
+  function conversionTargets() {
+    return analyzed()
+      .filter(g => g.result === 'loss' && (g.analysis.maxUserEval || 0) >= 300)
+      .map(g => {
+        const cm = g.analysis.conversionMoment;
+        const tp = g.analysis.turningPoint;
+        const src = (cm && cm.fen) ? { fenBefore: cm.fen, ply: cm.ply, evalCp: cm.evalCp } : null;
+        if (src) return { g, ...src };
+        if (tp && tp.fenBefore) return { g, fenBefore: tp.fenBefore, ply: tp.ply, evalCp: null, playedSan: tp.playedSan, bestSan: tp.bestSan };
+        return null;
+      })
+      .filter(Boolean)
+      .map(t => ({
+        uuid: t.g.uuid, oppName: t.g.oppName || '?', url: t.g.url || '',
+        date: t.g.endTime ? new Date(t.g.endTime * 1000).toLocaleDateString('fr-FR') : '',
+        timeClass: t.g.timeClass || '', maxEval: t.g.analysis.maxUserEval || 0,
+        fenBefore: t.fenBefore, ply: t.ply, evalCp: t.evalCp,
+        playedSan: t.playedSan || '', bestSan: t.bestSan || ''
+      }))
+      .sort((a, b) => (b.maxEval - a.maxEval));
+  }
+
+  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets };
 })();
