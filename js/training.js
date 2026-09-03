@@ -1682,14 +1682,25 @@ const Training = (() => {
   // exercice. Ici on recharge la position et on la rejoue contre Stockfish,
   // aide coupée (voir le mode 'convert' de js/replay.js).
   const CADENCE_SHORT = { rapid: 'rapide', daily: 'journalière', blitz: 'blitz', bullet: 'bullet' };
-  function renderConvert() {
+  // Le Coach ne charge ses parties (IndexedDB + coach-data.json) qu'à l'ouverture
+  // de son écran. Depuis la routine de l'accueil on arrivait ici avant lui, et
+  // la liste s'affichait vide : on attend maintenant Coach.ensureData().
+  let convToken = 0;
+  async function renderConvert() {
     const host = $('#train-convert');
     if (typeof Coach === 'undefined' || !Coach.conversionTargets) {
       host.innerHTML = `<div class="train-empty">Bilan du Coach indisponible.<br><span>Ouvre l'onglet Coach une fois pour charger tes parties.</span></div>`;
       return;
     }
+    const my = ++convToken;
     let list = [];
     try { list = Coach.conversionTargets(); } catch (_) { list = []; }
+    if (!list.length && Coach.ensureData) {
+      host.innerHTML = `<div class="train-empty">⏳ Chargement de tes parties…<br><span>On cherche celles que tu menais et que tu as perdues.</span></div>`;
+      try { await Coach.ensureData(); } catch (_) {}
+      if (my !== convToken) return; // l'utilisateur a changé d'onglet entre-temps
+      try { list = Coach.conversionTargets(); } catch (_) { list = []; }
+    }
     if (!list.length) {
       host.innerHTML = `<div class="train-empty">Rien à reconvertir pour l'instant.<br><span>Cet exercice se remplit tout seul avec les parties où tu étais gagnant et que tu as perdues.</span></div>`;
       return;
@@ -1706,7 +1717,7 @@ const Training = (() => {
     const done = loadLog().filter(e => e.kind === 'conversion');
     const wins = done.filter(e => e.score).length;
     host.innerHTML = `
-      <div class="train-prompt"><b>${list.length} parties</b> que tu menais nettement et que tu as perdues. Reprends la position juste avant que ça bascule, et gagne-la. <b>Aucune aide n'est affichée</b> : ni éval, ni meilleur coup.</div>
+      <div class="train-prompt"><b>${list.length} parties</b> que tu menais nettement et que tu as perdues. Reprends la position juste avant que ça bascule, et gagne-la. <b>Tu es guidé</b> : plan de la position, alerte sur les pièces en prise, verdict après chaque coup, et un indice en trois temps si tu bloques.</div>
       ${done.length ? `<div class="train-progress">Déjà tenté : <b>${done.length}</b> · converti <b>${wins}</b></div>` : ''}
       <div class="conv-list">${rows}</div>
       <p class="train-note">Le chiffre à gauche est ton avantage maximum dans cette partie (+3 = une pièce, +5 = une tour).</p>`;

@@ -69,7 +69,7 @@ Hub pedagogique regroupant plusieurs panneaux :
 Trainer en quatre onglets, tous alimentes par **tes propres erreurs** :
 - **🧩 Puzzles** : tes erreurs en repetition espacee (SM-2). Les cartes sans solution forcante deviennent une **comparaison de 3 coups** plutot qu'un « trouve LE coup »
 - **🛡️ Vigilance** : l'inventaire des prises. Tu **cliques la case** du danger (ou « rien »), apres un **delai plancher de 10 s** - c'est la pause qu'on entraine, pas seulement le motif. Desactivable.
-- **🏁 Convertir** : « Termine la partie ». Reprend une partie que tu menais nettement et que tu as perdue, a la position ou ca a bascule, et la rejoue contre Stockfish **sans aucune aide affichee** (ni eval, ni meilleur coup)
+- **🏁 Convertir** : « Termine la partie ». Reprend une partie que tu menais nettement et que tu as perdue, a la position ou ca a bascule, et la rejoue contre Stockfish **en mode guide** : briefing (ce que tu as, le plan de la position), alerte sur tes pieces en prise a chaque coup, verdict commente de chaque coup joue, indice en trois temps (theme > piece > coup) et reprise du coup apres une gaffe
 - **📊 Motifs** : drills par motif tactique, plus une fenetre **« coups 5 a 15 »** (la sortie d'ouverture, ou tombe la moitie des erreurs)
 
 ## Stack technique

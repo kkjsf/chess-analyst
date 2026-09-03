@@ -65,6 +65,59 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v205-v211 - « TERMINE LA PARTIE » : LA LISTE SE REMPLIT, ET L'EXERCICE EST GUIDE.**
+  Deux reproches du user, tous les deux traites, verifies sur ses 26 vraies parties gagnees puis
+  perdues (26 cibles, pas 0).
+  - **Le bug : la liste etait vide depuis l'accueil (js/coach.js, js/training.js).** `conversionTargets()`
+    lit le tableau `games` du module Coach, et ce tableau n'est peuple que par `Coach.show()`
+    (ouverture d'IndexedDB + `loadHosted()` sur `coach-data.json`). Depuis la routine de l'accueil
+    (`runRoutineAction('convert')` → `Training.show('convert')`) ou depuis la carte CTA du Coach,
+    on arrivait AVANT ce chargement : `Coach.conversionTargets()` renvoyait `[]` et l'onglet
+    affichait « Rien a reconvertir pour l'instant » alors que l'archive en contient 26. Mesure
+    faite en direct sur le live : `0` avant `ensureData()`, `26` apres. Nouveau
+    **`Coach.ensureData()`** (promesse partagee, memoisee, invalidee sur changement de compte) qui
+    charge les parties SANS ouvrir l'ecran Coach ; `renderConvert()` est devenu async, affiche
+    « ⏳ Chargement de tes parties… » et re-tente une fois la promesse resolue (garde `convToken`
+    si l'utilisateur change d'onglet entre-temps).
+  - **Le fond : l'exercice etait un test, pas une lecon (js/replay.js).** Le mode `convert` etait
+    muet par principe (« aucune aide affichee : ni eval, ni fleche, ni meilleur coup »), donc il le
+    remettait dans la position qu'il avait deja perdue sans rien lui apprendre - un seul retour
+    existait, l'avertissement « ton avantage vient de filer », APRES coup. Le mode est maintenant
+    **accompagne** :
+    - **Briefing** a l'ouverture : ce qu'il a en matiere (`edgeWords`, comptage de materiel :
+      « une tour de plus », « une piece de plus »), l'eval du Coach quand elle porte sur CETTE
+      position (`entry.evalCp` ; on ne retombe volontairement pas sur `maxEval`, qui est le maximum
+      de toute la partie et affichait un faux « +10 »), et un **plan en 2 + 1 points** derive de la
+      position (`conversionPlan`) : sa dame est encore la / echange les pieces garde les pions /
+      finale : monte ton roi, plus la regle de tempo. Replie dans un `<details>` sous 900 px - ouvert,
+      il repoussait l'echiquier sous la ligne de flottaison du telephone.
+    - **A chaque trait** : l'eval au point de vue de SON camp (`fmtMe`, « +5 » veut toujours dire
+      « je gagne »), la derive depuis le depart, et une **consigne** (`turnCue`) qui commence par le
+      danger. Le balayage des **pieces en prise** reutilise le SEE de `js/tactics.js`
+      (`boardOf` + `seeOn`), donc une piece defendue ne declenche rien : sur la premiere cible il
+      annonce « Ta tour en g6 est en prise » - exactement la piece qu'il a perdue dans la partie.
+    - **Indice en trois temps** a la demande (`hintFor`) : le theme, puis la piece et sa case, puis
+      le coup. La **fleche bleue n'apparait qu'au troisieme** (`hintArrow`), et le compteur d'indices
+      part dans le bilan. Le niveau se remet a zero a chaque coup et sur « Annuler ».
+    - **Verdict commente sur chaque coup** au lieu du silence : meilleur coup / solide / imprecis /
+      « laisse filer une partie de ton avantage » / « voila exactement le genre de coup qui te fait
+      reperdre une partie gagnee », avec `Analyzer.explainBadMove` pour la menace et la reprise de
+      l'ordi. Deux formulations distinctes de l'avantage (`advHold` en absolu sur un bon coup,
+      `advDrop` comparatif sur un mauvais) : annoncer « tu passes de +6.9 a +6.3 » sur le MEILLEUR
+      coup ne mesurait que le bruit de profondeur du moteur et se lisait comme un reproche. Au-dela
+      de 3 pions perdus on retire le chiffre en centipions, la phrase le dit mieux.
+    - **« ↶ Reprendre ce coup »** injecte dans le verdict apres une gaffe (delegation sur
+      `#rp-verdict`, appelle `undo()`) : une erreur qui passe sans etre rejouee n'apprend rien.
+      Habillage propre (`.rp-retry`) parce que `.train-btn` de base est clair sur clair ici.
+    - **Bilan de fin** (`convRecap`) : coups joues, meilleurs coups, gaffes, indices - « converti /
+      reperdue » seul ne disait pas ou ca s'etait joue.
+  - Recette faite dans le navigateur sur le vrai `coach-data.json` : liste a 26 depuis l'accueil,
+    briefing, alerte g6, les trois indices (theme → dame en d1 → Dh5 + fleche), le coup reel
+    perdant (Td6) note « voila exactement le genre de coup… » avec « La tour est en prise ! » et le
+    bouton de reprise, retour propre a la position apres reprise, meilleur coup (Dh5) note, mat de
+    verification → « Converti ! » + bilan + `Training.logSession('conversion')`. Mode « Rejoue ta
+    defaite » non regresse (fleche visible, bouton indice masque). Zero erreur console, mobile 375 px
+    tient en un ecran.
 - **v202-v204 - LA REVUE PEDAGOGIQUE, IMPLEMENTEE. 12 constats sur 12.**
   - Suite directe de la revue du 2026-08-28 (entree ci-dessous). Tout est fait, verifie en local sur
     ses 146 vraies parties, 39 tests unitaires verts.

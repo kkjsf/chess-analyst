@@ -27,6 +27,7 @@ const Coach = (() => {
   let stopFlag = false;
   let hostedInfo = null;
   let syncedOnce = false; // feed the SRS deck once per session, or when data changes
+  let dataPromise = null; // Coach.ensureData() : chargement partagé, une seule fois
   // Whole-page cadence filter. Defaults to 'all' (rapid + daily, minus
   // bullet/blitz) so Coach's default view matches exactly what the SRS trainer
   // drills — one and the same set of mistakes. The chips still let you narrow
@@ -139,7 +140,7 @@ const Coach = (() => {
     let wiped = false;
     if (owner && owner !== user) {
       await clearStore();
-      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null;
+      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null;
       wiped = true;
     }
     await setMeta('owner', user);
@@ -566,7 +567,7 @@ const Coach = (() => {
         // Switching accounts mid-session: wipe the previous account's games so
         // the two never mix, then pull the new account's games.
         await clearStore();
-        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null;
+        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null;
         await setMeta('owner', next);
         render();
         onRefresh();
@@ -913,7 +914,7 @@ const Coach = (() => {
     return `<div class="home-card coach-card coach-focus" id="coach-convert-cta">
       <div class="coach-focus-tag">🏁 Termine la partie</div>
       <h2 class="coach-focus-head">${list.length} parties gagnées puis perdues</h2>
-      <p class="coach-focus-sub">Tu menais nettement dans <b>${list.length}</b> parties que tu as perdues${big ? `, dont <b>${big}</b> avec au moins une tour d'avance` : ''}. Reprends la position juste avant la bascule et gagne-la contre Stockfish — <b>sans aucune aide affichée</b>.</p>
+      <p class="coach-focus-sub">Tu menais nettement dans <b>${list.length}</b> parties que tu as perdues${big ? `, dont <b>${big}</b> avec au moins une tour d'avance` : ''}. Reprends la position juste avant la bascule et gagne-la contre Stockfish, <b>guidé coup par coup</b> : le plan de la position, ce qui est en prise, ce que chaque coup te coûte.</p>
       <button class="btn-primary coach-focus-btn" id="coach-convert-go">🏁 Reconvertir une partie</button>
     </div>`;
   }
@@ -2684,6 +2685,27 @@ const Coach = (() => {
     setTimeout(fin, 50);
   });
 
+  // Charge les parties SANS ouvrir l'écran Coach. « Termine la partie » est
+  // atteignable depuis la routine de l'accueil, où Coach.show() n'a jamais
+  // tourné : `games` était alors vide et la liste s'affichait « rien à
+  // reconvertir » alors que l'archive en contient des dizaines.
+  function ensureData() {
+    if (dataPromise) return dataPromise;
+    dataPromise = (async () => {
+      if (!db) {
+        try {
+          db = await openDB();
+          await ensureOwner();
+          games = await getAll();
+          countryCache = (await getMeta('oppCountry')) || {};
+        } catch (_) { games = []; }
+      }
+      try { await loadHosted(); } catch (_) {}
+      return games.length;
+    })();
+    return dataPromise;
+  }
+
   // ─────────────── Entry ───────────────
   async function show() {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -2767,5 +2789,5 @@ const Coach = (() => {
       .sort((a, b) => (b.maxEval - a.maxEval));
   }
 
-  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets };
+  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData };
 })();

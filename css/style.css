@@ -2436,6 +2436,44 @@ body.guess-open { overflow: hidden; }
 .rp-reply b { color: var(--text); }
 .rp-term { margin-top: 6px; font-size: 13px; font-weight: 600; }
 .rp-actions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+
+/* ── Conversion guidée : briefing, plan, consigne du tour, indice ── */
+.rp-brief-head { font-size: 13.5px; }
+.rp-brief-edge { margin-top: 5px; font-size: 13.5px; }
+.rp-brief-plan { margin-top: 9px; }
+.rp-brief-plan > summary {
+  cursor: pointer; list-style: none; font-size: 11px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-dim); font-weight: 700; padding: 3px 0;
+}
+.rp-brief-plan > summary::-webkit-details-marker { display: none; }
+.rp-brief-plan > summary::after { content: ' ▾'; color: var(--dim-2); }
+.rp-brief-plan[open] > summary::after { content: ' ▴'; }
+.rp-brief-plan[open] > summary { margin-bottom: 4px; }
+.rp-plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rp-plan li { display: flex; gap: 8px; font-size: 13px; line-height: 1.45; color: var(--text-dim); }
+.rp-plan li b { color: var(--text); }
+.rp-plan-ic { flex: 0 0 auto; }
+.rp-cue {
+  margin-top: 6px; padding: 7px 10px; border-radius: 8px; font-size: 13px; line-height: 1.45;
+  background: rgba(91,143,185,.10); border-left: 3px solid #5b8fb9; color: var(--text-dim);
+}
+.rp-cue b { color: var(--text); }
+.rp-drift { color: var(--dim-2); font-weight: 400; }
+.rp-hintbox {
+  margin-top: 8px; padding: 8px 11px; border-radius: 8px; font-size: 13px; line-height: 1.45;
+  background: rgba(250,204,21,.10); border-left: 3px solid #facc15; color: var(--text-dim);
+}
+.rp-hintbox b { color: var(--text); }
+.rp-retry-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+/* .train-btn de base est clair sur clair ici : le bouton de reprise a son
+   propre habillage, en rouge sourd, pour rester lisible sur le panneau. */
+.rp-retry {
+  flex: 0 0 auto; background: rgba(248,113,113,.16); color: var(--danger);
+  border: 1px solid rgba(248,113,113,.45); font-weight: 600;
+}
+.rp-retry:hover { background: rgba(248,113,113,.26); }
+.rp-retry-note { font-size: 12px; color: var(--text-dim); }
+.rp-recap { margin-top: 6px; font-size: 12px; color: var(--text-dim); font-weight: 400; }
 .rp-cta { display: block; width: 100%; margin-top: 10px; }
 
 /* Secondary "vs Stockfish" buttons on the Coach cards (ghost variant). */
