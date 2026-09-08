@@ -2789,5 +2789,72 @@ const Coach = (() => {
       .sort((a, b) => (b.maxEval - a.maxEval));
   }
 
-  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData };
+  // ── Ce que TU joues vraiment dans une ouverture ────────────────────────────
+  // Les cours d'ouverture affichent, sur chaque noeud de l'arbre, combien de
+  // fois tu es passe par cette position, ton score, et le coup par lequel tu
+  // quittes le livre. Sans ca, un cours reste de la theorie generale : celui de
+  // l'Italienne enseigne 4.c3 / 4.d3 / 4.b4 alors que 3 de ses 7 parties
+  // partent sur 4.Cc3, un coup absent du cours.
+  //
+  // `sans` = la ligne du noeud (SAN anglais, comme les cours). Rend null si
+  // l'archive n'est pas chargee (appeler ensureData() avant).
+  function lineStats(sans) {
+    if (!games.length || !sans || !sans.length) return null;
+    const me = getUser().toLowerCase();
+    const out = { n: 0, w: 0, d: 0, l: 0, asWhite: 0, asBlack: 0, games: [] };
+    const next = {};
+    // Qui a le trait APRES la ligne du noeud : 5 demi-coups joues -> aux Noirs.
+    const mover = sans.length % 2 === 0 ? 'w' : 'b';
+    for (const g of games) {
+      const ms = gameMoves(g);
+      if (ms.length <= sans.length) continue;
+      let ok = true;
+      for (let i = 0; i < sans.length; i++) if (ms[i] !== sans[i]) { ok = false; break; }
+      if (!ok) continue;
+
+      const white = ((g.pgn.match(/\[White "([^"]*)"/) || [])[1] || '').toLowerCase();
+      const mine = g.userColor || (white === me ? 'w' : 'b');
+      const res = g.result || resultOf(g.pgn, mine);
+      out.n++;
+      if (mine === 'w') out.asWhite++; else out.asBlack++;
+      if (res === 'draw') out.d++; else if (res === 'win') out.w++; else out.l++;
+
+      const nx = ms[sans.length];
+      if (nx) {
+        const e = next[nx] || (next[nx] = { san: nx, n: 0, mine: mover === mine, w: 0, d: 0, l: 0 });
+        e.n++;
+        if (res === 'draw') e.d++; else if (res === 'win') e.w++; else e.l++;
+      }
+      out.games.push({ url: g.url || (g.pgn.match(/\[Link "([^"]*)"/) || [])[1] || '', res, mine, played: nx || '' });
+    }
+    if (!out.n) return null;
+    out.nextList = Object.keys(next).map(k => next[k]).sort((a, b) => b.n - a.n);
+    out.score = (out.w + out.d * 0.5) / out.n;
+    out.mover = mover;
+    return out;
+  }
+
+  function resultOf(pgn, mine) {
+    const res = (pgn.match(/\[Result "([^"]*)"/) || [])[1] || '*';
+    if (res === '1/2-1/2') return 'draw';
+    if (res === '1-0') return mine === 'w' ? 'win' : 'loss';
+    if (res === '0-1') return mine === 'b' ? 'win' : 'loss';
+    return 'loss';
+  }
+
+  // Les coups d'une partie en SAN anglais, sans commentaires ni numeros.
+  // Memoise sur l'objet partie : lineStats est appele une fois par noeud du
+  // cours, et reparser 150 PGN a chaque fois serait du gaspillage.
+  function gameMoves(g) {
+    if (g._moves) return g._moves;
+    let body = g.pgn || '';
+    const cut = body.lastIndexOf(']\n');
+    if (cut >= 0) body = body.slice(cut + 2);
+    body = body.replace(/\{[^}]*\}/g, ' ').replace(/\$\d+/g, ' ')
+               .replace(/\d+\.(\.\.)?/g, ' ').replace(/[?!]+/g, '');
+    g._moves = body.split(/\s+/).filter(t => t && !/^(1-0|0-1|1\/2-1\/2|\*)$/.test(t));
+    return g._moves;
+  }
+
+  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, lineStats };
 })();

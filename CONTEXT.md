@@ -61,10 +61,144 @@
   IMPLEMENTE en v191-v195 (voir ci-dessus). Pre-requis identifie a l'epoque : champ `parent` aux traps/quiz pour les
   raccrocher a leur branche, et faire exporter ses noeuds a `js/opening-tree.js` (il n'expose
   que `render`, d'ou une 3e representation des memes ouvertures).
+- **`_mockups/analysis-redesign-2026-09.html` (2026-09-08)** - maquette de refonte de l'ECRAN
+  ANALYSE (**implementee en v212-v223**). Constat mesure sur le code : 13 cartes de meme poids
+  dans 2 onglets desequilibres (`Conseil` = turning + pace + bouton guess, `Analyse` = 11 cartes),
+  le meme coup raconte 3 fois (`turning-card`, `highlights-card`, bloc « Moment cle » de
+  `summary-card`), 3 cartes sur le temps (`pace-card` dit litteralement « regarde la carte Pression
+  du temps plus bas »), 4 graphiques sur le meme axe des x jamais alignes, et 2 cartes nommees
+  « Resume » (`intro-card` + `summary-card`). Proposition : (1) la courbe des chances de gain
+  DEVIENT le scrubber de navigation, avec Matiere/Temps en onglets du meme cadre - remplace le
+  ruban de 43 pastilles + 3 cartes graphiques ; (2) la bulle du coach passe SOUS l'echiquier,
+  fusionnee au label du coup (le plateau remonte d'environ 90 px sur mobile) ; (3) le rapport
+  devient « les 4 moments » (le tournant simplement badge en premier) + 3 verdicts depliables
+  (phase / rythme / type d'erreur) ; (4) le reste (pastilles completes, plans, tablebase, effort
+  moteur) derriere un pli « Tout le detail ». Onglets Conseil/Analyse supprimes, CTA unique
+  « Rejouer les 4 moments » en fin de lecture. 3 telephones + table de correspondance carte par
+  carte. Donnees reelles de la partie du 14/08/2026 vs Koln (rapide 10 min, defaite au temps,
+  precision 52, 3 gaffes, acpl par phase 51/335/37, temps par coup extraits des `[%clk]`).
+- **`_mockups/opening-lesson-enrich-2026-09.html` (2026-09-08)** - maquette + 10 propositions pour
+  ENRICHIR LES COURS D'OUVERTURE (**les 10 implementees en v212-v223**). Chiffres mesures sur
+  `coach-data.json` (150 parties) : 9 des 28 ouvertures du catalogue ont un vrai cours (arbre +
+  notes + pieges + quiz) ; 124 parties sur 150 ne completent aucune ligne du catalogue au-dela du
+  coup 2 (profondeur mediane 3 plies, mesuree par prefixe exact contre les 172 lignes de
+  `js/openings.js` - borne basse) ; 8 parties contre **2.Dh5** apres 1.e4 e5 (aucun contenu dans
+  l'app, un mat en 5 subi) ; 8 parties d'Ouverture de l'Eveque cote Noirs a 38 % (absente du
+  catalogue OPENINGS) ; sur les 7 parties passant par 3.Fc4, il joue 4.Cc3 3 fois - un coup que le
+  cours ne couvre pas (il enseigne 4.c3 / 4.d3 / 4.b4). Les 3 propositions prioritaires : (1)
+  « tes parties ici » sur chaque noeud de l'arbre (nb de passages, score, coup par lequel il sort
+  du livre, point rouge sur les branches qu'il joue vraiment) ; (2) transformer les `deviations`
+  en prose en exercices d'une position, alimentes par les deviations reellement subies ; (5)
+  repetition espacee par branche (1/3/7/21 j) a la place de l'ensemble plat `ca_lessons_done`,
+  expose dans la Routine du jour. Les 7 autres : quiz sur l'echiquier au lieu du QCM texte (qui
+  enchaine au bout de 2 s et masque l'explication), rejeu en aveugle, position-type en diagramme,
+  deep-link analyse -> noeud du cours, fiche « 3 choses a retenir », budget temps affiche,
+  et l'ordre de creation des cours manquants pilote par ses parties (2.Dh5 > Eveque > Francaise > Sicilienne).
 - Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v212-v223 - REFONTE DE L'ECRAN ANALYSE + COURS D'OUVERTURE BRANCHES SUR SES PARTIES.**
+  Les deux maquettes de `_mockups/` (analysis-redesign-2026-09.html, opening-lesson-enrich-2026-09.html)
+  sont IMPLEMENTEES. 39 tests unitaires OK, 115 controles du nouveau `tools/verify_openings.cjs` OK,
+  0 erreur console.
+
+  **1. L'ecran Analyse : 13 cartes -> 4 blocs.** Constats mesures avant de toucher au code :
+  deux onglets desequilibres (`Conseil` = 3 blocs, `Analyse` = 11 cartes), le meme coup raconte
+  TROIS fois (`turning-card`, `highlights-card`, bloc « Moment cle » de `summary-card`), trois
+  cartes sur le temps (dont `pace-card` qui ecrivait « regarde la carte Pression du temps plus
+  bas »), quatre graphiques sur le meme axe des x jamais alignes, et deux cartes nommees « Resume »
+  (`intro-card` + `summary-card`).
+  - **La timeline EST la navigation** (`buildTimeline` / `drawTimeline` / `updateTimelineCursor` /
+    `bindTimeline`) : une courbe SVG 320x64 sous l'echiquier, trois series commutables
+    (Gain = win% vue Blancs, Matiere = `materialDiff` avec les glyphes de capture recuperes de
+    l'ancienne carte, Temps = secondes par coup avec le seuil 15 s), marqueurs des erreurs (plein =
+    tes coups, creux = les siens), curseur commun. On navigue en GLISSANT dessus (`pointerdown` /
+    `pointermove` avec `setPointerCapture`) - `goTo` pendant le geste et `pinBoard` seulement au
+    relachement, sinon la page sauterait a chaque pixel. Remplace le ruban de N pastilles
+    (`buildMoveStrip`) + `buildWinGraph` + `buildMaterialGraph` + `buildTimeChart`, tous supprimes,
+    ainsi que `materialFromFen` devenu mort.
+  - **Le commentaire du coach passe SOUS l'echiquier**, fusionne avec le label du coup (`#tl-cmt`,
+    `#tl-move-label`) : il disait la meme chose que le label et poussait le plateau d'environ 90 px
+    sur mobile. `updateReplayCta` et le bouton « retour au coup joue » de `bindAltMoves` y sont
+    reaccroches. Le lisere gauche de la carte prend la couleur de la classe du coup.
+  - **Le rapport** = l'histoire en un paragraphe (`#story-card`, l'ancienne `intro-card` sans son
+    titre « Resume » redondant) + **« Les moments »** (`buildMoments`, qui reutilise la collecte de
+    l'ancien `buildHighlights` renomme `collectMoments` : rien de la prose n'a ete perdu) + **trois
+    verdicts depliables** (`buildVerdicts`) + un pli « Tout le detail ».
+    - Le tournant n'est plus une carte : c'est le premier moment, badge `LE TOURNANT`, choisi par la
+      meme regle que l'ancien `buildTurningPoint` (gravite puis winPctLoss). Les moments sont
+      ordonnes tournant-d'abord puis chronologiquement.
+    - **Biais +5 sur tes coups** dans `collectMoments` : sans lui, deux gains manques par
+      l'ADVERSAIRE (score 11 chacun) sortaient avant sa propre gaffe decisive.
+    - Verdicts : phase (depuis `currentPhaseAccs`, extrait du paragraphe du resume ou il etait
+      noye), rythme (`paceStats` + `timeTroubleStats` fusionnes, les deux fonctions renvoient
+      maintenant du contenu au lieu de remplir une carte), type d'erreur (`mistakeStats`, avec la
+      sortie vers `Training.show('vigilance')`).
+    - **Piege corrige a la volee** : la premiere version du verdict de phase affirmait « ta perte
+      moyenne passe de 338 a 161 centiemes dans ta phase faible », soit l'INVERSE du chiffre montre.
+      La precision (base sur les chances de gain, qui saturent des que la position est perdue) et
+      l'acpl (centiemes de pion) ne varient pas dans le meme sens : on donne desormais les deux
+      phase par phase, sans en deduire de direction.
+  - CTA unique en fin de rapport, pre-rempli avec les indices des moments. Onglets
+    Conseil/Analyse, `setSegment` et `layoutCoachReview` supprimes. Grille desktop reprise
+    (`.verdict-strip` et `.report` en colonne 2, `board-wrapper` = `min(520px, 100vh - 420px)`
+    pour que la timeline tienne sous l'echiquier).
+
+  **2. Les cours d'ouverture, branches sur ses 150 parties.** Chiffres mesures sur
+  `coach-data.json` avant d'ecrire : 9 des 28 ouvertures du catalogue avaient un vrai cours ;
+  124 parties sur 150 ne completent AUCUNE ligne du catalogue au-dela du coup 2 (profondeur
+  mediane 3 demi-coups, par prefixe exact contre les 172 lignes de `js/openings.js`, donc borne
+  basse) ; 8 parties contre **2.Dh5** sans une ligne de contenu dans l'app (dont un mat en 5
+  encaisse : `e4 e5 Dh5 Cc6 Fc4 g6 Df3 Cd4?? Dxf7#`) ; 8 parties d'**Ouverture de l'Eveque** cote
+  Noirs a 38 %, absente du catalogue ; et sur les 7 parties passant par 3.Fc4, il joue 4.Cc3 ou
+  4.O-O au lieu des 4.c3 / 4.d3 / 4.b4 du cours.
+  - **`Coach.lineStats(sans)`** (nouveau, exporte) croise une ligne avec l'archive : nombre de
+    passages, V/N/D, score, et la distribution du coup suivant avec le camp qui l'a joue. Les coups
+    sont memoises sur l'objet partie (`gameMoves`) - `lineStats` est appele une fois par noeud.
+  - **Bloc « Tes parties apres X »** sur chaque noeud de l'arbre (`fillMine`, asynchrone via
+    `Coach.ensureData`) : stats + « Tu quittes le livre ici : g6 (2 parties) » + barres des coups
+    suivants (vert = au livre, rouge = ta fuite, bleu = son coup). Sur la TABIYA on compte a partir
+    de la ligne de l'ouverture (« apres 2.Dh5 » = 8 parties) et non sur les 8 demi-coups de la
+    tabiya, qui n'en retiendraient qu'une.
+  - **Bloc « S'il sort du livre »** : les `deviations` en prose deviennent des exercices d'UNE
+    position (`course.punish`, reparti par `Courses.spread` comme les pieges, joue par
+    `Tactics.start`). 15 drills, tous verifies.
+  - **Rejeu en aveugle** (`blindable` / `blindReplay` / `blindSide`) : le format `sol` de Tactics
+    alterne deja « ton coup / reponse forcee », une ligne d'ouverture y entre telle quelle. L'app
+    joue les coups de l'adversaire, on retrouve les siens. `Tactics.start` accepte un 3e argument
+    `{onDone}` et suit `sessionClean` pour faire redescendre une branche ratee.
+  - **Repetition espacee par branche** (`srsTouch` / `srsGet` / `srsDue` / `srsLabel`, cle
+    `ca_lessons_srs`, boites 1/3/7/21 j) a la place de l'ensemble plat `ca_lessons_done`. Bandeau
+    « branche revue N fois · a revoir demain » en bas de chaque noeud, item de routine
+    « Reviser une ligne d'ouverture » avec compteur, et l'action ouvre la branche la plus en
+    retard (deep-link `openOpeningByLine(line, {branch})`).
+  - **Quiz sur l'echiquier** quand la question porte une position (`quiz[].fen` + `sol`), et
+    surtout **plus d'enchainement automatique au bout de 2 s** : l'explication s'effacait avant
+    d'etre lue, il y a maintenant un bouton « Question suivante ».
+  - **`course.target`** (position type + cases-cibles surlignees via
+    `BoardRenderer.highlightSquares` dans un overlay dedie) et **`course.keep`** (les 3 phrases a
+    retenir) sur les 12 cours. **Budget temps** affiche a cote de la barre de progression
+    (`data-budget`, ~40 s par branche).
+  - **Boucle analyse -> cours** (`addLessonLink` + `lessonLinkOutOfBook`) : la carte histoire dit
+    « Tu as suivi le livre jusqu'au coup N » et deep-linke la BRANCHE suivie ; si aucun cours ne
+    correspond (le cas le plus frequent chez lui), elle dit « Tu sors du livre des 2.f3 » et ouvre
+    le cours de l'ouverture concernee.
+  - **3 nouveaux cours** : `e4 e5 Qh5` (Attaque Parham, 3 drills dont la position exacte du mat
+    encaisse), `e4 e5 Bc4` (Ouverture de l'Eveque) et `e4 e6 d4 d5` (Francaise ecrite du cote des
+    BLANCS, avec `course.side` qui prend le pas sur le `side` du catalogue). Deux nouvelles entrees
+    de catalogue (Eveque, Parham).
+  - **Le fil pedagogique verifie mecaniquement** : `…Cf6 bloque la colonne f`, donc Dxf7 devient
+    ILLEGAL - c'est ce qui tue le mat du berger, 2.Dh5 et 2.Fc4+3.Df3 d'un seul coup. Verifie avec
+    chess.js, pas raisonne de tete.
+  - **`tools/verify_openings.cjs`** (nouveau) : legalite de chaque FEN, de chaque `sol`, de chaque
+    ligne, prefixe des lignes = ligne de base du cours, `keep` a 3 phrases, cases de `target`
+    valides. **115 controles.**
+  - **⚠ Piege chess.js confirme** : en mode `sloppy`, `bxc6` est lu comme un coup de FOU. Eviter
+    les prises de pion de la colonne b dans les lignes et les solutions (rencontre en composant
+    la position type de l'Ecossaise).
+  - **Bug trouve au passage** : `openOpeningByLine` ne transmettait pas `side` a l'explorateur, donc
+    le camp du cours etait inconnu (rejeu en aveugle et detection de fuite cassés en silence).
 - **v205-v211 - « TERMINE LA PARTIE » : LA LISTE SE REMPLIT, ET L'EXERCICE EST GUIDE.**
   Deux reproches du user, tous les deux traites, verifies sur ses 26 vraies parties gagnees puis
   perdues (26 cibles, pas 0).

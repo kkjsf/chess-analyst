@@ -9,6 +9,12 @@ const App = (() => {
   let currentPgn = null;
   let currentClocks = [];
   let currentIncrement = 0;
+  // Les moments retenus par le rapport (voir buildMoments) : le CTA de fin les
+  // rejoue, et la timeline les marque.
+  let currentMoments = [];
+  // La precision par phase, calculee dans buildIntro et affichee par
+  // buildVerdicts (elle etait noyee en fin de paragraphe du resume).
+  let currentPhaseAccs = null;
   let gameHistory = [];
   let inspectSq = null;
   let lastRenderIndex = -1;
@@ -84,9 +90,15 @@ const App = (() => {
     $('#btn-analyze').addEventListener('click', onAnalyze);
     const trainBtn = $('#btn-open-training');
     if (trainBtn) trainBtn.addEventListener('click', () => Training.show());
+    // Le CTA de fin de rapport rejoue LES MOMENTS de la partie (les coups que
+    // le rapport vient de lister) plutot que la partie entiere : l'action suit
+    // la lecture. Sans moment identifie, il retombe sur la partie complete.
     const guessBtn = $('#btn-guess');
     if (guessBtn) guessBtn.addEventListener('click', () => {
-      if (currentAnalysis && typeof GuessMove !== 'undefined') GuessMove.start(currentAnalysis, currentHeader, currentUser);
+      if (!currentAnalysis || typeof GuessMove === 'undefined') return;
+      const idx = currentMoments.filter(m => m.isUserMove).map(m => m.index);
+      if (idx.length) GuessMove.start(currentAnalysis, currentHeader, currentUser, { indices: idx, title: '🎯 Les moments' });
+      else GuessMove.start(currentAnalysis, currentHeader, currentUser);
     });
     const coachBtn = $('#btn-open-coach');
     if (coachBtn) coachBtn.addEventListener('click', () => Coach.show());
@@ -98,7 +110,7 @@ const App = (() => {
 
     $$('.tabbar .tab').forEach(t => t.addEventListener('click', () => navTo(t.dataset.tab)));
 
-    $$('#analysis-segmented .seg-btn').forEach(b => b.addEventListener('click', () => setSegment(b.dataset.seg)));
+    bindTimeline();
 
     $('#board-svg').addEventListener('click', (e) => {
       const sq = BoardRenderer.coordToSquare($('#board-svg'), e.clientX, e.clientY);
@@ -533,27 +545,22 @@ const App = (() => {
     $('#top-player .piece-icon').textContent = isFlipped ? '⚪' : '⚫';
     $('#bottom-player .piece-icon').textContent = isFlipped ? '⚫' : '⚪';
 
-    buildMoveStrip(analysis);
-
-    buildIntro(header, analysis, summary);
+    // L'ordre de lecture : le verdict, l'echiquier et sa timeline, puis le
+    // rapport (histoire, moments, verdicts) et le detail replie.
+    buildTimeline(analysis);
     buildAccuracyHero(header, summary);
-    buildTurningPoint(header, analysis);
-    buildPace(header, analysis);
-    buildWinGraph(analysis);
-    buildHighlights(header, analysis);
-    buildMistakeProfile(header, analysis);
-    buildTimeTrouble(header, analysis);
-    buildMaterialGraph(analysis);
+    buildIntro(header, analysis, summary);
+    buildMoments(header, analysis);
+    buildVerdicts(header, analysis, summary);
     buildPlanRecognition(header, analysis);
-    buildTimeChart(analysis);
     buildSummary(summary, analysis);
     probeEndgameTablebase(analysis);
 
     $('#screen-import').classList.remove('active');
     $('#screen-analysis').classList.add('active');
     setTab('analyser');
-    setSegment('conseil');
-    layoutCoachReview();
+    const fold = $('#detail-fold');
+    if (fold) fold.open = false;
 
     lastRenderIndex = -1;
     unpinBoard();
@@ -595,31 +602,197 @@ const App = (() => {
     return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
-  // The coach verdict bubble lives inside the sticky board header on phones (so
-  // it stays pinned with the board while stepping moves), but on the desktop
-  // two-column grid that wasted vertical space above the board and left the
-  // right column half-empty. There it moves to the top of the right column,
-  // above the tabs. Grid only places direct children, so the node is physically
-  // relocated between the two containers by viewport.
-  const analysisDesktopMQ = window.matchMedia('(min-width: 1000px)');
-  function layoutCoachReview() {
-    const coach = $('.coach-review');
-    const sticky = $('.board-sticky');
-    const body = $('.analysis-body');
-    const seg = $('.analysis-segmented');
-    if (!coach || !sticky || !body || !seg) return;
-    if (analysisDesktopMQ.matches) {
-      if (coach.parentElement !== body || coach.nextElementSibling !== seg)
-        body.insertBefore(coach, seg);
-    } else if (coach.parentElement !== sticky || sticky.firstElementChild !== coach) {
-      sticky.insertBefore(coach, sticky.firstElementChild);
+  // ─────────────────────────── La timeline ───────────────────────────
+  // Un seul objet temporel sous l'echiquier. Il remplace quatre elements qui
+  // partageaient le meme axe des x sans jamais etre d'accord : le ruban de
+  // pastilles de coups (navigation), « Chances de gain », « Balance materielle »
+  // et « Temps par coup ». Trois series commutables, un curseur commun, et on
+  // navigue en glissant le doigt dessus.
+  const TL_W = 320, TL_H = 64;
+  let tlSeries = 'win';          // 'win' | 'mat' | 'time'
+  let tlData = null;             // { win:[], mat:[], time:[]|null, marks:{ply:type} }
+
+  function bindTimeline() {
+    const segs = $('#tl-segs');
+    if (segs) segs.addEventListener('click', (e) => {
+      const b = e.target.closest('.tl-seg');
+      if (!b || b.hidden) return;
+      setTlSeries(b.dataset.series);
+    });
+
+    const svg = $('#tl-svg');
+    if (!svg) return;
+    // Glisser = naviguer. On appelle goTo (et pas userNav) pendant le geste :
+    // userNav epingle l'echiquier et le ramene dans le champ, ce qui ferait
+    // sauter la page a chaque pixel de deplacement.
+    let dragging = false;
+    const plyAt = (clientX) => {
+      if (!currentAnalysis || !currentAnalysis.length) return null;
+      const r = svg.getBoundingClientRect();
+      if (!r.width) return null;
+      const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+      return Math.round(t * (currentAnalysis.length - 1)) + 1;
+    };
+    const go = (e) => {
+      const ply = plyAt(e.clientX);
+      if (ply !== null && ply !== currentIndex) goTo(ply);
+    };
+    svg.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+      go(e);
+    });
+    svg.addEventListener('pointermove', (e) => { if (dragging) go(e); });
+    const end = () => { if (dragging) { dragging = false; pinBoard(); } };
+    svg.addEventListener('pointerup', end);
+    svg.addEventListener('pointercancel', end);
+  }
+
+  function setTlSeries(kind) {
+    if (kind === 'time' && (!tlData || !tlData.time)) return;
+    tlSeries = kind;
+    $$('#tl-segs .tl-seg').forEach(b => b.classList.toggle('active', b.dataset.series === kind));
+    drawTimeline();
+    updateTimelineCursor(currentIndex);
+  }
+
+  // Les trois series, calculees une fois par partie.
+  function buildTimeline(analysis) {
+    const card = $('#tl-card');
+    if (!card) return;
+    tlData = null;
+    if (!analysis || !analysis.length) { card.hidden = true; return; }
+
+    const win = analysis.map(r => Analyzer.cpToWinPct(r.eval || 0));   // vue Blancs, 0..1
+    const mat = analysis.map(r => r.materialDiff || 0);
+    const hasEval = analysis[0].eval !== undefined && analysis[0].eval !== null;
+
+    let time = null;
+    if (currentClocks.length >= 4) {
+      const t = Analyzer.clocksToTimePerMove(currentClocks, currentIncrement);
+      if (t && t.length >= 4) time = analysis.map((_, i) => t[i] || 0);
+    }
+
+    // Les marqueurs : les erreurs, et les captures pour la serie materielle.
+    const marks = {};
+    analysis.forEach((r, i) => {
+      if (r.type === 'blunder' || r.type === 'mistake' || r.type === 'miss') marks[i] = r.type;
+    });
+    const caps = {};
+    analysis.forEach((r, i) => {
+      if (!r.move || !r.move.captured) return;
+      const prev = i > 0 ? (analysis[i - 1].materialDiff || 0) : 0;
+      if ((r.materialDiff || 0) === prev) return;
+      const key = r.move.color === 'w' ? r.move.captured : r.move.captured.toUpperCase();
+      caps[i] = PIECE_SYMBOLS[key] || '';
+    });
+
+    tlData = { win: hasEval ? win : null, mat, time, marks, caps };
+
+    const timeBtn = $('#tl-segs .tl-seg[data-series="time"]');
+    if (timeBtn) timeBtn.hidden = !time;
+    const winBtn = $('#tl-segs .tl-seg[data-series="win"]');
+    if (winBtn) winBtn.hidden = !tlData.win;
+
+    card.hidden = false;
+    setTlSeries(tlData.win ? 'win' : 'mat');
+  }
+
+  function drawTimeline() {
+    const svg = $('#tl-svg');
+    if (!svg || !tlData) return;
+    const data = tlData[tlSeries];
+    if (!data) return;
+    const n = data.length;
+    const x = i => n <= 1 ? 0 : (i / (n - 1)) * TL_W;
+
+    let lo, hi;
+    if (tlSeries === 'win') { lo = 0; hi = 1; }
+    else if (tlSeries === 'mat') { const m = Math.max(3, ...data.map(Math.abs)); lo = -m; hi = m; }
+    else { lo = 0; hi = Math.max(10, ...data); }
+    const y = v => TL_H - 5 - ((v - lo) / (hi - lo || 1)) * (TL_H - 11);
+
+    let s = '';
+    if (tlSeries === 'time') {
+      // 15 s : le seuil de la regle « Echecs, Captures, Menaces avant de jouer ».
+      s += line(0, y(15), TL_W, y(15), 'rgba(226,184,87,.45)', '3 3');
+      const bw = Math.max(1.6, Math.min(6, TL_W / n - 0.8));
+      s += data.map((v, i) => {
+        const bad = tlData.marks[i] && v < 15;
+        const mine = isUserPly(i);
+        const fill = bad ? 'var(--danger)' : mine ? 'rgba(226,184,87,.75)' : 'rgba(91,143,185,.55)';
+        return `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(TL_H - 5 - y(v)).toFixed(1)}" rx="1" fill="${fill}"/>`;
+      }).join('');
+    } else {
+      const mid = tlSeries === 'win' ? y(0.5) : y(0);
+      const pts = data.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      // « Gain » se lit comme la barre d'eval : la part claire est celle des
+      // Blancs, on remplit donc jusqu'en bas. « Matiere » se lit par rapport a
+      // zero, on remplit depuis la ligne mediane.
+      s += tlSeries === 'win'
+        ? `<polygon points="0,${TL_H} ${pts} ${TL_W},${TL_H}" fill="rgba(255,255,255,.10)"/>`
+        : `<polygon points="0,${mid} ${pts} ${TL_W},${mid}" fill="rgba(226,184,87,.10)"/>`;
+      s += line(0, mid, TL_W, mid, 'rgba(255,255,255,.14)', '3 3');
+      s += `<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/>`;
+      if (tlSeries === 'mat') {
+        // Les glyphes de capture : c'etait le seul apport propre de l'ancienne
+        // carte « Balance materielle », on le garde ici.
+        s += Object.keys(tlData.caps).map(i => {
+          const sym = tlData.caps[i];
+          if (!sym) return '';
+          const yy = y(data[i]);
+          return `<text x="${x(+i).toFixed(1)}" y="${(yy < TL_H / 2 ? yy + 8 : yy - 3).toFixed(1)}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.55)">${sym}</text>`;
+        }).join('');
+      }
+    }
+
+    // Les erreurs, sur la courbe. Les tiennes en plein, celles de l'adversaire
+    // en creux : le rapport parle de TON jeu.
+    s += Object.keys(tlData.marks).map(i => {
+      const t = tlData.marks[i];
+      const yy = tlSeries === 'time' ? y(data[i]) : y(data[i]);
+      const col = t === 'blunder' ? 'var(--danger)' : t === 'mistake' ? 'var(--warning)' : 'var(--blue)';
+      const mine = isUserPly(+i);
+      return `<circle cx="${x(+i).toFixed(1)}" cy="${yy.toFixed(1)}" r="${t === 'blunder' ? 3.2 : 2.5}" ` +
+             `fill="${mine ? col : 'var(--bg)'}" stroke="${col}" stroke-width="1.2"/>`;
+    }).join('');
+
+    s += `<line id="tl-cursor" x1="0" y1="0" x2="0" y2="${TL_H}" stroke="var(--text)" stroke-opacity=".45" stroke-width="1" opacity="0"/>`;
+    s += `<circle id="tl-dot" r="3.6" fill="var(--text)" stroke="var(--bg)" stroke-width="1.4" opacity="0"/>`;
+    svg.innerHTML = s;
+
+    const leg = $('#tl-legend');
+    if (leg) leg.textContent = tlSeries === 'win' ? 'chances de gain, vue Blancs'
+      : tlSeries === 'mat' ? 'matériel, en pions (vue Blancs)' : 'secondes par coup, seuil 15 s';
+
+    function line(x1, y1, x2, y2, col, dash) {
+      return `<line x1="${x1}" y1="${y1.toFixed(1)}" x2="${x2}" y2="${y2.toFixed(1)}" stroke="${col}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
     }
   }
-  analysisDesktopMQ.addEventListener('change', layoutCoachReview);
 
-  function setSegment(seg) {
-    $$('#analysis-segmented .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
-    $$('#screen-analysis .seg-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === seg));
+  function isUserPly(i) {
+    if (!currentUser || !currentAnalysis || !currentAnalysis[i] || !currentAnalysis[i].move) return true;
+    return currentAnalysis[i].move.color === currentUser;
+  }
+
+  function updateTimelineCursor(index) {
+    const cur = $('#tl-cursor'), dot = $('#tl-dot');
+    if (!cur || !dot || !tlData || !currentAnalysis) return;
+    const data = tlData[tlSeries];
+    if (!data) return;
+    const i = index - 1;
+    if (i < 0 || i >= data.length) { cur.setAttribute('opacity', '0'); dot.setAttribute('opacity', '0'); return; }
+    const n = data.length;
+    const x = n <= 1 ? 0 : (i / (n - 1)) * TL_W;
+    let lo, hi;
+    if (tlSeries === 'win') { lo = 0; hi = 1; }
+    else if (tlSeries === 'mat') { const m = Math.max(3, ...data.map(Math.abs)); lo = -m; hi = m; }
+    else { lo = 0; hi = Math.max(10, ...data); }
+    const y = TL_H - 5 - ((data[i] - lo) / (hi - lo || 1)) * (TL_H - 11);
+    cur.setAttribute('x1', x.toFixed(1)); cur.setAttribute('x2', x.toFixed(1));
+    cur.setAttribute('opacity', '1');
+    dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1));
+    dot.setAttribute('opacity', '1');
   }
 
   const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -725,65 +898,48 @@ const App = (() => {
       }
     }
 
-    const bubble = $('#coach-bubble');
-    const glyph = $('#cb-glyph');
-    const verdict = $('#cb-verdict');
-    const badge = $('#tip-badge');
-    const sideTag = $('#tip-side');
+    // Le coup courant et son commentaire, SOUS l'echiquier (la bulle du coach
+    // etait au-dessus : elle disait la meme chose que le label du coup et
+    // poussait le plateau vers le bas avant qu'on ait vu la position).
+    const label = $('#tl-move-label');
+    const badge = $('#tl-move-eval');
+    const cmt = $('#tl-cmt');
+    const card = $('#tl-card');
 
     if (index === 0) {
-      bubble.className = 'coach-bubble';
-      glyph.style.display = 'none';
-      glyph.className = 'cb-glyph';
-      verdict.textContent = 'Position de départ';
-      $('#tip-text').innerHTML = 'Parcours la partie coup par coup avec ‹ › ou la barre de coups ci-dessous.';
-      badge.textContent = ''; badge.hidden = true; badge.className = 'eval-badge';
-      if (sideTag) sideTag.hidden = true;
+      card.className = 'tl-card';
+      label.innerHTML = 'Position de départ';
+      cmt.innerHTML = 'Glisse sur la courbe, ou avance coup par coup avec ‹ ›. Les points rouges sont les coups à revoir.';
+      badge.textContent = ''; badge.hidden = true;
     } else {
       const r = currentAnalysis[index - 1];
       const moveNum = Math.floor((index - 1) / 2) + 1;
       const dot = (index - 1) % 2 === 0 ? '.' : '...';
       const meta = MOVE_CLASS[r.type];
+      const isUserMove = currentUser && r.move &&
+        ((currentUser === 'w' && r.move.color === 'w') || (currentUser === 'b' && r.move.color === 'b'));
 
-      bubble.className = 'coach-bubble' + (meta ? ' ' + meta.cls : '');
-      glyph.style.display = '';
-      glyph.textContent = '♞';
-      glyph.className = 'cb-glyph ' + (r.move && r.move.color === 'b' ? 'black' : 'white');
-      glyph.title = (r.move && r.move.color === 'b') ? 'Trait aux Noirs' : 'Trait aux Blancs';
-      verdict.innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b>${meta ? ' — ' + meta.label : ''}`;
-      $('#tip-text').innerHTML = r.tipFr;
+      card.className = 'tl-card' + (meta ? ' tl-' + meta.cls : '');
+      label.innerHTML = `<b>${moveNum}${dot} ${r.sanFr}</b>${markSpan(r.type)}` +
+        (meta ? ` <span class="tl-class">${meta.label}</span>` : '') +
+        (currentUser && r.move ? ` <span class="tl-side ${isUserMove ? 'tl-you' : 'tl-opp'}">${isUserMove ? 'toi' : 'lui'}</span>` : '');
+      cmt.innerHTML = r.tipFr;
       bindAltMoves();
 
-      if (sideTag && currentUser && r.move) {
-        const isUserMove = (currentUser === 'w' && r.move.color === 'w') || (currentUser === 'b' && r.move.color === 'b');
-        sideTag.hidden = false;
-        sideTag.textContent = isUserMove ? 'Vous' : 'Adversaire';
-        sideTag.className = 'tip-side-tag ' + (isUserMove ? 'tip-side-you' : 'tip-side-opp');
-      } else if (sideTag) {
-        sideTag.hidden = true;
-      }
-
-      // Numeric engine eval (White's perspective) as a neutral pill.
-      badge.className = 'eval-badge';
       const evalTxt = formatEval(r);
       if (evalTxt) { badge.textContent = evalTxt; badge.hidden = false; }
       else { badge.textContent = ''; badge.hidden = true; }
     }
 
     updateReplayCta(index);
-
-    updateMoveStripActive(index);
-
-    updateWinGraphCursor(index);
-    updateMatGraphCursor(index);
-
+    updateTimelineCursor(index);
   }
 
   // « Rejoue cette position » : quand le coup affiché est une de TES erreurs
   // (gaffe / erreur / coup manqué) et qu'on a la position + le meilleur coup,
   // proposer de reprendre la main juste avant et de rejouer contre Stockfish.
   function updateReplayCta(index) {
-    const bubble = $('#coach-bubble');
+    const bubble = $('#tl-cmt');
     if (!bubble) return;
     let cta = $('#rp-cta');
     const r = index > 0 ? currentAnalysis[index - 1] : null;
@@ -832,7 +988,7 @@ const App = (() => {
               altPreview = false;
               goTo(currentIndex);
             });
-            $('#coach-bubble').appendChild(back);
+            $('#tl-cmt').appendChild(back);
           }
           back.hidden = false;
         } catch(_) {}
@@ -891,6 +1047,41 @@ const App = (() => {
     if (w === name) return 'w';
     if (b === name) return 'b';
     return null;
+  }
+
+  // ─────────────── Repetition espacee des lignes d'ouverture ───────────────
+  // Avant : la progression d'un cours etait un simple ensemble « fait / pas
+  // fait » (`ca_lessons_done`), donc une ligne lue une fois etait une ligne
+  // consideree comme acquise - et oubliee. Chaque BRANCHE a maintenant sa
+  // boite (1 / 3 / 7 / 21 jours) ; la routine du jour expose ce qui est du.
+  const SRS_KEY = 'ca_lessons_srs';
+  const SRS_BOXES = [1, 3, 7, 21];
+  const DAY = 864e5;
+  function srsAll() { try { return JSON.parse(localStorage.getItem(SRS_KEY) || '{}'); } catch (_) { return {}; } }
+  function srsWrite(o) { try { localStorage.setItem(SRS_KEY, JSON.stringify(o)); } catch (_) {} }
+  function srsGet(line, i) { return srsAll()[line + '#' + i] || null; }
+  // Une branche revue monte d'une boite ; une branche ratee (2 fautes au rejeu
+  // en aveugle) redescend a la premiere.
+  function srsTouch(line, i, ok) {
+    const all = srsAll(), k = line + '#' + i;
+    const e = all[k] || { box: -1, seen: 0 };
+    e.box = ok === false ? 0 : Math.min(SRS_BOXES.length - 1, e.box + 1);
+    e.seen = (e.seen || 0) + 1;
+    e.due = Date.now() + SRS_BOXES[e.box] * DAY;
+    all[k] = e; srsWrite(all);
+    return e;
+  }
+  function srsDue() {
+    const all = srsAll(), now = Date.now();
+    return Object.keys(all).filter(k => (all[k].due || 0) <= now)
+      .map(k => ({ line: k.split('#')[0], i: +k.split('#')[1], e: all[k] }));
+  }
+  function srsLabel(e) {
+    if (!e) return '';
+    const days = Math.round((e.due - Date.now()) / DAY);
+    if (days <= 0) return 'à revoir maintenant';
+    if (days === 1) return 'à revoir demain';
+    return `à revoir dans ${days} jours`;
   }
 
   function buildIntro(header, analysis, summary) {
@@ -1021,7 +1212,11 @@ const App = (() => {
       openingLine = `<span class="intro-opening opening-toggle" tabindex="0" role="button" title="Cliquez pour explorer l'ouverture">${opening.name}</span> <span class="intro-eco">${opening.eco}</span>`;
     }
 
-    let accuracyHtml = '';
+    // La precision par phase ne s'affiche plus ICI : elle etait noyee en fin de
+    // paragraphe alors qu'elle repond a « qu'est-ce que je dois travailler ? ».
+    // Elle devient un verdict a part entiere (voir buildPhaseVerdict), calcule
+    // depuis les memes tranches.
+    currentPhaseAccs = null;
     if (summary.engineUsed) {
       const phaseRanges = [
         { label: 'Ouverture', from: 0, to: Math.min(20, analysis.length) },
@@ -1043,19 +1238,10 @@ const App = (() => {
         const acc = count > 0 ? Math.round(accSum / count) : 0;
         return { label: p.label, acc, count };
       }).filter(p => p.count > 0);
-
-      if (phaseAccs.length > 1) {
-        accuracyHtml += `<div class="phase-accuracy">`;
-        accuracyHtml += `<div class="phase-accuracy-title">${user ? 'Votre précision par phase' : 'Précision par phase'}</div>`;
-        for (const p of phaseAccs) {
-          const barClass = !showSide ? '' : (showSide === 'b' ? ' black' : '');
-          accuracyHtml += `<div class="accuracy-row phase-row"><span class="accuracy-label">${p.label}</span><div class="accuracy-bar-bg"><div class="accuracy-bar${barClass}" style="width:${p.acc}%"></div></div><span class="accuracy-val">${p.acc}%</span></div>`;
-        }
-        accuracyHtml += `</div>`;
-      }
+      if (phaseAccs.length > 1) currentPhaseAccs = phaseAccs;
     }
 
-    const card = $('#intro-card');
+    const card = $('#story-card');
     let html = `<p>${line1} ${line2}</p>`;
     if (dateLine || openingLine) {
       html += '<div class="intro-meta">';
@@ -1064,7 +1250,6 @@ const App = (() => {
       html += '</div>';
     }
     html += `<p class="intro-narrative">${narrative}</p>`;
-    html += accuracyHtml;
     $('#intro-text').innerHTML = html;
     const toggle = $('#intro-text .opening-toggle');
     if (toggle) {
@@ -1072,7 +1257,75 @@ const App = (() => {
       toggle.addEventListener('click', openModal);
       toggle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(); } });
     }
+    addLessonLink(card, analysis);
     card.hidden = false;
+  }
+
+  // La boucle analyse → cours. Avant, le nom de l'ouverture ouvrait le cours à
+  // sa RACINE : il fallait retrouver soi-même la branche où l'on venait de
+  // sortir du livre. Ici on la nomme, et le lien y va directement.
+  function addLessonLink(card, analysis) {
+    const old = card.querySelector('.story-lesson');
+    if (old) old.remove();
+    if (typeof Courses === 'undefined' || !Courses.match) return;
+    const played = analysis.map(r => r.move && r.move.san).filter(Boolean).slice(0, 24);
+    if (played.length < 4) return;
+    const hit = Courses.match(played.join(' '));
+    if (!hit || !hit.course) { lessonLinkOutOfBook(card, played); return; }
+    const branches = Courses.buildBranches(hit.course);
+    // La branche la plus profonde que la partie a REELLEMENT suivie.
+    let best = -1, bestPly = -1;
+    branches.forEach((b, i) => {
+      if (b.sans.length <= played.length && b.sans.every((s, k) => played[k] === s) && b.plyEnd > bestPly) {
+        bestPly = b.plyEnd; best = i;
+      }
+    });
+    if (best < 0) return;
+    const o = OPENINGS.find(x => x.line === hit.key);
+    if (!o) return;
+    const b = branches[best];
+    const label = b.name || (o.name || 'cette ligne');
+    const moveNo = Math.ceil((bestPly + 1) / 2);
+    const wrap = document.createElement('div');
+    wrap.className = 'story-lesson';
+    wrap.innerHTML = `<span>Tu as suivi le livre jusqu'au coup <b>${moveNo}</b>.</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'pill pill-ghost';
+    btn.textContent = `📖 Revoir « ${label} »`;
+    btn.addEventListener('click', () => openOpeningByLine(hit.key, { branch: best }));
+    wrap.appendChild(btn);
+    card.appendChild(wrap);
+  }
+
+  // Le cas le plus fréquent chez lui : la partie quitte la théorie avant le
+  // coup 3, donc AUCUN cours ne correspond à la ligne jouée. Plutôt que de ne
+  // rien afficher, on nomme le coup qui sort du livre et on ouvre le cours de
+  // l'ouverture qu'on était en train de jouer.
+  function lessonLinkOutOfBook(card, played) {
+    let bestKey = null, bestLen = 0;
+    for (const k of Object.keys(Courses.COURSES)) {
+      const kt = k.split(' ');
+      let n = 0;
+      while (n < kt.length && played[n] === kt[n]) n++;
+      if (n >= 2 && n < kt.length && n > bestLen) { bestLen = n; bestKey = k; }
+    }
+    if (!bestKey) return;
+    const o = OPENINGS.find(x => x.line === bestKey);
+    if (!o) return;
+    const frSan = (san) => (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(san) : san;
+    const ply = bestLen + 1;                       // le premier demi-coup hors livre
+    const moveNo = Math.ceil(ply / 2);
+    const dot = ply % 2 ? '.' : '…';
+    const who = (ply % 2 ? 'w' : 'b') === currentUser ? 'Tu sors' : 'Il sort';
+    const wrap = document.createElement('div');
+    wrap.className = 'story-lesson';
+    wrap.innerHTML = `<span>${who} du livre dès <b>${moveNo}${dot}${frSan(played[bestLen])}</b>.</span>`;
+    const btn = document.createElement('button');
+    btn.className = 'pill pill-ghost';
+    btn.textContent = `📖 Le cours : ${o.name}`;
+    btn.addEventListener('click', () => openOpeningByLine(bestKey));
+    wrap.appendChild(btn);
+    card.appendChild(wrap);
   }
 
   function explainMove(san, color, moveNum, fen) {
@@ -1123,7 +1376,7 @@ const App = (() => {
   // Open the internal opening explorer for an exact OPENINGS line (as used by the
   // openings tree). Falls back to the "Ouvertures" browse panel when the line has
   // no dedicated catalog entry (structural / family-head nodes).
-  function openOpeningByLine(line) {
+  function openOpeningByLine(line, opts) {
     const o = line ? OPENINGS.find(x => x.line === line) : null;
     if (!o) { if (_openPanel) _openPanel('openings'); return; }
     const flip = o.side === 'b';
@@ -1132,12 +1385,18 @@ const App = (() => {
     const course = (typeof Courses !== 'undefined') ? Courses.get(o.line) : null;
     openOpeningExplorer({
       name: title, eco: o.eco, line: o.line, moves,
+      // `side` manquait : le rejeu en aveugle et le bloc « tes parties » en ont
+      // besoin pour savoir de quel cote se place le cours.
+      side: o.side,
       idea: o.idea, plans: o.plans, structure: o.structure,
       mistakes: o.mistakes, deviations: o.deviations, course
-    }, [], o.level || '', flip);
+    }, [], o.level || '', flip, opts);
   }
 
-  function openOpeningExplorer(opening, analysis, footerOverride, flip) {
+  // `opts.branch` = index de branche a ouvrir directement (deep-link depuis
+  // l'analyse ou depuis la routine de revision : on veut LA branche, pas la
+  // racine du cours).
+  function openOpeningExplorer(opening, analysis, footerOverride, flip, opts) {
     if (!opening || !opening.line) return;
 
     // Self-enrich: if opened without a course (e.g. from the Coach, which passes
@@ -1514,7 +1773,7 @@ const App = (() => {
     // Maintenant : un rail à gauche montre l'arbre (dérivé des `lines[].sans` par
     // Courses.buildBranches, rien n'a été ressaisi), et chaque noeud porte TOUT ce
     // qui le concerne — l'idée, le plan, ses pièges, sa question.
-    function setupLesson(course) {
+    function setupLesson(course, lessonOpts) {
       const railEl = $('#opening-branch-rail');
       const progEl = $('#opening-lesson-progress');
       const bodyEl = $('#opening-lesson-body');
@@ -1534,6 +1793,7 @@ const App = (() => {
 
       const traps = Courses.spread(course.traps, branches);
       const quizzes = Courses.spread(course.quiz, branches);
+      const punish = Courses.spread(course.punish, branches);
       const visited = new Set();
       let cur = 0;
 
@@ -1549,6 +1809,10 @@ const App = (() => {
 
       railEl.hidden = false;
       progEl.hidden = false;
+      // Le budget temps : la barre de progression ne promettait rien. Compter
+      // ~40 s par branche (lecture de la fiche + pas-a-pas de la ligne).
+      const mins = Math.max(2, Math.round(branches.length * 40 / 60));
+      progEl.dataset.budget = `${branches.length} branche${branches.length > 1 ? 's' : ''} · ~${mins} min`;
 
       // ── Mobile : deux écrans ────────────────────────────────────────────────
       // Sur 390 px on ne peut pas loger l'arbre, l'échiquier et le contenu
@@ -1663,6 +1927,101 @@ const App = (() => {
         if (visited.size >= branches.length) markDone();
       }
 
+      // ── Le rejeu en aveugle ────────────────────────────────────────────────
+      // Le format `sol` de Tactics alterne deja « ton coup / reponse forcée » :
+      // une ligne d'ouverture y entre telle quelle. L'app joue les coups de
+      // l'adversaire, on doit retrouver les siens. C'est ce qui fait passer de
+      // « j'ai lu la ligne » a « je la joue ».
+      function blindSide(b) {
+        // Le camp du cours d'abord (la Française est cataloguée côté Noirs alors
+        // que le cours est écrit pour les Blancs), puis celui du catalogue, puis
+        // celui qui joue le coup ouvrant la branche.
+        if (course.side === 'w' || course.side === 'b') return course.side;
+        if (opening.side === 'w' || opening.side === 'b') return opening.side;
+        return b.plyStart % 2 ? 'w' : 'b';
+      }
+      function blindable(b) {
+        if (typeof Tactics === 'undefined' || !Tactics.start) return false;
+        const side = blindSide(b);
+        // Il faut au moins deux coups A NOUS a retrouver dans la branche.
+        let n = 0;
+        for (let ply = b.plyStart; ply <= b.plyEnd; ply++)
+          if ((ply % 2 === 1 ? 'w' : 'b') === side) n++;
+        return n >= 2;
+      }
+      function blindReplay(b) {
+        const side = blindSide(b);
+        // On part du dernier coup de l'adversaire AVANT notre premier coup a
+        // retrouver, pour que `sol` commence bien par un coup a nous.
+        let from = b.plyStart;
+        while (from <= b.plyEnd && (from % 2 === 1 ? 'w' : 'b') !== side) from++;
+        if (from > b.plyEnd) return;
+        const g = new Chess();
+        for (let k = 0; k < from - 1; k++) g.move(b.sans[k], { sloppy: true });
+        const sol = b.sans.slice(from - 1, b.plyEnd);
+        const iBranch = branches.indexOf(b);
+        Tactics.start(
+          [{ fen: g.fen(), sol, hint: `Rejoue ${sol.length > 2 ? 'la ligne' : 'le coup'} de mémoire : ${b.name || labelOf(b)}.` }],
+          // Pas de prefixe d'emoji : Tactics ajoute deja le sien au titre.
+          'En aveugle · ' + (b.name || labelOf(b)),
+          // Une ligne ratee redescend en premiere boite (voir srsTouch).
+          { onDone: (okAll) => { if (iBranch >= 0) srsTouch(opening.line, iBranch, okAll !== false); } }
+        );
+      }
+
+      // ── Tes parties sur ce noeud ───────────────────────────────────────────
+      async function fillMine(i) {
+        const host = $('#ob-mine');
+        if (!host || typeof Coach === 'undefined' || !Coach.lineStats) return;
+        const b = branches[i];
+        // Sur la tabiya on compte a partir de la ligne de l'ouverture (« apres
+        // 2.Dh5 » = 8 parties) et non sur les 8 demi-coups de la tabiya, qui
+        // n'en retiendraient qu'une : la question est « est-ce que je joue cette
+        // ouverture », pas « ai-je deja atteint cette position exacte ».
+        const baseSans = (b.depth === 0 && opening.line) ? opening.line.split(' ') : b.sans;
+        const after = mv(baseSans.length, baseSans);
+        try { await Coach.ensureData(); } catch (_) { return; }
+        const st = Coach.lineStats(baseSans);
+        // Le noeud n'est peut-etre plus affiche (on a change de branche pendant
+        // le chargement de l'archive).
+        if (host !== $('#ob-mine') || branches[cur] !== b) return;
+        if (!st) {
+          host.hidden = false;
+          host.innerHTML = `<p class="ob-h">Tes parties après ${after}</p>` +
+            `<p class="ob-mine-none">Aucune de tes parties analysées ne passe par cette position. C'est de la théorie neuve pour toi.</p>`;
+          return;
+        }
+        const pct = Math.round(st.score * 100);
+        const depth = baseSans.length;
+        const book = new Set(branches.filter(x => x.plyStart === depth + 1)
+          .map(x => x.sans[depth]).filter(Boolean));
+        // Sur la tabiya, le coup « du livre » est aussi celui de la tabiya
+        // elle-meme (le cours continue tout droit avant de bifurquer).
+        if (b.depth === 0 && b.sans[depth]) book.add(b.sans[depth]);
+        // Le coup du livre, ici, c'est celui que l'arbre du cours propose.
+        const rows = st.nextList.slice(0, 4).map(nx => {
+          const inBook = book.has(nx.san);
+          const w = Math.round(nx.n / st.n * 100);
+          return `<div class="om-row ${nx.mine ? (inBook ? 'in' : 'out') : 'opp'}">` +
+            `<span class="om-mv">${frSan(nx.san)}</span>` +
+            `<span class="om-bt"><i style="width:${Math.max(6, w)}%"></i></span>` +
+            `<span class="om-n">${nx.n} partie${nx.n > 1 ? 's' : ''}${nx.mine && inBook ? ' · au livre' : ''}</span></div>`;
+        }).join('');
+        const leaks = st.nextList.filter(nx => nx.mine && !book.has(nx.san));
+        host.hidden = false;
+        host.innerHTML = `<p class="ob-h">Tes parties après ${after}</p>` +
+          `<div class="om-stats">` +
+            `<div><span class="v">${st.n}</span><span class="l">partie${st.n > 1 ? 's' : ''}</span></div>` +
+            `<div><span class="v ${pct < 45 ? 'bad' : pct > 55 ? 'ok' : ''}">${pct} %</span><span class="l">des points</span></div>` +
+            `<div><span class="v">${st.w}/${st.d}/${st.l}</span><span class="l">V/N/D</span></div>` +
+          `</div>` +
+          (leaks.length
+            ? `<p class="om-leak">Tu quittes le livre ici : <b>${leaks.slice(0, 2).map(l => frSan(l.san)).join(', ')}</b>` +
+              ` (${leaks.reduce((a, l) => a + l.n, 0)} partie${leaks.reduce((a, l) => a + l.n, 0) > 1 ? 's' : ''}).</p>`
+            : '') +
+          `<div class="om-next">${rows}</div>`;
+      }
+
       // Le corps du noeud : tout ce qui concerne CETTE position, empilé.
       function renderBody(i) {
         const b = branches[i];
@@ -1677,6 +2036,12 @@ const App = (() => {
         const opener = b.notes.find(n => n);
         const idea = root ? (course.intro || opening.idea) : opener;
         if (idea) h += `<div class="ob-blk"><p class="ob-h">${root ? 'Idée maîtresse' : 'L\'idée du coup'}</p><p>${idea}</p></div>`;
+
+        // Tes parties ici : le cours devient personnel. Combien de fois tu es
+        // passé par cette position, ton score, et le coup par lequel tu quittes
+        // le livre. Rempli en asynchrone (l'archive peut ne pas être chargée),
+        // d'où le conteneur vide posé maintenant et garni par fillMine().
+        h += `<div class="ob-blk ob-mine" id="ob-mine" hidden></div>`;
 
         // Les plans restent sur la tabiya : ils valent pour toute l'ouverture.
         // Repliés par défaut — la tabiya porte déjà l'idée, la fourche, ses
@@ -1710,7 +2075,11 @@ const App = (() => {
         // et évite de raconter en texte ce qu'on peut montrer.
         if (b.plyEnd > b.plyStart) {
           h += `<div class="ob-blk"><p class="ob-h">Les coups</p>` +
-            `<p>Utilise <b>◀ ▶</b> sous l'échiquier : le commentaire de chaque coup s'affiche au fur et à mesure.</p></div>`;
+            `<p>Utilise <b>◀ ▶</b> sous l'échiquier : le commentaire de chaque coup s'affiche au fur et à mesure.</p>` +
+            // Lire une ligne n'est pas la savoir. En aveugle, l'app joue les
+            // coups de l'adversaire et c'est à toi de retrouver les tiens.
+            (blindable(b) ? `<button class="train-btn good ob-blind" data-i="${i}">🙈 Rejouer la ligne en aveugle</button>` : '') +
+            `</div>`;
         }
 
         // Les pièges, sur le coup qui les déclenche.
@@ -1721,8 +2090,44 @@ const App = (() => {
             `<div class="ob-callout trap"><b>${esc(t.title)}</b><br>${t.hint}</div>${drill}</div>`;
         });
 
+        // Quand l'adversaire sort du livre : un exercice d'UNE position par
+        // deviation, au lieu d'un paragraphe replie en bas de page. A son
+        // niveau, 124 parties sur 150 quittent le catalogue avant le coup 3 :
+        // c'est le cas le plus frequent, il ne peut pas rester en prose.
+        if (punish[i].length) {
+          h += `<div class="ob-blk"><p class="ob-h">S'il sort du livre</p>`;
+          punish[i].forEach((d, k) => {
+            const playable = has(d.sol) && d.fen;
+            h += `<div class="ob-punish">` +
+              `<div class="op-tx"><b>${esc(d.label)}</b><span>${d.hint}</span>` +
+              (d.seen ? `<em class="op-seen">vu ${d.seen} fois dans tes parties</em>` : '') + `</div>` +
+              (playable ? `<button class="train-btn good ob-pdrill" data-i="${i}" data-k="${k}">Jouer</button>` : '') +
+              `</div>`;
+          });
+          h += `</div>`;
+        }
+
+        // La position a atteindre : le plan, montre au lieu d'etre raconte.
+        // L'echiquier du cours restait fige sur la fin de la ligne, et les
+        // cases a occuper etaient decrites en prose dans « Plans typiques ».
+        if (root && course.target && course.target.fen) {
+          h += `<div class="ob-blk"><p class="ob-h">La position à atteindre</p>` +
+            `<div class="ob-target"><div class="ob-target-bd">` +
+            `<svg id="ob-target-svg" viewBox="0 0 360 360"></svg>` +
+            `<svg id="ob-target-ov" viewBox="0 0 360 360" class="arrow-overlay"></svg></div>` +
+            `<p>${course.target.note || ''}</p></div></div>`;
+        }
+
         // Une question par branche, posée juste après l'avoir lue.
         if (quizzes[i].length) h += `<div class="ob-blk"><p class="ob-h">Vérifie</p><div class="ob-quiz" id="ob-quiz"></div></div>`;
+
+        // Les trois phrases a retenir. Un cours d'Italienne, c'est 12 notes de
+        // coups, 3 pieges et 3 questions : rien ne disait ce qu'il faut en
+        // garder. Epinglable sur l'accueil.
+        if (root && has(course.keep)) {
+          h += `<div class="ob-blk"><p class="ob-h">À retenir</p><ol class="ob-keep">` +
+            course.keep.map(k => `<li>${k}</li>`).join('') + `</ol></div>`;
+        }
 
         // Les transpositions que l'arbre ne montre PAS. Celles dont le libellé est
         // un coup déjà présent dans la fourche sont retirées : c'était le doublon
@@ -1734,15 +2139,38 @@ const App = (() => {
             .map(x => mv(x.plyStart, x.sans).replace(/\s+/g, '')));
           const items = (has(course.transpositions) ? course.transpositions : opening.deviations || [])
             .filter(d => !shown.has(String(d.label).replace(/\s+/g, '')));
-          if (has(items)) h += `<details class="ob-blk ob-fold"><summary><span class="ob-h">Si l'adversaire sort de l'arbre</span></summary>` +
+          if (has(items)) h += `<details class="ob-blk ob-fold"><summary><span class="ob-h">Les autres suites</span></summary>` +
             items.map(d => `<p><b>${esc(d.label)} :</b> ${d.note}</p>`).join('') + `</details>`;
         }
+
+        // L'etat de revision de CETTE branche.
+        const srs = srsGet(opening.line, i);
+        if (srs) h += `<div class="ob-srs"><span class="dot"></span>` +
+          `<span>branche revue ${srs.seen} fois &middot; <b>${srsLabel(srs)}</b></span></div>`;
 
         bodyEl.innerHTML = h;
         bodyEl.hidden = false;
 
+        // Le diagramme de la position type (dessine apres l'injection du HTML).
+        if (root && course.target && course.target.fen) {
+          const tsvg = $('#ob-target-svg'), tov = $('#ob-target-ov');
+          if (tsvg && typeof BoardRenderer !== 'undefined') {
+            BoardRenderer.render(tsvg, course.target.fen);
+            if (tov && has(course.target.goals))
+              BoardRenderer.highlightSquares(tov, course.target.goals, 'var(--success)');
+          }
+        }
+
         bodyEl.querySelectorAll('.ob-fork').forEach(btn =>
           btn.addEventListener('click', () => show(+btn.dataset.i)));
+        bodyEl.querySelectorAll('.ob-pdrill').forEach(btn => btn.addEventListener('click', () => {
+          const d = punish[+btn.dataset.i][+btn.dataset.k];
+          if (d && d.fen && has(d.sol) && typeof Tactics !== 'undefined' && Tactics.start)
+            Tactics.start([{ fen: d.fen, sol: d.sol, hint: d.hint }], d.label);
+        }));
+        bodyEl.querySelectorAll('.ob-blind').forEach(btn =>
+          btn.addEventListener('click', () => blindReplay(branches[+btn.dataset.i])));
+        fillMine(i);
         bodyEl.querySelectorAll('.ob-drill').forEach(btn => btn.addEventListener('click', () => {
           const t = traps[+btn.dataset.i][+btn.dataset.k];
           if (t && t.fen && has(t.sol) && typeof Tactics !== 'undefined' && Tactics.start) {
@@ -1762,6 +2190,18 @@ const App = (() => {
             return;
           }
           const q = qs[k];
+          // Une question qui porte une position se joue SUR L'ECHIQUIER : un QCM
+          // teste la lecture, pas la memoire des coups.
+          if (q.fen && has(q.sol) && typeof Tactics !== 'undefined' && Tactics.start) {
+            host.innerHTML = `<p class="ol-quiz-q">${q.q}</p>` +
+              `<button class="train-btn good ob-qplay">Jouer sur l'échiquier</button>` +
+              `<div class="ol-quiz-fb" hidden></div>`;
+            host.querySelector('.ob-qplay').addEventListener('click', () => {
+              Tactics.start([{ fen: q.fen, sol: q.sol, hint: q.explain }], q.q);
+              score++; k++; draw();
+            });
+            return;
+          }
           host.innerHTML = `<p class="ol-quiz-q">${q.q}</p><div class="ol-quiz-opts">` +
             q.opts.map((o, j) => `<button class="quiz-opt" data-j="${j}">${esc(o)}</button>`).join('') +
             `</div><div class="ol-quiz-fb" hidden></div>`;
@@ -1779,13 +2219,23 @@ const App = (() => {
             if (+b.dataset.j === q.answer) b.classList.add('correct');
             if (+b.dataset.j === j && !ok) b.classList.add('wrong');
           });
-          setTimeout(() => { k++; draw(); }, 2000);
+          // Plus d'enchainement automatique : les 2 s effacaient l'explication
+          // avant qu'on ait fini de la lire. On avance quand on a lu.
+          const nx = document.createElement('button');
+          nx.className = 'train-btn good';
+          nx.textContent = k + 1 >= qs.length ? 'Voir le score' : 'Question suivante';
+          nx.addEventListener('click', () => { k++; draw(); });
+          fb.appendChild(nx);
         }
         draw();
       }
 
       function show(i) {
-        cur = i; visited.add(i);
+        cur = i;
+        // Premiere visite de la branche dans cette session : elle entre (ou
+        // monte) dans la boite de revision - une ligne lue une fois est une
+        // ligne oubliee.
+        if (!visited.has(i)) { visited.add(i); srsTouch(opening.line, i, true); }
         const b = branches[i];
         // L'échiquier suit l'arbre : on charge le chemin complet du noeud et on
         // s'arrête sur sa position, les flèches ◀ ▶ rejouant la branche.
@@ -1807,7 +2257,15 @@ const App = (() => {
 
       // On arrive sur la CARTE en mobile (choisir sa branche avant de lire), et
       // directement sur la tabiya en desktop, où l'arbre reste visible à gauche.
-      if (narrow()) { cur = 0; visited.add(0); renderRail(); renderSibs(); updateProgress(); goMap(); }
+      // Deep-link : on atterrit directement sur la branche demandee, meme sur
+      // mobile (ou l'on arrive normalement sur la carte de l'arbre).
+      const want = lessonOpts && typeof lessonOpts.branch === 'number' &&
+        lessonOpts.branch >= 0 && lessonOpts.branch < branches.length ? lessonOpts.branch : null;
+      if (want !== null) { renderRail(); renderSibs(); show(want); }
+      // Sur mobile on arrive sur la CARTE de l'arbre : rien n'a encore ete lu,
+      // donc la branche 0 n'est pas comptee comme visitee (c'est show() qui
+      // marque, et c'est lui qui fait monter la boite de revision).
+      else if (narrow()) { cur = 0; renderRail(); renderSibs(); updateProgress(); goMap(); }
       else { show(0); }
     }
 
@@ -1828,7 +2286,7 @@ const App = (() => {
     modal.querySelector('.opening-modal-controls').hidden = false;
     explEl.hidden = false;
     renderStep(false);
-    if (opening.course) setupLesson(opening.course);
+    if (opening.course) setupLesson(opening.course, opts);
   }
 
   function buildNarrative(analysis, user, userIsWhite, userWon, userLost, isDraw, s, userStats, oppStats, termLower, header, opening, engineUsed) {
@@ -2099,7 +2557,7 @@ const App = (() => {
   }
 
   function buildAccuracyHero(header, summary) {
-    const hero = $('#accuracy-hero');
+    const hero = $('#verdict-strip');
     if (!summary || !summary.engineUsed) { hero.hidden = true; return; }
     const s = summary.stats;
     const user = detectUser(header);
@@ -2133,81 +2591,144 @@ const App = (() => {
     if (eff) {
       const e = summary.engineEffort || '';
       const quick = /movetime/.test(e);
-      eff.textContent = quick ? 'analyse rapide (navigateur)' : e ? 'analyse complète' : '';
+      eff.textContent = quick ? 'analyse rapide' : e ? 'analyse complète' : '';
       eff.hidden = !e;
+    }
+
+    // Les pastilles de comptage remontent ici : elles etaient le contenu de la
+    // carte « Resume de la partie », en bas du deuxieme onglet, alors qu'elles
+    // repondent a la meme question que la jauge (« ca s'est bien passe ? »).
+    // On ne garde que ce qui compte cote user, le detail par camp reste en bas.
+    const marks = $('#vst-marks');
+    if (marks) {
+      const mine = user ? (uw ? s.w : s.b) : s.w;
+      const bits = [];
+      if (mine.blunders) bits.push(`<span class="vm vm-blunder">${mine.blunders} gaffe${mine.blunders > 1 ? 's' : ''}</span>`);
+      if (mine.mistakes) bits.push(`<span class="vm vm-mistake">${mine.mistakes} erreur${mine.mistakes > 1 ? 's' : ''}</span>`);
+      if (mine.misses) bits.push(`<span class="vm vm-miss">${mine.misses} manqué${mine.misses > 1 ? 's' : ''}</span>`);
+      if (mine.inaccuracies) bits.push(`<span class="vm">${mine.inaccuracies} imprécision${mine.inaccuracies > 1 ? 's' : ''}</span>`);
+      if (mine.brilliants) bits.unshift(`<span class="vm vm-good">${mine.brilliants} brillant${mine.brilliants > 1 ? 's' : ''}</span>`);
+      if (!bits.length) bits.push('<span class="vm vm-good">aucune erreur</span>');
+      marks.innerHTML = bits.join('');
     }
     hero.hidden = false;
   }
 
-  function buildTurningPoint(header, analysis) {
-    const card = $('#turning-card');
-    const user = detectUser(header);
 
-    const errs = [];
-    let best = null;
-    for (let i = 0; i < analysis.length; i++) {
-      const r = analysis[i];
-      if (!r || !r.move) continue;
-      if (user && r.move.color !== user) continue;
-      if (r.type !== 'blunder' && r.type !== 'mistake' && r.type !== 'inaccuracy') continue;
-      errs.push(i);
-      const weight = r.type === 'blunder' ? 3 : r.type === 'mistake' ? 2 : 1;
-      const score = weight * 1000 + (r.winPctLoss || 0) * 100 + (r.cpLoss || 0) / 100;
-      if (!best || score > best.score) best = { i, r, score };
-    }
+  // Les trois verdicts : phase, rythme, type d'erreur. Une ligne chacun, le
+  // detail au clic. Ils remplacent quatre cartes toujours depliees (« Profil
+  // d'erreurs », « Ton rythme », « Pression du temps », et la precision par
+  // phase noyee dans le resume), soit environ deux ecrans de defilement.
+  function buildVerdicts(header, analysis, summary) {
+    const sec = $('#verdicts-sec');
+    const list = $('#verdicts-list');
+    if (!sec || !list) return;
+    list.innerHTML = '';
+    const rows = [];
 
-    if (!best) { card.hidden = true; return; }
+    // 1. La phase. Le chiffre affiche est la phase la plus faible.
+    if (currentPhaseAccs && currentPhaseAccs.length > 1) {
+      const user = detectUser(header);
+      const side = user || 'w';
+      const ranges = { 'Ouverture': [0, 20], 'Milieu': [20, 50], 'Finale': [50, analysis.length] };
+      const acplOf = (label) => {
+        const [a, b] = ranges[label] || [0, analysis.length];
+        let sum = 0, n = 0;
+        for (let i = a; i < Math.min(b, analysis.length); i++) {
+          const r = analysis[i];
+          if (!r.move || r.move.color !== side) continue;
+          sum += (r.cpLoss || 0); n++;
+        }
+        return n ? Math.round(sum / n) : null;
+      };
+      const sorted = currentPhaseAccs.slice().sort((a, b) => a.acc - b.acc);
+      const worst = sorted[0], top = sorted[sorted.length - 1];
+      const spread = top.acc - worst.acc;
 
-    const i = best.i, r = best.r;
-    const moveNo = Math.floor(i / 2) + 1;
-    const dot = i % 2 === 0 ? '.' : '...';
-    const isUser = user && r.move.color === user;
-    const who = user ? (isUser ? '' : ' (adversaire)') : (r.move.color === 'w' ? ' (Blancs)' : ' (Noirs)');
+      // La perte moyenne par coup est donnee PHASE PAR PHASE, sans en deduire de
+      // direction : elle ne suit pas toujours la precision (l'une compte des
+      // centiemes de pion, l'autre des chances de gain, qui saturent des que la
+      // position est perdue). Une premiere version affirmait « ta perte passe de
+      // 338 a 161 dans ta phase faible », soit l'inverse du chiffre montre.
+      const acpls = currentPhaseAccs.map(p => ({ label: p.label, v: acplOf(p.label) })).filter(a => a.v !== null);
+      let body = 'Ta précision par phase, sur tes coups uniquement.';
+      if (acpls.length)
+        body += ` Perte moyenne par coup : ${acpls.map(a => `${a.label.toLowerCase()} <b>${a.v}</b>`).join(', ')} centièmes.`;
+      body += '<div class="bars">' + currentPhaseAccs.map(p => {
+        const col = p.acc >= 75 ? 'var(--success)' : p.acc >= 55 ? 'var(--accent)' : 'var(--danger)';
+        return `<div class="brow"><span class="bl">${p.label}</span><span class="bt"><i style="width:${p.acc}%;background:${col}"></i></span><span class="bv">${p.acc}</span></div>`;
+      }).join('') + '</div>';
 
-    $('#turning-title').textContent = `Le tournant — coup ${moveNo}${who}`;
-    const tip = (r.tipFr || '').replace(/<[^>]*>/g, '').trim();
-    $('#turning-text').innerHTML = `<b>${moveNo}${dot} ${r.sanFr}</b> — ${tip}`;
-
-    const actions = $('#turning-actions');
-    actions.innerHTML = '';
-
-    if (isUser && typeof GuessMove !== 'undefined') {
-      const replay = document.createElement('button');
-      replay.className = 'pill pill-gold';
-      replay.textContent = 'Rejouer ce coup';
-      replay.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, { indices: [i], title: '🎯 Le tournant' });
-      actions.appendChild(replay);
-    }
-
-    if (isUser && typeof Replay !== 'undefined' && r.fenBefore && r.bestUci) {
-      const replaySf = document.createElement('button');
-      replaySf.className = 'pill pill-ghost';
-      replaySf.textContent = '▶ Rejoue vs Stockfish';
-      replaySf.onclick = () => Replay.start({
-        fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan,
-        playedSan: r.sanFr || r.san, tip: r.tipFr || '', ply: i,
+      const detail = currentPhaseAccs.map(p => `${p.label.toLowerCase()} ${p.acc}%`).join(', ') + '.';
+      const PH_FR = { 'Ouverture': "l'ouverture", 'Milieu': 'le milieu de jeu', 'Finale': 'la finale' };
+      rows.push({
+        icon: '🎯',
+        head: spread < 8
+          ? `<b>Précision homogène</b> d'un bout à l'autre : ${detail}`
+          : `<b>Ça se joue dans ${PH_FR[worst.label] || worst.label.toLowerCase()}.</b> ${detail}`,
+        num: worst.acc,
+        tone: worst.acc >= 75 ? 'ok' : worst.acc >= 60 ? 'warn' : 'bad',
+        body, open: true,
       });
-      actions.appendChild(replaySf);
     }
 
-    const view = document.createElement('button');
-    view.className = 'pill pill-ghost';
-    view.textContent = "Voir l'échiquier";
-    view.onclick = () => userNav(i + 1);
-    actions.appendChild(view);
-
-    if (user && errs.length > 1 && typeof GuessMove !== 'undefined') {
-      const all = document.createElement('button');
-      all.className = 'pill pill-ghost';
-      all.textContent = `Revoir mes ${errs.length} erreurs`;
-      all.onclick = () => GuessMove.start(currentAnalysis, currentHeader, currentUser, { indices: errs, title: '🎯 Tes coups à revoir' });
-      actions.appendChild(all);
+    // 2. Le rythme = « Ton rythme » + « Pression du temps » en un seul bloc.
+    const pace = paceStats(header, analysis);
+    const tt = timeTroubleStats(header, analysis);
+    if (pace || tt) {
+      let body = (pace ? pace.html : '');
+      if (tt) body += tt.html;
+      if (pace && tt && tt.errorRate30 > tt.comfortErrorRate + 15)
+        body += `<div class="tt-insight">Tu fais <b>${tt.errorRate30}%</b> d'erreurs en zeitnot contre <b>${tt.comfortErrorRate}%</b> en temps confortable : c'est la pendule, pas le niveau.</div>`;
+      rows.push({
+        icon: '⏱',
+        head: pace ? pace.head : `<b>${tt.movesUnder30} coups joués sous 30 s</b>, dont ${tt.movesUnder10} sous 10 s.`,
+        num: pace ? pace.num : tt.movesUnder30,
+        tone: pace ? pace.tone : 'bad', body,
+      });
     }
 
-    card.hidden = false;
+    // 3. Le type d'erreur, avec la sortie vers l'exercice qui le corrige.
+    const mist = mistakeStats(header, analysis);
+    if (mist) rows.push({
+      icon: '♞', head: mist.head, num: mist.num, tone: mist.tone,
+      body: mist.html, drill: mist.drill,
+    });
+
+    if (!rows.length) { sec.hidden = true; return; }
+
+    for (const v of rows) {
+      const d = document.createElement('details');
+      d.className = 'verdict';
+      if (v.open) d.open = true;
+      d.innerHTML =
+        `<summary>
+           <span class="vd-ico">${v.icon}</span>
+           <span class="vd-txt">${v.head}</span>
+           <span class="vd-num ${v.tone || ''}">${v.num}</span>
+           <span class="vd-chev">▸</span>
+         </summary>
+         <div class="vd-body">${v.body}</div>`;
+      if (v.drill === 'vigilance' && typeof Training !== 'undefined') {
+        const b = document.createElement('button');
+        b.className = 'pill pill-gold';
+        b.textContent = '🎯 Entraîner la vigilance';
+        b.addEventListener('click', () => Training.show('vigilance'));
+        d.querySelector('.vd-body').appendChild(b);
+      }
+      d.querySelectorAll('.pace-chip, .tt-move-row').forEach(el =>
+        el.addEventListener('click', () => userNav(+el.dataset.goto)));
+      list.appendChild(d);
+    }
+    const cnt = $('#verdicts-count');
+    if (cnt) cnt.textContent = rows.length + (rows.length > 1 ? ' verdicts' : ' verdict');
+    sec.hidden = false;
   }
 
-  function buildHighlights(header, analysis) {
+  // Recolte les moments candidats de la partie (roque, mat, promotion, gaffes,
+  // coups manques, brillants, grosses captures) avec leur libelle et leur
+  // description deja redigee. Le rendu est dans buildMoments.
+  function collectMoments(header, analysis) {
     const candidates = [];
     const user = detectUser(header);
 
@@ -2298,6 +2819,10 @@ const App = (() => {
       }
     }
 
+    // Le rapport parle de TON jeu : a score voisin, tes coups passent devant
+    // ceux de l'adversaire. Sans ce biais, deux gains manques par l'adversaire
+    // (score 11 chacun) sortaient avant ta propre gaffe decisive.
+    candidates.forEach(c => { if (c.isUserMove) c.score += 5; });
     candidates.sort((a, b) => b.score - a.score);
 
     const seen = new Set();
@@ -2306,38 +2831,84 @@ const App = (() => {
       if (seen.has(c.index)) continue;
       seen.add(c.index);
       picks.push(c);
-      if (picks.length >= 5) break;
+      if (picks.length >= 4) break;
     }
+    return picks;
+  }
 
-    picks.sort((a, b) => a.index - b.index);
+  // Les moments de la partie. Remplace TROIS blocs qui racontaient le meme
+  // evenement : la carte « Le tournant » (onglet Conseil), la carte « Moments
+  // cles » (onglet Analyse) et le bloc « Moment cle » de la carte resume. Le
+  // tournant n'est plus une carte a part : c'est le premier moment, badge.
+  function buildMoments(header, analysis) {
+    const sec = $('#moments-sec');
+    const list = $('#moments-list');
+    if (!sec || !list) return;
+    const picks = collectMoments(header, analysis);
+    currentMoments = picks;
+    if (!picks.length) { sec.hidden = true; return; }
 
-    const card = $('#highlights-card');
-    const list = $('#highlights-list');
-
-    if (picks.length === 0) {
-      card.hidden = true;
-      return;
-    }
-
-    list.innerHTML = '';
+    // Le tournant = la pire erreur DU JOUEUR, au sens de l'ancien
+    // buildTurningPoint (gravite, puis perte de chances de gain).
+    let turning = null, best = -1;
     for (const p of picks) {
       const r = analysis[p.index];
-      let evalStr = '';
-      if (r && typeof r.eval === 'number') {
-        const v = Math.max(-99, Math.min(99, r.eval / 100));
-        evalStr = (v >= 0 ? '+' : '') + v.toFixed(1);
-      }
-      const item = document.createElement('button');
-      item.className = 'gm-chip ' + p.badgeClass;
-      item.innerHTML = `
-        <span class="gm-dot"></span>
-        <span class="gm-move">${p.label}${markSpan(r.type)}</span>
-        <span class="gm-label">${p.badge.toLowerCase()}</span>
-        <span class="gm-eval">${evalStr}</span>`;
+      if (!p.isUserMove && p.user) continue;
+      if (r.type !== 'blunder' && r.type !== 'mistake' && r.type !== 'inaccuracy' && r.type !== 'miss') continue;
+      const w = r.type === 'blunder' ? 3 : r.type === 'mistake' ? 2 : 1;
+      const sc = w * 1000 + (r.winPctLoss || 0) * 100 + (r.cpLoss || 0) / 100;
+      if (sc > best) { best = sc; turning = p; }
+    }
+
+    // Le tournant d'abord (c'est la reponse a « pourquoi j'ai perdu »), puis
+    // les autres dans l'ordre de la partie : on relit l'histoire.
+    const ordered = picks.slice().sort((a, b) =>
+      (a === turning ? -1 : b === turning ? 1 : a.index - b.index));
+
+    list.innerHTML = '';
+    for (const p of ordered) {
+      const r = analysis[p.index];
+      const meta = MOVE_CLASS[r.type];
+      const item = document.createElement('div');
+      item.className = 'moment ' + p.badgeClass + (p === turning ? ' moment-turning' : '');
+
+      const loss = r.cpLoss ? (r.cpLoss / 100) : 0;
+      const lossTxt = loss >= 0.5 ? `<span class="mo-loss">−${loss.toFixed(1)}</span>` : '';
+      const tag = p === turning ? '<span class="mo-tag">LE TOURNANT</span>' : '';
+
+      item.innerHTML =
+        `<span class="mo-dot"></span>
+         <div class="mo-body">
+           <div class="mo-head"><b>${p.label}</b>${markSpan(r.type)} ${lossTxt} ${tag}
+             <span class="mo-badge">${p.badge.toLowerCase()}</span></div>
+           <p class="mo-desc">${truncateText(p.desc, 145)}</p>
+           <div class="mo-acts"></div>
+         </div>`;
+
+      const acts = item.querySelector('.mo-acts');
+      const add = (txt, cls, fn) => {
+        const b = document.createElement('button');
+        b.className = 'pill ' + cls;
+        b.textContent = txt;
+        b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+        acts.appendChild(b);
+      };
+      // Pas de bouton « Voir la position » : toute la carte y mene (le titre de
+      // section le dit). Chaque pastille en trop, c'est une ligne de plus par
+      // carte sur un telephone.
+      if (p.isUserMove && typeof GuessMove !== 'undefined')
+        add('Rejouer ce coup', p === turning ? 'pill-gold' : 'pill-ghost',
+          () => GuessMove.start(analysis, header, currentUser, { indices: [p.index], title: '🎯 ' + p.label }));
+      if (p === turning && p.isUserMove && typeof Replay !== 'undefined' && r.fenBefore && r.bestUci)
+        add('▶ vs Stockfish', 'pill-ghost', () => Replay.start({
+          fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan,
+          playedSan: r.sanFr || r.san, tip: r.tipFr || '', ply: p.index,
+        }));
+
       item.addEventListener('click', () => userNav(p.index + 1));
       list.appendChild(item);
     }
-    card.hidden = false;
+    sec.hidden = false;
   }
 
   function classifyMistake(r, analysis, idx) {
@@ -2379,11 +2950,12 @@ const App = (() => {
 
   const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
-  function buildMistakeProfile(header, analysis) {
-    const card = $('#mistakes-card');
-    const content = $('#mistakes-content');
+  // Le profil d'erreurs : renvoie une phrase de tete + le diagnostic complet.
+  // Avant, la carte empilait jusqu'a six blocs de diagnostic de meme poids, et
+  // aucun ne debouchait sur un exercice.
+  function mistakeStats(header, analysis) {
     const user = detectUser(header);
-    if (!user) { card.hidden = true; return; }
+    if (!user) return null;
 
     const errors = [];
     for (let i = 0; i < analysis.length; i++) {
@@ -2399,7 +2971,7 @@ const App = (() => {
       errors.push({ index: i, moveNum, dot, r, tags, severity: r.type });
     }
 
-    if (errors.length === 0) { card.hidden = true; return; }
+    if (errors.length === 0) return null;
 
     const tactical = errors.filter(e => e.tags.includes('hanging-piece') || e.tags.includes('bad-exchange') || e.tags.includes('capture-error') || e.tags.includes('tactical'));
     const positional = errors.filter(e => e.tags.includes('positional'));
@@ -2481,8 +3053,26 @@ const App = (() => {
 
     html += `</div>`;
 
-    content.innerHTML = html;
-    card.hidden = false;
+    // La phrase de tete : le motif dominant, pas la liste.
+    let head, num;
+    if (hanging.length >= 2) {
+      head = `<b>${hanging.length} pièces laissées en prise</b> sur ${errors.length} erreurs : c'est du matériel, pas des plans.`;
+      num = `${hanging.length}/${errors.length}`;
+    } else if (badExch.length >= 2) {
+      head = `<b>${badExch.length} échanges défavorables</b> : tu donnes plus que tu ne reçois.`;
+      num = `${badExch.length}/${errors.length}`;
+    } else if (blunders.length) {
+      head = `<b>${blunders.length} gaffe${blunders.length > 1 ? 's' : ''}</b>, surtout dans ${phaseNames[weakestPhase]}.`;
+      num = blunders.length;
+    } else if (errors.length <= 2) {
+      head = `<b>Partie solide</b> : ${errors.length} imprécision${errors.length > 1 ? 's' : ''} et rien de grave.`;
+      num = errors.length;
+    } else {
+      head = `<b>${errors.length} erreurs</b>, concentrées dans ${phaseNames[weakestPhase]}.`;
+      num = errors.length;
+    }
+    const drill = hanging.length >= 2 || blunders.length >= 2 ? 'vigilance' : null;
+    return { head, num, html, tone: errors.length <= 2 ? 'ok' : 'bad', drill };
   }
 
   // Engine eval from White's perspective, shown as a compact signed pill.
@@ -2493,37 +3083,7 @@ const App = (() => {
     return (p > 0 ? '+' : p < 0 ? '−' : '') + Math.abs(p).toFixed(1);
   }
 
-  // Horizontal move strip under the board — one pill per ply, coloured mark by
-  // classification, current ply highlighted (replaces the old slider + counter).
-  function buildMoveStrip(analysis) {
-    const track = $('#ms-track');
-    if (!track) return;
-    track.innerHTML = '';
-    analysis.forEach((r, i) => {
-      const pill = document.createElement('button');
-      pill.className = 'ms-move';
-      pill.dataset.index = i;
-      const num = i % 2 === 0 ? `<span class="msn">${Math.floor(i / 2) + 1}.</span>` : '';
-      pill.innerHTML = num + r.sanFr + markSpan(r.type);
-      pill.addEventListener('click', () => userNav(i + 1));
-      track.appendChild(pill);
-    });
-  }
 
-  function updateMoveStripActive(index) {
-    const track = $('#ms-track');
-    if (!track) return;
-    track.querySelectorAll('.ms-move').forEach(p => p.classList.remove('active'));
-    if (index > 0) {
-      const pill = track.querySelector(`.ms-move[data-index="${index - 1}"]`);
-      if (pill) {
-        pill.classList.add('active');
-        pill.scrollIntoView({ inline: 'center', block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-      }
-    } else {
-      track.scrollTo({ left: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-    }
-  }
 
   function buildSummary(summary, analysis) {
     const s = summary.stats;
@@ -2537,8 +3097,11 @@ const App = (() => {
       if (side.book) pills += `<span class="stat-pill book">${side.book} théorique${side.book !== 1 ? 's' : ''}</span>`;
       if (side.inaccuracies) pills += `<span class="stat-pill inaccuracy">${side.inaccuracies} imprécision${side.inaccuracies !== 1 ? 's' : ''}</span>`;
       if (side.misses) pills += `<span class="stat-pill miss">${side.misses} coup${side.misses !== 1 ? 's' : ''} manqué${side.misses !== 1 ? 's' : ''}</span>`;
-      pills += `<span class="stat-pill mistake">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
-      pills += `<span class="stat-pill blunder">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
+      // Les zeros ne s'affichent plus : « 0 erreurs 0 gaffes » occupait deux
+      // pastilles pour ne rien dire.
+      if (side.mistakes) pills += `<span class="stat-pill mistake">${side.mistakes} erreur${side.mistakes !== 1 ? 's' : ''}</span>`;
+      if (side.blunders) pills += `<span class="stat-pill blunder">${side.blunders} gaffe${side.blunders !== 1 ? 's' : ''}</span>`;
+      if (!side.mistakes && !side.blunders) pills += `<span class="stat-pill good">aucune erreur</span>`;
       return pills;
     };
     let html = `
@@ -2551,21 +3114,12 @@ const App = (() => {
         <div class="stat-pills">${pillsHtml(s.b)}</div>
       </div>`;
     if (summary.engineUsed) {
-      html += `<div class="engine-badge">Analyse Stockfish · ~1,5 s/coup · 3 variantes</div>`;
+      html += `<div class="engine-badge">Analyse Stockfish${summary.engineEffort ? ' · ' + summary.engineEffort : ''} · 3 variantes</div>`;
     }
 
-    if (summary.keyMoment) {
-      const km = summary.keyMoment;
-      const dot = km.index % 2 === 0 ? '.' : '...';
-      html += `
-        <div class="key-moment">
-          <span class="km-icon">⚡</span>
-          <div class="km-text">
-            <b>Moment clé :</b> <span class="km-move" data-goto="${km.index + 1}">Coup ${km.moveNum} (${km.result.sanFr})</span><br>
-            ${km.result.tipFr}
-          </div>
-        </div>`;
-    }
+    // Le bloc « Moment cle » a ete retire d'ici : c'etait la TROISIEME fois que
+    // la meme position etait racontee dans l'ecran (avec « Le tournant » et
+    // « Moments cles »). Elle vit maintenant une seule fois, dans les moments.
 
     $('#summary-content').innerHTML = html;
 
@@ -2574,115 +3128,26 @@ const App = (() => {
     });
   }
 
-  function buildWinGraph(analysis) {
-    const card = $('#win-graph-card');
-    const container = $('#win-graph-container');
-    if (!analysis.length || analysis[0].eval === undefined) { card.hidden = true; return; }
 
-    const W = 480, H = 140, PAD_L = 0, PAD_R = 0, PAD_T = 4, PAD_B = 20;
-    const graphW = W - PAD_L - PAD_R;
-    const graphH = H - PAD_T - PAD_B;
-    const n = analysis.length;
-
-    const winPcts = analysis.map(r => {
-      const cp = r.eval || 0;
-      return Analyzer.cpToWinPct(r.move && r.move.color === 'b' ? -cp : cp);
-    });
-    const whiteWin = analysis.map(r => {
-      const cp = r.eval || 0;
-      return Analyzer.cpToWinPct(cp);
-    });
-
-    let svg = `<svg viewBox="0 0 ${W} ${H}" class="win-graph-svg">`;
-    svg += `<rect x="${PAD_L}" y="${PAD_T}" width="${graphW}" height="${graphH}" fill="var(--bg)" rx="4"/>`;
-    svg += `<line x1="${PAD_L}" y1="${PAD_T + graphH/2}" x2="${PAD_L + graphW}" y2="${PAD_T + graphH/2}" stroke="rgba(255,255,255,0.15)" stroke-dasharray="4,4"/>`;
-
-    const whitePoints = [];
-    const areaTop = [];
-    for (let i = 0; i < n; i++) {
-      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      const y = PAD_T + (1 - whiteWin[i]) * graphH;
-      whitePoints.push(`${x},${y}`);
-      areaTop.push({ x, y });
-    }
-
-    const midY = PAD_T + graphH / 2;
-    let areaPath = `M${PAD_L},${midY}`;
-    for (const p of areaTop) areaPath += ` L${p.x},${p.y}`;
-    areaPath += ` L${PAD_L + graphW},${midY} Z`;
-    svg += `<path d="${areaPath}" fill="rgba(255,255,255,0.12)"/>`;
-
-    let areaBPath = `M${PAD_L},${midY}`;
-    for (const p of areaTop) areaBPath += ` L${p.x},${p.y}`;
-    areaBPath += ` L${PAD_L + graphW},${PAD_T + graphH} L${PAD_L},${PAD_T + graphH} Z`;
-    svg += `<path d="${areaBPath}" fill="rgba(100,100,100,0.12)"/>`;
-
-    svg += `<polyline points="${whitePoints.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
-
-    for (let i = 0; i < n; i++) {
-      const r = analysis[i];
-      if (r.type === 'blunder' || r.type === 'mistake') {
-        const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-        const y = PAD_T + (1 - whiteWin[i]) * graphH;
-        const color = r.type === 'blunder' ? 'var(--danger)' : 'var(--warning)';
-        svg += `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="var(--bg)" stroke-width="1"/>`;
-      }
-    }
-
-    for (let i = 0; i < n; i++) {
-      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      svg += `<rect x="${x - graphW/(2*n)}" y="${PAD_T}" width="${graphW/n}" height="${graphH}" fill="transparent" class="win-graph-hit" data-move="${i + 1}" style="cursor:pointer"/>`;
-    }
-
-    const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
-    for (let i = 0; i < n; i += labelInterval) {
-      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      const moveNum = Math.floor(i / 2) + 1;
-      svg += `<text x="${x}" y="${H - 4}" fill="var(--text-dim)" font-size="9" text-anchor="middle">${moveNum}</text>`;
-    }
-
-    svg += `<line id="win-graph-cursor" x1="0" y1="${PAD_T}" x2="0" y2="${PAD_T + graphH}" stroke="var(--accent)" stroke-width="1" opacity="0" pointer-events="none"/>`;
-    svg += '</svg>';
-
-    container.innerHTML = svg;
-    card.hidden = false;
-
-    container.querySelectorAll('.win-graph-hit').forEach(el => {
-      el.addEventListener('click', () => userNav(+el.dataset.move));
-    });
-  }
-
-  function updateWinGraphCursor(index) {
-    const cursor = $('#win-graph-cursor');
-    if (!cursor || !currentAnalysis) return;
-    const n = currentAnalysis.length;
-    const svg = cursor.closest('svg');
-    if (!svg) return;
-    const W = 480, PAD_L = 0, PAD_R = 0;
-    const graphW = W - PAD_L - PAD_R;
-    const x = PAD_L + ((index - 1) / Math.max(1, n - 1)) * graphW;
-    cursor.setAttribute('x1', x);
-    cursor.setAttribute('x2', x);
-    cursor.setAttribute('opacity', index > 0 ? '0.7' : '0');
-  }
 
   // The opposite of time trouble: playing a 10-min game at blitz speed. Most
   // beginner blunders here are played in seconds with a nearly-full clock —
   // this card makes that visible and hammers the one rule that fixes it.
-  function buildPace(header, analysis) {
-    const card = $('#pace-card');
-    if (!card) return;
-    card.hidden = true;
-    if (currentClocks.length < 4) return;
+  // Le rythme : renvoie le materiau du verdict au lieu de remplir une carte.
+  // « Ton rythme » (onglet Conseil) et « Pression du temps » (onglet Analyse)
+  // etaient deux cartes distinctes, dans deux onglets differents, et la premiere
+  // renvoyait a la seconde par ecrit (« regarde la carte plus bas »).
+  function paceStats(header, analysis) {
+    if (currentClocks.length < 4) return null;
     const user = detectUser(header);
-    if (!user) return;
+    if (!user) return null;
 
     const clocks = currentClocks;
     const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
     const tc = header.TimeControl || '';
-    if (tc.includes('/')) return; // daily — no pace to manage
+    if (tc.includes('/')) return null; // journalier : pas de rythme a gerer
     const base = parseInt(tc) || 0;
-    if (!base || base > 3600) return;
+    if (!base || base > 3600) return null;
 
     let userMoves = 0, spentTotal = 0, lastClock = base;
     const fastErrors = [];
@@ -2701,33 +3166,33 @@ const App = (() => {
         fastErrors.push({ index: i, label: `${moveNum}${dot} ${r.sanFr}`, spent: Math.round(spent), remaining, type: r.type });
       }
     }
-    if (userMoves < 4) return;
+    if (userMoves < 4) return null;
 
     const mmss = (s) => { const t = Math.round(s); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
     const avgSpent = Math.round(spentTotal / Math.max(1, userMoves - 1));
 
-    let verdict, cls;
+    // Le titre du verdict : une phrase, le chiffre qui la porte a droite.
+    let head, num, tone;
     if (fastErrors.length) {
       const worst = fastErrors[0];
-      verdict = `⚡ <b>Tu joues trop vite.</b> ${fastErrors.length === 1 ? 'Une erreur jouée' : fastErrors.length + ' erreurs jouées'} en moins de 15 secondes alors qu'il te restait plus de ${mmss(base / 2)} au compteur. Ce ne sont pas des fautes de niveau — ce sont des fautes de rythme : tu avais ${mmss(worst.remaining)} pour vérifier ce coup.`;
-      cls = 'pace-fast';
+      head = `<b>Tu joues vite quand il faut réfléchir.</b> ${fastErrors.length === 1 ? 'Une erreur jouée' : fastErrors.length + ' erreurs jouées'} en moins de 15 s avec ${mmss(worst.remaining)} au compteur.`;
+      num = fastErrors.length; tone = 'bad';
     } else if (avgSpent < 12 && lastClock > base * 0.4) {
-      verdict = `⚡ <b>${avgSpent}s par coup</b> et tu finis avec ${mmss(lastClock)} inutilisées : ton temps est ta meilleure arme, dépense-le.`;
-      cls = 'pace-fast';
+      head = `<b>${avgSpent} s par coup</b> et ${mmss(lastClock)} inutilisées à la fin : ton temps est une arme, dépense-le.`;
+      num = avgSpent + 's'; tone = 'warn';
     } else if (lastClock < 30) {
-      verdict = `🐢 Tu as fini à <b>${Math.round(lastClock)}s</b> — regarde la carte « Pression du temps » plus bas.`;
-      cls = 'pace-slow';
+      head = `<b>Tu as fini à ${Math.round(lastClock)} s.</b> La fin de partie s'est jouée à la pendule.`;
+      num = Math.round(lastClock) + 's'; tone = 'bad';
     } else {
-      verdict = `✅ Bon équilibre : ${avgSpent}s par coup, ${mmss(lastClock)} de réserve à la fin.`;
-      cls = 'pace-ok';
+      head = `<b>Bon équilibre :</b> ${avgSpent} s par coup, ${mmss(lastClock)} de réserve à la fin.`;
+      num = avgSpent + 's'; tone = 'ok';
     }
 
     let html = `<div class="pace-stats">
       <div class="pace-stat"><span class="pace-val">${mmss(Math.min(spentTotal, base))}</span><span class="pace-lbl">utilisé sur ${mmss(base)}</span></div>
       <div class="pace-stat"><span class="pace-val">${avgSpent}s</span><span class="pace-lbl">par coup</span></div>
       <div class="pace-stat"><span class="pace-val">${mmss(lastClock)}</span><span class="pace-lbl">restant à la fin</span></div>
-    </div>
-    <div class="pace-verdict">${verdict}</div>`;
+    </div>`;
 
     if (fastErrors.length) {
       html += `<div class="pace-chips">` + fastErrors.slice(0, 4).map(f =>
@@ -2736,22 +3201,18 @@ const App = (() => {
     }
     html += `<div class="pace-rule">📏 <b>Règle d'or :</b> après le coup 4, jamais moins de 15 secondes par coup. Échecs, Captures, Menaces — puis joue.</div>`;
 
-    $('#pace-content').innerHTML = html;
-    card.hidden = false;
-    card.querySelectorAll('.pace-chip').forEach(el => el.addEventListener('click', () => userNav(+el.dataset.goto)));
+    return { head, num, tone, html };
   }
 
-  function buildTimeTrouble(header, analysis) {
-    const card = $('#time-trouble-card');
-    const content = $('#time-trouble-content');
-    card.hidden = true;
-    if (currentClocks.length < 4) return;
+  // La pression du temps : meme principe, on renvoie le HTML au verdict.
+  function timeTroubleStats(header, analysis) {
+    if (currentClocks.length < 4) return null;
 
     const clocks = currentClocks;
 
     const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
     const user = detectUser(header);
-    if (!user) return;
+    if (!user) return null;
 
     const tc = header.TimeControl || '';
     let initialTime = 0;
@@ -2792,7 +3253,7 @@ const App = (() => {
       }
     }
 
-    if (movesUnder30 === 0) return;
+    if (movesUnder30 === 0) return null;
 
     const errorRate30 = movesUnder30 > 0 ? Math.round(100 * errorsUnder30 / movesUnder30) : 0;
 
@@ -2852,151 +3313,13 @@ const App = (() => {
       html += `<div class="tt-insight">Vous passez beaucoup de temps en zeitnot (<b>${movesUnder30} coups sous 30s</b>). Travaillez la gestion du temps dès le milieu de partie.</div>`;
     }
 
-    content.innerHTML = html;
-    card.hidden = false;
-
-    content.querySelectorAll('.tt-move-row').forEach(el => {
-      el.addEventListener('click', () => userNav(+el.dataset.goto));
-    });
+    return { html, movesUnder30, movesUnder10, errorRate30, comfortErrorRate };
   }
 
   const PIECE_SYMBOLS = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕' };
 
-  function buildMaterialGraph(analysis) {
-    const card = $('#material-graph-card');
-    const container = $('#material-graph-container');
-    if (!analysis.length) { card.hidden = true; return; }
 
-    const n = analysis.length;
-    const diffs = analysis.map(r => r.materialDiff || 0);
-    const maxAbs = Math.max(1, ...diffs.map(d => Math.abs(d)));
 
-    const W = 480, H = 140, PAD_L = 28, PAD_R = 4, PAD_T = 8, PAD_B = 20;
-    const graphW = W - PAD_L - PAD_R;
-    const graphH = H - PAD_T - PAD_B;
-    const midY = PAD_T + graphH / 2;
-
-    let svg = `<svg viewBox="0 0 ${W} ${H}" class="material-graph-svg">`;
-    svg += `<rect x="${PAD_L}" y="${PAD_T}" width="${graphW}" height="${graphH}" fill="var(--bg)" rx="4"/>`;
-    svg += `<line x1="${PAD_L}" y1="${midY}" x2="${PAD_L + graphW}" y2="${midY}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
-
-    const yScale = (graphH / 2) / Math.max(maxAbs, 5);
-    const points = [];
-
-    for (let i = 0; i < n; i++) {
-      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      const y = midY - diffs[i] * yScale;
-      const clamped = Math.max(PAD_T, Math.min(PAD_T + graphH, y));
-      points.push({ x, y: clamped, diff: diffs[i] });
-    }
-
-    let abovePath = `M${PAD_L},${midY}`;
-    let belowPath = `M${PAD_L},${midY}`;
-    for (const p of points) {
-      abovePath += ` L${p.x},${Math.min(midY, p.y)}`;
-      belowPath += ` L${p.x},${Math.max(midY, p.y)}`;
-    }
-    abovePath += ` L${PAD_L + graphW},${midY} Z`;
-    belowPath += ` L${PAD_L + graphW},${midY} Z`;
-
-    svg += `<path d="${abovePath}" fill="rgba(255,255,255,0.15)"/>`;
-    svg += `<path d="${belowPath}" fill="rgba(140,140,140,0.15)"/>`;
-
-    svg += `<polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
-
-    for (let i = 0; i < n; i++) {
-      const r = analysis[i];
-      if (r.type === 'blunder' || r.type === 'mistake') {
-        const p = points[i];
-        const color = r.type === 'blunder' ? 'var(--danger)' : 'var(--warning)';
-        svg += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" stroke="var(--bg)" stroke-width="1"/>`;
-      }
-    }
-
-    for (let i = 0; i < n; i++) {
-      const r = analysis[i];
-      if (!r.move || !r.move.captured) continue;
-      const prevDiff = i > 0 ? (analysis[i - 1].materialDiff || 0) : 0;
-      if (diffs[i] === prevDiff) continue;
-      const p = points[i];
-      const capturedKey = r.move.color === 'w' ? r.move.captured : r.move.captured.toUpperCase();
-      const sym = PIECE_SYMBOLS[capturedKey] || '';
-      if (sym) {
-        const ty = p.y < midY ? p.y + 7 : p.y - 3;
-        svg += `<text x="${p.x}" y="${ty}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.6)" style="pointer-events:none">${sym}</text>`;
-      }
-    }
-
-    const ticks = [];
-    for (let v = -Math.floor(maxAbs); v <= Math.floor(maxAbs); v++) {
-      if (v === 0 || Math.abs(v) > maxAbs) continue;
-      if (maxAbs > 5 && Math.abs(v) % 2 !== 0) continue;
-      ticks.push(v);
-    }
-    for (const v of ticks) {
-      const y = midY - v * yScale;
-      if (y < PAD_T + 8 || y > PAD_T + graphH - 8) continue;
-      svg += `<text x="${PAD_L - 4}" y="${y + 3}" fill="var(--text-dim)" font-size="9" text-anchor="end">${v > 0 ? '+' : ''}${v}</text>`;
-    }
-    svg += `<text x="${PAD_L - 4}" y="${midY + 3}" fill="rgba(255,255,255,0.4)" font-size="9" text-anchor="end">0</text>`;
-
-    svg += `<line id="mat-graph-cursor" x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${PAD_T + graphH}" stroke="var(--accent)" stroke-width="1.5" opacity="0" stroke-dasharray="3,2"/>`;
-
-    for (let i = 0; i < n; i++) {
-      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      const wMat = analysis[i].fen ? materialFromFen(analysis[i].fen) : null;
-      const tooltip = wMat ? `⚪ ${wMat.white} · ⚫ ${wMat.black} · Δ${diffs[i] >= 0 ? '+' : ''}${diffs[i]}` : '';
-      svg += `<rect x="${x - graphW/(2*n)}" y="${PAD_T}" width="${graphW/n}" height="${graphH}" fill="transparent" class="mat-graph-hit" data-move="${i + 1}" style="cursor:pointer">`;
-      if (tooltip) svg += `<title>${tooltip}</title>`;
-      svg += `</rect>`;
-    }
-
-    const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
-    for (let i = 0; i < n; i += labelInterval) {
-      const x = PAD_L + (i / Math.max(1, n - 1)) * graphW;
-      const moveNum = Math.floor(i / 2) + 1;
-      svg += `<text x="${x}" y="${H - 4}" fill="var(--text-dim)" font-size="9" text-anchor="middle">${moveNum}</text>`;
-    }
-
-    svg += `<text x="${PAD_L + 4}" y="${PAD_T + 10}" fill="rgba(255,255,255,0.3)" font-size="8">⚪</text>`;
-    svg += `<text x="${PAD_L + 4}" y="${PAD_T + graphH - 4}" fill="rgba(255,255,255,0.3)" font-size="8">⚫</text>`;
-
-    svg += '</svg>';
-    container.innerHTML = svg;
-    card.hidden = false;
-
-    container.querySelectorAll('.mat-graph-hit').forEach(el => {
-      el.addEventListener('click', () => userNav(+el.dataset.move));
-    });
-  }
-
-  function materialFromFen(fen) {
-    const board = fen.split(' ')[0];
-    const vals = { p: 1, n: 3, b: 3, r: 5, q: 9 };
-    let white = 0, black = 0;
-    for (const ch of board) {
-      const lower = ch.toLowerCase();
-      if (vals[lower] !== undefined) {
-        if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) white += vals[lower];
-        else if (ch === ch.toLowerCase() && ch !== ch.toUpperCase()) black += vals[lower];
-      }
-    }
-    return { white, black };
-  }
-
-  function updateMatGraphCursor(index) {
-    const cursor = $('#mat-graph-cursor');
-    if (!cursor || !currentAnalysis) return;
-    const n = currentAnalysis.length;
-    const svg = cursor.closest('svg');
-    if (!svg) return;
-    const W = 480, PAD_L = 28, PAD_R = 4;
-    const graphW = W - PAD_L - PAD_R;
-    const x = PAD_L + ((index - 1) / Math.max(1, n - 1)) * graphW;
-    cursor.setAttribute('x1', x);
-    cursor.setAttribute('x2', x);
-    cursor.setAttribute('opacity', index > 0 ? '0.7' : '0');
-  }
 
   function buildPlanRecognition(header, analysis) {
     const card = $('#plan-card');
@@ -3325,48 +3648,6 @@ const App = (() => {
     return { text: parts.join(', ') + '.', coaching };
   }
 
-  function buildTimeChart(analysis) {
-    const card = $('#time-chart-card');
-    const container = $('#time-chart-container');
-    if (currentClocks.length < 4) { card.hidden = true; return; }
-
-    const clocks = currentClocks;
-
-    const times = Analyzer.clocksToTimePerMove(clocks, currentIncrement);
-    if (times.length === 0) { card.hidden = true; return; }
-
-    const n = Math.min(times.length, analysis.length);
-    const maxTime = Math.max(...times.slice(0, n), 1);
-
-    const W = 480, H = 120, PAD_T = 4, PAD_B = 20;
-    const graphH = H - PAD_T - PAD_B;
-    const barW = Math.max(2, Math.min(12, (W / n) - 1));
-    const gap = (W - barW * n) / (n + 1);
-
-    let svg = `<svg viewBox="0 0 ${W} ${H}" class="time-chart-svg">`;
-
-    for (let i = 0; i < n; i++) {
-      const x = gap + i * (barW + gap);
-      const h = (times[i] / maxTime) * graphH;
-      const y = PAD_T + graphH - h;
-      const color = i % 2 === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(140,140,140,0.7)';
-      const secs = Math.round(times[i]);
-      svg += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="1">`;
-      svg += `<title>Coup ${Math.floor(i/2)+1}${i%2===0?'.':'...'}: ${secs}s</title>`;
-      svg += `</rect>`;
-    }
-
-    const labelInterval = n <= 30 ? 5 : n <= 60 ? 10 : 20;
-    for (let i = 0; i < n; i += labelInterval) {
-      const x = gap + i * (barW + gap) + barW / 2;
-      const moveNum = Math.floor(i / 2) + 1;
-      svg += `<text x="${x}" y="${H - 4}" fill="var(--text-dim)" font-size="9" text-anchor="middle">${moveNum}</text>`;
-    }
-
-    svg += '</svg>';
-    container.innerHTML = svg;
-    card.hidden = false;
-  }
 
   async function probeEndgameTablebase(analysis) {
     const card = $('#tablebase-card');
@@ -3688,6 +3969,9 @@ const App = (() => {
     { key: 'puzzles',   icon: '🧩', label: 'Puzzles tactiques (tes erreurs)', action: 'train', due: true },
     { key: 'convert',   icon: '🏁', label: 'Reconvertir une partie gagnée',  action: 'convert' },
     { key: 'review',    icon: '🔎', label: 'Revoir une partie',              action: 'review' },
+    // Une ligne d'ouverture a reviser : sans ce rappel, une ligne lue une fois
+    // etait une ligne perdue (voir la repetition espacee, srsTouch).
+    { key: 'ligne',     icon: '📖', label: "Réviser une ligne d'ouverture",   action: 'ligne', dueLines: true },
     // La règle d'arrêt EST un item de la routine, pas un conseil en pied de
     // carte : ses journées à deux défaites d'affilée tombent à 44-52 % de
     // précision contre 76-81 % les bons jours. Ce n'est pas le niveau qui
@@ -3707,7 +3991,8 @@ const App = (() => {
     ROUTINE_ITEMS.forEach(item => {
       const row = document.createElement('label');
       row.className = 'routine-item' + (state[item.key] ? ' done' : '');
-      const dueTag = (item.due && due > 0) ? ` <span class="routine-due">${due}</span>` : '';
+      const nDue = item.dueLines ? srsDue().length : due;
+      const dueTag = ((item.due || item.dueLines) && nDue > 0) ? ` <span class="routine-due">${nDue}</span>` : '';
       const launch = item.action ? '<button type="button" class="routine-go" aria-label="Ouvrir">→</button>' : '';
       row.innerHTML = `<input type="checkbox" ${state[item.key] ? 'checked' : ''}>` +
         `<span class="routine-ico">${item.icon}</span>` +
@@ -3762,6 +4047,17 @@ const App = (() => {
 
   function runRoutineAction(action) {
     if (action === 'train') { if (typeof Training !== 'undefined') Training.show(); return; }
+    if (action === 'ligne') {
+      // La branche la plus en retard d'abord ; si rien n'est du, la premiere
+      // ouverture jamais ouverte, sinon le panneau des ouvertures.
+      const due = srsDue().sort((a, b) => (a.e.due || 0) - (b.e.due || 0));
+      if (due.length) { openOpeningByLine(due[0].line, { branch: due[0].i }); return; }
+      const seen = srsAll();
+      const fresh = OPENINGS.find(o => !Object.keys(seen).some(k => k.split('#')[0] === o.line));
+      if (fresh) { openOpeningByLine(fresh.line); return; }
+      if (_openPanel) _openPanel('openings');
+      return;
+    }
     if (action === 'vigilance') { if (typeof Training !== 'undefined') Training.show('vigilance'); return; }
     if (action === 'convert') { if (typeof Training !== 'undefined') Training.show('convert'); return; }
     if (action === 'review') {
@@ -4158,6 +4454,31 @@ const App = (() => {
       deviations: [
         { label: `2…Cf6 (la réponse principale)`, note: `Les Noirs frappent e4 tout de suite ; ils visent la libératrice …d5. C'est la façon la plus sûre de neutraliser la Viennoise.` },
         { label: `2…Cc6 puis 3.Fc4`, note: `Jeu symétrique qui peut transposer vers une Italienne ; attention au piège 3…Cxe4?? 4.Dh5! qui regagne la pièce avec avantage.` }
+      ] },
+    // Deux entrees ajoutees en sept. 2026 parce qu'elles sont dans SES parties
+    // et nulle part dans le catalogue : 2.Fc4 (11 parties, 38 % des points cote
+    // Noirs) et 2.Dh5 (8 parties, dont un mat en 5 encaisse).
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Ouverture de l\'Évêque', en: "Bishop's Opening", eco: 'C23', side: 'b', level: '👍 À savoir recevoir',
+      line: 'e4 e5 Bc4',
+      desc: `Le fou sort en <b>c4</b> avant le cavalier. Rien de terrible, mais deux détails changent tout : <b>e4 n'est pas encore défendu</b>, et la dame blanche garde f3 et h5 libres pour tenter un mat du berger. La réponse est <b>2…Cf6</b>.`,
+      idea: `Sortir le fou en c4 sans engager le cavalier, en gardant la dame libre pour f3 ou h5. Côté noir : …Cf6 attaque e4 (non défendu) et bloque d'avance la colonne f, ce qui tue les tentatives de mat.`,
+      plans: { w: `d3 ou Cc3 pour tenir e4, puis Cf3, roque, et un jeu de type Italienne ou Viennoise.`, b: `…Cf6 tout de suite, puis …c6 et …d5 pour chasser le fou c4 et prendre le centre.` },
+      structure: `Centre symétrique e4/e5 mais un développement blanc atypique : c'est un jeu de pièces où le camp le mieux développé prend le dessus rapidement.`,
+      mistakes: `Répondre 2…Cc6 puis oublier la dame : après 3.Dh5, <b>Dxf7 est mat</b> et la seule parade est …g6.`,
+      deviations: [
+        { label: `3.Df3`, note: `Sans objet si tu as joué 2…Cf6 : le cavalier bloque la colonne f, la dame ne peut plus atteindre f7. Développe normalement.` },
+        { label: `3.d3 / 3.Cc3`, note: `Les coups sains : les Blancs défendent e4 et on retombe sur un jeu d'Italienne ou de Viennoise.` }
+      ] },
+    { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Attaque Parham (2.Dh5)', en: 'Parham Attack', eco: 'C20', side: 'b', level: '🪤 Le piège à connaître',
+      line: 'e4 e5 Qh5',
+      desc: `La dame au 2ᵉ coup : ce n'est pas une ouverture, c'est un pari sur le <b>mat du berger</b>. Bien reçu, c'est un cadeau - la dame se fait chasser et les Blancs perdent trois temps. Trois coups à retenir : <b>…Cc6</b>, <b>…g6</b>, <b>…Cf6</b>.`,
+      idea: `Attaquer e5 et f7 avec la dame dès le 2ᵉ coup en espérant Dxf7#. La réfutation ne demande aucune théorie : défendre e5 en développant, chasser la dame quand le fou arrive en c4, et bloquer la colonne f avec le cavalier.`,
+      plans: { w: `Fc4 puis Df3/Db3 pour insister sur f7 ; sans mat rapide, il faut ramener la dame et jouer avec un développement en retard.`, b: `…Cc6, …g6 (seulement après Fc4), …Cf6, …Fg7, roque : quatre pièces sorties contre une dame qui a joué trois fois.` },
+      structure: `Centre symétrique e4/e5. Le déséquilibre n'est pas dans les pions mais dans le <b>temps</b> : chaque coup de la dame blanche est un coup de développement noir.`,
+      mistakes: `2…Cf6? abandonne e5 (3.Dxe5+ gagne un pion avec échec) et 2…g6? affaiblit f7 avant que le fou n'arrive. Et surtout : après 4.Df3, tout coup qui ne bloque pas la colonne f perd (4…Cd4?? 5.Dxf7#).`,
+      deviations: [
+        { label: `3.Df3 (au lieu de 3.Fc4)`, note: `La dame double sur f7 sans le fou : …Cf6 bloque la colonne et tu es déjà mieux développé.` },
+        { label: `3.Fc4 g6 4.Db3`, note: `La dame garde la diagonale de f7 depuis b3. Réponds …Cf6 puis …Cd4 ! qui attaque la dame et c2.` }
       ] },
     { cat: '♙ Jeux ouverts (1.e4 e5)', name: 'Défense Petrov (Russe)', en: "Petrov's Defence", eco: 'C42', side: 'b', level: '🛡️ Solide pour les Noirs',
       line: 'e4 e5 Nf3 Nf6',

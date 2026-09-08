@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess Analyst - maquette ecran Analyse (sept. 2026)</title>
+<style>
+  :root{
+    --bg:#12172b; --bg-2:#0e1223; --card:#1a2140; --card-2:#242c52; --elev:#212a4d;
+    --gold:#e2b857; --text:#eef1f7; --dim:#9aa4bd; --dim2:#6b7590;
+    --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --blue:#5b8fb9;
+    --line:rgba(255,255,255,.07); --line-str:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:radial-gradient(1100px 560px at 18% -12%,#1c2140 0,transparent 60%),var(--bg-2);
+       color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:26px 18px 60px}
+  h1{font-size:22px;font-weight:700;color:var(--gold)}
+  .lede{max-width:920px;color:var(--dim);font-size:14px;line-height:1.65;margin-top:8px}
+  .lede b{color:var(--text)}
+  h2{font-size:15px;font-weight:600;margin:34px 0 10px;color:var(--text)}
+  .principles{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;max-width:1020px}
+  .principles div{flex:1 1 220px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--dim)}
+  .principles b{display:block;color:var(--gold);font-size:12px;margin-bottom:3px;letter-spacing:.02em}
+
+  .frames{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;margin-top:20px}
+  .col{width:352px}
+  .col > .cap{font-size:12px;color:var(--dim2);margin:0 0 8px 4px}
+  .col > .cap b{color:var(--gold);font-weight:600}
+  .phone{width:352px;background:var(--bg);border-radius:28px;border:1px solid var(--line-str);
+         overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  .notch{height:22px;display:flex;align-items:center;justify-content:center}
+  .notch span{width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.16)}
+
+  /* header */
+  .tb{display:flex;align-items:center;gap:9px;padding:2px 14px 10px}
+  .tb .bk{color:var(--dim);font-size:19px}
+  .tb .who{flex:1;font-size:13.5px;line-height:1.35}
+  .tb .who b{font-weight:600}
+  .tb .who small{display:block;color:var(--dim2);font-size:11.5px}
+  .chip{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .chip.loss{color:#f3b0b0;background:rgba(248,113,113,.16)}
+
+  /* verdict strip */
+  .vs{display:flex;align-items:center;gap:11px;margin:0 14px 12px;background:var(--card);
+      border:1px solid var(--line);border-radius:14px;padding:11px 13px}
+  .vs .mid{flex:1;min-width:0}
+  .vs .g{font-size:13px;font-weight:600}
+  .vs .g.low{color:var(--bad)}
+  .vs .sub{font-size:11.5px;color:var(--dim2);margin-top:2px}
+  .vs .marks{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+  .mk{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:999px;border:1px solid var(--line-str);color:var(--dim)}
+  .mk.b{color:#f3b0b0;background:rgba(248,113,113,.14);border-color:transparent}
+  .mk.m{color:#f7c98b;background:rgba(251,191,36,.14);border-color:transparent}
+  .vs .opp{text-align:right;padding-left:10px;border-left:1px solid var(--line)}
+  .vs .opp .n{font-size:19px;font-weight:600}
+  .vs .opp .l{font-size:10.5px;color:var(--dim2)}
+
+  /* board */
+  .bwrap{padding:0 14px;position:relative}
+  .pbar{display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 2px;color:var(--dim)}
+  .pbar b{color:var(--text);font-weight:600}
+  .pbar .cap2{color:var(--dim2);font-size:11px;flex:1}
+  .pbar .clk{font-variant-numeric:tabular-nums;background:var(--card-2);padding:2px 7px;border-radius:6px;font-size:11.5px}
+  .pbar .clk.low{color:#f3b0b0}
+  .boardrow{display:flex;gap:6px;align-items:stretch}
+  .evalbar{width:7px;border-radius:4px;background:#2b3457;overflow:hidden;display:flex;flex-direction:column-reverse}
+  .evalbar i{display:block;background:#e9edf5}
+  #board{flex:1;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border-radius:8px;overflow:hidden}
+  .sq{position:relative;display:flex;align-items:center;justify-content:center;font-size:27px;line-height:1}
+  .sq.l{background:#ebd7b2}.sq.d{background:#ae8a68}
+  .sq.hl::after{content:"";position:absolute;inset:0;background:rgba(226,184,87,.42)}
+  .pc{position:relative;z-index:1}
+  .pc.w{color:#fff;text-shadow:0 0 1px #000,0 1px 2px rgba(0,0,0,.55)}
+  .pc.b{color:#272522;text-shadow:0 1px 1px rgba(255,255,255,.22)}
+
+  /* timeline = chart + scrubber */
+  .tl{margin:12px 14px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 11px 9px}
+  .tl .th{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .segs{display:flex;gap:3px;background:var(--bg-2);border-radius:8px;padding:2px}
+  .segs button{border:0;background:none;color:var(--dim2);font:inherit;font-size:10.5px;font-weight:600;
+               padding:3px 9px;border-radius:6px;cursor:pointer}
+  .segs button.on{background:var(--card-2);color:var(--text)}
+  .tl .thl{flex:1;text-align:right;font-size:10.5px;color:var(--dim2)}
+  .tl svg#tlSvg{display:block;width:100%;height:64px;overflow:visible;cursor:crosshair}
+  .mvline{display:flex;align-items:center;gap:8px;margin-top:7px}
+  .mvline .nav{width:26px;height:26px;border-radius:8px;border:1px solid var(--line-str);background:none;
+               color:var(--dim);font-size:14px;line-height:1;cursor:pointer}
+  .mvline .cur{flex:1;font-size:13.5px;font-weight:600}
+  .mvline .cur .mark{color:var(--bad)}
+  .mvline .d{font-size:12px;font-variant-numeric:tabular-nums;color:var(--bad);font-weight:600}
+  .cmt{margin-top:7px;font-size:12.5px;line-height:1.55;color:#d6dcea;border-left:2px solid var(--gold);padding-left:9px}
+  .cmt b{color:var(--gold)}
+  .cmt .more{display:block;margin-top:5px;color:var(--dim2);font-size:11.5px}
+
+  /* report */
+  .rep{padding:14px 14px 18px}
+  .story{font-size:13.5px;line-height:1.62;color:#d6dcea;background:rgba(226,184,87,.08);
+         border:1px solid rgba(226,184,87,.18);border-radius:14px;padding:12px 13px}
+  .story b{color:var(--gold)}
+  .sh{display:flex;align-items:baseline;gap:8px;margin:18px 0 8px}
+  .sh h3{font-size:13px;font-weight:600}
+  .sh span{font-size:11px;color:var(--dim2)}
+  .mom{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
+       border-radius:13px;padding:10px 11px;margin-bottom:7px}
+  .mom .dot{width:9px;height:9px;border-radius:50%;margin-top:5px;flex:0 0 auto}
+  .mom .bd{flex:1;min-width:0}
+  .mom .t{font-size:13px;font-weight:600;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+  .mom .t .dd{font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--bad)}
+  .mom .t .tag{font-size:10px;font-weight:600;color:#1a1a2e;background:var(--gold);padding:1px 6px;border-radius:999px}
+  .mom p{font-size:12.5px;line-height:1.5;color:var(--dim);margin-top:3px}
+  .mom p b{color:var(--text)}
+  .mom .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .pill{font-size:11px;font-weight:600;padding:5px 10px;border-radius:999px;border:1px solid var(--line-str);
+        background:none;color:var(--dim);cursor:pointer}
+  .pill.gold{background:var(--gold);border-color:var(--gold);color:#1a1a2e}
+  .vd{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px 11px;margin-bottom:7px}
+  .vd summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px}
+  .vd summary::-webkit-details-marker{display:none}
+  .vd .ico{font-size:15px}
+  .vd .vt{flex:1;font-size:12.8px;line-height:1.45;color:var(--dim)}
+  .vd .vt b{font-weight:600;color:var(--text)}
+  .vd .vn{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  .vd .vn.bad{color:var(--bad)}
+  .vd .chev{color:var(--dim2);font-size:12px}
+  .vd .body{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.55;color:var(--dim)}
+  .vd .body b{color:var(--text)}
+  .bars{margin-top:8px}
+  .brow{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:11.5px}
+  .brow .bl{width:66px;color:var(--dim)}
+  .brow .bt{flex:1;height:7px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+  .brow .bt i{display:block;height:100%;border-radius:4px}
+  .brow .bv{width:32px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+  .cta{width:100%;margin-top:14px;padding:13px;border-radius:13px;border:0;background:var(--gold);
+       color:#1a1a2e;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+  .fold{margin-top:10px;background:none;border:1px dashed var(--line-str);border-radius:13px;padding:11px;
+        width:100%;color:var(--dim2);font:inherit;font-size:12.5px;cursor:pointer;text-align:left}
+
+  .detail{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px;margin-bottom:8px}
+  .detail h4{font-size:12px;font-weight:600;color:var(--dim);margin-bottom:8px}
+  .pills{display:flex;flex-wrap:wrap;gap:5px}
+  .sp{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--card-2);color:var(--dim)}
+  .sp.b{color:#f3b0b0;background:rgba(248,113,113,.16)}
+  .sp.m{color:#f7c98b;background:rgba(251,191,36,.16)}
+  .sp.g{color:#a7e6bd;background:rgba(74,222,128,.14)}
+  .mini{width:100%;height:46px;display:block;margin-top:4px}
+
+  table{border-collapse:collapse;width:100%;max-width:1020px;margin-top:12px;font-size:12.5px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim2);font-weight:600;font-size:11px;letter-spacing:.03em;text-transform:uppercase}
+  td.old{color:var(--dim);width:38%}
+  td.new{color:var(--text)}
+  td.why{color:var(--dim2);font-size:11.5px}
+  .kill{color:#f3b0b0}
+  .note{max-width:1020px;color:var(--dim2);font-size:12px;line-height:1.6;margin-top:14px}
+  .note b{color:var(--dim)}
+</style>
+</head>
+<body>
+
+<h1>Ecran Analyse - proposition de refonte</h1>
+<p class="lede">Aujourd'hui l'ecran Analyse empile <b>13 cartes de meme poids</b> dans deux onglets desequilibres
+(<i>Conseil</i> = 3 blocs, <i>Analyse</i> = 11 cartes). Le meme evenement y est raconte <b>trois fois</b>
+(« Le tournant », « Moments cles », et « Moment cle » dans le resume), trois cartes parlent du temps,
+quatre graphiques partagent le meme axe des x sans jamais etre alignes, et deux cartes s'appellent « Resume ».
+Proposition : <b>meme contenu, 4 blocs visibles</b>, un seul objet temporel, et la reponse a
+« qu'est-ce que je dois travailler ? » en haut du rapport.
+Donnees reelles : ta partie du 14 aout vs Koln (rapide 10 min, defaite au temps).</p>
+
+<div class="principles">
+  <div><b>1. UN objet temporel</b>La courbe des chances de gain <i>est</i> la barre de navigation. Matiere et temps sont deux onglets du meme cadre, donc toujours alignes sur le coup affiche.</div>
+  <div><b>2. UN evenement, UN endroit</b>Le tournant n'est plus une carte a part : c'est le premier des 4 moments, simplement badge.</div>
+  <div><b>3. Le commentaire sous l'echiquier</b>La bulle du coach descend sous le plateau et fusionne avec le label du coup : on lit apres avoir vu, et l'echiquier remonte d'environ 90 px sur mobile.</div>
+  <div><b>4. 3 verdicts, pas 8 cartes</b>Phase, rythme, type d'erreur : une ligne chacun, le graphique au clic. Tout le reste passe derriere « Tout le detail ».</div>
+</div>
+
+<div class="frames">
+
+  <!-- FRAME 1 -->
+  <div class="col">
+    <p class="cap"><b>1.</b> Haut d'ecran : piloter la partie</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+
+      <div class="tb">
+        <span class="bk">&#8249;</span>
+        <div class="who"><b>vs Koln</b> <small>Rapide 10 min &middot; 14 aout &middot; 323 vs 361</small></div>
+        <span class="chip loss">Defaite au temps</span>
+      </div>
+
+      <div class="vs">
+        <svg viewBox="0 0 60 60" width="52" height="52" aria-hidden="true">
+          <circle cx="30" cy="30" r="25" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="6"/>
+          <circle cx="30" cy="30" r="25" fill="none" stroke="#f87171" stroke-width="6" stroke-linecap="round"
+                  stroke-dasharray="81.7 157" transform="rotate(-90 30 30)"/>
+          <text x="30" y="35" text-anchor="middle" font-size="16" font-weight="600" fill="#eef1f7">52</text>
+        </svg>
+        <div class="mid">
+          <div class="g low">Precision faible</div>
+          <div class="sub">sous ta moyenne rapide (58 %) &middot; analyse complete</div>
+          <div class="marks"><span class="mk b">3 gaffes</span><span class="mk m">2 erreurs</span><span class="mk">1 rate</span><span class="mk">3 imprecisions</span></div>
+        </div>
+        <div class="opp"><div class="n">61</div><div class="l">Koln</div></div>
+      </div>
+
+      <div class="bwrap">
+        <div class="pbar"><span>&#9899;</span><b>Koln</b><span class="cap2">&#9817;&#9817;&#9816;</span><span class="clk">2:41</span></div>
+        <div class="boardrow">
+          <div class="evalbar"><i style="height:12%"></i></div>
+          <div id="board"></div>
+        </div>
+        <div class="pbar"><span>&#9898;</span><b>Nimokaji</b><span class="cap2">&#9823;&#9822;&#9821;</span><span class="clk low">0:31</span></div>
+      </div>
+
+      <div class="tl">
+        <div class="th">
+          <div class="segs">
+            <button class="on" data-s="win">Gain</button>
+            <button data-s="mat">Matiere</button>
+            <button data-s="time">Temps</button>
+          </div>
+          <div class="thl" id="tlLegend">chances de gain, vue Blancs</div>
+        </div>
+        <svg id="tlSvg" viewBox="0 0 320 64" preserveAspectRatio="none"></svg>
+        <div class="mvline">
+          <button class="nav">&#8249;</button>
+          <span class="cur">23. Fxf4 <span class="mark">??</span></span>
+          <span class="d">-9,5</span>
+          <button class="nav">&#8250;</button>
+        </div>
+        <div class="cmt">
+          <b>Ta dame est en prise.</b> Il fallait <b>Cf6+</b> : avec l'echec, le fou f4 tombe ensuite.
+          <span class="more">Voir les 2 autres coups jouables &middot; 32 s passees sur ce coup</span>
+        </div>
+      </div>
+
+      <div style="height:14px"></div>
+    </div>
+    <p class="note" style="margin-left:4px"><b>Remplace :</b> la bulle du coach au-dessus de l'echiquier
+    (elle poussait le plateau vers le bas), le ruban de 43 pastilles de coups, la carte « Chances de gain »,
+    la carte « Balance materielle » et la carte « Temps par coup ». Le graphique se pilote au doigt :
+    glisser dessus = naviguer, les marqueurs rouges sont les coups a revoir.</p>
+  </div>
+
+  <!-- FRAME 2 -->
+  <div class="col">
+    <p class="cap"><b>2.</b> Le rapport : ce qu'il faut retenir</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="rep">
+
+        <div class="story">
+          <b>Tu avais gagne cette partie deux fois.</b> +6 au coup 9, puis a nouveau +4,7 au coup 22 apres
+          etre revenu de -6. Trois gaffes de materiel (coups 14, 15 et 23) et une fin de partie a 3 s par coup
+          ont suffi a tout rendre.
+        </div>
+
+        <div class="sh"><h3>Les 4 moments</h3><span>touche pour aller sur l'echiquier</span></div>
+
+        <div class="mom">
+          <span class="dot" style="background:#f87171"></span>
+          <div class="bd">
+            <div class="t">23. Fxf4 <span class="dd">-9,5</span> <span class="tag">LE TOURNANT</span></div>
+            <p>Tu prends un pion en laissant la dame en prise. <b>Cf6+</b> gagnait la piece avec l'echec.</p>
+            <div class="acts"><button class="pill gold">Rejouer ce coup</button><button class="pill">vs Stockfish</button></div>
+          </div>
+        </div>
+
+        <div class="mom">
+          <span class="dot" style="background:#f87171"></span>
+          <div class="bd">
+            <div class="t">14. Cd4 <span class="dd">-8,5</span></div>
+            <p>Le cavalier va sur une case attaquee deux fois. <b>5,8 s</b> pour ce coup, avec 8 min au compteur.</p>
+            <div class="acts"><button class="pill">Rejouer ce coup</button></div>
+          </div>
+        </div>
+
+        <div class="mom">
+          <span class="dot" style="background:#f87171"></span>
+          <div class="bd">
+            <div class="t">15. f3 <span class="dd">-6,6</span></div>
+            <p>Meme cavalier, toujours en prise : il fallait reprendre par <b>Cxc6</b> avant tout le reste.</p>
+            <div class="acts"><button class="pill">Rejouer ce coup</button></div>
+          </div>
+        </div>
+
+        <div class="mom">
+          <span class="dot" style="background:#fbbf24"></span>
+          <div class="bd">
+            <div class="t">10. Fb5 <span class="dd">-4,3</span> <span class="mk m">rate</span></div>
+            <p>Tu etais en position de gagner : <b>Fd5</b> clouait tout. En b5, le fou se laisse simplement prendre.</p>
+            <div class="acts"><button class="pill">Rejouer ce coup</button></div>
+          </div>
+        </div>
+
+        <div class="sh"><h3>Ce que ca dit de ton jeu</h3><span>3 verdicts</span></div>
+
+        <details class="vd" open>
+          <summary><span class="ico">&#127919;</span><span class="vt"><b>Tout se joue au milieu de jeu.</b> 90 % en ouverture, <b>64 %</b> au milieu, 93 % en finale.</span><span class="vn bad">64</span><span class="chev">&#9662;</span></summary>
+          <div class="body">
+            Ta perte moyenne par coup passe de 51 centiemes en ouverture a <b>335</b> au milieu de jeu, puis
+            redescend a 37 en finale. Tes principes d'ouverture tiennent, ta technique de finale tient :
+            c'est le passage « plus de theorie, encore toutes les pieces » qui casse.
+            <div class="bars">
+              <div class="brow"><span class="bl">Ouverture</span><span class="bt"><i style="width:90%;background:#4ade80"></i></span><span class="bv">90</span></div>
+              <div class="brow"><span class="bl">Milieu</span><span class="bt"><i style="width:64%;background:#f87171"></i></span><span class="bv">64</span></div>
+              <div class="brow"><span class="bl">Finale</span><span class="bt"><i style="width:93%;background:#4ade80"></i></span><span class="bv">93</span></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="vd">
+          <summary><span class="ico">&#9201;</span><span class="vt"><b>Tu joues vite quand il faut reflechir.</b> La gaffe du coup 14 a pris 5,8 s avec 8 min de reserve.</span><span class="vn bad">6</span><span class="chev">&#9656;</span></summary>
+          <div class="body">
+            6 coups sous 10 s, une gaffe dedans, et une defaite au temps a l'arrivee : tu depenses ta reserve
+            sur les coups calmes (32 s au coup 23, 43 s au coup 31) et tu expedies ceux ou du materiel est en jeu.
+            <b>Regle :</b> des qu'une piece est attaquee, 15 s minimum - Echecs, Captures, Menaces.
+          </div>
+        </details>
+
+        <details class="vd">
+          <summary><span class="ico">&#9822;</span><span class="vt"><b>4 erreurs sur 6 sont du materiel en prise</b>, pas des plans.</span><span class="vn">4/6</span><span class="chev">&#9656;</span></summary>
+          <div class="body">
+            Aucune de tes gaffes ne vient d'un mauvais plan : chaque fois une piece etait attaquee et tu as
+            joue ailleurs. C'est exactement le motif de l'entrainement <b>Vigilance</b>.
+            <div class="acts" style="margin-top:9px"><button class="pill gold">Entrainer Vigilance</button></div>
+          </div>
+        </details>
+
+        <button class="cta">&#127919; Rejouer les 4 moments</button>
+        <button class="fold">Tout le detail &nbsp;&#9662;<br><span style="font-size:11px">classement des 43 coups, plans de jeu, table de finales, effort moteur</span></button>
+      </div>
+    </div>
+    <p class="note" style="margin-left:4px"><b>Remplace :</b> « Le tournant », « Moments cles »,
+    le bloc « Moment cle » du resume, « Resume » (narratif), « Profil d'erreurs », « Ton rythme »,
+    « Pression du temps » et la precision par phase (aujourd'hui noyee dans un paragraphe).
+    Les onglets Conseil / Analyse disparaissent.</p>
+  </div>
+
+  <!-- FRAME 3 -->
+  <div class="col">
+    <p class="cap"><b>3.</b> « Tout le detail » deplie - rien n'est perdu</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="rep">
+        <p style="font-size:12px;color:#6b7590;margin-bottom:10px">&#8249; Rapport &nbsp;/&nbsp; Tout le detail</p>
+
+        <div class="detail">
+          <h4>Tes 43 coups, classes</h4>
+          <div class="pills">
+            <span class="sp g">7 meilleurs</span><span class="sp g">3 excellents</span><span class="sp g">11 tres bien</span>
+            <span class="sp">9 bons</span><span class="sp">4 theoriques</span><span class="sp m">3 imprecisions</span>
+            <span class="sp m">1 rate</span><span class="sp m">2 erreurs</span><span class="sp b">3 gaffes</span>
+          </div>
+          <p style="font-size:11px;color:#6b7590;margin-top:8px">Koln : 4 meilleurs, 12 tres bien, 2 erreurs, 1 gaffe.</p>
+        </div>
+
+        <div class="detail">
+          <h4>Plans de jeu - Giuoco Piano</h4>
+          <p style="font-size:12.5px;line-height:1.55;color:#9aa4bd">
+            <b style="color:#eef1f7">Ton plan :</b> c3 + d4 pour batir le centre, puis Cbd2-f1-g3 avant d'attaquer.<br>
+            <b style="color:#eef1f7">Le sien :</b> copier le developpement, tenir e5, viser la rupture ...d5.
+          </p>
+          <div class="acts" style="margin-top:9px"><button class="pill">Ouvrir le cours (5 min)</button></div>
+        </div>
+
+        <div class="detail">
+          <h4>Temps par coup</h4>
+          <svg class="mini" viewBox="0 0 300 46" preserveAspectRatio="none">
+            <line x1="0" y1="34" x2="300" y2="34" stroke="rgba(255,255,255,.10)"/>
+            <g id="timeBars"></g>
+            <line x1="0" y1="23.6" x2="300" y2="23.6" stroke="rgba(226,184,87,.5)" stroke-dasharray="3 3"/>
+            <text x="2" y="21" font-size="7" fill="#e2b857">15 s</text>
+          </svg>
+          <p style="font-size:11px;color:#6b7590;margin-top:5px">En rouge : un coup joue sous 15 s ou tu as perdu du materiel.</p>
+        </div>
+
+        <div class="detail">
+          <h4>Table de finales (Syzygy)</h4>
+          <p style="font-size:12.5px;color:#9aa4bd">Position hors table : encore 9 pieces sur l'echiquier quand le drapeau est tombe.</p>
+        </div>
+
+        <div class="detail">
+          <h4>Effort moteur</h4>
+          <p style="font-size:12.5px;color:#9aa4bd">Stockfish, profondeur 20, 3 variantes par position - analyse complete, pas l'analyse rapide du navigateur.</p>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-left:4px"><b>Le principe :</b> rien ne disparait, tout descend d'un niveau.
+    Ce qui repond a « qu'est-ce que je dois travailler ? » reste visible ; ce qui repond a
+    « donne-moi les chiffres » passe derriere un pli.</p>
+  </div>
+</div>
+
+<h2>Correspondance carte par carte</h2>
+<table>
+  <thead><tr><th>Aujourd'hui (13 cartes, 2 onglets)</th><th>Propose</th><th>Pourquoi</th></tr></thead>
+  <tbody>
+    <tr><td class="old">Bulle du coach, au-dessus de l'echiquier</td><td class="new">Commentaire sous l'echiquier, fusionne avec le label du coup</td><td class="why">Meme information que le label ; au-dessus, elle poussait le plateau d'environ 90 px sur mobile</td></tr>
+    <tr><td class="old">Ruban de 43 pastilles de coups</td><td class="new">Courbe-scrubber (glisser = naviguer)</td><td class="why">Une pastille de 28 px n'est pas une cible tactile ; la courbe montre <i>ou</i> ca a bascule</td></tr>
+    <tr><td class="old">Chances de gain <span class="kill">+</span> Balance materielle <span class="kill">+</span> Temps par coup</td><td class="new">Un cadre, 3 onglets, meme axe des x</td><td class="why">Trois graphiques du meme axe, jamais alignes sur le coup affiche</td></tr>
+    <tr><td class="old">Precision (jauge) <span class="kill">+</span> Resume de la partie (pastilles)</td><td class="new">Bandeau verdict : 52, le grade, 4 pastilles de comptage</td><td class="why">Deux cartes pour trois nombres</td></tr>
+    <tr><td class="old">Le tournant <span class="kill">+</span> Moments cles <span class="kill">+</span> Moment cle (dans le resume)</td><td class="new">« Les 4 moments », le tournant badge en premier</td><td class="why">Le meme coup raconte trois fois, dans deux onglets differents</td></tr>
+    <tr><td class="old">Resume (narratif) <span class="kill">+</span> Precision par phase</td><td class="new">Le paragraphe d'ouverture du rapport + le verdict « phase »</td><td class="why">« Resume » et « Resume de la partie » etaient deux cartes distinctes</td></tr>
+    <tr><td class="old">Ton rythme <span class="kill">+</span> Pression du temps</td><td class="new">Verdict « rythme », depliable</td><td class="why">« Ton rythme » disait deja <i>« regarde la carte Pression du temps plus bas »</i></td></tr>
+    <tr><td class="old">Profil d'erreurs</td><td class="new">Verdict « type d'erreur » + bouton vers Vigilance</td><td class="why">Un diagnostic sans action ne change rien</td></tr>
+    <tr><td class="old">Plans de jeu, Table de finales, effort moteur, pastilles completes</td><td class="new">« Tout le detail » (repli)</td><td class="why">Utile en consultation, jamais en premiere lecture</td></tr>
+    <tr><td class="old">Onglets Conseil / Analyse</td><td class="new">Supprimes</td><td class="why">3 blocs contre 11 : le premier onglet ne contient pas de quoi justifier un onglet</td></tr>
+    <tr><td class="old">Bouton « Devine le coup », perdu dans l'onglet Conseil</td><td class="new">CTA unique en fin de rapport, pre-rempli avec les 4 moments</td><td class="why">L'action doit etre a la fin de la lecture</td></tr>
+  </tbody>
+</table>
+
+<p class="note"><b>Ce que ca donne en scroll (mobile 390 px)</b> : ecran 1 = bandeau + echiquier + pilotage
+(aujourd'hui : bulle + echiquier, le pilotage arrive apres). Ecran 2 = l'histoire en trois lignes + les 4 moments.
+Ecran 3 = les 3 verdicts + l'action. Aujourd'hui il faut environ cinq ecrans et demi pour atteindre le bas de
+l'onglet Analyse, et la carte la plus actionnable (« Ton rythme ») se trouve dans l'autre onglet.</p>
+
+<script>
+// board from FEN (position before 23.Fxf4, partie reelle vs Koln)
+const FEN = '3rk2r/1pp2pp1/p6p/1P6/Q3Nn2/6K1/PP5P/R1Bb4';
+const GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',
+                k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
+const board = document.getElementById('board');
+FEN.split('/').forEach((row, r) => {
+  let f = 0;
+  for (const ch of row) {
+    if (/\d/.test(ch)) { for (let i = 0; i < +ch; i++) addSq(r, f++, null); }
+    else addSq(r, f++, ch);
+  }
+});
+function addSq(r, f, p) {
+  const d = document.createElement('div');
+  const file = 'abcdefgh'[f], rank = 8 - r;
+  d.className = 'sq ' + ((r + f) % 2 ? 'd' : 'l');
+  if ((file === 'c' && rank === 1) || (file === 'f' && rank === 4)) d.classList.add('hl');
+  if (p) d.innerHTML = '<span class="pc ' + (p === p.toUpperCase() ? 'w' : 'b') + '">' + GLYPH[p] + '</span>';
+  board.appendChild(d);
+}
+
+// timeline: 3 series on one x axis (43 coups blancs)
+const WIN = [50,52,53,52,54,55,57,88,93,48,33,32,34,12,10,14,22,35,52,70,82,88,12,12,13,11,12,10,11,9,10,9,8,8,7,7,6,5,5,4,4,3,2];
+const MAT = [0,0,0,0,0,0,0,1,1,-2,-2,-2,-2,-5,-5,-5,-3,-3,-1,-1,-1,-1,-7,-7,-7,-7,-7,-7,-7,-7,-7,-7,-7,-7,-7,-7,-9,-9,-9,-9,-9,-9,-9];
+const TIME = [2.8,1.5,5.5,6,3.4,4,11.8,4.1,23.4,4.2,17.9,2.7,20.2,5.8,18.3,26,9.1,25.3,9.1,4.3,20.1,8.3,31.9,23.2,13.8,7.6,22.1,27.3,4.9,32.1,43.2,14.7,16.8,6.2,6.4,12,42.7,9.8,3.9,19.2,11.4,3.4,7.5];
+const ERRS = { 10:'m', 11:'m', 14:'b', 15:'b', 23:'b', 38:'m' };
+const CUR = 23;
+const svg = document.getElementById('tlSvg');
+const legend = document.getElementById('tlLegend');
+const W = 320, H = 64;
+
+function draw(kind) {
+  const data = kind === 'win' ? WIN : kind === 'mat' ? MAT : TIME;
+  const lo = kind === 'win' ? 0 : Math.min(...data, 0);
+  const hi = kind === 'win' ? 100 : Math.max(...data);
+  const x = i => (i / (data.length - 1)) * W;
+  const y = v => H - 4 - ((v - lo) / (hi - lo || 1)) * (H - 10);
+  let out = '';
+
+  if (kind === 'win') {
+    out += '<line x1="0" y1="' + y(50) + '" x2="' + W + '" y2="' + y(50) + '" stroke="rgba(255,255,255,.12)" stroke-dasharray="3 3"/>';
+    out += '<polygon points="0,' + H + ' ' + data.map((v, i) => x(i) + ',' + y(v)).join(' ') + ' ' + W + ',' + H + '" fill="rgba(226,184,87,.10)"/>';
+  }
+  if (kind === 'mat') out += '<line x1="0" y1="' + y(0) + '" x2="' + W + '" y2="' + y(0) + '" stroke="rgba(255,255,255,.12)" stroke-dasharray="3 3"/>';
+  if (kind === 'time') out += '<line x1="0" y1="' + y(15) + '" x2="' + W + '" y2="' + y(15) + '" stroke="rgba(226,184,87,.45)" stroke-dasharray="3 3"/>';
+
+  if (kind === 'time') {
+    out += data.map((v, i) => {
+      const bad = ERRS[i + 1] && v < 15;
+      return '<rect x="' + (x(i) - 2.6) + '" y="' + y(v) + '" width="5.2" height="' + (H - 4 - y(v)) +
+             '" rx="1.4" fill="' + (bad ? '#f87171' : 'rgba(91,143,185,.75)') + '"/>';
+    }).join('');
+  } else {
+    out += '<polyline fill="none" stroke="' + (kind === 'win' ? '#e2b857' : '#5b8fb9') + '" stroke-width="2" ' +
+           'stroke-linejoin="round" points="' + data.map((v, i) => x(i) + ',' + y(v)).join(' ') + '"/>';
+  }
+
+  Object.keys(ERRS).forEach(mv => {
+    const i = +mv - 1;
+    if (i >= data.length) return;
+    out += '<circle cx="' + x(i) + '" cy="' + y(data[i]) + '" r="' + (ERRS[mv] === 'b' ? 3.4 : 2.6) +
+           '" fill="' + (ERRS[mv] === 'b' ? '#f87171' : '#fbbf24') + '" stroke="#12172b" stroke-width="1.2"/>';
+  });
+
+  const ci = CUR - 1;
+  out += '<line x1="' + x(ci) + '" y1="0" x2="' + x(ci) + '" y2="' + H + '" stroke="#eef1f7" stroke-opacity=".5"/>';
+  out += '<circle cx="' + x(ci) + '" cy="' + y(data[ci]) + '" r="4.6" fill="#eef1f7" stroke="#12172b" stroke-width="1.6"/>';
+  svg.innerHTML = out;
+  legend.textContent = kind === 'win' ? 'chances de gain, vue Blancs'
+    : kind === 'mat' ? 'materiel, en pions (vue Blancs)' : 'secondes par coup, seuil 15 s';
+}
+draw('win');
+document.querySelectorAll('.segs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.segs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); draw(b.dataset.s);
+}));
+
+const tb = document.getElementById('timeBars');
+tb.innerHTML = TIME.map((v, i) => {
+  const h = Math.min(30, v / 43.2 * 30);
+  const bad = ERRS[i + 1] && v < 15;
+  return '<rect x="' + (i / TIME.length * 300 + 1) + '" y="' + (34 - h) + '" width="4.4" height="' + h +
+         '" rx="1.2" fill="' + (bad ? '#f87171' : 'rgba(91,143,185,.7)') + '"/>';
+}).join('');
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess Analyst - enrichir les cours d'ouverture (sept. 2026)</title>
+<style>
+  :root{
+    --bg:#12172b; --bg-2:#0e1223; --card:#1a2140; --card-2:#242c52;
+    --gold:#e2b857; --text:#eef1f7; --dim:#9aa4bd; --dim2:#6b7590;
+    --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --blue:#5b8fb9;
+    --line:rgba(255,255,255,.07); --line-str:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:radial-gradient(1100px 560px at 18% -12%,#1c2140 0,transparent 60%),var(--bg-2);
+       color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:26px 18px 60px}
+  h1{font-size:22px;font-weight:700;color:var(--gold)}
+  h2{font-size:15px;font-weight:600;margin:34px 0 10px}
+  .lede{max-width:940px;color:var(--dim);font-size:14px;line-height:1.65;margin-top:8px}
+  .lede b{color:var(--text)}
+  .facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;max-width:1040px}
+  .fact{flex:1 1 200px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .fact .n{font-size:21px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+  .fact .t{font-size:12px;line-height:1.5;color:var(--dim);margin-top:3px}
+  .fact .t b{color:var(--text)}
+
+  .row{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;margin-top:18px}
+  .col{width:352px}
+  .cap{font-size:12px;color:var(--dim2);margin:0 0 8px 4px}
+  .cap b{color:var(--gold);font-weight:600}
+  .phone{width:352px;background:var(--bg);border-radius:28px;border:1px solid var(--line-str);
+         overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  .notch{height:22px;display:flex;align-items:center;justify-content:center}
+  .notch span{width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.16)}
+  .mhead{display:flex;align-items:center;gap:8px;padding:2px 14px 8px;font-size:13.5px}
+  .mhead .bk{color:var(--dim);font-size:18px}
+  .mhead b{flex:1;font-weight:600}
+  .mhead .eco{font-size:11px;color:var(--dim2);background:var(--card-2);padding:2px 7px;border-radius:6px}
+  .prog{margin:0 14px 10px;height:4px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+  .prog i{display:block;height:100%;width:43%;background:var(--gold)}
+
+  /* rail = arbre des variantes */
+  .rail{display:flex;gap:6px;overflow-x:auto;padding:0 14px 10px}
+  .rn{flex:0 0 auto;font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:9px;
+      border:1px solid var(--line-str);color:var(--dim);background:none;white-space:nowrap;position:relative}
+  .rn.on{background:var(--gold);border-color:var(--gold);color:#1a1a2e}
+  .rn.mine::after{content:"";position:absolute;top:-2px;right:-2px;width:7px;height:7px;border-radius:50%;
+                  background:var(--bad);border:1.5px solid var(--bg)}
+  .rn.done{color:var(--ok);border-color:rgba(74,222,128,.4)}
+
+  .body{padding:0 14px 16px}
+  .blk{margin-bottom:12px}
+  .bh{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim2);margin-bottom:5px}
+  .blk p{font-size:12.8px;line-height:1.58;color:#d6dcea}
+  .blk p b{color:var(--text)}
+
+  .new{border:1px solid rgba(226,184,87,.35);background:rgba(226,184,87,.07);border-radius:13px;padding:11px}
+  .new .bh{color:var(--gold)}
+  .tagnew{font-size:9.5px;font-weight:700;background:var(--gold);color:#1a1a2e;padding:1px 5px;border-radius:4px;margin-left:6px;letter-spacing:.04em}
+
+  .stat{display:flex;gap:8px;margin-top:8px}
+  .stat div{flex:1;background:var(--card-2);border-radius:9px;padding:7px 8px;text-align:center}
+  .stat .v{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .v.bad{color:var(--bad)}
+  .stat .l{font-size:10px;color:var(--dim2);line-height:1.3;margin-top:1px}
+
+  .leaks{margin-top:9px}
+  .leak{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid var(--line)}
+  .leak .mv{font-weight:600;width:52px}
+  .leak .bt{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}
+  .leak .bt i{display:block;height:100%;border-radius:3px}
+  .leak .n{font-size:11px;color:var(--dim2);width:56px;text-align:right}
+  .leak.book .mv{color:var(--ok)}
+  .leak.out .mv{color:var(--bad)}
+
+  .drill{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);
+         border-radius:12px;padding:9px 10px;margin-top:8px}
+  .drill .mini{width:64px;height:64px;flex:0 0 auto;display:grid;grid-template-columns:repeat(8,1fr);
+               grid-template-rows:repeat(8,1fr);border-radius:6px;overflow:hidden}
+  .drill .mini div{font-size:9px;display:flex;align-items:center;justify-content:center}
+  .drill .mini .l{background:#ebd7b2}.drill .mini .d{background:#ae8a68}
+  .drill .mini .w{color:#fff;text-shadow:0 0 1px #000}
+  .drill .mini .b{color:#272522}
+  .drill .tx{flex:1;min-width:0}
+  .drill .tx b{font-size:12.5px;font-weight:600;display:block}
+  .drill .tx span{font-size:11.5px;color:var(--dim);line-height:1.45;display:block;margin-top:2px}
+  .pill{font-size:11px;font-weight:600;padding:5px 10px;border-radius:999px;border:1px solid var(--line-str);
+        background:none;color:var(--dim);cursor:pointer;white-space:nowrap}
+  .pill.gold{background:var(--gold);border-color:var(--gold);color:#1a1a2e}
+  .acts{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+
+  .srs{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim);
+       background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 10px;margin-top:10px}
+  .srs .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+  .srs b{color:var(--text);font-weight:600}
+
+  .target{margin-top:8px;display:flex;gap:10px;align-items:flex-start}
+  .target .board{width:104px;height:104px;flex:0 0 auto;display:grid;grid-template-columns:repeat(8,1fr);
+                 grid-template-rows:repeat(8,1fr);border-radius:7px;overflow:hidden}
+  .target .board div{font-size:12px;display:flex;align-items:center;justify-content:center;position:relative}
+  .target .board .l{background:#ebd7b2}.target .board .d{background:#ae8a68}
+  .target .board .goal{box-shadow:inset 0 0 0 2px rgba(74,222,128,.85)}
+  .target .board .w{color:#fff;text-shadow:0 0 1px #000}
+  .target .board .b{color:#272522}
+  .target p{font-size:12px;line-height:1.5;color:#d6dcea}
+
+  table{border-collapse:collapse;width:100%;max-width:1040px;margin-top:12px;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim2);font-weight:600;font-size:11px;letter-spacing:.03em;text-transform:uppercase}
+  td.i{width:34px;color:var(--gold);font-weight:700}
+  td.w{color:var(--text);width:26%}
+  td.d{color:var(--dim);font-size:12px}
+  td.e{width:74px;font-size:11px;color:var(--dim2);white-space:nowrap}
+  .badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px}
+  .b1{background:rgba(74,222,128,.16);color:#a7e6bd}
+  .b2{background:rgba(226,184,87,.16);color:#f0d28a}
+  .b3{background:rgba(255,255,255,.07);color:var(--dim)}
+  .note{max-width:1040px;color:var(--dim2);font-size:12px;line-height:1.62;margin-top:14px}
+  .note b{color:var(--dim)}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#f0d28a}
+</style>
+</head>
+<body>
+
+<h1>Cours d'ouverture - comment les enrichir</h1>
+<p class="lede">L'ossature est deja la : 28 ouvertures avec prose (idee, plans, structure, erreur frequente,
+deviations), <b>9 vrais cours</b> avec arbre de variantes, notes coup par coup, pieges jouables et quiz.
+Ce qui manque n'est pas de la theorie en plus : c'est <b>le lien avec tes 150 parties</b> et
+<b>quoi faire quand l'adversaire sort du livre</b> - ce qui arrive presque toujours a ton niveau.
+Tous les chiffres ci-dessous sont mesures sur <code>coach-data.json</code>.</p>
+
+<div class="facts">
+  <div class="fact"><div class="n">9 / 28</div><div class="t">ouvertures du catalogue qui ont un <b>vrai cours</b> (arbre + notes + pieges + quiz). Les 19 autres n'ont que de la prose.</div></div>
+  <div class="fact"><div class="n">124 / 150</div><div class="t">de tes parties ne completent <b>aucune ligne du catalogue</b> au-dela du coup 2. Profondeur mediane atteinte : 3 demi-coups.</div></div>
+  <div class="fact"><div class="n">8</div><div class="t">parties ou l'adversaire a joue <b>2.Dh5</b> apres 1.e4 e5. L'app n'en dit pas un mot - et tu t'es fait mater en 5 coups dans l'une d'elles.</div></div>
+  <div class="fact"><div class="n">3 / 7</div><div class="t">de tes parties d'Italienne partent sur <b>4.Cc3</b>, un coup que le cours ne couvre pas (il enseigne 4.c3, 4.d3, 4.b4).</div></div>
+</div>
+
+<div class="row">
+
+  <!-- FRAME -->
+  <div class="col">
+    <p class="cap"><b>Maquette</b> - le noeud « 3.Fc4 » du cours d'Italienne, enrichi</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="mhead"><span class="bk">&#8249;</span><b>Partie Italienne</b><span class="eco">C50</span></div>
+      <div class="prog"><i></i></div>
+
+      <div class="rail">
+        <button class="rn on mine">3.Fc4</button>
+        <button class="rn done">3&#8230;Fc5</button>
+        <button class="rn mine">3&#8230;Cf6</button>
+        <button class="rn">4.b4</button>
+        <button class="rn mine">4.Cc3</button>
+      </div>
+
+      <div class="body">
+
+        <div class="blk">
+          <div class="bh">L'idee du coup</div>
+          <p><b>Le coup-signature de l'Italienne :</b> le fou vise f7, la case la plus fragile
+          avant le roque. On developpe en menacant.</p>
+        </div>
+
+        <div class="blk new">
+          <div class="bh">Tes parties ici <span class="tagnew">NOUVEAU</span></div>
+          <p>Tu es passe par cette position <b>7 fois</b>. Le cours t'apprend 4.c3, 4.d3 et 4.b4 -
+          mais dans tes parties, tu joues autre chose une fois sur deux.</p>
+          <div class="stat">
+            <div><div class="v">7</div><div class="l">parties</div></div>
+            <div><div class="v bad">29 %</div><div class="l">des points</div></div>
+            <div><div class="v">4</div><div class="l">tu sors au coup</div></div>
+          </div>
+          <div class="leaks">
+            <div class="leak out"><span class="mv">4.Cc3</span><span class="bt"><i style="width:43%;background:#f87171"></i></span><span class="n">3 parties</span></div>
+            <div class="leak book"><span class="mv">4.d3</span><span class="bt"><i style="width:29%;background:#4ade80"></i></span><span class="n">2 &middot; au livre</span></div>
+            <div class="leak out"><span class="mv">4.O-O</span><span class="bt"><i style="width:29%;background:#f87171"></i></span><span class="n">2 parties</span></div>
+          </div>
+          <div class="acts">
+            <button class="pill gold">Voir mes 3 parties en 4.Cc3</button>
+            <button class="pill">Pourquoi 4.d3 plutot ?</button>
+          </div>
+        </div>
+
+        <div class="blk new">
+          <div class="bh">Quand l'adversaire sort du livre <span class="tagnew">NOUVEAU</span></div>
+          <p>Les 3 deviations que tu as reellement subies apres 3.Fc4, chacune en un exercice
+          d'une position : tu joues le coup qui punit, l'app valide.</p>
+
+          <div class="drill">
+            <div class="mini" id="m1"></div>
+            <div class="tx"><b>3&#8230;Ch6 ?</b><span>Vu 1 fois. Le cavalier au bord ne defend rien : ouvre le centre par d4.</span></div>
+            <button class="pill">Jouer</button>
+          </div>
+          <div class="drill">
+            <div class="mini" id="m2"></div>
+            <div class="tx"><b>3&#8230;Cd4 ?!</b><span>Le « saut au centre » que tes adversaires adorent : Cxd4 exd4 puis c3.</span></div>
+            <button class="pill">Jouer</button>
+          </div>
+          <div class="drill">
+            <div class="mini" id="m3"></div>
+            <div class="tx"><b>2.Dh5 (avant meme 3.Fc4)</b><span>8 de tes parties. Reponse : Cc6 puis g6 - jamais &#8230;Cf6 ni &#8230;g6 en premier.</span></div>
+            <button class="pill gold">Jouer</button>
+          </div>
+        </div>
+
+        <div class="blk new">
+          <div class="bh">La position a atteindre <span class="tagnew">NOUVEAU</span></div>
+          <div class="target">
+            <div class="board" id="tgt"></div>
+            <p>Le cours dit le plan en prose. Ici on le <b>montre</b> : Fb3, Te1, Cbd2-f1-g3, h3.
+            Tant que ces quatre pieces ne sont pas placees, tu n'attaques pas.</p>
+          </div>
+        </div>
+
+        <div class="blk new">
+          <div class="bh">Verifie <span class="tagnew">SUR L'ECHIQUIER</span></div>
+          <p><b>Les Noirs viennent de jouer 3&#8230;Cf6.</b> Joue le coup qui defend e4
+          sans fermer ton jeu.</p>
+          <div class="acts"><button class="pill gold">Jouer sur l'echiquier</button><button class="pill">Indice</button></div>
+        </div>
+
+        <div class="srs">
+          <span class="dot"></span>
+          <span>Branche revue 2 fois &middot; <b>a revoir dans 3 jours</b> &middot; ajoutee a ta routine du matin</span>
+        </div>
+
+      </div>
+    </div>
+    <p class="note" style="margin-left:4px">Les 4 blocs dores sont les ajouts. Le rail du haut gagne un point
+    rouge sur les branches <b>que tu joues vraiment</b> : sur cet ecran, 3.Fc4, 3&#8230;Cf6 et 4.Cc3 - donc
+    par ou commencer.</p>
+  </div>
+
+  <!-- IDEES -->
+  <div style="flex:1 1 520px;min-width:420px">
+    <h2 style="margin-top:0">Les 10 propositions, par rapport valeur / effort</h2>
+    <table>
+      <thead><tr><th></th><th>Quoi</th><th>Pourquoi ca compte pour toi</th><th>Effort</th></tr></thead>
+      <tbody>
+        <tr><td class="i">1</td><td class="w">Tes parties dans le cours</td>
+          <td class="d">Chaque noeud de l'arbre affiche : combien de fois tu es passe la, ton score, et le coup par lequel tu quittes le livre. Les donnees sont deja chargees (<code>coach-data.json</code> + les PGN) et le detecteur d'ouverture existe deja.</td>
+          <td class="e"><span class="badge b1">M</span> 1 fonction de calcul + 1 bloc</td></tr>
+        <tr><td class="i">2</td><td class="w">Punir la sortie du livre</td>
+          <td class="d">Les <i>deviations</i> sont aujourd'hui de la prose (« Si l'adversaire sort de l'arbre »). Les transformer en exercices d'une position, verifies hors-ligne avec le rig existant, et les alimenter avec les deviations que tu as <b>reellement</b> subies. C'est le manque n&deg;1 : la mediane de theorie de tes parties est le coup 2.</td>
+          <td class="e"><span class="badge b1">M</span> reutilise <code>Tactics.start</code></td></tr>
+        <tr><td class="i">3</td><td class="w">Combler les ouvertures que tu croises</td>
+          <td class="d">Ordre de priorite mesure sur tes 150 parties, pas alphabetique : <b>2.Dh5</b> (8 parties, aucun contenu), <b>Ouverture de l'Eveque</b> (8 parties cote Noirs a 38 %, absente du catalogue), <b>Francaise</b> (7 parties cote Blancs a 43 %, prose seule), <b>Sicilienne</b> (3 parties, 0 point, prose seule).</td>
+          <td class="e"><span class="badge b2">L</span> 1 a 2 h de contenu par cours</td></tr>
+        <tr><td class="i">4</td><td class="w">Quiz sur l'echiquier</td>
+          <td class="d">Le quiz actuel est un QCM texte qui teste la lecture, pas la memoire des coups - et il enchaine tout seul au bout de 2 s, ce qui masque l'explication. Meme question, mais on joue le coup sur le plateau.</td>
+          <td class="e"><span class="badge b1">S</span> <code>Tactics</code> fait deja tout</td></tr>
+        <tr><td class="i">5</td><td class="w">Repetition espacee</td>
+          <td class="d">Aujourd'hui la progression est un simple ensemble « fait / pas fait » (<code>ca_lessons_done</code>). Le remplacer par une boite par branche (1 / 3 / 7 / 21 jours) et exposer « 1 ligne a reviser » dans la Routine du jour. Une ligne revue une fois est une ligne oubliee.</td>
+          <td class="e"><span class="badge b1">S</span> localStorage + routine</td></tr>
+        <tr><td class="i">6</td><td class="w">Rejeu en aveugle</td>
+          <td class="d">L'app joue les coups de l'adversaire, tu dois retrouver les tiens sur l'echiquier ; 2 fautes et la note du coup reapparait. C'est ce qui transforme « j'ai lu la ligne » en « je la joue ». Le module de rejeu existe (<code>freeplay</code> / <code>guess</code>).</td>
+          <td class="e"><span class="badge b1">M</span> reutilise 2 modules</td></tr>
+        <tr><td class="i">7</td><td class="w">La position a atteindre</td>
+          <td class="d">Un diagramme de fin de branche avec les cases-cibles surlignees, au lieu de decrire le plan en prose. Le plateau est deja la et reste figé sur la derniere position de la ligne.</td>
+          <td class="e"><span class="badge b1">S</span> 1 FEN par branche</td></tr>
+        <tr><td class="i">8</td><td class="w">Boucle analyse &rarr; cours</td>
+          <td class="d">A la fin d'une analyse, si tu as quitte le livre au coup 4, proposer <i>« revoir la branche 3&#8230;Cf6, 30 s »</i> avec un lien direct sur le noeud - pas sur le cours entier. Aujourd'hui l'analyse ouvre l'explorateur d'ouverture a la racine.</td>
+          <td class="e"><span class="badge b1">S</span> deep-link sur le noeud</td></tr>
+        <tr><td class="i">9</td><td class="w">La fiche « 3 choses a retenir »</td>
+          <td class="d">Fin de cours : trois phrases, epinglables sur l'accueil. Le cours d'Italienne fait aujourd'hui 12 notes de coups + 2 pieges + 2 questions ; rien ne dit ce qu'il faut en retenir.</td>
+          <td class="e"><span class="badge b1">S</span> 3 lignes par cours</td></tr>
+        <tr><td class="i">10</td><td class="w">Budget temps affiche</td>
+          <td class="d">« 5 min, 4 branches » sur la carte du cours, et la barre de progression devient une promesse tenue plutot qu'un decor.</td>
+          <td class="e"><span class="badge b1">XS</span> 1 champ</td></tr>
+      </tbody>
+    </table>
+
+    <p class="note"><b>Si tu n'en prends que trois :</b> 1, 2 et 5. La 1 rend le cours personnel
+    (il te dit ou <i>tu</i> te trompes, pas ou on se trompe en general), la 2 couvre le cas qui arrive
+    dans presque toutes tes parties, la 5 fait que ce qui est lu reste. Les 8 autres sont surtout
+    du polissage a cote.</p>
+
+    <p class="note"><b>Reserve de mesure :</b> le « coup 2 de theorie mediane » est mesure contre les
+    172 lignes du catalogue interne, avec correspondance par prefixe exact - c'est donc une borne basse
+    de la vraie theorie jouee. Le sens ne change pas : 34 de tes parties ne completent aucune ligne
+    connue, et seules 14 depassent le 3e coup.</p>
+  </div>
+</div>
+
+<script>
+// mini diagrammes des exercices "sortie du livre"
+const G = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
+function mini(id, fen, cls) {
+  const host = document.getElementById(id);
+  if (!host) return;
+  fen.split('/').forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) { for (let i = 0; i < +ch; i++) cell(host, r, f++, null, cls); }
+      else cell(host, r, f++, ch, cls);
+    }
+  });
+}
+function cell(host, r, f, p, cls) {
+  const d = document.createElement('div');
+  d.className = (r + f) % 2 ? 'd' : 'l';
+  const sq = 'abcdefgh'[f] + (8 - r);
+  if (cls && cls[sq]) d.className += ' ' + cls[sq];
+  if (p) d.innerHTML = '<span class="' + (p === p.toUpperCase() ? 'w' : 'b') + '">' + G[p] + '</span>';
+  host.appendChild(d);
+}
+// 1.e4 e5 2.Cf3 Cc6 3.Fc4 Ch6
+mini('m1', 'r1bqkb1r/pppp1ppp/2n4n/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R');
+// 1.e4 e5 2.Cf3 Cc6 3.Fc4 Cd4
+mini('m2', 'r1bqkbnr/pppp1ppp/8/4p3/2BnP3/5N2/PPPP1PPP/RNBQK2R');
+// 1.e4 e5 2.Dh5
+mini('m3', 'rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR');
+// position type de l'Italienne (Pianissimo) : cases-cibles surlignees
+mini('tgt', 'r1bq1rk1/pppp1ppp/2n2n2/2b1p3/4P3/1BPP1N1P/PP1N1PP1/R1BQR1K1',
+     { b3:'goal', e1:'goal', d2:'goal', h3:'goal' });
+</script>
+</body>
+</html>

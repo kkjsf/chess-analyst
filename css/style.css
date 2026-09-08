@@ -2739,23 +2739,10 @@ body.guess-open { overflow: hidden; }
     width: 100%;
     max-width: 100%;
   }
-  /* Right column: the coach verdict bubble sits at the top (it used to eat
-     vertical space above the board and leave this column half-empty), then the
-     segmented tabs and every seg-panel stack under it. */
-  .analysis-body > .coach-review,
-  .analysis-segmented,
-  .analysis-body > .seg-panel {
-    grid-column: 2;
-    width: 100%;
-    max-width: 100%;
-  }
-  .analysis-body > .coach-review {
-    align-items: stretch;
-    margin: 0;
-  }
-  .analysis-body > .coach-review .coach-bubble { min-height: 0; }
-  .analysis-body > .coach-review .tip-text { height: auto; max-height: 5em; }
-  .analysis-body > .analysis-segmented { align-self: stretch; max-width: none; }
+  /* Colonne de droite : le bandeau verdict puis le rapport. (Avant la refonte
+     de sept. 2026, c'etait la bulle du coach + les onglets Conseil/Analyse ;
+     les regles qui les placaient ici ne visaient plus rien.) Les selecteurs
+     sont repris en fin de feuille, avec les composants de la refonte. */
   /* The bottom nav is a centred 600px pill from the ≥720px rule — on this wide
      grid it sat ON TOP of the board column, hiding the move strip beneath the
      board. Span the full width here so it's a normal bottom bar again. */
@@ -4496,3 +4483,273 @@ body.guess-open { overflow: hidden; }
   .coach-truth-row { flex-direction: column; }
   .sess-row { grid-template-columns: 52px 30px 56px 1fr 40px; gap: 6px; font-size: 12px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ECRAN ANALYSE — refonte sept. 2026
+   Avant : 13 cartes de meme poids dans deux onglets desequilibres (Conseil = 3
+   blocs, Analyse = 11 cartes), le meme coup raconte trois fois, trois cartes sur
+   le temps, quatre graphiques sur le meme axe des x, et deux cartes « Resume ».
+   Maintenant : un bandeau verdict, l'echiquier et SA timeline, puis un rapport
+   en trois etages (histoire / moments / verdicts) et un pli pour le detail.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── Le bandeau verdict ─────────────────────────────────────────────────── */
+.verdict-strip {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px 12px;
+}
+.verdict-strip .acc-ring-svg { width: 52px; height: 52px; }
+.vst-mid { flex: 1; min-width: 0; }
+.vst-grade { font-size: 13.5px; font-weight: 600; }
+.vst-sub { font-size: 11.5px; color: var(--dim-2); display: flex; gap: 5px; flex-wrap: wrap; }
+.vst-sub .acc-effort { margin: 0; }
+.vst-marks { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.vm {
+  font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--line-str); color: var(--text-dim);
+}
+.vm-blunder { color: #f3b0b0; background: rgba(248,113,113,.15); border-color: transparent; }
+.vm-mistake, .vm-miss { color: #f7c98b; background: rgba(251,191,36,.15); border-color: transparent; }
+.vm-good { color: #a7e6bd; background: rgba(74,222,128,.14); border-color: transparent; }
+.vst-opp { text-align: right; padding-left: 10px; border-left: 1px solid var(--line); }
+.vst-opp-val { font-size: 19px; font-weight: 700; }
+.vst-opp-lbl { font-size: 10.5px; color: var(--dim-2); }
+
+/* ── La timeline : le graphique EST la navigation ───────────────────────── */
+.tl-card {
+  width: 100%; max-width: 400px;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 9px 10px 8px;
+  border-left: 3px solid transparent;
+}
+/* Le liseré reprend la classe du coup affiché (memes cls que MOVE_CLASS). */
+.tl-card.tl-blunder { border-left-color: var(--danger); }
+.tl-card.tl-mistake, .tl-card.tl-miss { border-left-color: var(--warning); }
+.tl-card.tl-brilliant, .tl-card.tl-great, .tl-card.tl-best { border-left-color: var(--success); }
+.tl-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.tl-segs { display: flex; gap: 3px; background: var(--bg-2); border-radius: 8px; padding: 2px; }
+.tl-seg {
+  border: 0; background: none; color: var(--dim-2); font: inherit; font-size: 10.5px;
+  font-weight: 600; padding: 4px 9px; border-radius: 6px; cursor: pointer;
+}
+.tl-seg.active { background: var(--card-2); color: var(--text); }
+.tl-legend { flex: 1; text-align: right; font-size: 10.5px; color: var(--dim-2); }
+.tl-svg { display: block; width: 100%; height: 64px; touch-action: none; cursor: crosshair; }
+.tl-move { display: flex; align-items: center; gap: 7px; margin-top: 5px; }
+.tl-move .nav-btn { width: 34px; height: 34px; font-size: 16px; flex: 0 0 auto; }
+.tl-move-label { flex: 1; min-width: 0; font-size: 13.5px; }
+.tl-move-label b { font-weight: 600; }
+.tl-class { font-size: 11px; color: var(--text-dim); }
+.tl-side {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  padding: 1px 5px; border-radius: 4px;
+}
+.tl-you { color: #1a1a2e; background: var(--accent); }
+.tl-opp { color: var(--text-dim); border: 1px solid var(--line-str); }
+.tl-cmt {
+  margin-top: 6px; font-size: 12.5px; line-height: 1.55; color: #d6dcea;
+  border-left: 2px solid var(--accent); padding-left: 9px;
+}
+.tl-cmt .rp-cta, .tl-cmt .alt-back-btn { margin-top: 7px; }
+
+/* ── Le rapport ─────────────────────────────────────────────────────────── */
+.report { display: flex; flex-direction: column; gap: 11px; }
+.story-card {
+  background: rgba(226,184,87,.08); border: 1px solid rgba(226,184,87,.18);
+  border-radius: 14px; padding: 11px 13px;
+  font-size: 13px; line-height: 1.6;
+}
+.story-card p + p { margin-top: 6px; }
+.story-card .intro-narrative { color: #d6dcea; }
+.rep-sec { display: flex; flex-direction: column; gap: 7px; }
+.rep-head { display: flex; align-items: baseline; gap: 8px; }
+.rep-head h3 { font-size: 13px; font-weight: 600; }
+.rep-head span { font-size: 11px; color: var(--dim-2); }
+
+/* Les moments : le tournant n'est plus une carte a part, juste le premier. */
+.moments-list { display: flex; flex-direction: column; gap: 7px; }
+.moment {
+  display: flex; gap: 9px; align-items: flex-start; cursor: pointer;
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 13px; padding: 9px 11px;
+}
+.moment:hover { border-color: var(--line-str); }
+.moment-turning { border-color: rgba(226,184,87,.4); background: var(--bg-elevated); }
+.mo-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; background: var(--text-dim); }
+.moment.gaffe .mo-dot { background: var(--danger); }
+.moment.erreur .mo-dot, .moment.miss .mo-dot, .moment.imprecision .mo-dot { background: var(--warning); }
+.moment.brillant .mo-dot, .moment.bon-coup .mo-dot { background: var(--success); }
+.moment.moment-cle .mo-dot { background: var(--accent); }
+.mo-body { flex: 1; min-width: 0; }
+.mo-head { font-size: 13px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.mo-head b { font-weight: 600; }
+.mo-loss { font-size: 11.5px; font-weight: 700; color: var(--danger); font-variant-numeric: tabular-nums; }
+.mo-tag {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em;
+  color: #1a1a2e; background: var(--accent); padding: 1px 6px; border-radius: 999px;
+}
+.mo-badge { font-size: 10.5px; color: var(--dim-2); }
+.mo-desc { font-size: 12.5px; line-height: 1.5; color: var(--text-dim); margin-top: 3px; }
+.mo-acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+
+/* Les verdicts : une ligne, le detail au clic. */
+.verdicts-list { display: flex; flex-direction: column; gap: 7px; }
+.verdict {
+  background: var(--bg-card); border: 1px solid var(--line);
+  border-radius: 13px; padding: 9px 11px;
+}
+.verdict > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px; }
+.verdict > summary::-webkit-details-marker { display: none; }
+.vd-ico { font-size: 15px; flex: 0 0 auto; }
+.vd-txt { flex: 1; min-width: 0; font-size: 12.8px; line-height: 1.45; color: var(--text-dim); }
+.vd-txt b { color: var(--text); font-weight: 600; }
+.vd-num { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vd-num.bad { color: var(--danger); }
+.vd-num.warn { color: var(--warning); }
+.vd-num.ok { color: var(--success); }
+.vd-chev { color: var(--dim-2); font-size: 11px; transition: transform .15s; }
+.verdict[open] .vd-chev { transform: rotate(90deg); }
+.vd-body {
+  margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.55; color: var(--text-dim);
+}
+.vd-body b { color: var(--text); }
+.vd-body .pill { margin-top: 9px; }
+.vd-body .mistake-diagnosis { margin-top: 8px; }
+.bars { margin-top: 8px; }
+.brow { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 11.5px; }
+.brow .bl { width: 68px; color: var(--text-dim); }
+.brow .bt { flex: 1; height: 7px; background: rgba(255,255,255,.08); border-radius: 4px; overflow: hidden; }
+.brow .bt i { display: block; height: 100%; border-radius: 4px; }
+.brow .bv { width: 30px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* L'action, a la fin de la lecture (elle etait perdue dans l'onglet Conseil). */
+.cta-guess {
+  width: 100%; padding: 13px; border: 0; border-radius: 13px;
+  background: var(--accent); color: #1a1a2e;
+  font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
+}
+.cta-guess:hover { background: var(--accent-dim); }
+
+/* Le pli : rien ne disparait, tout descend d'un niveau. */
+.detail-fold { border: 1px dashed var(--line-str); border-radius: 13px; padding: 10px 11px; }
+.detail-fold > summary { list-style: none; cursor: pointer; }
+.detail-fold > summary::-webkit-details-marker { display: none; }
+.detail-fold .df-t { font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
+.detail-fold .df-t::after { content: " \25be"; color: var(--dim-2); }
+.detail-fold[open] .df-t::after { content: " \25b4"; }
+.detail-fold .df-s { display: block; font-size: 11px; color: var(--dim-2); margin-top: 2px; }
+.df-body { display: flex; flex-direction: column; gap: 10px; margin-top: 11px; }
+.df-body > div { background: var(--bg-elevated); border-radius: 12px; padding: 10px 12px; }
+.df-body h3 { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 7px; }
+
+@media (max-width: 380px) {
+  .verdict-strip { gap: 8px; padding: 9px 10px; }
+  .verdict-strip .acc-ring-svg { width: 44px; height: 44px; }
+  .vst-opp-val { font-size: 17px; }
+  .tl-svg { height: 56px; }
+}
+
+/* Desktop : le bandeau verdict et le rapport tombent dans la colonne 2, a cote
+   de la colonne echiquier (voir la grille a 1000px plus haut). */
+@media (min-width: 1000px) {
+  .analysis-body > .verdict-strip,
+  .analysis-body > .report { grid-column: 2; width: 100%; max-width: 100%; }
+  .board-sticky .tl-card { max-width: 100%; }
+  /* L'echiquier partage sa colonne avec la timeline (plus haute que l'ancien
+     ruban de coups) : on lui laisse la place, sinon la courbe passe sous la nav. */
+  .board-wrapper { width: min(520px, calc(100vh - 420px)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COURS D'OUVERTURE — enrichissements sept. 2026
+   Ce qui manquait n'etait pas de la theorie en plus : c'etait le lien avec ses
+   150 parties, et quoi faire quand l'adversaire sort du livre (124 de ses
+   parties quittent le catalogue avant le coup 3).
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* Le budget temps, ecrit a cote de la barre de progression : elle ne promettait
+   rien, maintenant elle dit combien il reste. */
+.opening-lesson-progress { position: relative; margin-bottom: 16px; }
+.opening-lesson-progress::after {
+  content: attr(data-budget);
+  position: absolute; right: 0; top: 7px;
+  font-size: 10.5px; color: var(--dim-2); white-space: nowrap;
+}
+
+/* ── Tes parties sur ce noeud ───────────────────────────────────────────── */
+.ob-mine {
+  border: 1px solid rgba(226,184,87,.35); background: rgba(226,184,87,.07);
+  border-radius: 12px; padding: 10px 11px;
+}
+.ob-mine .ob-h { color: var(--accent); }
+.ob-mine-none { font-size: 12.5px; color: var(--text-dim); }
+.om-stats { display: flex; gap: 8px; margin-top: 8px; }
+.om-stats > div {
+  flex: 1; background: var(--card-2); border-radius: 9px; padding: 7px 8px; text-align: center;
+}
+.om-stats .v { display: block; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.om-stats .v.bad { color: var(--danger); }
+.om-stats .v.ok { color: var(--success); }
+.om-stats .l { display: block; font-size: 10px; color: var(--dim-2); margin-top: 1px; }
+.om-leak { font-size: 12.5px; line-height: 1.5; margin-top: 9px; color: #d6dcea; }
+.om-leak b { color: var(--danger); }
+.om-next { margin-top: 8px; }
+.om-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 0; }
+.om-row + .om-row { border-top: 1px solid var(--line); }
+.om-mv { width: 56px; font-weight: 600; }
+.om-row.in .om-mv { color: var(--success); }
+.om-row.out .om-mv { color: var(--danger); }
+.om-row.opp .om-mv { color: var(--text-dim); }
+.om-bt { flex: 1; height: 6px; background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden; }
+.om-bt i { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
+.om-row.in .om-bt i { background: var(--success); }
+.om-row.out .om-bt i { background: var(--danger); }
+.om-n { font-size: 10.5px; color: var(--dim-2); text-align: right; min-width: 78px; }
+
+/* ── S'il sort du livre : un exercice d'une position par deviation ───────── */
+.ob-punish {
+  display: flex; gap: 10px; align-items: center;
+  background: var(--bg-elevated); border-radius: 11px; padding: 9px 10px; margin-top: 7px;
+}
+.ob-punish .op-tx { flex: 1; min-width: 0; }
+.ob-punish .op-tx b { display: block; font-size: 12.5px; }
+.ob-punish .op-tx span { display: block; font-size: 11.5px; line-height: 1.45; color: var(--text-dim); margin-top: 2px; }
+.ob-punish .op-seen { display: block; font-size: 10.5px; color: var(--accent); font-style: normal; margin-top: 3px; }
+.ob-punish .train-btn { margin: 0; flex: 0 0 auto; }
+
+/* ── La position a atteindre ─────────────────────────────────────────────── */
+.ob-target { display: flex; gap: 11px; align-items: flex-start; }
+.ob-target-bd { position: relative; width: 128px; flex: 0 0 auto; }
+.ob-target-bd svg { display: block; width: 100%; border-radius: 7px; }
+.ob-target-bd .arrow-overlay { position: absolute; inset: 0; pointer-events: none; }
+.ob-target p { font-size: 12.5px; line-height: 1.5; }
+
+/* ── Les trois choses a retenir ──────────────────────────────────────────── */
+.ob-keep { margin: 0; padding-left: 20px; }
+.ob-keep li { font-size: 12.8px; line-height: 1.55; margin: 5px 0; }
+
+/* ── L'etat de revision de la branche ────────────────────────────────────── */
+.ob-srs {
+  display: flex; align-items: center; gap: 8px; margin-top: 14px;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 11px;
+  padding: 8px 10px; font-size: 11.5px; color: var(--text-dim);
+}
+.ob-srs .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: 0 0 auto; }
+.ob-srs b { color: var(--text); }
+
+@media (max-width: 480px) {
+  .ob-target { flex-direction: column; }
+  .ob-target-bd { width: 100%; max-width: 220px; margin: 0 auto; }
+  .ob-punish { flex-direction: column; align-items: stretch; }
+  .ob-punish .train-btn { width: 100%; }
+}
+
+/* Le lien analyse -> branche du cours (voir addLessonLink). */
+.story-lesson {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(226,184,87,.18);
+  font-size: 12px; color: var(--text-dim);
+}
+.story-lesson b { color: var(--text); }

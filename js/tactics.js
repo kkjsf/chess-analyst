@@ -601,10 +601,16 @@ const Tactics = (() => {
     $('#tac-close').onclick = close;
   }
 
-  function start(puzzles, name) {
+  // `opts.onDone(sansFaute)` est appele quand la serie est terminee : les cours
+  // d'ouverture s'en servent pour faire monter (ou redescendre) la branche dans
+  // la boite de revision espacee.
+  let onDone = null, sessionClean = true;
+  function start(puzzles, name, opts) {
     list = (puzzles || []).filter(p => p && p.fen && p.sol && p.sol.length);
     motifName = name || 'Entraînement';
     idx = 0;
+    onDone = (opts && typeof opts.onDone === 'function') ? opts.onDone : null;
+    sessionClean = true;
     ensureDom();
     $('#tactics-overlay').hidden = false;
     document.body.classList.add('guess-open');
@@ -629,6 +635,7 @@ const Tactics = (() => {
       return;
     }
     if (idx >= list.length) {
+      if (onDone) { const cb = onDone; onDone = null; try { cb(sessionClean); } catch (_) {} }
       stage.innerHTML = `<div class="guess-empty">Série terminée ! 🎉<br><span>Tu as parcouru les ${list.length} position${list.length > 1 ? 's' : ''} de ce motif.</span>
         <div class="guess-actions"><button class="train-btn good" id="tac-restart">↺ Recommencer</button></div></div>`;
       $('#tac-restart').onclick = () => { idx = 0; render(); };
@@ -746,6 +753,7 @@ const Tactics = (() => {
       let legal = false;
       try { const g = new Chess(game.fen()); legal = !!g.move({ from, to, promotion: 'q' }); } catch (_) {}
       const isMateEx = String(list[idx].sol[list[idx].sol.length - 1]).indexOf('#') >= 0;
+      sessionClean = false;   // pour onDone (revision espacee des ouvertures)
       fb.className = 'guess-feedback wrong';
       if (!legal) fb.innerHTML = "⚠️ Coup illégal. Clique la pièce, puis sa case d'arrivée.";
       // Sur un exercice de mat, tout mat est accepté (voir altMate) : si on

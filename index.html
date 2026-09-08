@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '211';
+window.APP_VERSION = '223';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -479,20 +479,30 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
 
   <div class="analysis-body">
 
-    <div class="board-sticky">
-
-    <div class="coach-review">
-      <div class="coach-avatar" aria-hidden="true">♞</div>
-      <div class="coach-bubble" id="coach-bubble">
-        <div class="cb-head">
-          <span class="cb-glyph" id="cb-glyph"></span>
-          <span class="cb-verdict" id="cb-verdict"></span>
-          <span class="tip-side-tag" id="tip-side" hidden></span>
-          <span class="eval-badge" id="tip-badge"></span>
-        </div>
-        <div class="tip-text" id="tip-text"></div>
+    <!-- Le bandeau verdict : trois nombres au lieu de deux cartes.
+         Avant : #accuracy-hero (jauge + adversaire) et #summary-card (pastilles
+         de comptage) etaient deux cartes distinctes, dans le meme onglet, pour
+         dire « 52 %, faible, 3 gaffes ». Les pastilles de comptage remontent
+         ici (#vst-marks) ; le detail par camp reste dans « Tout le detail ». -->
+    <div class="verdict-strip" id="verdict-strip" hidden>
+      <svg class="acc-ring-svg" viewBox="0 0 60 60" aria-hidden="true">
+        <circle class="acc-track" cx="30" cy="30" r="25"/>
+        <circle class="acc-fill" id="acc-fill-ring" cx="30" cy="30" r="25" transform="rotate(-90 30 30)"/>
+        <text class="acc-num" id="acc-hero-num" x="30" y="34" text-anchor="middle">–</text>
+      </svg>
+      <div class="vst-mid">
+        <div class="vst-grade"><span id="acc-hero-grade"></span></div>
+        <div class="vst-sub"><span class="acc-label" id="acc-hero-label">Ta précision</span><span class="acc-effort" id="acc-hero-effort" hidden></span></div>
+        <div class="acc-elo" id="acc-hero-elo"></div>
+        <div class="vst-marks" id="vst-marks"></div>
+      </div>
+      <div class="vst-opp">
+        <div class="vst-opp-val" id="acc-opp-num">–</div>
+        <div class="vst-opp-lbl" id="acc-opp-label">Adversaire</div>
       </div>
     </div>
+
+    <div class="board-sticky">
 
     <div class="board-wrapper">
       <div class="player-bar" id="top-player">
@@ -520,115 +530,86 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       </div>
     </div>
 
-    <div class="move-strip">
-      <button class="nav-btn ms-nav" id="btn-prev" title="Coup précédent">‹</button>
-      <div class="ms-track" id="ms-track"></div>
-      <button class="nav-btn ms-nav ms-next" id="btn-next" title="Coup suivant">›</button>
+    <!-- La timeline : le graphique EST la barre de navigation.
+         Avant : un ruban de N pastilles de coups (cibles de 28 px, aucune vue
+         d'ensemble) PLUS trois cartes graphiques (« Chances de gain », « Balance
+         materielle », « Temps par coup ») qui partageaient le meme axe des x
+         sans jamais etre alignees sur le coup affiche. Ici : un seul cadre, trois
+         series commutables, un curseur commun, et on navigue en glissant. -->
+    <div class="tl-card" id="tl-card">
+      <div class="tl-head">
+        <div class="tl-segs" id="tl-segs">
+          <button class="tl-seg active" data-series="win" type="button">Gain</button>
+          <button class="tl-seg" data-series="mat" type="button">Matière</button>
+          <button class="tl-seg" data-series="time" type="button" hidden>Temps</button>
+        </div>
+        <div class="tl-legend" id="tl-legend"></div>
+      </div>
+      <svg class="tl-svg" id="tl-svg" viewBox="0 0 320 64" preserveAspectRatio="none"
+           role="img" aria-label="Courbe de la partie — glisse dessus pour naviguer"></svg>
+      <div class="tl-move">
+        <button class="nav-btn" id="btn-prev" title="Coup précédent" aria-label="Coup précédent">‹</button>
+        <span class="tl-move-label" id="tl-move-label">Position de départ</span>
+        <span class="eval-badge" id="tl-move-eval" hidden></span>
+        <button class="nav-btn" id="btn-next" title="Coup suivant" aria-label="Coup suivant">›</button>
+      </div>
+      <!-- Le commentaire du coach : SOUS l'echiquier, pas au-dessus. Il disait la
+           meme chose que le label du coup, et sur mobile il poussait le plateau
+           d'environ 90 px vers le bas avant meme qu'on ait vu la position. -->
+      <div class="tl-cmt" id="tl-cmt"></div>
     </div>
 
     </div><!-- /board-sticky -->
 
-    <div class="analysis-segmented" id="analysis-segmented">
-      <button class="seg-btn active" data-seg="conseil">💡 Conseil</button>
-      <button class="seg-btn" data-seg="analyse">📊 Analyse</button>
-    </div>
+    <!-- ═══════ LE RAPPORT ═══════
+         Avant : deux onglets (Conseil = 3 blocs, Analyse = 11 cartes) et le meme
+         coup raconte trois fois (Le tournant / Moments cles / Moment cle du
+         resume). Maintenant : l'histoire en un paragraphe, les moments (le
+         tournant simplement badge en premier), trois verdicts, une action. -->
+    <div class="report" id="report">
 
-    <div class="seg-panel active" data-panel="conseil">
-
-    <div class="turning-card" id="turning-card" hidden>
-      <div class="turning-head">
-        <svg class="turning-bulb" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10.5c-.7.7-1 1.2-1 2.5H9c0-1.3-.3-1.8-1-2.5A6 6 0 0 1 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="turning-title" id="turning-title">Le tournant</span>
+      <div class="story-card" id="story-card" hidden>
+        <div class="story-text" id="intro-text"></div>
       </div>
-      <div class="turning-text" id="turning-text"></div>
-      <div class="turning-actions" id="turning-actions"></div>
-    </div>
 
-    <div class="pace-card" id="pace-card" hidden>
-      <div class="pace-head">⏱️ <span>Ton rythme</span></div>
-      <div id="pace-content"></div>
-    </div>
+      <div class="rep-sec" id="moments-sec" hidden>
+        <div class="rep-head"><h3>Les moments</h3><span>touche pour voir la position</span></div>
+        <div class="moments-list" id="moments-list"></div>
+      </div>
 
-    <button class="guess-launch" id="btn-guess">🎯 Devine le coup — rejoue cette partie</button>
+      <div class="rep-sec" id="verdicts-sec" hidden>
+        <div class="rep-head"><h3>Ce que ça dit de ton jeu</h3><span id="verdicts-count"></span></div>
+        <div class="verdicts-list" id="verdicts-list"></div>
+      </div>
 
-    </div><!-- /seg-panel conseil -->
+      <button class="cta-guess" id="btn-guess">🎯 Rejouer les moments de cette partie</button>
 
-    <div class="seg-panel" data-panel="analyse">
+      <details class="detail-fold" id="detail-fold">
+        <summary>
+          <span class="df-t">Tout le détail</span>
+          <span class="df-s">classement des coups, plans de jeu, table de finales, effort moteur</span>
+        </summary>
+        <div class="df-body">
 
-    <div class="accuracy-hero" id="accuracy-hero" hidden>
-      <div class="acc-gauge">
-        <svg class="acc-ring-svg" viewBox="0 0 60 60" aria-hidden="true">
-          <circle class="acc-track" cx="30" cy="30" r="25"/>
-          <circle class="acc-fill" id="acc-fill-ring" cx="30" cy="30" r="25" transform="rotate(-90 30 30)"/>
-          <text class="acc-num" id="acc-hero-num" x="30" y="34" text-anchor="middle">–</text>
-        </svg>
-        <div class="acc-meta">
-          <div class="acc-label" id="acc-hero-label">Ta précision</div>
-          <div class="acc-grade" id="acc-hero-grade"></div>
-          <div class="acc-effort" id="acc-hero-effort" hidden></div>
-          <div class="acc-elo" id="acc-hero-elo"></div>
+          <div class="summary-card" id="summary-card">
+            <h3>Tes coups, classés</h3>
+            <div id="summary-content"></div>
+          </div>
+
+          <div class="plan-card" id="plan-card" hidden>
+            <h3>Plans de jeu</h3>
+            <div id="plan-content"></div>
+          </div>
+
+          <div class="tablebase-card" id="tablebase-card" hidden>
+            <h3>Table de finales (Syzygy)</h3>
+            <div id="tablebase-content"></div>
+          </div>
+
         </div>
-      </div>
-      <div class="acc-opp">
-        <div class="acc-opp-label" id="acc-opp-label">Adversaire</div>
-        <div class="acc-opp-val"><span id="acc-opp-num">–</span><span class="acc-opp-pct">%</span></div>
-      </div>
-    </div>
+      </details>
 
-    <div class="intro-card" id="intro-card" hidden>
-      <div class="intro-header">
-        <span class="intro-icon">📋</span>
-        <span class="intro-label">Résumé</span>
-      </div>
-      <div class="intro-text" id="intro-text"></div>
-    </div>
-
-    <div class="highlights-card" id="highlights-card" hidden>
-      <h3>Moments clés</h3>
-      <div class="highlights-list" id="highlights-list"></div>
-    </div>
-
-      <div class="win-graph-card" id="win-graph-card" hidden>
-        <h3>Chances de gain</h3>
-        <div class="win-graph-container" id="win-graph-container"></div>
-      </div>
-
-      <div class="mistakes-card" id="mistakes-card" hidden>
-        <h3>Profil d'erreurs</h3>
-        <div id="mistakes-content"></div>
-      </div>
-
-    <div class="time-trouble-card" id="time-trouble-card" hidden>
-      <h3>Pression du temps</h3>
-      <div id="time-trouble-content"></div>
-    </div>
-
-    <div class="material-graph-card" id="material-graph-card" hidden>
-      <h3>Balance matérielle</h3>
-      <div class="material-graph-container" id="material-graph-container"></div>
-    </div>
-
-    <div class="plan-card" id="plan-card" hidden>
-      <h3>Plans de jeu</h3>
-      <div id="plan-content"></div>
-    </div>
-
-    <div class="time-chart-card" id="time-chart-card" hidden>
-      <h3>Temps par coup</h3>
-      <div class="time-chart-container" id="time-chart-container"></div>
-    </div>
-
-    <div class="tablebase-card" id="tablebase-card" hidden>
-      <h3>Table de finales (Syzygy)</h3>
-      <div id="tablebase-content"></div>
-    </div>
-
-    <div class="summary-card" id="summary-card">
-      <h3>Résumé de la partie</h3>
-      <div id="summary-content"></div>
-    </div>
-
-    </div><!-- /seg-panel analyse -->
+    </div><!-- /report -->
   </div>
 </div>
 

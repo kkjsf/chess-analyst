@@ -626,9 +626,444 @@ const Courses = (() => {
         { at: 2, q: `Après 4…Db6 (qui attaque b2), quelle défense garde le fou f4 ET les dames pour jouer le gain ?`, opts: ['5.Dc1', '5.Db3 (propose l\'échange)', '5.b3 (affaiblit)', '5.dxc5'], answer: 0, explain: `5.Dc1 protège b2 sans rien lâcher ; Db3 mène souvent à l'échange des dames et à l'égalité.` },
         { at: 0, q: `Quel est le schéma d'attaque typique du Londres contre un roque adverse ?`, opts: [`Ce5, Fd3, Dc1-h6 et parfois Fxh7+`, `Roque long et pion h`, `Échanger toutes les pièces`, `Pousser a4-a5`], answer: 0, explain: `Le fou d3 vise h7, le cavalier e5 renforce, la dame vient en h6 : schéma standard, avec le sacrifice grec Fxh7+ en embuscade.` }
       ]
+    },
+
+    // ─────────────── Attaque Parham (2.Dh5) — la sortie de dame ───────────────
+    // 8 de ses parties, aucune ligne de contenu dans l'app jusqu'ici, et un mat
+    // en 5 encaisse (e4 e5 Dh5 Cc6 Fc4 g6 Df3 Cd4?? Dxf7#). Le cours d'ouverture
+    // le plus rentable de tout le catalogue a son niveau.
+    'e4 e5 Qh5': {
+      side: 'b',
+      intro: `Sortir la dame au 2ᵉ coup n'est pas une ouverture, c'est un piège : les Blancs espèrent le mat du berger sur <b>f7</b>. Bien joué, c'est un cadeau - la dame est la pièce la plus chère et elle est en plein courant d'air. Trois règles suffisent : <b>défends e5 sans bouger les pions du roque</b>, <b>chasse la dame en gagnant du temps</b>, et souviens-toi que <b>…Cf6 bloque la colonne f</b>. Ne réponds jamais …g6 avant que le fou n'arrive en c4 : tu affaiblirais f7 pour rien.`,
+      lines: [
+        {
+          name: 'La bonne parade', eco: 'C20',
+          sans: ['e4', 'e5', 'Qh5', 'Nc6', 'Bc4', 'g6', 'Qf3', 'Nf6', 'Ne2', 'Bg7'],
+          notes: [
+            `Partie de pion roi, tout va bien.`,
+            `Tu occupes le centre à égalité.`,
+            `<b>La dame sort au 2ᵉ coup.</b> Elle attaque e5 (simple échec après capture) et lorgne f7.`,
+            `<b>Le bon coup :</b> Cc6 défend e5 <i>en développant</i>. Pas …Dd6 ni …d6, qui enferment : une pièce, une case utile.`,
+            `Maintenant les deux pièces visent f7 : <b>Dxf7 serait mat</b>. Il faut réagir tout de suite.`,
+            `<b>…g6 !</b> Le pion chasse la dame et coupe la diagonale h5-f7. C'est le seul moment où …g6 est bon : le fou f8 va s'installer en g7 derrière.`,
+            `La dame se recase et remet la pression sur f7.`,
+            `<b>…Cf6 !</b> Le cavalier <b>bloque la colonne f</b> : la dame ne peut plus atteindre f7, la partie est finie pour son attaque. Retiens ce coup, il neutralise aussi le mat du berger.`,
+            `Les Blancs doivent enfin développer - avec deux temps de retard.`,
+            `Tu roques bientôt, tu as deux cavaliers, un fou en fianchetto et le centre. La dame blanche a joué trois fois pour rien : <b>tu es déjà mieux</b>.`
+          ]
+        },
+        {
+          name: 'Il insiste avec 5.Db3', eco: 'C20',
+          sans: ['e4', 'e5', 'Qh5', 'Nc6', 'Bc4', 'g6', 'Qf3', 'Nf6', 'Qb3'],
+          notes: [
+            '', '', '', '', '', '', '', '',
+            `La dame reste sur la diagonale de f7 depuis b3. Ne panique pas : <b>Cd4 !</b> attaque la dame ET c2, et f7 est déjà couvert par le cavalier f6. Le contre-jeu est à toi.`
+          ]
+        }
+      ],
+      punish: [
+        {
+          label: '2.Dh5 — le premier coup à trouver',
+          hint: `Le pion e5 est attaqué et f7 est dans le viseur. Joue le coup qui défend e5 <b>en développant</b> une pièce.`,
+          fen: 'rnbqkbnr/pppp1ppp/8/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq - 1 2',
+          sol: ['Nc6']
+        },
+        {
+          label: '3.Fc4 — Dxf7 est mat au coup suivant',
+          hint: `Les deux pièces visent f7 et le roi ne pourra pas reprendre. Chasse la dame avec un pion, en coupant la diagonale.`,
+          fen: 'r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3',
+          sol: ['g6']
+        },
+        {
+          label: '4.Df3 — la position exacte où tu t\'es fait mater',
+          hint: `Elle remet la pression sur f7. Un seul coup ferme la porte définitivement : <b>bloque la colonne f</b> avec un cavalier. (Dans ta partie du 31 juillet, 4…Cd4 a permis 5.Dxf7#.)`,
+          fen: 'r1bqkbnr/pppp1p1p/2n3p1/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 1 4',
+          sol: ['Nf6']
+        }
+      ],
+      target: {
+        fen: 'r1bqk2r/ppppppbp/2n2np1/8/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 0 1',
+        goals: ['c6', 'f6', 'g7'],
+        note: `Ta position type : <b>Cc6</b>, <b>Cf6</b>, <b>Fg7</b>. Trois pièces sorties, f7 verrouillé par le cavalier, et la dame blanche toujours sans travail. Tu roques et tu joues …d6 puis …Cd4 ou …d5.`
+      },
+      keep: [
+        `Contre 2.Dh5, on défend e5 <b>en développant</b> : 2…Cc6, jamais 2…Dd6 ni 2…Cf6 (qui perd e5 avec échec).`,
+        `<b>…g6 seulement quand le fou est en c4</b> - avant, on affaiblit f7 pour rien ; après, on gagne un temps sur la dame.`,
+        `<b>…Cf6 bloque la colonne f</b> : ce seul coup tue le mat du berger et toutes ses variantes.`
+      ],
+      quiz: [
+        {
+          q: `4.Df3 remet la pression sur f7. Joue le coup qui ferme la porte.`,
+          fen: 'r1bqkbnr/pppp1p1p/2n3p1/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 1 4',
+          sol: ['Nf6'],
+          explain: `Le cavalier en f6 bloque la colonne f : la dame ne peut plus aller en f7.`
+        },
+        {
+          q: `Pourquoi 2…Cf6 est-il un mauvais deuxième coup ?`,
+          opts: [`Parce qu'il abandonne e5 : 3.Dxe5+ gagne un pion avec échec`, `Parce qu'il est illégal`, `Parce qu'il enferme le fou f8`, `Parce que le cavalier sera chassé par e5`],
+          answer: 0,
+          explain: `Le cavalier f6 est utile plus tard (il bloque la colonne f), mais au 2ᵉ coup il faut d'abord défendre e5 : 2…Cc6.`
+        },
+        {
+          q: `Après 2…Cc6, quelle case la dame et le fou blancs visent-ils ensemble ?`,
+          opts: ['f7', 'e5', 'h7', 'd5'], answer: 0,
+          explain: `f7 n'est défendue que par le roi, et le roi ne peut pas prendre une dame protégée par le fou c4 : c'est un mat.`
+        }
+      ]
+    },
+
+    // ──────────────────── Ouverture de l'Évêque (2.Fc4) ────────────────────
+    // 8 parties cote Noirs, 38 % des points, et rien dans le catalogue.
+    'e4 e5 Bc4': {
+      side: 'b',
+      intro: `Les Blancs sortent le fou en <b>c4</b> avant le cavalier : l'Ouverture de l'Évêque. Il n'y a rien de terrible là-dedans, mais deux choses changent par rapport à l'Italienne : le pion e4 n'est <b>pas encore défendu</b> par un cavalier, et la dame blanche garde la case <b>f3</b> ou <b>h5</b> libre pour tenter un mat du berger. D'où la réponse la plus simple et la plus solide : <b>2…Cf6</b>, qui attaque e4 et bloque d'avance la colonne f.`,
+      lines: [
+        {
+          name: '2…Cf6, la réponse universelle', eco: 'C23',
+          sans: ['e4', 'e5', 'Bc4', 'Nf6', 'd3', 'c6', 'Nf3', 'd5'],
+          notes: [
+            '', '',
+            `<b>Le fou avant le cavalier.</b> e4 n'est défendu par rien.`,
+            `<b>…Cf6 !</b> On attaque e4 tout de suite, et le cavalier bloque la colonne f : plus aucun mat du berger possible.`,
+            `Les Blancs doivent défendre e4. d3 est le coup naturel (Cc3 est l'autre).`,
+            `On prépare …d5 : quand le centre s'ouvrira, le fou c4 sera la pièce chassée, pas la nôtre.`,
+            `Développement normal.`,
+            `<b>…d5 !</b> Le pion frappe le fou et le centre. Après l'échange tu as un centre libre et un développement facile : l'ouverture est réussie.`
+          ]
+        },
+        {
+          name: '2…Cc6 : retour à l\'Italienne', eco: 'C50',
+          sans: ['e4', 'e5', 'Bc4', 'Nc6', 'Nf3', 'Nf6'],
+          notes: [
+            '', '', '',
+            `Jouable aussi - mais <b>attention</b> : tant que ton cavalier n'est pas en f6, la dame blanche peut venir en h5 avec une menace de mat (voir le piège).`,
+            `Si les Blancs sortent enfin le cavalier, on est revenu dans une Italienne classique.`,
+            `Position des Deux Cavaliers : tu connais la suite par le cours de l'Italienne.`
+          ]
+        }
+      ],
+      punish: [
+        {
+          label: '3.Dh5 (après 2…Cc6) — Dxf7 est MAT',
+          hint: `La dame et le fou visent f7, le roi ne peut pas prendre : c'est mat au coup suivant. Chasse la dame avec un pion.`,
+          fen: 'r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3',
+          sol: ['g6']
+        },
+        {
+          label: '3.Df3 (après 2…Cf6) — sans objet',
+          hint: `Ici, rien à faire : ton cavalier en f6 <b>bloque déjà la colonne f</b>, la dame ne peut pas atteindre f7. Développe tranquillement - par exemple …Cc6 en attaquant encore le centre.`,
+          fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 3 3',
+          sol: ['Nc6']
+        }
+      ],
+      target: {
+        fen: 'rnbqkb1r/pp3ppp/2p2n2/3pp3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 5',
+        goals: ['d5', 'c6', 'f6'],
+        note: `Ta position type : <b>…Cf6</b>, <b>…c6</b>, <b>…d5</b>. Le pion d5 frappe le fou c4 et le centre en même temps ; à toi le grand centre, à lui le fou à recaser.`
+      },
+      keep: [
+        `Contre 2.Fc4, réponds <b>2…Cf6</b> : ça attaque e4 (non défendu) et ça bloque la colonne f.`,
+        `Si tu joues 2…Cc6, la dame en h5 <b>menace un mat</b> - la parade est …g6, à jouer immédiatement.`,
+        `Le plan est toujours le même : <b>…c6 puis …d5</b>, pour chasser le fou et prendre le centre.`
+      ],
+      quiz: [
+        {
+          q: `Les Blancs viennent de jouer 3.Dh5 et menacent Dxf7 mat. Joue la parade.`,
+          fen: 'r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3',
+          sol: ['g6'],
+          explain: `…g6 chasse la dame et coupe la diagonale h5-f7. Le fou ira en g7 derrière le pion.`
+        },
+        {
+          q: `Qu'est-ce que 2.Fc4 a de différent de l'Italienne (2.Cf3 puis 3.Fc4) ?`,
+          opts: [`e4 n'est pas encore défendu, donc …Cf6 l'attaque avec un temps`, `Le fou est plus fort en c4`, `Les Blancs ne peuvent plus roquer`, `Le centre est fermé`],
+          answer: 0,
+          explain: `C'est tout l'intérêt de 2…Cf6 : les Blancs doivent s'occuper de e4 au lieu d'attaquer.`
+        }
+      ]
+    },
+
+    // ─────────── Défense Française, du côté des BLANCS (7 parties, 43 %) ───────────
+    'e4 e6 d4 d5': {
+      side: 'w',
+      intro: `Contre la Française, tu as les Blancs et un vrai avantage d'espace - à condition de choisir ton système et de t'y tenir. Trois routes : <b>3.Cc3</b> (la principale, la plus riche), <b>3.e5</b> (l'avance : tu fermes le centre et tu joues à l'aile roi) et <b>3.exd5</b> (l'échange : simple, un peu terne). Le fait à retenir : le fou c8 des Noirs est <b>enfermé derrière …e6</b>. Toute ta stratégie consiste à garder le centre fermé assez longtemps pour que ce fou reste mauvais.`,
+      lines: [
+        {
+          name: '3.Cc3, la principale', eco: 'C10',
+          sans: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Nf6', 'e5', 'Nfd7', 'f4'],
+          notes: [
+            `Ton coup.`,
+            `La Française : les Noirs préparent …d5.`,
+            `Tu prends le grand centre.`,
+            `Le coup annoncé. Le centre est tendu.`,
+            `<b>3.Cc3</b> défend e4 en développant : c'est le coup le plus naturel et le plus fort.`,
+            `Les Noirs attaquent e4 une deuxième fois.`,
+            `<b>4.e5 !</b> Tu pousses au lieu de défendre : le cavalier f6 est chassé et le centre se ferme à ton avantage d'espace.`,
+            `Le cavalier recule en d7 (il retournera en f8 ou c5).`,
+            `<b>5.f4</b> soutient e5 et prépare l'attaque à l'aile roi. C'est le plan complet : pions e5+f4, Cf3, Fd3, roque, puis f5 ou Dh5.`
+          ]
+        },
+        {
+          name: '3.e5, l\'avance', eco: 'C02',
+          sans: ['e4', 'e6', 'd4', 'd5', 'e5', 'c5', 'c3', 'Nc6', 'Nf3'],
+          notes: [
+            '', '', '', '',
+            `<b>3.e5</b> ferme le centre tout de suite. Peu de théorie, un plan clair : tu as l'espace, il a le fou enfermé.`,
+            `La contre-attaque obligatoire des Noirs : ils frappent la base de ta chaîne, d4.`,
+            `<b>4.c3</b> soutient d4. La règle de la chaîne de pions : on défend la <b>base</b>, on n'échange pas.`,
+            `Ils ajoutent un attaquant sur d4.`,
+            `Tu développes en défendant d4 une troisième fois. Ensuite Fe2/Fd3, roque, puis un jeu à l'aile roi pendant qu'il s'agite à l'aile dame.`
+          ]
+        },
+        {
+          name: '3.exd5, l\'échange', eco: 'C01',
+          sans: ['e4', 'e6', 'd4', 'd5', 'exd5', 'exd5', 'Nf3', 'Nf6', 'Bd3'],
+          notes: [
+            '', '', '', '',
+            `<b>3.exd5</b> : la solution simple. Tu renonces à l'avantage d'espace mais il n'y a rien à retenir et son fou c8 se libère.`,
+            `Reprise forcée.`,
+            `Développement naturel, structure symétrique.`,
+            `Idem.`,
+            `Fd3 face au fou d6 : la position est égale et propre. Un bon choix les jours où tu ne veux pas de théorie.`
+          ]
+        }
+      ],
+      punish: [
+        {
+          label: '3…Fb4 (Winawer) après 3.Cc3',
+          hint: `Le fou cloue ton cavalier c3. Ne le défends pas : <b>pousse e5</b>. Tu gagnes de l'espace et le fou devra prendre en c3 (ce qui te donne la paire de fous) ou reculer.`,
+          fen: 'rnbqk2r/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4',
+          sol: ['e5']
+        },
+        {
+          label: '3…dxe4 (Rubinstein) après 3.Cc3',
+          hint: `Il te rend le centre sans rien demander. Reprends avec la pièce, pas avec un pion : tu gardes un centre de pions intact et un développement d'avance.`,
+          fen: 'rnbqkbnr/ppp2ppp/4p3/8/3Pp3/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 4',
+          sol: ['Nxe4']
+        },
+        {
+          label: '3…c5 tout de suite après 3.e5',
+          hint: `C'est le coup normal, et la réponse est un réflexe à avoir : <b>soutiens la base de ta chaîne</b> par c3. Ne prends pas en c5, tu lui rendrais le centre.`,
+          fen: 'rnbqkbnr/pp3ppp/4p3/2ppP3/3P4/8/PPP2PPP/RNBQKBNR w KQkq - 0 4',
+          sol: ['c3']
+        }
+      ],
+      target: {
+        fen: 'r1bqkb1r/pp1n1ppp/2n1p3/2ppP3/3P1P2/2P2N2/PP4PP/RNBQKB1R b KQkq - 0 7',
+        goals: ['e5', 'f4', 'd4', 'c3'],
+        note: `La position type de l'avance : ta chaîne <b>c3-d4-e5</b> soutenue par <b>f4</b>. Tant qu'elle tient, son fou c8 ne joue pas. Tu attaques à l'aile roi (f5, Dh5, Ce5) pendant qu'il pousse à l'aile dame.`
+      },
+      keep: [
+        `Son fou c8 est <b>enfermé derrière …e6</b> : garde le centre fermé et il ne jouera jamais.`,
+        `Dans une chaîne de pions, on défend la <b>base</b> (c3 pour d4), on ne l'échange pas.`,
+        `Choisis UN système et tiens-t'y : <b>3.Cc3</b> si tu veux jouer, <b>3.e5</b> si tu veux un plan simple, <b>3.exd5</b> les jours sans.`
+      ],
+      quiz: [
+        {
+          q: `Après 3.e5 c5, quel coup soutient la base de ta chaîne de pions ?`,
+          opts: ['4.c3', '4.dxc5', '4.f4', '4.Cf3'], answer: 0,
+          explain: `On défend la base (d4) par c3. Prendre en c5 rend le centre et libère son fou.`
+        },
+        {
+          q: `Pourquoi la Française laisse-t-elle un problème durable aux Noirs ?`,
+          opts: [`Le fou c8 est enfermé derrière le pion e6`, `Le roi noir ne peut pas roquer`, `Les Noirs perdent un pion`, `La dame noire est mal placée`],
+          answer: 0,
+          explain: `C'est LE thème de l'ouverture : tout le jeu noir consiste à libérer ce fou (…b6/…Fb7, ou …f6 pour ouvrir le centre).`
+        }
+      ]
     }
 
   };
+
+
+  // ─────────────────── Compléments sept. 2026 ───────────────────
+  // Trois choses manquaient à chaque cours existant :
+  //  - la POSITION À ATTEINDRE (le plan était raconté en prose alors que
+  //    l'échiquier du cours restait figé sur la fin de la ligne) ;
+  //  - les TROIS PHRASES à retenir (un cours = 12 notes de coups, 3 pièges et
+  //    3 questions, et rien ne disait ce qu'il faut en garder) ;
+  //  - les exercices « S'IL SORT DU LIVRE » : à son niveau, 124 parties sur 150
+  //    quittent le catalogue avant le coup 3, donc c'est le cas le plus
+  //    fréquent, et il vivait en prose repliée en bas de page.
+  // Posés en surcouche pour ne pas reformater les entrées d'origine.
+  // Chaque FEN et chaque solution est vérifiée par tools/verify_openings.cjs.
+  //
+  // ⚠ Piège chess.js : en mode `sloppy`, « bxc6 » est lu comme un coup de FOU.
+  // Éviter les prises de pion de la colonne b dans les lignes et les solutions.
+  const EXTRA = {
+
+    'e4 e5 Nf3 Nc6 Bc4': {
+      target: {
+        fen: 'r1bq1rk1/bpp2ppp/p2p1nn1/4p3/4P3/1BPP1N1P/PP3PP1/R1BQRNK1 b - - 2 11',
+        goals: ['b3', 'e1', 'f1', 'h3'],
+        note: `La position type de l'Italienne lente : <b>Fb3</b> (le fou sort de la ligne de mire de …Ca5), <b>Te1</b>, <b>h3</b> et le cavalier en route par <b>d2-f1-g3</b>. Tant que ces quatre pièces ne sont pas placées, on n'attaque pas.`
+      },
+      keep: [
+        `Le fou en c4 vise <b>f7</b>, la case que seul le roi défend : c'est toute l'idée de l'ouverture.`,
+        `On roque <b>avant</b> de pousser au centre. c3 + d4, ou d3 et la manœuvre Cbd2-f1-g3.`,
+        `Ne sors pas la dame tôt et ne pousse pas les pions du roque : la moindre imprécision se paie tactiquement.`
+      ],
+      punish: [
+        {
+          label: '3…Cd4 — le saut au centre',
+          hint: `Le cavalier s'installe au centre en attaquant ton cavalier f3. Ne recule pas et ne t'affole pas : <b>prends-le simplement</b>. Après la reprise du pion, tu joues c3 et tu chasses tout.`,
+          fen: 'r1bqkbnr/pppp1ppp/8/4p3/2BnP3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+          sol: ['Nxd4']
+        },
+        {
+          label: '3…Ch6 — le cavalier au bord',
+          hint: `Un cavalier en h6 ne défend rien et ne contrôle pas le centre. La punition n'est pas une tactique, c'est un coup de principe : <b>ouvre le centre</b> pendant qu'il est mal développé.`,
+          fen: 'r1bqkb1r/pppp1ppp/2n4n/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+          sol: ['d4']
+        }
+      ]
+    },
+
+    'e4 e5 Nf3 Nc6 Bc4 Bc5 d3': {
+      target: {
+        fen: 'r1bq1rk1/bpp2ppp/p2p1nn1/4p3/4P3/1BPP1N1P/PP3PP1/R1BQRNK1 b - - 2 11',
+        goals: ['b3', 'e1', 'f1', 'h3'],
+        note: `Le Pianissimo au complet : <b>Fb3</b>, <b>Te1</b>, <b>h3</b>, cavalier <b>d2-f1-g3</b>. C'est un jeu de manœuvre : la partie commence quand le dernier de ces coups est joué.`
+      },
+      keep: [
+        `d3 soutient e4 <b>sans ouvrir le centre</b> : on cherche une position saine, pas un avantage immédiat.`,
+        `Le plan est un ordre de placement : <b>c3, Cbd2-f1-g3, Fb3, Te1, h3</b>. Ensuite seulement d4 ou l'attaque à l'aile roi.`,
+        `La position récompense la patience : celui qui casse trop tôt donne l'initiative à l'autre.`
+      ]
+    },
+
+    'e4 e5 Nf3 Nc6 Bb5': {
+      target: {
+        fen: 'r1bq1rk1/4bppp/p2p1n2/npp1p3/3PP3/2P2N1P/PPB2PP1/RNBQR1K1 b - d3 0 11',
+        goals: ['c2', 'd4', 'e1', 'h3'],
+        note: `La tabiya de l'Espagnole fermée : <b>Fc2</b>, <b>Te1</b>, <b>h3</b>, puis <b>d4</b>. Le fou revenu en c2 et le centre d4+e4 : c'est la position que toute la théorie cherche à atteindre.`
+      },
+      keep: [
+        `Fb5 attaque le <b>défenseur</b> de e5, pas e5 : la pression est durable, rien n'est forcé.`,
+        `4.Fxc6 ne gagne pas le pion : après …dxc6 5.Cxe5 Dd4 ! les Noirs reprennent tout.`,
+        `Ton plan blanc tient en quatre coups : <b>c3, Te1, h3, d4</b>, et le fou se replie en c2.`
+      ],
+      punish: [
+        {
+          label: '3…Cd4 — la défense Bird',
+          hint: `Le cavalier saute au centre en attaquant ton cavalier f3 et en dégageant la pression sur c6. <b>Prends-le</b> : après la reprise du pion, ton fou b5 n'a plus de cible mais tu as le centre et un temps d'avance.`,
+          fen: 'r1bqkbnr/pppp1ppp/8/1B2p3/3nP3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+          sol: ['Nxd4']
+        }
+      ]
+    },
+
+    'e4 e5 Nf3 Nc6 d4 exd4 Nxd4': {
+      target: {
+        fen: 'r1bqr1k1/ppp2ppp/2pb1n2/8/4P3/2NB4/PPP2PPP/R1BQ1RK1 w - - 6 9',
+        goals: ['d3', 'c3', 'e4'],
+        note: `Après l'échange des cavaliers : ton pion <b>e4</b> tient le centre, le <b>Fd3</b> et le <b>Cc3</b> sont sortis, tu es roqué. Position saine et sans théorie, exactement ce qu'on cherchait en jouant 3.d4.`
+      },
+      keep: [
+        `Ouvrir le centre au 3ᵉ coup te donne un jeu clair, <b>sans la théorie de l'Espagnole</b>.`,
+        `Après 3…exd4 4.Cxd4, ne t'attarde pas : <b>développe et roque</b>, le centre ouvert punit les retards.`,
+        `Le cavalier d4 est bien placé mais ne l'y laisse pas s'échanger contre rien : Fd3, Cc3, roque, puis le milieu de jeu.`
+      ],
+      punish: [
+        {
+          label: '3…Df6 — il défend e5 avec la dame',
+          hint: `La dame en f6 défend le pion mais <b>bloque son propre cavalier g8</b>. Pousse : le pion attaque son cavalier c6 et gagne l'espace pendant qu'il est mal développé.`,
+          fen: 'r1b1kbnr/pppp1ppp/2n2q2/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 1 4',
+          sol: ['d5']
+        }
+      ]
+    },
+
+    'e4 e5 f4': {
+      target: {
+        fen: 'rnbqk2r/ppp1bppp/8/3n4/2BP1p2/5N2/PPP3PP/RNBQ1RK1 b kq d3 0 7',
+        goals: ['c4', 'd4', 'f1'],
+        note: `Ce que le gambit achète : le <b>Fc4</b> braqué sur f7, le centre <b>d4</b>, la <b>colonne f</b> ouverte pour la tour. Un pion contre trois atouts - à condition d'attaquer tout de suite.`
+      },
+      keep: [
+        `Tu donnes un pion pour <b>la colonne f, le centre et le temps</b> : si tu ne les utilises pas, tu es juste en moins.`,
+        `Roque tôt (la tour vient sur f1 gratuitement) et braque le fou sur <b>f7</b>.`,
+        `Contre une défense solide, accepte de rendre le pion : garde l'initiative, pas le matériel.`
+      ]
+    },
+
+    'e4 e5 Nf3 Nf6': {
+      target: {
+        fen: 'rnbq1rk1/ppp1bppp/8/3p4/2PPn3/3B1N2/PP3PPP/RNBQ1RK1 b - c3 0 8',
+        goals: ['c4', 'd4', 'd3'],
+        note: `La position type de la Petrov : structure symétrique, cavalier noir avancé en e4, et ta poussée <b>c4</b> qui attaque le soutien d5. C'est là que la partie commence vraiment.`
+      },
+      keep: [
+        `…Cf6 <b>contre-attaque e4</b> au lieu de défendre e5 : c'est une défense de sang-froid qui vise l'égalité propre.`,
+        `Après 3.Cxe5, ne reprends <b>jamais</b> tout de suite en e4 : joue d'abord <b>…d6</b> pour chasser le cavalier.`,
+        `La symétrie ne veut pas dire la nulle : celui qui place son cavalier et sa poussée c4/…c5 le premier prend l'initiative.`
+      ],
+      punish: [
+        {
+          label: '3…Cxe4 — la gaffe classique de la Petrov',
+          hint: `Il reprend le pion tout de suite, sans avoir chassé ton cavalier. Il y a un coup qui gagne une pièce : <b>cherche la colonne e</b>, ton cavalier e5 et son roi e8 sont sur la même ligne.`,
+          fen: 'rnbqkb1r/pppp1ppp/8/4N3/4n3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 4',
+          sol: ['Qe2']
+        }
+      ]
+    },
+
+    'e4 e5 Nc3': {
+      target: {
+        fen: 'rnbq1rk1/ppp1bppp/8/3pP3/3Pn3/2NB1N2/PPP3PP/R1BQK2R b KQ - 2 7',
+        goals: ['e5', 'd4', 'd3'],
+        note: `La Viennoise du gambit : pions <b>d4+e5</b>, <b>Fd3</b> braqué sur h7, cavaliers sortis. Tu as l'espace et l'attaque à l'aile roi ; son cavalier e4 est joli mais seul.`
+      },
+      keep: [
+        `2.Cc3 est le Gambit du Roi <b>bien élevé</b> : on développe et on surprotège e4 AVANT de jouer f4.`,
+        `Trois familles à choisir une fois pour toutes : <b>3.f4</b> (tranchant), <b>3.Fc4</b> (à l'italienne), <b>3.g3</b> (positionnel).`,
+        `Le fou en d3 et le pion e5 : le schéma d'attaque vise <b>h7</b>, comme au Système de Londres.`
+      ]
+    },
+
+    'e4 d5 exd5 Qxd5': {
+      target: {
+        fen: 'rn2k2r/pp3ppp/2p1pn2/q4b2/1bBP4/2N2N2/PPPBQPPP/2KR3R b kq - 3 9',
+        goals: ['c4', 'd4', 'd2'],
+        note: `La position type côté Blancs : <b>d4</b>, <b>Fc4</b>, <b>Fd2</b> et le grand roque. La dame noire en a5 a l'air active mais c'est elle qui devra bouger encore.`
+      },
+      keep: [
+        `La dame noire sort tôt : chaque coup qui l'<b>attaque en développant</b> (Cc3, d4, Fd2) est un temps gagné.`,
+        `Ne cours pas après la dame avec des coups qui affaiblissent : Cc3 puis d4, et c'est tout.`,
+        `Sa structure reste saine - ne compte pas sur un gain rapide, compte sur ton <b>avance de développement</b>.`
+      ],
+      punish: [
+        {
+          label: 'Après 2…Dxd5, le coup qui gagne un temps',
+          hint: `La dame noire est au centre. Développe une pièce <b>en l'attaquant</b> : c'est le coup qui donne aux Blancs leur avance dans toute la Scandinave.`,
+          fen: 'rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3',
+          sol: ['Nc3']
+        }
+      ]
+    },
+
+    'd4 d5 Bf4': {
+      target: {
+        fen: 'r2q1rk1/pb3ppp/1pnbpn2/2ppN3/3P4/2PBP1B1/PP1N1PPP/R2Q1RK1 b - - 3 10',
+        goals: ['e5', 'd3', 'g3'],
+        note: `Le Londres au complet : <b>Ce5</b> au centre, <b>Fd3</b> braqué sur h7, <b>Fg3</b> hors de la chaîne de pions. Les trois pièces de l'attaque sont en place ; la dame vient ensuite en c1-h6.`
+      },
+      keep: [
+        `Ff4 se joue <b>avant</b> e3, sinon le fou reste enfermé derrière ses propres pions.`,
+        `Le schéma est toujours le même : <b>Ff4, e3, Fd3, c3, Cf3, Cbd2, roque</b> - quoi que fasse l'adversaire.`,
+        `L'attaque type vise <b>h7</b> : Ce5, Fd3, Dc1-h6, avec le sacrifice grec Fxh7+ en embuscade.`
+      ],
+      punish: [
+        {
+          label: '2…Ff5 — il copie ton fou',
+          hint: `Il sort son fou hors de la chaîne, comme toi. Ne l'échange pas tout de suite : joue le coup qui prépare <b>Fd3</b> pour lui proposer l'échange à TES conditions (tu ouvriras la colonne pour ta dame).`,
+          fen: 'rn1qkbnr/ppp1pppp/8/3p1b2/3P1B2/8/PPP1PPPP/RN1QKBNR w KQkq - 2 3',
+          sol: ['e3']
+        }
+      ]
+    }
+
+  };
+  Object.keys(EXTRA).forEach(k => { if (COURSES[k]) Object.assign(COURSES[k], EXTRA[k]); });
 
   function get(line) { return (line && COURSES[line]) || null; }
   function has(line) { return !!(line && COURSES[line]); }
