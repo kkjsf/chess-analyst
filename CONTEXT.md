@@ -98,10 +98,13 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v212-v223 - REFONTE DE L'ECRAN ANALYSE + COURS D'OUVERTURE BRANCHES SUR SES PARTIES.**
-  Les deux maquettes de `_mockups/` (analysis-redesign-2026-09.html, opening-lesson-enrich-2026-09.html)
-  sont IMPLEMENTEES. 39 tests unitaires OK, 115 controles du nouveau `tools/verify_openings.cjs` OK,
-  0 erreur console.
+- **v212-v223 - REFONTE DE L'ECRAN ANALYSE + COURS D'OUVERTURE BRANCHES SUR SES PARTIES**
+  (SHIPPED `6e43aa1`, verifie en live). Les deux maquettes de `_mockups/`
+  (analysis-redesign-2026-09.html, opening-lesson-enrich-2026-09.html) sont IMPLEMENTEES.
+  39 tests unitaires OK, 115 controles du nouveau `tools/verify_openings.cjs` OK, 0 erreur console.
+  Deploiement : `origin/main` portait encore un commit automatique « chore: update coach analysis
+  data » de l'action GitHub (comme en v211 - le piege se repete a chaque fois), rebase sans conflit
+  puis push ; Pages met ~30 a 60 s a servir la nouvelle version.
 
   **1. L'ecran Analyse : 13 cartes -> 4 blocs.** Constats mesures avant de toucher au code :
   deux onglets desequilibres (`Conseil` = 3 blocs, `Analyse` = 11 cartes), le meme coup raconte
