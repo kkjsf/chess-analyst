@@ -110,40 +110,148 @@ const BoardRenderer = (() => {
     svgEl.innerHTML = html;
   }
 
-  // Cubic-bezier for a smooth ease-out glide (fast start, gentle settle) — the
-  // same "easeOutCubic" curve CSS transitions use. Applied to the SMIL move so
-  // pieces decelerate into their square instead of stopping abruptly.
+  // ── L'animation des deplacements ──────────────────────────────────────────
+  // Courbe d'ease-out (depart franc, arrivee qui freine) : la piece se pose sur
+  // sa case au lieu de s'arreter net.
   const EASE_OUT = '0.22 0.61 0.36 1';
-  function renderAnimated(svgEl, prevFen, fen, lastMove, duration) {
-    if (duration == null) duration = 240;
-    if (!prevFen || !lastMove || duration <= 0) { render(svgEl, fen, lastMove); return; }
+  // Duree par defaut. Volontairement lente et glissante (l'ancienne valeur,
+  // 240 ms, donnait une impression de saut) ; c'est la seule valeur a bouger
+  // pour rendre TOUTE l'app plus ou moins vive.
+  const ANIM_MS = 340;
+  const FADE_MS = 190;    // effacement d'une piece capturee / retiree
 
-    const { boardHtml, pieces: newPieces } = buildBoard(fen, lastMove);
+  function reducedMotion() {
+    try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+    catch (_) { return false; }
+  }
 
-    const fromCoords = squareToCoords(lastMove.from);
-    const toCoords = squareToCoords(lastMove.to);
-    const fromX = fromCoords.col * SQ;
-    const fromY = fromCoords.row * SQ;
-    const toX = toCoords.col * SQ;
-    const toY = toCoords.row * SQ;
-
-    let movingPiece = null;
-    for (const p of newPieces) {
-      if (p.sq === lastMove.to) { movingPiece = p; break; }
+  // Table case -> piece, en NOMS de cases : l'orientation du plateau
+  // (`flipped`) n'entre en jeu qu'au moment de dessiner.
+  function pieceMap(fen) {
+    const b = fenToBoard(fen);
+    const m = {};
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      if (b[r][c]) m[FILES[c] + (8 - r)] = b[r][c];
     }
-    if (!movingPiece) { render(svgEl, fen, lastMove); return; }
+    return m;
+  }
+  function sqDist(a, b) {
+    return Math.max(Math.abs(FILES.indexOf(a[0]) - FILES.indexOf(b[0])), Math.abs(+a[1] - +b[1]));
+  }
+
+  // Qu'est-ce qui a bouge entre deux positions ? Chaque piece APPARUE est
+  // rattachee a la piece IDENTIQUE la plus proche qui vient de DISPARAITRE.
+  // Quand `lastMove` est connu on l'apparie d'abord (deux tours identiques sur
+  // la meme rangee seraient sinon interchangeables), dans un sens comme dans
+  // l'autre - c'est ce qui fait fonctionner le retour en arriere.
+  // Ce qui reste sans paire : les captures (`removed`, en fondu de sortie) et
+  // les apparitions comme la promotion (`added`, en fondu d'entree).
+  function diffPositions(prevFen, fen, lastMove) {
+    const before = pieceMap(prevFen), after = pieceMap(fen);
+    const gone = [], appeared = [];
+    for (const sq in before) if (after[sq] !== before[sq]) gone.push({ sq, p: before[sq] });
+    for (const sq in after) if (before[sq] !== after[sq]) appeared.push({ sq, p: after[sq] });
+
+    const moves = [];
+    const pair = (fromSq, toSq) => {
+      const g = gone.find(x => !x.used && x.sq === fromSq);
+      const a = appeared.find(x => !x.used && x.sq === toSq);
+      if (!g || !a || g.p !== a.p) return false;
+      g.used = a.used = true;
+      moves.push({ from: g.sq, to: a.sq, piece: a.p });
+      return true;
+    };
+    if (lastMove && lastMove.from && lastMove.to) {
+      pair(lastMove.from, lastMove.to);   // on avance
+      pair(lastMove.to, lastMove.from);   // on revient en arriere
+    }
+    for (const a of appeared) {
+      if (a.used) continue;
+      let best = null, bestD = 99;
+      for (const g of gone) {
+        if (g.used || g.p !== a.p) continue;
+        const d = sqDist(g.sq, a.sq);
+        if (d < bestD) { bestD = d; best = g; }
+      }
+      if (best) { best.used = a.used = true; moves.push({ from: best.sq, to: a.sq, piece: a.p }); }
+    }
+    // Promotion : la piece apparue n'a aucune jumelle disparue, mais un PION de
+    // la meme couleur vient de quitter la 7e (ou la 2e) rangee sur un fichier
+    // voisin. On garde le lien pour pouvoir faire glisser le pion, puis fondre
+    // les deux pieces l'une dans l'autre.
+    const promos = [];
+    for (const a of appeared) {
+      if (a.used || a.p === 'P' || a.p === 'p') continue;
+      const white = a.p === a.p.toUpperCase();
+      const pawn = white ? 'P' : 'p';
+      const homeRank = white ? '7' : '2';
+      let best = null, bestD = 9;
+      for (const g of gone) {
+        if (g.used || g.p !== pawn || g.sq[1] !== homeRank) continue;
+        const d = Math.abs(FILES.indexOf(g.sq[0]) - FILES.indexOf(a.sq[0]));
+        if (d <= 1 && d < bestD) { bestD = d; best = g; }
+      }
+      if (best) {
+        best.used = a.used = true;
+        promos.push({ from: best.sq, to: a.sq, pawn, piece: a.p });
+      }
+    }
+
+    return { moves, promos, added: appeared.filter(a => !a.used), removed: gone.filter(g => !g.used) };
+  }
+
+  function pieceGroup(sq, piece, inner) {
+    const c = squareToCoords(sq);
+    return `<g transform="translate(${c.col * SQ},${c.row * SQ})" data-sq="${sq}" style="pointer-events:none">${inner}${PIECE_DEFS[piece]}</g>`;
+  }
+
+  function renderAnimated(svgEl, prevFen, fen, lastMove, duration) {
+    const ms = duration == null ? ANIM_MS : duration;
+    const samePos = prevFen && prevFen.split(' ')[0] === fen.split(' ')[0];
+    if (!prevFen || ms <= 0 || samePos || reducedMotion()) { render(svgEl, fen, lastMove); return; }
+
+    const { boardHtml, pieces } = buildBoard(fen, lastMove);
+    const d = diffPositions(prevFen, fen, lastMove);
+    if (!d.moves.length && !d.added.length && !d.promos.length) { render(svgEl, fen, lastMove); return; }
+
+    const busy = {};
+    for (const m of d.moves) busy[m.to] = true;
+    for (const a of d.added) busy[a.sq] = true;
+    for (const q of d.promos) busy[q.to] = true;
 
     let html = boardHtml;
-    for (const p of newPieces) {
-      if (p === movingPiece) continue;
-      html += renderPieceHtml(p);
+    // 1. Ce qui ne bouge pas, dessous.
+    for (const p of pieces) if (!busy[p.sq]) html += renderPieceHtml(p);
+    // 2. Les pieces capturees s'EFFACENT au lieu de disparaitre d'un coup.
+    for (const g of d.removed) {
+      html += pieceGroup(g.sq, g.p,
+        `<animate attributeName="opacity" from="1" to="0" dur="${Math.min(FADE_MS, ms)}ms" fill="freeze"/>`);
     }
-
-    const ms = duration;
-    html += `<g transform="translate(${fromX},${fromY})" style="pointer-events:none">
-      <animateTransform attributeName="transform" type="translate" from="${fromX} ${fromY}" to="${toX} ${toY}" dur="${ms}ms" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="${EASE_OUT}"/>
-      ${PIECE_DEFS[movingPiece.piece]}</g>`;
-
+    // 3. Les pieces qui glissent, par-dessus (et avec `data-sq` sur la case
+    //    d'ARRIVEE : un glisser-deposer juste apres doit les retrouver).
+    for (const m of d.moves) {
+      const f = squareToCoords(m.from), t = squareToCoords(m.to);
+      html += `<g transform="translate(${f.col * SQ},${f.row * SQ})" data-sq="${m.to}" style="pointer-events:none">`
+        + `<animateTransform attributeName="transform" type="translate" from="${f.col * SQ} ${f.row * SQ}" to="${t.col * SQ} ${t.row * SQ}" dur="${ms}ms" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="${EASE_OUT}"/>`
+        + `${PIECE_DEFS[m.piece]}</g>`;
+    }
+    // 4. La promotion : le pion glisse, puis les deux pieces se fondent l'une
+    //    dans l'autre sur la seconde moitie du trajet.
+    const half = Math.round(ms / 2);
+    for (const q of d.promos) {
+      const f = squareToCoords(q.from), t = squareToCoords(q.to);
+      html += `<g transform="translate(${f.col * SQ},${f.row * SQ})" style="pointer-events:none">`
+        + `<animateTransform attributeName="transform" type="translate" from="${f.col * SQ} ${f.row * SQ}" to="${t.col * SQ} ${t.row * SQ}" dur="${ms}ms" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="${EASE_OUT}"/>`
+        + `<animate attributeName="opacity" from="1" to="0" begin="${half}ms" dur="${half}ms" fill="freeze"/>`
+        + `${PIECE_DEFS[q.pawn]}</g>`;
+      html += pieceGroup(q.to, q.piece,
+        `<animate attributeName="opacity" from="0" to="1" begin="${half}ms" dur="${half}ms" fill="freeze"/>`);
+    }
+    // 5. Les apparitions sans lien : simple fondu d'entree.
+    for (const a of d.added) {
+      html += pieceGroup(a.sq, a.p,
+        `<animate attributeName="opacity" from="0" to="1" dur="${ms}ms" fill="freeze"/>`);
+    }
     svgEl.innerHTML = html;
   }
 
@@ -423,5 +531,9 @@ const BoardRenderer = (() => {
     }, true);
   }
 
-  return { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag };
+  return { render, renderAnimated, ANIM_MS, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions };
 })();
+
+// Export CommonJS pour les tests hors navigateur (tools/test_core.cjs) : le
+// diff des positions est une fonction pure, elle se teste sans DOM.
+if (typeof module !== 'undefined' && module.exports) module.exports = BoardRenderer;

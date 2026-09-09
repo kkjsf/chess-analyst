@@ -35,7 +35,9 @@ const Replay = (() => {
 
   const DEPTH_MY = 12;              // éval + flèche bleue à mon trait
   const REPLY_MT = 'movetime 700';  // force de la réplique de l'ordi
-  const ANIM_MS = 260;
+  // Duree unique, definie dans board.js. Le garde `typeof` sert aux tests
+  // hors navigateur (tools/test_core.cjs requiert ce module sans BoardRenderer).
+  const ANIM_MS = (typeof BoardRenderer !== 'undefined' && BoardRenderer.ANIM_MS) || 340;
 
   // ── helpers d'affichage (calqués sur l'explorateur d'ouverture) ──
   function fr(san) { return (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(san) : san; }
@@ -414,6 +416,12 @@ const Replay = (() => {
   function renderBoard(lastMove, animateFrom) {
     if (animateFrom) BoardRenderer.renderAnimated(boardSvg, animateFrom, curFen(), lastMove, ANIM_MS);
     else BoardRenderer.render(boardSvg, curFen(), lastMove);
+    syncControls();
+  }
+
+  // Les controles seuls, sans redessiner le plateau : un rendu sec a mon trait
+  // effacait l'animation de la reponse de l'ordi dans la meme frame.
+  function syncControls() {
     const undoBtn = $('#rp-undo'); if (undoBtn) undoBtn.disabled = hist.length <= 1 || busy;
     const resetBtn = $('#rp-reset'); if (resetBtn) resetBtn.disabled = hist.length <= 1 || busy;
     const turnEl = $('#rp-turn');
@@ -449,7 +457,7 @@ const Replay = (() => {
     BoardRenderer.clearArrows(arrowsSvg);
     if (gameOver()) return terminalComment();
     busy = true;
-    renderBoard(null);
+    syncControls();
     setStatus('⏳ Le moteur regarde la position…');
     const my = ++token;
     const fen = curFen();
@@ -466,7 +474,7 @@ const Replay = (() => {
     myBestUci = res && res.bestMove ? res.bestMove : null;
     busy = false;
     drawMyArrow();
-    renderBoard(null);
+    syncControls();
     if (mode === 'convert') {
       // startEvalMe est figé au premier passage : c'est la référence du bilan
       // de fin et de l'alerte « ton avantage file ».

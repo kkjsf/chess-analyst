@@ -127,6 +127,38 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v235-v236 - LES DEPLACEMENTS DE PIECES GLISSENT, PARTOUT.** Demande du user (« + lent /
+  glissant et pas de teleportation »). `js/board.js` ne faisait glisser QUE la piece nommee par
+  `lastMove`, en 240 ms, et seulement si l'appelant pensait a passer la position precedente : tout
+  le reste se teleportait - la **tour du roque**, le **pion pris en passant**, la piece
+  **capturee** (qui disparaissait d'un coup), la **promotion**, et **tout retour en arriere**
+  (l'ecran d'analyse n'animait que le pas EN AVANT).
+  - **Nouvelle approche : on DIFFE les deux positions** (`diffPositions`, fonction pure exportee)
+    et on anime tout ce qui a bouge. Plus besoin de savoir quel coup a ete joue, donc ca marche
+    dans les deux sens, sur le roque (2 pieces qui glissent), la prise en passant (le pion pris
+    s'efface sur SA case) et la promotion (le pion **glisse** jusqu'a la case, puis les deux
+    pieces se fondent l'une dans l'autre a mi-parcours). L'appariement suit `lastMove` en
+    priorite, sinon la piece identique la plus proche - sinon deux tours de la meme rangee
+    seraient interchangeables.
+  - **Une seule duree pour toute l'app** : `BoardRenderer.ANIM_MS = 340` (contre 240/250/260
+    selon l'ecran), ease-out conserve, `prefers-reduced-motion` respecte **dans board.js** (donc
+    pour tous les appelants, plus seulement l'ecran d'analyse). Les pieces capturees s'effacent en
+    190 ms au lieu de disparaitre.
+  - **Les 6 ecrans passent en anime** : analyse (avant ET arriere ; un SAUT reste instantane, on
+    n'anime pas un curseur de timeline), rejeu d'une ligne de cours, exercices de tactique (mon
+    coup, la reponse, la solution deroulee, l'exploration libre), entrainement (solution pas a
+    pas, revelation du meilleur coup, exploration libre), mode entraineur et « Rejoue ta defaite ».
+  - **Piege trouve en jouant** : dans le mode entraineur le glissement de la reponse de l'ordi
+    etait **efface dans la meme frame**. `onMyTurn()` commencait par un rendu SEC du plateau pour
+    remettre a jour le libelle du trait et les boutons, alors que la position n'avait pas change.
+    Nouveau `syncControls()` dans `coachgame.js` et `replay.js` : les controles se mettent a jour
+    sans redessiner le plateau. **A retenir : un `render()` d'apparence inoffensive juste apres un
+    `renderAnimated()` annule l'animation.**
+  - Les pieces animees portent `data-sq` sur leur case d'ARRIVEE, donc un glisser-deposer juste
+    apres les retrouve (verifie en jouant). 10 nouveaux tests unitaires sur `diffPositions`
+    (roque court et long, prise en passant, promotion, retour en arriere, deux tours identiques,
+    positions sans rapport, position inchangee) - **76 tests OK**. `js/board.js` a desormais un
+    `module.exports` pour etre testable hors navigateur.
 - **v233-v234 (SHIPPED `e60fe20`, verifie en live) - LE MODE ENTRAINEUR PREND SON PROPRE ONGLET, l'ancien Coach devient
   « Statistiques ».** Demande du user. La barre de navigation passe a 5 entrees :
   **Analyser | Coach | Statistiques | Apprendre | Entrainer**. Les cles internes suivent les

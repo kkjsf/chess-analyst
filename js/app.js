@@ -872,11 +872,19 @@ const App = (() => {
       lastMove = r.move;
     }
 
-    // Slide the piece only on a single-step forward move; jumps render instantly.
-    if (!prefersReducedMotion() && index === lastRenderIndex + 1 && index > 0 && lastMove) {
-      const prevFen = index >= 2 ? currentAnalysis[index - 2].fen
-        : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-      BoardRenderer.renderAnimated($('#board-svg'), prevFen, fen, lastMove, 240);
+    // Un PAS, dans un sens ou dans l'autre, glisse ; un saut (curseur de la
+    // timeline, clic dans la liste des coups) reste instantane. Le retour en
+    // arriere n'etait pas anime : c'etait la moitie des « teleportations ».
+    const step = index - lastRenderIndex;
+    if (!prefersReducedMotion() && (step === 1 || step === -1)) {
+      const fenAt = (i) => (i <= 0
+        ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+        : (currentAnalysis[i - 1] || {}).fen);
+      const prevFen = fenAt(lastRenderIndex);
+      // En marche arriere, le coup a annuler est celui qui menait a la position
+      // qu'on quitte : c'est lui qui dit quelle piece revient.
+      const mv = step === 1 ? lastMove : ((currentAnalysis[lastRenderIndex - 1] || {}).move || null);
+      BoardRenderer.renderAnimated($('#board-svg'), prevFen, fen, step === 1 ? lastMove : mv);
     } else {
       BoardRenderer.render($('#board-svg'), fen, lastMove);
     }
@@ -1582,7 +1590,7 @@ const App = (() => {
 
     let idx = 0;
     let boardActive = true; // false in lesson sections that hide the board (keyboard nav off)
-    const ANIM_MS = 250;
+    const ANIM_MS = BoardRenderer.ANIM_MS;
 
     function renderStep(animate) {
       const pos = positions[idx];

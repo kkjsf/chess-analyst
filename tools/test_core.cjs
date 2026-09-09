@@ -25,6 +25,8 @@ const Analyzer = require(path.join(ROOT, 'js/analysis.js'));
 // Il lit Analyzer.cpToWinPct au travers du global, comme dans le navigateur.
 global.Analyzer = Analyzer;
 const CoachGame = require(path.join(ROOT, 'js/coachgame.js'));
+// board.js : seule sa fonction pure `diffPositions` est testee (aucun DOM).
+const BoardRenderer = require(path.join(ROOT, 'js/board.js'));
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -298,6 +300,82 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   check(G, 'les memes 63 cp dans une position perdue ne comptent plus', pts(-1200, -1263) < 2, true);
   check(G, 'un coup qui ameliore ne perd rien', wl(0, 50), 0);
   check(G, 'eval manquante : pas de note', wl(null, -800), null);
+}
+
+// ────────────── animation des deplacements (js/board.js) ────────────────────
+// Avant, seule la piece nommee par `lastMove` glissait : la tour du roque, le
+// pion pris en passant, la piece capturee et TOUT retour en arriere se
+// teleportaient. `diffPositions` compare les deux positions et doit retrouver
+// seule ce qui a bouge - y compris quand personne ne lui dit quel coup a ete
+// joue. C'est exactement le genre de fonction qu'on casse en la retouchant.
+{
+  const G = 'ANIMATION';
+  const D = BoardRenderer.diffPositions;
+  const fenAfter = (fen, mv) => { const g = new global.Chess(fen); g.move(mv); return g.fen(); };
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const key = (d) => ({
+    moves: d.moves.map(m => m.from + m.to + m.piece).sort(),
+    promos: (d.promos || []).map(q => q.from + q.to + q.pawn + '>' + q.piece),
+    added: d.added.map(a => a.sq + a.p).sort(),
+    removed: d.removed.map(r => r.sq + r.p).sort(),
+  });
+
+  // Un coup simple : une seule piece glisse.
+  check(G, '1.e4 : une piece qui glisse',
+    key(D(START, fenAfter(START, 'e4'), { from: 'e2', to: 'e4' })),
+    { moves: ['e2e4P'], promos: [], added: [], removed: [] });
+
+  // Le roque : DEUX pieces bougent, la tour se teleportait.
+  const preCastle = 'rnbqkbnr/pppp1ppp/8/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1';
+  check(G, 'petit roque : le roi ET la tour glissent',
+    key(D(preCastle, fenAfter(preCastle, 'O-O'), { from: 'e1', to: 'g1' })),
+    { moves: ['e1g1K', 'h1f1R'], promos: [], added: [], removed: [] });
+  const preLong = 'r3kbnr/pppqpppp/2np4/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1';
+  check(G, 'grand roque : idem cote noir',
+    key(D(preLong, fenAfter(preLong, 'O-O-O'), { from: 'e8', to: 'c8' })),
+    { moves: ['a8d8r', 'e8c8k'], promos: [], added: [], removed: [] });
+
+  // La prise en passant : le pion capture n'est PAS sur la case d'arrivee.
+  const preEp = 'rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3';
+  check(G, 'prise en passant : le pion pris s\'efface sur SA case',
+    key(D(preEp, fenAfter(preEp, { from: 'e5', to: 'd6' }), { from: 'e5', to: 'd6' })),
+    { moves: ['e5d6P'], promos: [], added: [], removed: ['d5p'] });
+
+  // La promotion : le pion glisse puis se change en dame (pas deux
+  // apparitions/disparitions sans lien).
+  const prePromo = 'rnbqkbnr/pP4pp/8/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1';
+  check(G, 'promotion avec prise : le pion glisse et se transforme',
+    key(D(prePromo, fenAfter(prePromo, { from: 'b7', to: 'a8', promotion: 'q' }), { from: 'b7', to: 'a8' })),
+    { moves: [], promos: ['b7a8P>Q'], added: [], removed: ['a8r'] });
+
+  // Le RETOUR EN ARRIERE : c'etait la moitie des teleportations.
+  const afterE5 = fenAfter(fenAfter(START, 'e4'), 'e5');
+  const afterE4 = fenAfter(START, 'e4');
+  check(G, 'retour en arriere : la piece revient en glissant',
+    key(D(afterE5, afterE4, { from: 'e7', to: 'e5' })),
+    { moves: ['e5e7p'], promos: [], added: [], removed: [] });
+
+  // Deux pieces identiques : l'appariement doit suivre `lastMove`, pas la
+  // distance (deux tours sur la meme rangee sont interchangeables).
+  const twoRooks = '4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1';
+  check(G, 'deux tours identiques : c\'est bien celle du coup qui bouge',
+    key(D(twoRooks, fenAfter(twoRooks, { from: 'a1', to: 'd1' }), { from: 'a1', to: 'd1' })),
+    { moves: ['a1d1R'], promos: [], added: [], removed: [] });
+
+  // Position sans rapport (on saute d'un exercice a l'autre) : on ne doit pas
+  // inventer des trajectoires absurdes, juste des apparitions/disparitions.
+  const unrelated = D('8/8/8/4k3/8/8/8/4K3 w - - 0 1', '8/8/8/8/8/2K5/8/7k w - - 0 1', null);
+  check(G, 'positions sans rapport : rien ne glisse plus loin que 8 cases',
+    unrelated.moves.every(m => Math.abs(+m.from[1] - +m.to[1]) <= 7), true);
+
+  // Meme position : aucune animation a jouer.
+  const same = D(START, START, null);
+  check(G, 'meme position : rien a animer',
+    key(same), { moves: [], promos: [], added: [], removed: [] });
+
+  // La duree par defaut est la source unique partagee par les 6 ecrans.
+  check(G, 'une duree par defaut, lente et glissante',
+    BoardRenderer.ANIM_MS >= 300 && BoardRenderer.ANIM_MS <= 450, true);
 }
 
 // ─────────────────────────── rapport ────────────────────────────────────────

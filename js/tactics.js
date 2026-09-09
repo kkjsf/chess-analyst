@@ -771,7 +771,7 @@ const Tactics = (() => {
     const before = game.fen();
     const done = game.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' });
     if (altSan === true) altSan = done ? done.san : null;
-    BoardRenderer.render($('#tac-board'), game.fen(), { from: move.from, to: move.to });
+    BoardRenderer.renderAnimated($('#tac-board'), before, game.fen(), { from: move.from, to: move.to });
     // Ce que le coup vient de créer : flèches + phrase, tout de suite, pendant
     // que la figure est encore sur le plateau.
     lastThreats = threats(before, game.fen(), move);
@@ -786,8 +786,9 @@ const Tactics = (() => {
     setTimeout(() => {
       if (myToken !== token) return; // moved on to another puzzle meanwhile
       if (reply) {
+        const beforeReply = game.fen();
         game.move({ from: reply.from, to: reply.to, promotion: reply.promotion || 'q' });
-        BoardRenderer.render($('#tac-board'), game.fen(), { from: reply.from, to: reply.to });
+        BoardRenderer.renderAnimated($('#tac-board'), beforeReply, game.fen(), { from: reply.from, to: reply.to });
         ply++;
       }
       hideThreats();
@@ -875,7 +876,7 @@ const Tactics = (() => {
       if (m) {
         const before = game.fen();
         game.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' });
-        BoardRenderer.render($('#tac-board'), game.fen(), { from: m.from, to: m.to });
+        BoardRenderer.renderAnimated($('#tac-board'), before, game.fen(), { from: m.from, to: m.to });
         if (mine) {
           lastThreats = threats(before, game.fen(), m);
           if (lastThreats) lastThreats.final = ply + 1 >= list[idx].sol.length;
@@ -931,8 +932,9 @@ const Tactics = (() => {
   }
   function renderFree(lastMove) {
     const fen = freeHist[freeHist.length - 1];
+    const prev = freeHist.length > 1 ? freeHist[freeHist.length - 2] : null;
     game = new Chess(fen);
-    BoardRenderer.render($('#tac-board'), fen, lastMove ? { from: lastMove.from, to: lastMove.to } : undefined);
+    BoardRenderer.renderAnimated($('#tac-board'), prev, fen, lastMove ? { from: lastMove.from, to: lastMove.to } : undefined);
     BoardRenderer.clearArrows($('#tac-arrows'));
     // Sur un coup libre aussi : ce que le coup vient de menacer.
     const box = $('#tac-threats');

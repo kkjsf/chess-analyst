@@ -30,7 +30,9 @@ const CoachGame = (() => {
   const KEY = 'ca_coachgames';       // magasin separe (parties + bilans)
   const CFG_KEY = 'ca_coachgame_cfg';
   const DEPTH_ME = 12;               // profondeur d'analyse de MES coups (pleine force)
-  const ANIM_MS = 260;
+  // Duree unique, definie dans board.js. Le garde `typeof` sert aux tests
+  // hors navigateur (tools/test_core.cjs requiert ce module sans BoardRenderer).
+  const ANIM_MS = (typeof BoardRenderer !== 'undefined' && BoardRenderer.ANIM_MS) || 340;
 
   // ── L'echelle de force ────────────────────────────────────────────────────
   // Point de depart a calibrer en jouant : `skill` = Skill Level UCI, `mt` =
@@ -488,6 +490,13 @@ const CoachGame = (() => {
   function renderBoard(lastMove, animateFrom) {
     if (animateFrom) BoardRenderer.renderAnimated(boardSvg, animateFrom, curFen(), lastMove, ANIM_MS);
     else BoardRenderer.render(boardSvg, curFen(), lastMove);
+    syncControls();
+  }
+
+  // Les controles seuls, SANS toucher au plateau : appele quand la position n'a
+  // pas change (a mon trait, juste apres l'animation de la reponse). Un rendu
+  // sec a ce moment-la effacait le glissement de l'ordi dans la meme frame.
+  function syncControls() {
     const u = $('#cg-undo'); if (u) u.disabled = busy || !game || game.history().length < 1;
     const turn = $('#cg-turn');
     if (turn) turn.textContent = gameOver() ? '' : (myTurn() ? 'À toi' : 'Coach…');
@@ -570,7 +579,7 @@ const CoachGame = (() => {
     const box = $('#cg-hintout'); if (box) { box.hidden = true; box.innerHTML = ''; }
 
     busy = true;
-    renderBoard(null);
+    syncControls();
     setStatus('⏳ Le moteur regarde la position…');
     const my = ++token;
     const fen = curFen();
@@ -591,7 +600,7 @@ const CoachGame = (() => {
     myBestUci = res && res.bestMove ? res.bestMove : null;
     myBestPv = res && res.pv ? res.pv : '';
     busy = false;
-    renderBoard(null);
+    syncControls();
 
     if (cfg.aide === 'assiste') {
       drawAssist(fen);
@@ -745,7 +754,7 @@ const CoachGame = (() => {
       });
     }
 
-    if (gameOver()) { busy = false; renderBoard(null); setVerdict(v.html, v.cls); setStatus(''); return finish('board'); }
+    if (gameOver()) { busy = false; syncControls(); setVerdict(v.html, v.cls); setStatus(''); return finish('board'); }
 
     // Le coach repond, a SON niveau.
     const reply = await coachReply(fenAfter, my);
@@ -775,7 +784,7 @@ const CoachGame = (() => {
 
     setVerdict(v.html + replyHtml + threatHtml + (v.slip ? RETRY : ''), v.cls);
     busy = false;
-    if (gameOver()) { renderBoard(null); setStatus(''); return finish('board'); }
+    if (gameOver()) { syncControls(); setStatus(''); return finish('board'); }
     onMyTurn();
   }
 
@@ -882,7 +891,7 @@ const CoachGame = (() => {
   // Le coach ouvre la partie (je joue les Noirs).
   async function coachMove() {
     busy = true;
-    renderBoard(null);
+    syncControls();
     setStatus('⏳ Le coach ouvre…');
     const my = ++token;
     const r = await coachReply(curFen(), my);

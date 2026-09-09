@@ -1127,10 +1127,11 @@ const Training = (() => {
         const rm = g.move({ from: step.replyUci.slice(0, 2), to: step.replyUci.slice(2, 4), promotion: step.replyUci[4] || 'q' });
         replySan = rm ? enToFr(rm.san) : null;
       }
+      const prevFen = liveFen;
       liveFen = g.fen();
       solStep++;
       selected = null;
-      BoardRenderer.render(board, liveFen);
+      BoardRenderer.renderAnimated(board, prevFen, liveFen);
       BoardRenderer.clearArrows(arrows);
       setFeedback('right', `✔ Bien vu !${replySan ? ` L'adversaire répond <b>${replySan}</b>.` : ''} Continue — coup ${solStep + 1} sur ${solLine.length}.`);
     } catch (_) { revealSolution(true); }
@@ -1159,7 +1160,7 @@ const Training = (() => {
         const ru = solLine[s].replyUci;
         if (ru) { const rm = g.move({ from: ru.slice(0, 2), to: ru.slice(2, 4), promotion: ru[4] || 'q' }); if (rm) lineSans.push(enToFr(rm.san)); }
       }
-      if (afterFirstFen) BoardRenderer.render(board, afterFirstFen, firstMove);
+      if (afterFirstFen) BoardRenderer.renderAnimated(board, current.fen, afterFirstFen, firstMove);
     } catch (_) {}
     BoardRenderer.drawArrows(arrows, [{ from: current.bestUci.slice(0, 2), to: current.bestUci.slice(2, 4), color: '#56b886', opacity: 0.9, width: 7 }]);
 
@@ -1339,9 +1340,10 @@ const Training = (() => {
 
   function renderExplore(lastMove) {
     const fen = exploreHist[exploreHist.length - 1];
+    const prev = exploreHist.length > 1 ? exploreHist[exploreHist.length - 2] : null;
     liveFen = fen;
     selected = null;
-    BoardRenderer.render(board, fen, lastMove);
+    BoardRenderer.renderAnimated(board, prev, fen, lastMove);
     BoardRenderer.clearArrows(arrows);
     onMove = exploreMove;
     const canUndo = exploreHist.length > 1;
