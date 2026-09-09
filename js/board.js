@@ -113,12 +113,14 @@ const BoardRenderer = (() => {
   // ── L'animation des deplacements ──────────────────────────────────────────
   // Courbe d'ease-out (depart franc, arrivee qui freine) : la piece se pose sur
   // sa case au lieu de s'arreter net.
-  const EASE_OUT = '0.22 0.61 0.36 1';
-  // Duree par defaut. Volontairement lente et glissante (l'ancienne valeur,
-  // 240 ms, donnait une impression de saut) ; c'est la seule valeur a bouger
+  // Courbe plus douce que l'easeOutCubic d'origine : le depart est franc mais
+  // la fin s'etire, ce qui donne la sensation de « glisse » demandee.
+  const EASE_OUT = '0.16 0.84 0.24 1';
+  // Duree par defaut. Deux passes de reglage avec le user : 240 ms donnaient un
+  // saut, 340 ms restaient trop vifs -> 460 ms. C'est la seule valeur a bouger
   // pour rendre TOUTE l'app plus ou moins vive.
-  const ANIM_MS = 340;
-  const FADE_MS = 190;    // effacement d'une piece capturee / retiree
+  const ANIM_MS = 460;
+  const FADE_MS = 260;    // effacement d'une piece capturee / retiree
 
   function reducedMotion() {
     try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }

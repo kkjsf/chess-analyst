@@ -120,6 +120,13 @@ const CoachGame = (() => {
   let bookPly = 0, bookOut = null;  // bookOut = 'me' | 'coach' | null
   let lastWasBook = false;          // mon dernier coup etait de la theorie
   let threatArrows = false;         // des fleches de menace sont affichees : ne pas les effacer
+  // Journal des coups pour le suivi lateral : { n, san, mine, k } ou `k` est une
+  // cle de Analyzer.MOVE_TYPES (best, excellent, good, book, inaccuracy,
+  // mistake, blunder, miss...). Le coup du coach est note lui aussi : son eval
+  // « avant » est celle qu'on mesure apres MON coup, son eval « apres » celle du
+  // tour suivant - deux recherches qu'on fait de toute facon.
+  let moveLog = [];
+  let pendingOpp = null;            // { idx, evalBefore } : le coup du coach en attente de note
   let saved = false;
 
   // ── Utilitaires ──────────────────────────────────────────────────────────
@@ -287,24 +294,45 @@ const CoachGame = (() => {
           <button class="train-btn ghost cg-histbtn" id="cg-hist-open" type="button">🗄 Tes parties avec le coach</button>
         </div>
 
-        <!-- 2. partie -->
+        <!-- 2. partie : plateau a gauche, suivi des coups a droite (desktop) -->
         <div id="cg-game" hidden>
-          <div class="cg-bookbar" id="cg-bookbar" hidden></div>
-          <div class="guess-board-wrap">
-            <svg viewBox="0 0 360 360" id="cg-board"></svg>
-            <svg viewBox="0 0 360 360" id="cg-arrows" class="arrow-overlay"></svg>
+          <div class="cg-main">
+            <div class="cg-bookbar" id="cg-bookbar" hidden></div>
+            <div class="cg-pbar" id="cg-pbar-top">
+              <span class="cg-who" id="cg-top-name"></span>
+              <span class="cg-capt" id="cg-top-capt"></span>
+              <span class="cg-mat" id="cg-top-mat"></span>
+            </div>
+            <div class="guess-board-wrap cg-boardwrap">
+              <div class="eval-bar-container cg-evalbar" title="Avantage vu par le moteur">
+                <div class="eval-bar-fill" id="cg-eval-fill"></div>
+              </div>
+              <svg viewBox="0 0 360 360" id="cg-board"></svg>
+              <svg viewBox="0 0 360 360" id="cg-arrows" class="arrow-overlay"></svg>
+            </div>
+            <div class="cg-pbar" id="cg-pbar-bottom">
+              <span class="cg-who" id="cg-bot-name"></span>
+              <span class="cg-capt" id="cg-bot-capt"></span>
+              <span class="cg-mat" id="cg-bot-mat"></span>
+            </div>
+            <div class="guess-feedback rp-comment">
+              <div class="rp-verdict" id="cg-verdict"></div>
+              <div class="rp-status" id="cg-status"></div>
+              <div class="rp-hintbox" id="cg-hintout" hidden></div>
+            </div>
+            <div class="rp-actions">
+              <button class="train-btn ghost" id="cg-hint" hidden>💡 Indice</button>
+              <button class="train-btn ghost" id="cg-undo">↶ Annuler</button>
+              <button class="train-btn ghost" id="cg-swap" hidden>👁 Aide</button>
+              <button class="train-btn ghost" id="cg-resign">🏳 Abandonner</button>
+            </div>
           </div>
-          <div class="guess-feedback rp-comment">
-            <div class="rp-verdict" id="cg-verdict"></div>
-            <div class="rp-status" id="cg-status"></div>
-            <div class="rp-hintbox" id="cg-hintout" hidden></div>
-          </div>
-          <div class="rp-actions">
-            <button class="train-btn ghost" id="cg-hint" hidden>💡 Indice</button>
-            <button class="train-btn ghost" id="cg-undo">↶ Annuler</button>
-            <button class="train-btn ghost" id="cg-swap" hidden>👁 Aide</button>
-            <button class="train-btn ghost" id="cg-resign">🏳 Abandonner</button>
-          </div>
+          <aside class="cg-side">
+            <div class="cg-side-head">Suivi des coups</div>
+            <div class="cg-tally" id="cg-tally"></div>
+            <div class="cg-mvlist" id="cg-moves"></div>
+            <div class="cg-legend" id="cg-legend"></div>
+          </aside>
         </div>
 
         <!-- 3. bilan -->
@@ -344,7 +372,15 @@ const CoachGame = (() => {
     $('#cg-book').onchange = () => { $('#cg-bookmode').hidden = !$('#cg-book').value; };
     // « Reprendre ce coup » est injecte dans le verdict : delegation.
     $('#cg-verdict').addEventListener('click', (e) => {
-      if (e.target && e.target.id === 'cg-retry' && !busy) undo();
+      if (!e.target) return;
+      if (e.target.id === 'cg-retry' && !busy) undo();
+      // « Continuer » ne fait que retirer la proposition de reprise : la partie
+      // n'a jamais ete interrompue, c'est l'affichage qui laissait croire qu'il
+      // fallait choisir.
+      if (e.target.id === 'cg-keepgoing') {
+        const row = e.target.closest('.rp-retry-row');
+        if (row) row.remove();
+      }
     });
 
     if (!dragBound) {
@@ -397,6 +433,7 @@ const CoachGame = (() => {
       syncSwapBtn();
       renderBoard(null);
       renderBookBar();
+      renderMoves();
       if (myTurn() && !busy) onMyTurn();
       return;
     }
@@ -475,6 +512,7 @@ const CoachGame = (() => {
 
     game = new Chess();
     stats = { moves: 0, best: 0, slips: 0, hints: 0, mistakes: [] };
+    moveLog = []; pendingOpp = null;
     track = []; saved = false; curEvalMe = null; myBestUci = null; hintLevel = 0; hintArrow = false;
     busy = false; token++; threatArrows = false;
 
@@ -484,6 +522,7 @@ const CoachGame = (() => {
     setVerdict('');
     renderBoard(null);
     renderBookBar();
+    renderMoves();          // l'etat vide + la legende, des le premier ecran
     if (myTurn()) onMyTurn(); else coachMove();
   }
 
@@ -493,10 +532,60 @@ const CoachGame = (() => {
     syncControls();
   }
 
+  // ── Barre d'avantage + materiel pris, en direct ──────────────────────────
+  // La barre reprend le composant de l'ecran d'analyse : la part claire est
+  // celle des Blancs, ancree du cote des Blancs (donc en haut si tu joues les
+  // Noirs). Faute d'eval moteur (au tout debut), on retombe sur le materiel,
+  // comme l'ecran d'analyse.
+  function syncEvalBar() {
+    const fill = $('#cg-eval-fill');
+    if (!fill) return;
+    const fen = curFen();
+    // curEvalMe est vue de MON camp : la barre se lit du cote des Blancs.
+    const cpWhite = curEvalMe == null ? null : (mySide === 'w' ? curEvalMe : -curEvalMe);
+    let pct;
+    if (cpWhite != null) {
+      pct = Math.max(5, Math.min(95, 50 + 50 * (2 / (1 + Math.exp(-0.004 * cpWhite)) - 1)));
+    } else {
+      const mat = (typeof Analyzer !== 'undefined' && Analyzer.materialCount) ? Analyzer.materialCount(fen) : { diff: 0 };
+      pct = Math.max(5, Math.min(95, 50 + (mat.diff || 0) * 5));
+    }
+    fill.style.height = pct + '%';
+    if (BoardRenderer.isFlipped()) { fill.style.top = '0'; fill.style.bottom = 'auto'; }
+    else { fill.style.bottom = '0'; fill.style.top = 'auto'; }
+  }
+
+  // Le materiel : les pieces prises par chaque camp + l'ecart en points, sous
+  // le nom du camp qui est de ce cote de l'echiquier.
+  function syncMaterial() {
+    const fen = curFen();
+    let capt = { white: '', black: '' }, diff = 0;
+    try { capt = BoardRenderer.getCapturedPieces(fen); } catch (_) {}
+    try {
+      const m = (typeof Analyzer !== 'undefined' && Analyzer.materialCount) ? Analyzer.materialCount(fen) : null;
+      diff = m ? (m.diff || 0) : 0;   // > 0 = les Blancs devant
+    } catch (_) {}
+    const meIsWhite = mySide === 'w';
+    const myDiff = meIsWhite ? diff : -diff;
+    const set = (nameEl, captEl, matEl, label, captured, d) => {
+      const n = $(nameEl), c = $(captEl), mt = $(matEl);
+      if (n) n.textContent = label;
+      if (c) c.textContent = captured;
+      if (mt) { mt.textContent = d > 0 ? '+' + d : ''; mt.hidden = !(d > 0); }
+    };
+    // En haut : l'adversaire (le plateau est retourne quand je joue les Noirs).
+    set('#cg-top-name', '#cg-top-capt', '#cg-top-mat',
+      'Coach ~' + (prm ? prm.elo : ''), meIsWhite ? capt.black : capt.white, -myDiff);
+    set('#cg-bot-name', '#cg-bot-capt', '#cg-bot-mat',
+      'Toi', meIsWhite ? capt.white : capt.black, myDiff);
+  }
+
   // Les controles seuls, SANS toucher au plateau : appele quand la position n'a
   // pas change (a mon trait, juste apres l'animation de la reponse). Un rendu
   // sec a ce moment-la effacait le glissement de l'ordi dans la meme frame.
   function syncControls() {
+    syncMaterial();
+    syncEvalBar();
     const u = $('#cg-undo'); if (u) u.disabled = busy || !game || game.history().length < 1;
     const turn = $('#cg-turn');
     if (turn) turn.textContent = gameOver() ? '' : (myTurn() ? 'À toi' : 'Coach…');
@@ -525,6 +614,65 @@ const CoachGame = (() => {
     b.textContent = hintLevel >= 3 ? '💡 Indice donné'
       : hintLevel === 2 ? '💡 Donne-moi le coup'
       : hintLevel === 1 ? '💡 Encore un indice' : '💡 Indice';
+  }
+
+  // ── Le suivi des coups (colonne de droite, desktop) ─────────────────────
+  // Meme lecture que l'ecran d'analyse : un glyphe et une couleur par coup,
+  // tires de Analyzer.MOVE_CLASS. Masque sous 1000 px (voir le CSS) : sur
+  // telephone il n'y a pas la place, et le bilan de fin fait le meme travail.
+  function logMove(san, mine, k) {
+    const n = Math.ceil(game.history().length / 2);
+    moveLog.push({ n, san: fr(san), mine, k: k || null });
+    renderMoves();
+    return moveLog.length - 1;
+  }
+  function gradeLogged(idx, k) {
+    if (idx == null || !moveLog[idx]) return;
+    moveLog[idx].k = k;
+    renderMoves();
+  }
+
+  function mvCell(e) {
+    if (!e) return '<span class="cg-mv empty"></span>';
+    const T = e.k ? typeOf(e.k) : null;
+    const cls = 'cg-mv' + (e.k ? ' ' + e.k : '') + (e.mine ? ' mine' : '');
+    const mark = T && T.mark ? `<i>${T.mark}</i>` : '';
+    const title = T ? T.label : '';
+    return `<span class="${cls}" title="${title}">${e.san}${mark}</span>`;
+  }
+
+  function renderMoves() {
+    const host = $('#cg-moves');
+    if (!host) return;
+    // Une ligne par coup complet : le camp qui a commence tient la 1re colonne.
+    const rows = [];
+    for (let i = 0; i < moveLog.length; i += 2) {
+      const a = moveLog[i], b = moveLog[i + 1];
+      rows.push(`<div class="cg-mvrow"><span class="cg-no">${a.n}.</span>${mvCell(a)}${mvCell(b)}</div>`);
+    }
+    host.innerHTML = rows.join('') || `<p class="cg-mv-empty">Les coups s'afficheront ici, notés au fur et à mesure.</p>`;
+    host.scrollTop = host.scrollHeight;
+
+    // Le decompte de MES coups, dans l'ordre du dictionnaire de l'app.
+    const tally = $('#cg-tally');
+    if (tally) {
+      const order = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'miss', 'mistake', 'blunder'];
+      const cnt = {};
+      for (const e of moveLog) if (e.mine && e.k) cnt[e.k] = (cnt[e.k] || 0) + 1;
+      const cells = order.filter(k => cnt[k]).map(k => {
+        const T = typeOf(k);
+        return `<span class="eval-badge ${k}" title="${T.label}">${T.mark} ${cnt[k]}</span>`;
+      });
+      tally.innerHTML = cells.length ? cells.join('') : '';
+    }
+    const leg = $('#cg-legend');
+    if (leg && !leg.dataset.done) {
+      leg.dataset.done = '1';
+      leg.innerHTML = ['best', 'good', 'inaccuracy', 'mistake', 'blunder'].map(k => {
+        const T = typeOf(k);
+        return `<span class="cg-leg"><i class="eval-badge ${k}">${T.mark}</i>${T.label}</span>`;
+      }).join('');
+    }
   }
 
   // ── Le bandeau du livre ──────────────────────────────────────────────────
@@ -599,6 +747,14 @@ const CoachGame = (() => {
     curEvalMe = meScore(res, fen);
     myBestUci = res && res.bestMove ? res.bestMove : null;
     myBestPv = res && res.pv ? res.pv : '';
+    // Le coup que le coach vient de jouer se note maintenant : son eval avant
+    // (mesuree juste apres mon coup) contre son eval apres (celle-ci, vue de son
+    // cote). Zero recherche supplementaire.
+    if (pendingOpp && curEvalMe != null && pendingOpp.evalBefore != null) {
+      const w = winLoss(pendingOpp.evalBefore, -curEvalMe);
+      gradeLogged(pendingOpp.idx, classify(false, w, false, 0.5, false, false, false));
+      pendingOpp = null;
+    }
     busy = false;
     syncControls();
 
@@ -639,14 +795,14 @@ const CoachGame = (() => {
       return Tactics.threats(fen, g.fen(), { from: m.from, to: m.to });
     } catch (_) { return null; }
   }
-  function whyBest(fen, uci) {
+  function whyBest(fen, uci, pvStr) {
     const t = threatsOfBest(fen, uci);
-    if (t && (t.count || t.mate) && Tactics.threatSentence) {
-      const s = Tactics.threatSentence(t, t.final !== false);
-      if (s) return s;
-    }
-    const pv = FreePlay.pvToFr(fen, myBestPv, 4);
-    return pv.length > 1 ? `Suite du moteur : <b>${pv.join(' ')}</b>.` : '';
+    let head = '';
+    if (t && (t.count || t.mate) && Tactics.threatSentence) head = Tactics.threatSentence(t, t.final !== false) || '';
+    const pv = FreePlay.pvToFr(fen, pvStr == null ? myBestPv : pvStr, 4);
+    const line = pv.length > 1 ? ` <span class="rp-hint">(suite : ${pv.join(' ')})</span>` : '';
+    if (head) return head + line;
+    return pv.length > 1 ? `la suite du moteur est <b>${pv.join(' ')}</b>.` : '';
   }
 
   // ── Indice en trois temps (mode libre) ───────────────────────────────────
@@ -689,7 +845,14 @@ const CoachGame = (() => {
       if (typeof Openings === 'undefined' || !Openings.detect) return false;
       const h = game.history();
       const det = Openings.detect(h);
-      return !!(det && det.moves >= 3 && h.length <= det.moves);
+      if (!det) return false;
+      if (det.moves >= 3 && h.length <= det.moves) return true;
+      // Les tout premiers coups : `Openings.detect` reconnait « Ouverture Pion
+      // Roi » (moves 1) mais rend `???` sur un coup exotique. Un coup du
+      // catalogue dans les 6 premiers demi-coups est de la theorie - le moteur
+      // chipote 7 points de chances de gain entre 1.e4 et 1.d4, et personne ne
+      // croira un coach qui appelle ca une imprecision.
+      return h.length <= 6 && det.moves >= 1 && det.eco !== '???';
     } catch (_) { return false; }
   }
 
@@ -719,7 +882,11 @@ const CoachGame = (() => {
     judgeThenReply(fen, mv, from + to + (mv.promotion || ''), ++token);
   }
 
-  const RETRY = `<div class="rp-retry-row"><button type="button" class="train-btn rp-retry" id="cg-retry">↶ Reprendre ce coup</button><span class="rp-retry-note">Rejoue-le autrement — c'est là qu'une partie se gagne.</span></div>`;
+  const RETRY = `<div class="rp-retry-row">`
+    + `<button type="button" class="train-btn rp-retry" id="cg-retry">↶ Reprendre ce coup</button>`
+    + `<button type="button" class="train-btn ghost" id="cg-keepgoing">▶ Continuer quand même</button>`
+    + `<span class="rp-retry-note">La partie n'est pas arrêtée : tu peux jouer la suite et voir ce que ça donne.</span>`
+    + `</div>`;
 
   async function judgeThenReply(fenBefore, myMove, myUci, my) {
     const fenAfter = curFen();
@@ -741,7 +908,13 @@ const CoachGame = (() => {
     const isBest = myUci === myBestUci;
     if (isBest) stats.best++;
     const wpl = winLoss(curEvalMe, after);
-    const v = gradeMove(isBest, cpLoss, fenBefore, myMove, fenAfter, lastWasBook, wpl);
+    const v = gradeMove(isBest, cpLoss, fenBefore, myMove, fenAfter, lastWasBook, wpl, {
+      fenBefore, fenAfter, myMove, evalBefore: curEvalMe, evalAfter: after,
+      res, bestUci: myBestUci, bestPv: myBestPv,
+    });
+    logMove(myMove.san, true, v.k);
+    // L'eval de reference du coach : son point de vue, c'est l'oppose du mien.
+    const oppBefore = after == null ? null : -after;
     if (v.slip) {
       stats.slips++;
       // Forme attendue par Training.ingestGame() : ply 0-base, type, cpLoss.
@@ -765,6 +938,7 @@ const CoachGame = (() => {
     if (reply) {
       renderBoard(reply.mv, fenAfter);
       renderBookBar();
+      pendingOpp = { idx: logMove(reply.mv.san, false, null), evalBefore: oppBefore };
       replyHtml = `<div class="cg-reply">Il joue <b>${fr(reply.mv.san)}</b>${reply.tag ? ` <span class="rp-hint">${reply.tag}</span>` : ''}.</div>`;
       // C'est ICI que le mode libre montre ce qui a ete rate : les fleches
       // n'apparaissent qu'apres, sur le coup qui punit.
@@ -802,28 +976,133 @@ const CoachGame = (() => {
     return Math.max(0, Analyzer.cpToWinPct(before) - Analyzer.cpToWinPct(after));
   }
 
-  function gradeMove(isBest, cpLoss, fenBefore, myMove, fenAfter, inBook, wpl) {
-    let bad = '';
+  // Le dictionnaire des coups de l'app : un seul vocabulaire pour le verdict, le
+  // suivi lateral et l'ecran d'analyse (l'app s'est deja fait avoir par deux
+  // definitions concurrentes du mot « Excellent »).
+  function typeOf(k) {
+    const T = (typeof Analyzer !== 'undefined' && Analyzer.MOVE_CLASS) ? Analyzer.MOVE_CLASS[k] : null;
+    return T || { label: k, mark: '', cls: k };
+  }
+
+  // La CLASSE du coup, aux seuils de analysis.js (en chances de gain).
+  function classify(isBest, wpl, inBook, winBefore, stillOk, mated, onlyMove) {
+    if (mated) return 'best';
+    if (onlyMove) return 'forced';
+    if (wpl == null) return isBest ? 'best' : 'good';
+    if (wpl >= 0.20) return (winBefore >= 0.70 && stillOk) ? 'miss' : 'blunder';
+    if (wpl >= 0.10) return (winBefore >= 0.70 && stillOk) ? 'miss' : 'mistake';
+    if (inBook) return 'book';
+    if (wpl >= 0.05) return 'inaccuracy';
+    if (wpl >= 0.02) return 'good';
+    if (isBest) return 'best';
+    return 'excellent';
+  }
+
+  // Le commentaire long. Le user : « sois un peu plus verbeux quand tu expliques
+  // pourquoi c'est une erreur / mauvais coup / gaffe / pourquoi il faudrait
+  // faire autrement ». Quatre lignes maximum, toutes concretes : ce que ca
+  // coute, ce que l'adversaire en fait, ce qu'il fallait jouer et pourquoi, et
+  // le reflexe a retenir. Aucune morale, aucun « sois vigilant ».
+  function explainSlip(ctx) {
+    const bits = [];
+    const { fenBefore, fenAfter, myMove, evalBefore, evalAfter, res, bestUci, bestPv } = ctx;
+
+    // 1. Ce que ca coute, en clair.
+    if (evalBefore != null && evalAfter != null) {
+      bits.push(`<b>Ce que ça coûte</b> : tu passes de <b>${fmtMe(evalBefore)}</b> à <b>${fmtMe(evalAfter)}</b> (ton point de vue).`);
+    }
+
+    // 2. Ce que l'adversaire peut en faire : sa meilleure reponse, nommee, avec
+    //    ce qu'elle menace. `res` est la recherche faite APRES mon coup, donc
+    //    ses lignes sont les siennes.
+    let punish = '';
     try {
       if (typeof Analyzer !== 'undefined' && Analyzer.explainBadMove) {
-        bad = Analyzer.explainBadMove(fenBefore, fenAfter, { from: myMove.from, to: myMove.to, san: myMove.san }) || '';
+        punish = Analyzer.explainBadMove(fenBefore, fenAfter, { from: myMove.from, to: myMove.to, san: myMove.san }) || '';
       }
-    } catch (_) { bad = ''; }
-    let mated = false;
+    } catch (_) { punish = ''; }
+    const oppUci = res && res.bestMove ? res.bestMove : null;
+    const oppSan = oppUci ? uciToFr(fenAfter, oppUci) : null;
+    let oppWhy = '';
+    if (oppUci) {
+      const t = threatsAfter(fenAfter, oppUci);
+      if (t && (t.count || t.mate) && typeof Tactics !== 'undefined' && Tactics.threatSentence) {
+        oppWhy = Tactics.threatSentence(t, t.final !== false) || '';
+        // La phrase de menace est ecrite du point de vue de celui qui joue le
+        // coup : ici c'est LUI, donc son « adversaire » c'est moi. On le dit
+        // avec mes mots, sinon on lit « l'adversaire ne peut pas tout sauver »
+        // en parlant de soi.
+        oppWhy = oppWhy.replace(/L'adversaire/g, 'Tu').replace(/l'adversaire/g, 'tu')
+          .replace(/Tu ne peut/g, 'Tu ne peux').replace(/tu ne peut/g, 'tu ne peux')
+          .replace(/Tu doit/g, 'Tu dois').replace(/tu doit/g, 'tu dois')
+          .replace(/Tu n'a/g, "Tu n'as").replace(/tu n'a/g, "tu n'as")
+          .replace(/Tu fait/g, 'Tu fais').replace(/tu fait/g, 'tu fais')
+          .replace(/Tu ne fait/g, 'Tu ne fais').replace(/tu ne fait/g, 'tu ne fais')
+          .replace(/Tu choisit/g, 'Tu choisis').replace(/tu choisit/g, 'tu choisis')
+          .replace(/Tu reprend/g, 'Tu reprends').replace(/tu reprend/g, 'tu reprends')
+          .replace(/Tu peut/g, 'Tu peux').replace(/tu peut/g, 'tu peux');
+      }
+    }
+    const oppLine = res && res.pv ? FreePlay.pvToFr(fenAfter, res.pv, 4) : [];
+    if (oppSan) {
+      const head = oppWhy ? `<b>Ce que ça lui donne</b>` : `<b>Sa meilleure réponse</b>`;
+      bits.push(`${head} : <b>${oppSan}</b>${oppWhy ? ' — ' + oppWhy : ''}`
+        + (oppLine.length > 1 ? ` <span class="rp-hint">(suite : ${oppLine.join(' ')})</span>` : ''));
+    } else if (punish) {
+      bits.push(`<b>Ce qu'il peut faire</b> : ${punish}`);
+    }
+
+    // 3. Ce qu'il fallait jouer, et POURQUOI - c'est la demande explicite.
+    const bestSan = bestUci ? uciToFr(fenBefore, bestUci) : null;
+    if (bestSan) {
+      const why = whyBest(fenBefore, bestUci, bestPv);
+      bits.push(`<b>Il fallait jouer</b> : <b>${bestSan}</b>${why ? ' — ' + why : ''}`);
+    }
+
+    // 4. Le reflexe, tire de ce qui vient de se passer (pas un slogan).
+    if (punish && (!oppWhy || oppWhy.indexOf('prise') < 0)) bits.push(`<b>Le réflexe</b> : ${punish}`);
+    else if (oppSan && /x/.test(oppUci ? (uciToFr(fenAfter, oppUci) || '') : '')) {
+      bits.push(`<b>Le réflexe</b> : avant de lâcher ton coup, regarde les <b>captures</b> que tu laisses à l'adversaire - c'est celle-là que tu n'as pas vue.`);
+    }
+    return bits.length ? `<div class="cg-why">${bits.map(b => '<p>' + b + '</p>').join('')}</div>` : '';
+  }
+
+  // Les menaces creees par un coup joue dans `fen` (sans le jouer pour de bon).
+  function threatsAfter(fen, uci) {
+    if (!uci || typeof Tactics === 'undefined' || !Tactics.threats) return null;
+    try {
+      const g = new Chess(fen);
+      const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' });
+      if (!m) return null;
+      return Tactics.threats(fen, g.fen(), { from: m.from, to: m.to });
+    } catch (_) { return null; }
+  }
+
+  function gradeMove(isBest, cpLoss, fenBefore, myMove, fenAfter, inBook, wpl, ctx) {
+    let mated = false, onlyMove = false;
     try { mated = game.in_checkmate(); } catch (_) {}
-    if (mated) return { html: '🏆 <b>Échec et mat !</b> Bien joué.', cls: 'right' };
-    if (isBest) return { html: '✅ <b>Le meilleur coup.</b>', cls: 'right' };
-    if (wpl == null) return { html: '🔵 Coup joué.', cls: '' };
-    const pts = Math.round(wpl * 100);          // en points de chances de gain
-    const l = cpLoss == null ? null : Math.round(cpLoss);
-    const cost = l != null && pts >= 5 ? ` <span class="rp-hint">(-${pts} pts de chances de gain)</span>` : '';
-    // Theorie connue : prioritaire sur « imprecision », comme dans l'analyseur.
-    if (inBook && wpl < 0.10) return { html: '📖 <b>Coup théorique.</b> Tu es encore dans le livre.', cls: '' };
-    if (wpl >= 0.20) return { html: `🔴 <b>Gaffe</b>${cost}.${bad ? ' ' + bad : ''}`, cls: 'wrong', slip: true, blunder: true };
-    if (wpl >= 0.10) return { html: `🟠 <b>Erreur</b>${cost}.${bad ? ' ' + bad : ''}`, cls: 'wrong', slip: true };
-    if (wpl >= 0.05) return { html: `🟡 <b>Imprécision</b>${cost}, rien de grave.`, cls: '' };
-    if (wpl >= 0.02) return { html: '👍 <b>Bon coup</b>, tu gardes le fil.', cls: 'right' };
-    return { html: '👍 <b>Précis</b>, tu gardes le fil.', cls: 'right' };
+    try { onlyMove = (new Chess(fenBefore)).moves().length === 1; } catch (_) {}
+    const winBefore = (ctx && ctx.evalBefore != null && typeof Analyzer !== 'undefined' && Analyzer.cpToWinPct)
+      ? Analyzer.cpToWinPct(ctx.evalBefore) : 0.5;
+    const stillOk = (ctx && ctx.evalAfter != null) ? ctx.evalAfter > -150 : false;
+    const k = classify(isBest, wpl, inBook, winBefore, stillOk, mated, onlyMove);
+    const T = typeOf(k);
+    const pts = wpl == null ? null : Math.round(wpl * 100);
+    const slip = (k === 'mistake' || k === 'blunder' || k === 'miss');
+
+    if (mated) return { k, html: '🏆 <b>Échec et mat !</b> Bien joué.', cls: 'right' };
+
+    const badge = `<span class="eval-badge ${k}">${T.mark} ${T.label}</span>`;
+    const cost = pts != null && pts >= 5 ? ` <span class="rp-hint">-${pts} pts de chances de gain</span>` : '';
+    if (!slip) {
+      const tail = k === 'book' ? ' Tu es encore dans le livre.'
+        : k === 'best' ? ' C\'est le coup du moteur.'
+        : k === 'forced' ? ' Il n\'y avait rien d\'autre.'
+        : k === 'inaccuracy' ? ' Rien de grave, mais il y avait mieux.'
+        : '';
+      return { k, html: badge + cost + tail, cls: (k === 'inaccuracy' ? '' : 'right') };
+    }
+    return { k, html: badge + cost + explainSlip(ctx), cls: 'wrong', slip: true, blunder: k === 'blunder' };
   }
 
   // ═════════════════════════ Le coach joue ═════════════════════════
@@ -896,7 +1175,7 @@ const CoachGame = (() => {
     const my = ++token;
     const r = await coachReply(curFen(), my);
     if (my !== token) return;
-    if (r) { renderBoard(r.mv, null); renderBookBar(); }
+    if (r) { renderBoard(r.mv, null); renderBookBar(); logMove(r.mv.san, false, null); }
     busy = false;
     onMyTurn();
   }
@@ -911,6 +1190,10 @@ const CoachGame = (() => {
     else game.undo();
     if (track.length) track.pop();
     if (stats && stats.moves > 0) stats.moves--;
+    // On retire du journal ce qu'on vient de defaire (mon coup + la reponse).
+    while (moveLog.length > game.history().length) moveLog.pop();
+    pendingOpp = null;
+    renderMoves();
     curEvalMe = null; myBestUci = null; threatArrows = false;
     bookOut = null;
     bookPly = Math.min(bookPly, game.history().length);
@@ -1090,8 +1373,9 @@ const CoachGame = (() => {
       const RL = g.result === 'win' ? 'V' : g.result === 'loss' ? 'D' : 'N';
       const tags = [g.book ? '📖 ' + g.book : null, g.aide === 'libre' ? 'libre' : 'assisté', 'niv. ~' + g.elo,
         (g.device === 'Android' || g.device === 'iOS') ? '📱' : null].filter(Boolean).join(' · ');
-      return `<div class="cg-hrow"><span class="d">${day}</span><span class="r ${R}">${RL}</span>`
-        + `<span class="m">${tags}</span><span class="g">${g.slips} err.</span></div>`;
+      return `<div class="cg-hrow" data-id="${g.id}"><span class="d">${day}</span><span class="r ${R}">${RL}</span>`
+        + `<span class="m">${tags}</span><span class="g">${g.slips} err.</span>`
+        + `<button type="button" class="cg-del" data-act="ask" data-id="${g.id}" title="Retirer cette partie de l'historique">🗑</button></div>`;
     }).join('');
 
     $('#cg-hist').innerHTML = `
@@ -1123,7 +1407,47 @@ const CoachGame = (() => {
     $('#cg-export').onclick = exportGames;
     $('#cg-import').onclick = () => $('#cg-file').click();
     $('#cg-file').onchange = (e) => importGames(e.target.files && e.target.files[0]);
+    bindDelete();
     view('hist');
+  }
+
+  // Suppression d'une partie : en deux temps, DANS la ligne. Une partie
+  // abandonnee parce qu'il fallait partir n'a rien a faire dans le bilan (elle
+  // compte comme une defaite et pese sur les erreurs/partie).
+  function bindDelete() {
+    const list = document.querySelector('#cg-hist .cg-hist-list');
+    if (!list || list.dataset.bound) return;
+    list.dataset.bound = '1';
+    list.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const row = btn.closest('.cg-hrow');
+      const id = btn.dataset.id;
+      if (btn.dataset.act === 'ask') {
+        row.classList.add('asking');
+        row.dataset.keep = row.innerHTML;
+        row.innerHTML = `<span class="m">Retirer cette partie de l'historique ?</span>`
+          + `<button type="button" class="cg-del yes" data-act="del" data-id="${id}">Supprimer</button>`
+          + `<button type="button" class="cg-del no" data-act="cancel" data-id="${id}">Annuler</button>`;
+        return;
+      }
+      if (btn.dataset.act === 'cancel') {
+        row.classList.remove('asking');
+        if (row.dataset.keep) row.innerHTML = row.dataset.keep;
+        return;
+      }
+      if (btn.dataset.act === 'del') {
+        const st = load();
+        const before = st.games.length;
+        st.games = st.games.filter(g => g.id !== id);
+        save(st);
+        showHistory();
+        const io2 = $('#cg-io');
+        if (io2) io2.innerHTML = before === st.games.length
+          ? `Rien n'a été supprimé (partie introuvable).`
+          : `<b>Partie retirée de l'historique.</b> Le bilan et le niveau conseillé sont recalculés sans elle.`;
+      }
+    });
   }
 
   function exportGames() {

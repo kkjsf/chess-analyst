@@ -127,6 +127,46 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v237-v243 - LE MODE ENTRAINEUR SE MET A PARLER : suivi des coups, barre d'avantage,
+  explications longues, et on ne t'arrete plus.** Cinq demandes du user d'affilee.
+  - **« N'arrete pas la partie si je fais une erreur. »** Mesure d'abord : elle ne s'arretait
+    PAS - verifie en jouant, on peut enchainer apres une gaffe. Mais la seule action proposee
+    etait « ↶ Reprendre ce coup », ce qui se lit comme un ordre. La ligne offre maintenant les
+    DEUX sorties, « Reprendre ce coup » **et** « ▶ Continuer quand meme » (qui ne fait que
+    retirer la proposition), avec la phrase « La partie n'est pas arretee ».
+  - **Explications longues** (« sois un peu plus verbeux ») : sur une erreur/gaffe/coup manque,
+    `explainSlip()` sort jusqu'a 4 lignes concretes - **ce que ca coute** (« tu passes de +1,2 a
+    -3,6 »), **ce que ca lui donne** (sa meilleure reponse nommee + la menace qu'elle cree +
+    la suite du moteur), **il fallait jouer** (le coup + POURQUOI, via la phrase de menace de
+    `Tactics`) et **le reflexe** tire de ce qui vient de se passer. Les phrases de menace de
+    `tactics.js` sont ecrites du point de vue de celui qui joue le coup : reecrites a la 2e
+    personne quand elles decrivent le coup du COACH, sinon on lisait « l'adversaire ne peut pas
+    tout sauver » en parlant de soi.
+  - **Le vocabulaire des coups est desormais celui de l'app** : `Analyzer.MOVE_CLASS`
+    (★ Meilleur / ✔ Tres bien / ✓ Bon / 📖 Theorique / ?! Imprecision / ✗ Coup manque /
+    ? Erreur / ?? Gaffe), badges compris. Une seule definition dans l'app, la ou j'en avais
+    invente une deuxieme (« Precis », « Petite imprecision »…).
+  - **Suivi des coups facon Chess.com** (colonne de droite, **desktop uniquement** - c'est ce
+    qu'il demandait, il n'y a pas la place sous 1000 px) : une ligne par coup complet, glyphe et
+    couleur par coup, **les DEUX camps notes** (le coup du coach se note avec les recherches
+    qu'on fait de toute facon : son eval « avant » = celle mesuree apres mon coup, son eval
+    « apres » = celle du tour suivant, zero recherche en plus), decompte de mes coups par
+    categorie, et la legende. Couleurs = celles de `.eval-badge` de l'ecran d'analyse.
+  - **Barre d'avantage + materiel, en direct** : le composant de l'ecran d'analyse
+    (`.eval-bar-container` / `.eval-bar-fill`) a gauche du plateau, part claire = les Blancs,
+    ancree du cote des Blancs (donc en haut quand tu joues les Noirs) ; barres joueur au-dessus
+    et au-dessous avec les pieces prises (`BoardRenderer.getCapturedPieces`) et l'ecart en points
+    (`Analyzer.materialCount`). Mesure a 375 px : centre, la barre sortait de l'ecran d'1 px ->
+    le plateau est decale de 26 px pour lui faire sa place.
+  - **Supprimer une partie de l'historique** (« si j'ai abandonne pour une raison autre, pas le
+    temps ») : bouton 🗑 par ligne, suppression **en deux temps dans la ligne** (pas de
+    `confirm()` bloquant), et le bilan + le niveau conseille se recalculent sans elle.
+  - **Animation encore ralentie** : `ANIM_MS` 340 -> **460 ms**, courbe d'arrivee plus douce
+    (`0.16 0.84 0.24 1`), effacement des captures 190 -> 260 ms. Troisieme passe de reglage avec
+    lui ; c'est toujours une seule valeur a bouger.
+  - **Correction mesuree** : `1.e4` sortait « ?! Imprecision » (le moteur chipote 7 points de
+    chances de gain entre 1.e4 et 1.d4). Tout coup du catalogue des ouvertures joue dans les
+    **6 premiers demi-coups** compte maintenant comme 📖 Theorique.
 - **v235-v236 (SHIPPED `2e6a3d7`, verifie en live) - LES DEPLACEMENTS DE PIECES GLISSENT, PARTOUT.** Demande du user (« + lent /
   glissant et pas de teleportation »). `js/board.js` ne faisait glisser QUE la piece nommee par
   `lastMove`, en 240 ms, et seulement si l'appelant pensait a passer la position precedente : tout

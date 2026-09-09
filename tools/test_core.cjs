@@ -375,7 +375,7 @@ function T(group, label, fen, from, to, fn, want, promotion) {
 
   // La duree par defaut est la source unique partagee par les 6 ecrans.
   check(G, 'une duree par defaut, lente et glissante',
-    BoardRenderer.ANIM_MS >= 300 && BoardRenderer.ANIM_MS <= 450, true);
+    BoardRenderer.ANIM_MS >= 380 && BoardRenderer.ANIM_MS <= 600, true);
 }
 
 // ─────────────────────────── rapport ────────────────────────────────────────

@@ -4901,3 +4901,94 @@ body.guess-open { overflow: hidden; }
 .cg-hrow .m { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cg-hrow .g { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
 .cg-empty { font-size: 13px; color: var(--text-dim); line-height: 1.55; padding: 6px 2px; }
+
+/* ── Suivi des coups du mode entraineur (colonne de droite) ────────────────
+   Masque sous 1000 px : sur telephone il n'y a pas la place, et c'est ce que
+   le user demandait (« en tout cas en mode desktop »). Les couleurs sont
+   celles de `.eval-badge` de l'ecran d'analyse - un seul jeu de couleurs pour
+   toute l'app. */
+.cg-side { display: none; }
+.cg-why { margin-top: 7px; }
+.cg-why p { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); margin: 5px 0 0; }
+.cg-why p b { color: var(--text); }
+.cg-why p:first-child { margin-top: 0; }
+.rp-retry-row .rp-retry { margin-right: 6px; }
+
+@media (min-width: 1000px) {
+  #cg-overlay .guess-panel { max-width: 1000px; }
+  #cg-game { display: grid; grid-template-columns: minmax(0, 1fr) 292px; gap: 20px; align-items: start; }
+  .cg-side {
+    display: block; background: var(--bg-card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 12px 13px; position: sticky; top: 64px;
+  }
+  .cg-side-head {
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 9px;
+  }
+  .cg-tally { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 9px; }
+  .cg-tally:empty { display: none; }
+  .cg-mvlist {
+    max-height: 46vh; overflow-y: auto; font-variant-numeric: tabular-nums;
+    border-top: 1px solid var(--line); padding-top: 7px;
+  }
+  .cg-mvrow { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 4px; align-items: center; padding: 1px 0; }
+  .cg-no { color: var(--dim-2, var(--text-dim)); font-size: 11.5px; }
+  .cg-mv {
+    display: flex; align-items: baseline; gap: 4px; font-size: 13px; color: var(--text);
+    padding: 3px 6px; border-radius: 7px; min-height: 26px;
+  }
+  .cg-mv i { font-style: normal; font-size: 11px; opacity: .95; }
+  .cg-mv.mine { font-weight: 600; }
+  .cg-mv.empty { min-height: 26px; }
+  .cg-mv-empty { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  /* Memes couleurs que les badges de l'analyse. */
+  .cg-mv.brilliant  { background: #16303b; color: #67d4e8; }
+  .cg-mv.great      { background: #1a2740; color: #86b3e6; }
+  .cg-mv.best       { background: #14331f; color: #4ade80; }
+  .cg-mv.excellent  { background: #17321f; color: #86d99a; }
+  .cg-mv.good       { background: #262f18; color: #c2d69a; }
+  .cg-mv.book       { background: #2f2717; color: #d4b177; }
+  .cg-mv.forced     { background: #2a2a3a; color: var(--text-dim); }
+  .cg-mv.inaccuracy { background: #3b2e1a; color: var(--warning); }
+  .cg-mv.miss       { background: #3b1a1a; color: #e0574a; }
+  .cg-mv.mistake    { background: #3b2a1a; color: #f0a050; }
+  .cg-mv.blunder    { background: #3b1a1a; color: var(--danger); }
+  .cg-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
+  .cg-leg { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-dim); }
+  .cg-leg .eval-badge { padding: 1px 5px; font-size: 10px; }
+}
+
+/* Barre d'avantage + materiel du mode entraineur. La barre est le composant de
+   l'ecran d'analyse (.eval-bar-container / .eval-bar-fill) ; on lui fait juste
+   la place a gauche du plateau. */
+/* La barre vit a GAUCHE du plateau : on lui reserve 26 px en decalant le
+   plateau (mesure a 375 px : centre, la barre sortait de l'ecran d'1 px). */
+.cg-boardwrap {
+  max-width: min(var(--ex-board), calc(100% - 30px));
+  margin-left: 26px; margin-right: 0;
+}
+.cg-evalbar { left: -24px; width: 12px; }
+.cg-pbar {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  font-size: 12.5px; color: var(--text-dim);
+  max-width: min(var(--ex-board), calc(100% - 30px));
+  margin: 0 0 0 26px; text-align: left;
+}
+.cg-pbar .cg-who { font-weight: 600; color: var(--text); white-space: nowrap; }
+.cg-pbar .cg-capt { flex: 1; min-width: 0; font-size: 15px; line-height: 1; color: #cfd6e6; overflow: hidden; }
+.cg-pbar .cg-mat {
+  font-size: 11.5px; font-weight: 700; color: var(--accent);
+  background: rgba(226,184,87,.14); padding: 2px 7px; border-radius: 999px;
+}
+
+/* Retirer une partie de l'historique du mode entraineur (deux temps). */
+.cg-del {
+  border: 1px solid var(--line-str); background: none; color: var(--text-dim);
+  font: inherit; font-size: 12px; padding: 5px 8px; border-radius: 8px; cursor: pointer;
+  min-height: 30px; flex: 0 0 auto;
+}
+.cg-del:hover { color: var(--text); background: var(--bg-elevated); }
+.cg-del.yes { color: #ffb4b4; border-color: rgba(248,113,113,.4); }
+.cg-del.no { color: var(--text-dim); }
+.cg-hrow.asking { background: rgba(248,113,113,.08); gap: 6px; }
+.cg-hrow.asking .m { color: #ffb4b4; }
