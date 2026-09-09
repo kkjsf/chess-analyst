@@ -1280,7 +1280,7 @@ const Coach = (() => {
     return `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
       <div class="coach-rating-head"><span>Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶ plein écran</span></span>
         <b class="${delta >= 0 ? 'up' : 'down'}">${last} ${delta >= 0 ? '▲ +' + delta : '▼ ' + delta}</b></div>
-      <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg" preserveAspectRatio="none">
+      <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg">
         <path d="${path}" fill="none" stroke="#e2b857" stroke-width="2"/>
         ${dots}
       </svg></div>`;

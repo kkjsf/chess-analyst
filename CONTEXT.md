@@ -127,6 +127,30 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v249-v252 - LES COURBES ETAIENT ETIREES EN DESKTOP.** Signale par le user (« les graphiques
+  gains / matiere de Analyser sont etires »). Cause : le SVG de la timeline est dessine dans un
+  repere FIXE `viewBox="0 0 320 64"` avec `preserveAspectRatio="none"` et une largeur CSS de
+  100 %. Sur telephone la colonne fait ~327 px, donc 1 unite = 1 px et tout va bien ; en desktop
+  elle fait ~590 px, donc **tout est etire de 1,8x horizontalement** - cercles d'erreur en
+  ellipses, pointilles allonges, epaisseurs de trait incoherentes selon l'orientation, glyphes de
+  capture deformes.
+  - **Correction** : le repere devient la largeur REELLE de l'element (`tlMeasure()` +
+    `viewBox = 0 0 <largeur mesuree> 64`), donc 1 unite = 1 px a toutes les tailles. La hauteur CSS
+    de 56 px sous 900 px est supprimee (elle etirait verticalement de 64/56).
+  - **Deux pieges de mesure, tous les deux rencontres** : (1) `drawTimeline()` est appele par
+    `showAnalysis` **avant** que l'ecran soit affiche, donc la largeur vaut 0 - on redessine juste
+    apres l'activation de l'ecran ; (2) la largeur change encore ensuite (barre de defilement) -
+    `updateTimelineCursor` verifie donc l'ecart a chaque navigation et redessine si besoin (c'est
+    gratuit et ca corrige au premier deplacement). Un `ResizeObserver` est pose en plus, mais il ne
+    suffit pas : **il ne se declenche pas quand le rendu de la page est en pause**, ce qui est le
+    cas du volet navigateur masque pendant les tests. Mesure finale : viewBox 592 pour 592 px
+    rendus en desktop, 327 pour 327 px sur telephone - ecart 0.
+  - **Meme defaut sur deux autres courbes**, corrige au passage : l'**Elo** des Statistiques
+    (`.coach-rating-svg`) et la **courbe du bilan** du mode entraineur. Elles sont produites en
+    chaine HTML, donc sans mesure JS possible : on leur donne un **rapport fixe**
+    (`aspect-ratio: 320/90` et `320/46`) et on retire `preserveAspectRatio="none"` pour laisser le
+    navigateur mettre a l'echelle **uniformement**. Verifie : ratio du repere = ratio rendu
+    (3,556 = 3,556).
 - **v245-v248 (SHIPPED `668582a`, verifie en live) - LA TYPOLOGIE DES COUPS, CORRIGEE A LA RACINE, + navigation dans le suivi.**
   Signale par le user : en Petrov (1.e4 e5 2.Cf3 Cf6), les coups **du coach** sortaient
   « ?! Imprecision » (…e5) et « ? Erreur » (…Cf6). Non, ce n'est pas normal - deux causes, l'une

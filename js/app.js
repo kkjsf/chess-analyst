@@ -570,6 +570,13 @@ const App = (() => {
     $('#screen-import').classList.remove('active');
     $('#screen-analysis').classList.add('active');
     setTab('analyser');
+    // La timeline a ete CONSTRUITE avant que l'ecran soit affiche : la largeur
+    // du SVG valait alors 0, donc son repere restait a 320 unites pour un
+    // element large de 586 px - c'est ce qui etirait les courbes en desktop. On
+    // la redessine maintenant que l'element a une largeur reelle (l'appel a
+    // getBoundingClientRect force la mise en page, donc pas besoin d'attendre
+    // une frame).
+    drawTimeline();
     const fold = $('#detail-fold');
     if (fold) fold.open = false;
 
@@ -624,11 +631,51 @@ const App = (() => {
   // pastilles de coups (navigation), « Chances de gain », « Balance materielle »
   // et « Temps par coup ». Trois series commutables, un curseur commun, et on
   // navigue en glissant le doigt dessus.
-  const TL_W = 320, TL_H = 64;
+  // TL_H est fixe (la hauteur CSS du SVG) ; la LARGEUR est mesuree a chaque
+  // dessin et devient le viewBox, sinon le trace est etire par le rapport
+  // largeur reelle / 320 - c'est ce qui deformait les courbes en desktop.
+  const TL_H = 64;
+  let TL_W = 320;
+  let tlDrawnW = 0;      // largeur pour laquelle le trace courant a ete calcule
+  function tlMeasure() {
+    const svg = $('#tl-svg');
+    if (!svg) return TL_W;
+    const w = Math.round(svg.getBoundingClientRect().width || svg.clientWidth || 0);
+    if (w >= 120) TL_W = w;      // sous 120 px, l'element n'est pas encore mis en page
+    return TL_W;
+  }
   let tlSeries = 'win';          // 'win' | 'mat' | 'time'
   let tlData = null;             // { win:[], mat:[], time:[]|null, marks:{ply:type} }
 
+  let tlResizeTimer = null, tlLastW = 0;
+  function tlRedrawIfResized() {
+    if (!tlData) return;
+    clearTimeout(tlResizeTimer);
+    tlResizeTimer = setTimeout(() => {
+      const svg = $('#tl-svg');
+      if (!svg) return;
+      const w = Math.round(svg.getBoundingClientRect().width);
+      if (!w || Math.abs(w - tlLastW) < 4) return;   // 0 = pas encore mis en page ; < 4 px = bruit
+      tlLastW = w;
+      drawTimeline();
+      updateTimelineCursor(currentIndex);
+    }, 60);
+  }
+  function bindTimelineResize() {
+    const svg = $('#tl-svg');
+    // ResizeObserver plutot que `window.resize` : au PREMIER dessin l'ecran
+    // d'analyse n'est pas encore mis en page (largeur 0), donc le repere serait
+    // fige a 320 et le trace etire. L'observateur redessine des que la largeur
+    // reelle arrive, et a chaque changement ensuite.
+    if (svg && typeof ResizeObserver === 'function') {
+      new ResizeObserver(tlRedrawIfResized).observe(svg);
+    } else {
+      window.addEventListener('resize', tlRedrawIfResized);
+    }
+  }
+
   function bindTimeline() {
+    bindTimelineResize();
     const segs = $('#tl-segs');
     if (segs) segs.addEventListener('click', (e) => {
       const b = e.target.closest('.tl-seg');
@@ -719,6 +766,11 @@ const App = (() => {
     if (!svg || !tlData) return;
     const data = tlData[tlSeries];
     if (!data) return;
+    // Un repere = des pixels : le trace n'est plus etire, quelle que soit la
+    // largeur de la colonne (telephone ~320 px, desktop 500-700 px).
+    tlMeasure();
+    tlDrawnW = TL_W;
+    svg.setAttribute('viewBox', `0 0 ${TL_W} ${TL_H}`);
     const n = data.length;
     const x = i => n <= 1 ? 0 : (i / (n - 1)) * TL_W;
 
@@ -727,6 +779,7 @@ const App = (() => {
     else if (tlSeries === 'mat') { const m = Math.max(3, ...data.map(Math.abs)); lo = -m; hi = m; }
     else { lo = 0; hi = Math.max(10, ...data); }
     const y = v => TL_H - 5 - ((v - lo) / (hi - lo || 1)) * (TL_H - 11);
+
 
     let s = '';
     if (tlSeries === 'time') {
@@ -792,6 +845,7 @@ const App = (() => {
   }
 
   function updateTimelineCursor(index) {
+    if (tlData && Math.abs(tlMeasure() - tlDrawnW) > 4) drawTimeline();
     const cur = $('#tl-cursor'), dot = $('#tl-dot');
     if (!cur || !dot || !tlData || !currentAnalysis) return;
     const data = tlData[tlSeries];
@@ -799,7 +853,7 @@ const App = (() => {
     const i = index - 1;
     if (i < 0 || i >= data.length) { cur.setAttribute('opacity', '0'); dot.setAttribute('opacity', '0'); return; }
     const n = data.length;
-    const x = n <= 1 ? 0 : (i / (n - 1)) * TL_W;
+    const x = n <= 1 ? 0 : (i / (n - 1)) * tlMeasure();
     let lo, hi;
     if (tlSeries === 'win') { lo = 0; hi = 1; }
     else if (tlSeries === 'mat') { const m = Math.max(3, ...data.map(Math.abs)); lo = -m; hi = m; }

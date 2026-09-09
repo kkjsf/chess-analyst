@@ -1467,7 +1467,7 @@ const CoachGame = (() => {
     const y = (v) => H - 3 - ((v - lo) / ((hi - lo) || 1)) * (H - 8);
     const poly = pts.map((v, i) => x(i) + ',' + y(v)).join(' ');
     return `<div class="cg-spark"><div class="h">Ton avantage, coup par coup (ton point de vue)</div>`
-      + `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
+      + `<svg viewBox="0 0 ${W} ${H}">`
       + `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="rgba(255,255,255,.14)" stroke-dasharray="3 3"/>`
       + `<polyline points="${poly}" fill="none" stroke="#e2b857" stroke-width="1.8"/>`
       + `</svg></div>`;
