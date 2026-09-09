@@ -127,6 +127,26 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v233-v234 - LE MODE ENTRAINEUR PREND SON PROPRE ONGLET, l'ancien Coach devient
+  « Statistiques ».** Demande du user. La barre de navigation passe a 5 entrees :
+  **Analyser | Coach | Statistiques | Apprendre | Entrainer**. Les cles internes suivent les
+  libelles (`data-tab="coach"` = JOUER, `data-tab="stats"` = le bilan de l'archive) pour que le
+  code ne mente pas sur ce qu'il ouvre : `navTo`, `syncTabbar` et `wireTabSync` sont a jour, et
+  `CoachGame.open` est patche pour allumer l'onglet. La tuile « Jouer avec le coach » disparait du
+  hub Apprendre (elle avait un onglet maintenant), l'acces rapide de l'accueil se scinde en deux
+  (« Coach - jouer une partie contre lui » et « Statistiques - bilan de toutes tes parties »), et
+  le guide d'utilisation est renomme en consequence. Verifie : 5 onglets tiennent a **320 px**
+  (64 px chacun, « Statistiques » = 57 px) comme en sidebar desktop.
+  - **Deux bugs de calque corriges au passage, mesures en direct.** Avec le mode ouvert, un clic
+    sur un autre onglet laissait le calque EN PLACE par-dessus le nouvel ecran (il est en
+    `position:fixed`, donc `offsetParent` rend `null` et trompe la verification) **et** laissait
+    `body.guess-open`, c'est-a-dire `overflow:hidden` - l'ecran d'arrivee n'etait meme plus
+    defilable. Nouveau `closeOverlays(except)` dans app.js : changer d'onglet ferme tous les
+    calques `.guess-*` (CoachGame, Mates, Replay, GuessMove) via leur propre `close()`, qui fait
+    leur menage. Le bug valait pour les calques existants, pas seulement le nouveau.
+  - Et pour ne pas perdre une partie en allant voir ses stats : `CoachGame.open()` **reprend la
+    partie en cours** (`inProgress()`) au lieu de rouvrir les reglages. Verifie : coup joue ->
+    onglet Statistiques -> retour Coach -> le pion est toujours en e4 et c'est mon trait.
 - **v225-v232 - LE MODE ENTRAINEUR : jouer une partie complete contre le coach** (SHIPPED `fe398a1`, verifie en live).
   La maquette `_mockups/coach-mode-2026-09.html` (6 ecrans) est implementee. Nouveau module
   `js/coachgame.js` (~900 lignes), tuile en TETE du hub Apprendre. 66 tests unitaires OK

@@ -377,12 +377,29 @@ const CoachGame = (() => {
   }
 
   // ═════════════════════════ Ouverture / fermeture ═════════════════════════
+  // Une partie est en cours ? On la REPREND. Sinon on quitterait sa partie en
+  // allant voir ses statistiques, ce qui est le genre de detail qui fait
+  // abandonner un mode de jeu.
+  function inProgress() {
+    try { return !!(game && !saved && cfg && game.history().length > 0 && !game.game_over()); }
+    catch (_) { return false; }
+  }
+
   function open() {
     ensureDom();
-    const c = loadCfg();
-    cfg = null;
     $('#cg-overlay').hidden = false;
     document.body.classList.add('guess-open');
+    if (inProgress()) {
+      view('game');
+      BoardRenderer.setFlipped(mySide === 'b');
+      syncSwapBtn();
+      renderBoard(null);
+      renderBookBar();
+      if (myTurn() && !busy) onMyTurn();
+      return;
+    }
+    const c = loadCfg();
+    cfg = null;
     view('setup');
 
     // Livre : catalogue des lignes des cours.
@@ -1141,7 +1158,7 @@ const CoachGame = (() => {
     fr2.readAsText(file);
   }
 
-  return { open, showHistory, close, paramsFor, pickIndex, effSpread, winLoss, LADDER };
+  return { open, showHistory, close, inProgress, paramsFor, pickIndex, effSpread, winLoss, LADDER };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CoachGame;

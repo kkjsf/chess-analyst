@@ -3785,14 +3785,34 @@ const App = (() => {
   }
 
   function syncTabbar() {
-    if ($('#screen-coach').classList.contains('active')) setTab('coach');
+    if ($('#screen-coach').classList.contains('active')) setTab('stats');
     else if ($('#screen-learn').classList.contains('active')) setTab('apprendre');
     else if ($('#screen-training').classList.contains('active')) setTab('entrainer');
     else setTab('analyser');
   }
 
+  // Les calques `.guess-*` (mode entraineur, mats, rejeu, devine le coup) sont en
+  // position:fixed par-dessus tout et posent `body.guess-open` (overflow:hidden).
+  // Changer d'onglet sans les fermer laisse donc l'ancien ecran affiche ET le
+  // nouveau non defilable. Chaque module a son close() qui fait son menage
+  // (annulation des recherches moteur en cours comprise).
+  function closeOverlays(except) {
+    const mods = { coachgame: typeof CoachGame !== 'undefined' ? CoachGame : null,
+                   mates: typeof Mates !== 'undefined' ? Mates : null,
+                   replay: typeof Replay !== 'undefined' ? Replay : null,
+                   guess: typeof GuessMove !== 'undefined' ? GuessMove : null };
+    for (const k in mods) {
+      if (k === except || !mods[k] || typeof mods[k].close !== 'function') continue;
+      try { mods[k].close(); } catch (_) {}
+    }
+  }
+
   function navTo(tab) {
-    if (tab === 'coach') { if (typeof Coach !== 'undefined') Coach.show(); return; }
+    // `coach` = JOUER contre le coach (js/coachgame.js) ; `stats` = le bilan de
+    // l'archive Chess.com (js/coach.js), qui s'appelait « Coach » jusqu'ici.
+    if (tab === 'coach') { closeOverlays('coachgame'); if (typeof CoachGame !== 'undefined') CoachGame.open(); return; }
+    closeOverlays();
+    if (tab === 'stats') { if (typeof Coach !== 'undefined') Coach.show(); return; }
     if (tab === 'apprendre') { showLearn(); return; }
     if (tab === 'entrainer') { if (typeof Training !== 'undefined') Training.show(); return; }
     // analyser: leave any sub-screen, show the loaded game or the import home
@@ -3815,7 +3835,10 @@ const App = (() => {
       const orig = obj[method];
       obj[method] = function () { const ret = orig.apply(obj, arguments); after(); return ret; };
     };
-    if (typeof Coach !== 'undefined') { patch(Coach, 'show', () => setTab('coach')); patch(Coach, 'hide', syncTabbar); }
+    if (typeof Coach !== 'undefined') { patch(Coach, 'show', () => setTab('stats')); patch(Coach, 'hide', syncTabbar); }
+    // Le mode entraineur est un calque (body.guess-open) : l'observateur plus bas
+    // resynchronise l'onglet a sa fermeture, il ne reste qu'a l'allumer a l'ouverture.
+    if (typeof CoachGame !== 'undefined') { patch(CoachGame, 'open', () => setTab('coach')); patch(CoachGame, 'showHistory', () => setTab('coach')); }
     if (typeof Training !== 'undefined') { patch(Training, 'show', () => setTab('entrainer')); patch(Training, 'hide', syncTabbar); }
     if (typeof Mates !== 'undefined') { patch(Mates, 'show', () => setTab('apprendre')); patch(Mates, 'close', syncTabbar); }
     // Mates/GuessMove are overlays toggling body.guess-open; re-sync the tab when one closes.
@@ -4233,7 +4256,6 @@ const App = (() => {
       $$('#screen-learn .learn-tile').forEach(tile => {
         tile.addEventListener('click', () => {
           if (tile.dataset.panel === 'mats') { if (typeof Mates !== 'undefined') Mates.show(); return; }
-          if (tile.dataset.panel === 'coachgame') { if (typeof CoachGame !== 'undefined') CoachGame.open(); return; }
           if (_openPanel) _openPanel(tile.dataset.panel);
         });
       });

@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '232';
+window.APP_VERSION = '234';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -101,10 +101,10 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     </div>
     <div class="guide-block">
       <div class="guide-icon">📊</div>
-      <h3>Coach — toutes vos parties</h3>
-      <p>Le <b>Coach</b> analyse l'<b>ensemble</b> de vos parties Chess.com et en tire un bilan : taux de victoire, répertoire d'ouvertures, points faibles par phase, et un entraînement bâti sur <b>vos propres erreurs</b>.</p>
+      <h3>Statistiques — toutes vos parties</h3>
+      <p>L'onglet <b>Statistiques</b> analyse l'<b>ensemble</b> de vos parties Chess.com et en tire un bilan : taux de victoire, répertoire d'ouvertures, points faibles par phase, et un entraînement bâti sur <b>vos propres erreurs</b>.</p>
       <p><b>L'analyse tourne sur un serveur</b> (GitHub Actions), pas sur votre téléphone : rien à laisser tourner pendant une heure. Le bilan se met à jour <b>automatiquement chaque semaine</b> ; l'app télécharge simplement un petit fichier de résultats (~1 Mo).</p>
-      <p>Pour mettre à jour : ouvrez le Coach et touchez <b>⟳ Actualiser</b>. Si vous venez de jouer quelques parties et êtes pressé, <b>« Analyser ici »</b> les traite directement dans le navigateur (rapide pour quelques parties). Pour relancer l'analyse complète côté serveur, utilisez le lien <b>⚙ Relancer l'analyse (serveur)</b>.</p>
+      <p>Pour mettre à jour : ouvrez <b>Statistiques</b> et touchez <b>⟳ Actualiser</b>. Si vous venez de jouer quelques parties et êtes pressé, <b>« Analyser ici »</b> les traite directement dans le navigateur (rapide pour quelques parties). Pour relancer l'analyse complète côté serveur, utilisez le lien <b>⚙ Relancer l'analyse (serveur)</b>.</p>
       <p>Le bilan est conservé <b>hors-ligne</b> sur l'appareil. Comme l'analyse est faite côté serveur, le même bilan s'affiche sur tous vos appareils après actualisation.</p>
     </div>
   </div>
@@ -440,8 +440,13 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
           <span class="qtile-ds">Tes erreurs en exercices</span>
         </button>
         <button class="qtile" data-nav="coach" type="button">
-          <span class="qtile-ic">📊</span>
+          <span class="qtile-ic">♟️</span>
           <span class="qtile-tt">Coach</span>
+          <span class="qtile-ds">Jouer une partie contre lui</span>
+        </button>
+        <button class="qtile" data-nav="stats" type="button">
+          <span class="qtile-ic">📊</span>
+          <span class="qtile-tt">Statistiques</span>
           <span class="qtile-ds">Bilan de toutes tes parties</span>
         </button>
         <button class="qtile" data-nav="tree" type="button">
@@ -641,7 +646,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
   <div class="top-bar">
     <button class="back-btn" id="btn-coach-back">←</button>
     <div class="match-info">
-      <div class="players-line">📊 Coach</div>
+      <div class="players-line">📊 Statistiques</div>
       <div class="elo-line">Toutes vos parties, un seul bilan</div>
     </div>
   </div>
@@ -662,14 +667,6 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     </div>
   </div>
   <div class="learn-body">
-    <button class="learn-tile learn-tile-hero" data-panel="coachgame">
-      <div class="learn-tile-icon">♟️</div>
-      <div class="learn-tile-txt">
-        <span class="learn-tile-title">Jouer avec le coach</span>
-        <span class="learn-tile-sub">Une partie complète contre le moteur, <b>au niveau que tu choisis</b> (par défaut le tien). En <b>libre</b> il ne dit rien pendant ton coup et montre après ce que tu n'as pas vu ; en <b>assisté</b> tu as les flèches de menace, le meilleur coup et le pourquoi. Tu peux aussi lui <b>imposer une ouverture</b> - ou lui demander d'en sortir exprès.</span>
-      </div>
-      <div class="learn-tile-arrow">→</div>
-    </button>
     <button class="learn-tile learn-tile-hero" data-panel="concepts">
       <div class="learn-tile-icon">⚔️</div>
       <div class="learn-tile-txt">
@@ -714,7 +711,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       <div class="learn-tile-icon">💡</div>
       <div class="learn-tile-txt">
         <span class="learn-tile-title">Guide d'utilisation</span>
-        <span class="learn-tile-sub">Importer une partie, lire l'analyse, comprendre les couleurs et le Coach.</span>
+        <span class="learn-tile-sub">Importer une partie, lire l'analyse, comprendre les couleurs et les Statistiques.</span>
       </div>
       <div class="learn-tile-arrow">→</div>
     </button>
@@ -742,6 +739,10 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
   <button class="tab" data-tab="coach" role="tab" aria-selected="false" aria-label="Coach">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><polygon points="12,3 20,9 17,19 7,19 4,9" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><polygon points="12,8 16,11 14.6,16 9.4,16 8,11" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
     <span>Coach</span>
+  </button>
+  <button class="tab" data-tab="stats" role="tab" aria-selected="false" aria-label="Statistiques">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><rect x="5.5" y="12" width="3.4" height="6" rx="1.1" stroke="currentColor" stroke-width="1.6"/><rect x="10.3" y="7" width="3.4" height="11" rx="1.1" stroke="currentColor" stroke-width="1.6"/><rect x="15.1" y="14" width="3.4" height="4" rx="1.1" stroke="currentColor" stroke-width="1.6"/></svg>
+    <span>Statistiques</span>
   </button>
   <button class="tab" data-tab="apprendre" role="tab" aria-selected="false" aria-label="Apprendre">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 6.5C10 5 6.5 4.6 3.5 5v13c3-.4 6.5 0 8.5 1.5 2-1.5 5.5-1.9 8.5-1.5V5c-3-.4-6.5 0-8.5 1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 6.5v13" stroke="currentColor" stroke-width="1.7"/></svg>
