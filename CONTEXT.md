@@ -127,7 +127,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v249-v252 - LES COURBES ETAIENT ETIREES EN DESKTOP.** Signale par le user (« les graphiques
+- **v249-v252 (SHIPPED `d0e4c32`, verifie en live) - LES COURBES ETAIENT ETIREES EN DESKTOP.** Signale par le user (« les graphiques
   gains / matiere de Analyser sont etires »). Cause : le SVG de la timeline est dessine dans un
   repere FIXE `viewBox="0 0 320 64"` avec `preserveAspectRatio="none"` et une largeur CSS de
   100 %. Sur telephone la colonne fait ~327 px, donc 1 unite = 1 px et tout va bien ; en desktop
