@@ -34,9 +34,12 @@ function checkFenSol(where, fen, sol) {
   ok();
 }
 
+const ALIASES = Courses.ALIASES || {};
 const only = process.argv[2];
 for (const line of Object.keys(Courses.COURSES)) {
   if (only && line !== only) continue;
+  // Cle alias (autre ordre de coups) : meme objet que la cle canonique, deja verifie.
+  if (ALIASES[line] && !only) continue;
   const c = Courses.COURSES[line];
   console.log('── ' + line);
 
@@ -51,7 +54,24 @@ for (const line of Object.keys(Courses.COURSES)) {
     else {
       ok();
       const pre = baseSans.every((s, k) => L.sans[k] === s);
-      if (!pre) bad(`lines[${i}] ${L.name || ''}`, 'ne commence pas par la ligne de base du cours');
+      // `altOrder: j` = la ligne joue le MEME plan dans un autre ordre de coups
+      // (le Londres classique 2.Cf3 3.Ff4 face a l'accelere 2.Ff4). On n'exige
+      // alors pas le prefixe, mais deux choses plus fortes : les coups de la
+      // ligne de base sont bien joues dans le meme ORDRE RELATIF, et la position
+      // finale est identique a celle de la ligne `j` (sinon ce n'est pas une
+      // transposition, c'est une autre variante).
+      if (typeof L.altOrder === 'number') {
+        let k = 0;
+        for (const san of L.sans) { if (san === baseSans[k]) k++; }
+        if (k < baseSans.length) bad(`lines[${i}] ${L.name || ''}`, 'altOrder : les coups de la ligne de base ne sont pas tous joues dans le meme ordre');
+        else ok();
+        const ref = (c.lines || [])[L.altOrder];
+        const rr = ref ? playLine(ref.sans || []) : null;
+        if (!rr || rr.err) bad(`lines[${i}] ${L.name || ''}`, 'altOrder pointe sur une ligne absente ou illegale');
+        else if (rr.g.fen().split(' ')[0] !== r.g.fen().split(' ')[0])
+          bad(`lines[${i}] ${L.name || ''}`, `altOrder : ne transpose pas sur lines[${L.altOrder}] (positions finales differentes)`);
+        else ok();
+      } else if (!pre) bad(`lines[${i}] ${L.name || ''}`, 'ne commence pas par la ligne de base du cours');
       if (L.notes && L.notes.length > L.sans.length)
         bad(`lines[${i}] ${L.name || ''}`, `${L.notes.length} notes pour ${L.sans.length} coups`);
     }

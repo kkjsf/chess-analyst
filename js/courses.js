@@ -550,37 +550,65 @@ const Courses = (() => {
       ]
     },
 
-    // ── Système de Londres (1.d4 d5 2.Ff4) ──
+    // ── Système de Londres : les deux ordres de coups ──
+    // Sa question : « d4 d5 Ff4, ce n'est pas la version accélérée ? Il n'y a pas
+    // un Cf3 avant le fou ? » — si. L'ordre de référence est 2.Cf3 Cf6 3.Ff4
+    // (classique) ; 2.Ff4 tout de suite est la version accélérée. Les deux
+    // convergent : vérifié moteur, les lignes 0 et 1 arrivent sur la MÊME
+    // position au 8e coup (r1bq1rk1/pp3ppp/2nbpn2/2pp4/3P4/2PBPNB1/PP1N1PPP/R2QK2R b KQ),
+    // et aucun n'est objectivement meilleur (Stockfish d18 : égalité après 2.Ff4
+    // comme après 3.Ff4 ; sa réponse préférée à l'accéléré est …Ff5).
     'd4 d5 Bf4': {
-      intro: `Le Système de Londres, c'est le plan de développement quasi identique quoi que fasse l'adversaire. On sort le fou en f4 AVANT e3 (pour ne pas l'enfermer), puis e3, Fd3, c3, Cf3, Cbd2 et roque. Solide comme un roc, très peu de théorie, et de vraies idées d'attaque à l'aile roi (Ce5, Fd3xh7, Dc1-h6) quand l'adversaire roque. En échange : ce n'est pas l'ouverture qui cherche un gros avantage théorique, mais celle qui vous amène en milieu de partie sain à chaque fois.`,
+      intro: `Le Système de Londres, c'est le même dispositif quoi que fasse l'adversaire : <b>Ff4, e3, Fd3, c3, Cf3, Cbd2, roque</b>. Deux ordres de coups y mènent, et ils portent des noms différents. L'<b>ordre classique</b> sort le cavalier d'abord — <b>1.d4 d5 2.Cf3 Cf6 3.Ff4</b> : c'est la version de référence, celle des grands maîtres. La <b>version accélérée</b> pose le fou tout de suite — <b>1.d4 d5 2.Ff4</b> : le fou est dehors avant que l'adversaire ait pu s'y opposer, mais d4 devient attaquable par …c5 alors que tu n'as développé aucune pièce. Les deux transposent presque toujours sur la même position, et aucun des deux n'est réfuté. La vraie règle, elle, ne change pas : <b>le fou sort AVANT e3</b>, puis <b>e3 verrouille le tout</b> — ce petit pion soutient d4 <b>et</b> défend le fou f4. Ensuite Fd3 (braqué sur h7), c3, Cbd2, roque, et Ce5 dès que l'occasion vient.`,
       lines: [
         {
-          name: 'Plan principal', eco: 'D02',
+          name: 'Ordre classique (2.Cf3 puis 3.Ff4)', eco: 'D02', altOrder: 1,
+          sans: ['d4','d5','Nf3','Nf6','Bf4','e6','e3','c5','c3','Nc6','Nbd2','Bd6','Bg3','O-O','Bd3'],
+          notes: [
+            '',
+            `Réponse classique et symétrique.`,
+            `<b>L'ordre classique</b> : le cavalier d'abord. Il développe, prépare le roque et n'engage à rien — le fou sortira au coup suivant, rien ne peut l'en empêcher.`,
+            `Les Noirs développent en miroir.`,
+            `<b>Le coup-signature du Londres</b>, ici au 3ᵉ coup : le fou sort AVANT e3, sinon il resterait enfermé derrière ses propres pions.`,
+            `Structure solide, type Gambit Dame refusé.`,
+            `<b>Le verrou</b> : e3 soutient d4 ET défend le fou f4 (un pion en e3 couvre les deux cases). C'est exactement pour ça qu'on le joue APRÈS avoir sorti le fou.`,
+            `La contestation classique du centre d4.`,
+            `<b>Le pilier</b> : c3 soutient d4 et ouvre la case c2 à la dame.`,
+            `Développe et presse d4.`,
+            `Le cavalier va en d2 (pas c3) : il ne bloque pas le pion c et prépare le bond Ce5.`,
+            `Les Noirs proposent l'échange du fou f4.`,
+            `<b>On garde le bon fou</b> : il recule en g3, où le pion h2 le protège et d'où il tient toujours e5.`,
+            `Les Noirs roquent… et deviennent une cible.`,
+            `<b>Position modèle du Londres</b> : le fou vise h7, et c'est exactement la position atteinte par l'ordre accéléré. Les deux chemins se rejoignent ici.`
+          ]
+        },
+        {
+          name: 'Version accélérée (2.Ff4 tout de suite)', eco: 'D02',
           sans: ['d4','d5','Bf4','Nf6','e3','e6','Nf3','c5','c3','Nc6','Nbd2','Bd6','Bg3','O-O','Bd3'],
           notes: [
             '',
             `Réponse classique et symétrique.`,
-            `<b>Le coup-signature du Londres</b> : le fou sort AVANT e3, sinon il resterait enfermé.`,
+            `<b>La version accélérée</b> : le fou d'abord, dès le 2ᵉ coup. Plus rien ne pourra l'enfermer — en échange, d4 est attaquable tout de suite par …c5.`,
             `Développe.`,
-            `Ouvre la maison au fou f1 et solidifie d4.`,
+            `<b>Le verrou</b> : e3 soutient d4 et défend le fou f4.`,
             `Les Noirs adoptent une structure solide type Gambit Dame refusé.`,
-            `Développement automatique du système.`,
+            `Le cavalier arrive maintenant : à ce stade, l'ordre n'a plus d'importance.`,
             `La contestation classique du centre d4.`,
-            `<b>Le pilier du Londres</b> : c3 soutient d4 et ouvre la case c2 au fou.`,
+            `<b>Le pilier du Londres</b> : c3 soutient d4 et ouvre la case c2 à la dame.`,
             `Développe et presse d4.`,
             `Le cavalier va en d2 (pas c3) : il ne bloque pas le pion c et prépare le bond Ce5.`,
             `Les Noirs proposent l'échange du fou f4.`,
-            `<b>On garde le bon fou</b> : au lieu d'échanger, il recule en g3 où il reste actif (e5, h2).`,
+            `<b>On garde le bon fou</b> : au lieu d'échanger, il recule en g3, où il reste actif et protégé par h2.`,
             `Les Noirs roquent… et deviennent une cible.`,
-            `<b>Le fou vise h7</b> : début du plan d'attaque type (Ce5, Dc1-h6, sacrifice grec Fxh7+ en embuscade). Position modèle du Londres.`
+            `<b>Le fou vise h7</b> : début du plan d'attaque type (Ce5, Dc1-h6, sacrifice grec Fxh7+ en embuscade). Même position que par l'ordre classique.`
           ]
         },
         {
           name: 'Contre …Ff5 (le clone)', eco: 'D02',
           sans: ['d4','d5','Bf4','Nf6','e3','Bf5','Nf3','e6','c4','c6','Nc3','Bd6','Bg3'],
           notes: [
-            '', `Réponse symétrique.`, `Le fou sort en premier.`, `Développe.`, `Solidifie d4.`,
-            `<b>Le clone</b> : les Noirs sortent LEUR fou avant …e6, en miroir. Contre ça, on change de plan.`,
+            '', `Réponse symétrique.`, `Le fou sort en premier.`, `Développe.`, `Solidifie d4 et défend le fou.`,
+            `<b>Le clone</b> : les Noirs sortent LEUR fou avant …e6, en miroir. C'est la réponse préférée du moteur à l'ordre accéléré — contre ça, on change de plan.`,
             `Développe.`, `Ouvre au fou.`,
             `<b>Changement de plan</b> : puisque le jeu est confortable en miroir, on ouvre par c4 pour créer un déséquilibre et presser d5.`,
             `Soutient d5.`, `Développe en pressant d5.`, `Échange proposé…`,
@@ -588,13 +616,14 @@ const Courses = (() => {
           ]
         },
         {
-          name: 'Contre …c5 + …Db6', eco: 'D02',
+          name: 'Le prix de l’accélération : …c5 + …Db6', eco: 'D02',
           sans: ['d4','d5','Bf4','c5','e3','Nc6','c3','Qb6','Qc1','Bf5','Nf3','e6','Nbd2'],
           notes: [
-            '', `Symétrie.`, `Le fou d'abord.`, `Les Noirs frappent le centre tout de suite.`,
-            `On reste calme : e3 soutient d4.`, `Pression sur d4.`, `Le pilier : d4 tient.`,
+            '', `Symétrie.`, `Le fou d'abord.`,
+            `<b>Le contre de l'ordre accéléré</b> : les Noirs frappent d4 dès le 2ᵉ coup, avant que tu aies sorti une pièce. Par l'ordre classique, ce coup arrive un temps plus tard, quand ton Cf3 est déjà là.`,
+            `On reste calme : e3 soutient d4 (et défend le fou).`, `Pression sur d4.`, `Le pilier : d4 tient.`,
             `<b>Le coup critique</b> : la dame attaque b2. Il faut connaître la parade.`,
-            `<b>La bonne défense</b> : Dc1 protège b2 SANS lâcher le fou f4 (contrairement à Db3, qui propose l'échange des dames et casse l'attaque).`,
+            `<b>La bonne défense</b> : Dc1 protège b2 SANS lâcher le fou f4. <b>Dc2</b> fait exactement le même travail, et le moteur préfère même le modeste <b>b3</b> : trois coups équivalents, retiens-en un seul. Le coup à éviter, c'est <b>Db3</b>, qui propose l'échange des dames et casse ton attaque.`,
             `Développement.`, `Développe.`, `Ouvre au fou.`,
             `On termine le schéma : Cbd2, puis Fd3/Fe2 et roque. Le Londres a tenu bon.`
           ]
@@ -607,24 +636,33 @@ const Courses = (() => {
           fen: 'r1bq1rk1/ppp2ppp/3bpn2/3pn3/3P4/4P1B1/PPPN1PPP/R2QKB1R w KQ - 0 8',
           sol: ['dxe5']
         },
-        { at: 0,
+        { at: 1,
           title: `🎯 Le schéma d'attaque : Ce5, Fd3, Dc1-h6`,
           hint: `Dès que l'adversaire roque du côté roi, le Londres a une attaque toute prête : cavalier en e5, fou en d3 (visant h7), dame en c1 puis h6, et parfois le sacrifice grec Fxh7+ suivi de Cg5+ et Dh5. Mémorise ce schéma : c'est là que le système devient tranchant.`
         },
+        { 
+          title: `♗ Il attaque ton fou par …Ch5 : glisse-le, ne l'échange pas`,
+          hint: `Contre l'ordre accéléré (1.d4 Cf6 2.Ff4), un adversaire averti joue …Ch5 pour taper sur ton fou. Ne le rends pas et ne le renvoie pas à la maison : <b>Fg5 !</b> Il reste dehors, hors de la chaîne de pions, et si …h6 tu continues Fh4. Le cavalier en h5, lui, est mal placé : tu as gagné du temps.`,
+          fen: 'rnbqkb1r/pppppppp/8/7n/3P1B2/8/PPP1PPPP/RN1QKBNR w KQkq - 3 3',
+          sol: ['Bg5']
+        },
         {
-          title: `♗ N'enferme JAMAIS ton fou : Ff4 avant e3`,
-          hint: `L'erreur classique : jouer Cf3 et e3 puis vouloir sortir le fou… trop tard, il est prisonnier en c1. L'ordre correct sort TOUJOURS le fou en f4 (ou g5) AVANT de fermer la diagonale avec e3.`
+          title: `♗ L'ordre des coups : le fou AVANT e3, le cavalier quand tu veux`,
+          hint: `Le seul ordre qui compte, c'est <b>le fou puis e3</b>. L'erreur classique : jouer Cf3 <b>et e3</b>, puis vouloir sortir le fou… trop tard, il est prisonnier en c1. En revanche <b>Cf3 avant le fou (ordre classique) ou après (ordre accéléré), c'est au choix</b> : les deux arrivent à la même position. Retiens la séquence sûre : Ff4 → e3 (qui défend d4 ET le fou) → Fd3 → c3 → Cf3 → Cbd2 → roque.`
         }
       ],
       transpositions: [
+        { label: `Ordre classique : 1.d4 d5 2.Cf3 Cf6 3.Ff4`, note: `L'ordre de référence, le plus joué : le cavalier sort d'abord, le fou au 3ᵉ coup, et on retombe sur la position type du Londres. C'est l'ordre le plus prudent — le développement commence avant de s'engager.` },
+        { label: `Ordre accéléré : 1.d4 d5 2.Ff4 (ou 1.d4 Cf6 2.Ff4)`, note: `Le fou est posé immédiatement, avant tout développement. Aucun problème théorique, mais l'adversaire gagne un temps pour frapper d4 par …c5 (avec …Db6 sur b2) ou pour copier avec …Ff5 : ce sont les deux réponses à connaître.` },
         { label: `…Cf6 puis …g6 (setup est-indien)`, note: `Si les Noirs fianchettent (…g6, …Fg7), on garde le même plan (e3, Fd3, c3, Cbd2) ; l'attaque h4-h5 devient une option de plus contre leur roque.` },
-        { label: `Ordre de coups : 2.Cf3 puis 3.Ff4`, note: `On atteint souvent le Londres par 1.d4 puis Cf3 et Ff4 : mêmes positions, tant qu'on sort le fou avant e3.` },
         { label: `Jobava-Londres (2.Cc3 + Ff4)`, note: `Variante plus agressive : cavalier en c3 et attaque rapide (e4, Cb5). Un autre univers, plus tranchant que le Londres classique.` }
       ],
       quiz: [
         { q: `Pourquoi joue-t-on Ff4 AVANT e3 au Système de Londres ?`, opts: [`Pour ne pas enfermer le fou derrière la chaîne de pions`, `Pour attaquer la dame`, `Parce que e3 serait illégal avant`, `Pour préparer le grand roque`], answer: 0, explain: `Le fou de cases sombres doit sortir hors de la chaîne e3-d4 ; joué après e3, il resterait mauvais en c1.` },
-        { at: 2, q: `Après 4…Db6 (qui attaque b2), quelle défense garde le fou f4 ET les dames pour jouer le gain ?`, opts: ['5.Dc1', '5.Db3 (propose l\'échange)', '5.b3 (affaiblit)', '5.dxc5'], answer: 0, explain: `5.Dc1 protège b2 sans rien lâcher ; Db3 mène souvent à l'échange des dames et à l'égalité.` },
-        { at: 0, q: `Quel est le schéma d'attaque typique du Londres contre un roque adverse ?`, opts: [`Ce5, Fd3, Dc1-h6 et parfois Fxh7+`, `Roque long et pion h`, `Échanger toutes les pièces`, `Pousser a4-a5`], answer: 0, explain: `Le fou d3 vise h7, le cavalier e5 renforce, la dame vient en h6 : schéma standard, avec le sacrifice grec Fxh7+ en embuscade.` }
+        { q: `Lequel est l'ordre CLASSIQUE du Londres ?`, opts: [`1.d4 d5 2.Cf3 Cf6 3.Ff4`, `1.d4 d5 2.Ff4`, `1.d4 d5 2.Cc3 Cf6 3.Ff4`, `1.d4 d5 2.e3 Cf6 3.Ff4`], answer: 0, explain: `Le cavalier d'abord, le fou au 3ᵉ coup : c'est l'ordre de référence. 2.Ff4 tout de suite est la version <b>accélérée</b> ; 2.Cc3 est le Jobava ; et 2.e3 est l'erreur qui enferme le fou.` },
+        { q: `Une fois le fou sorti en f4, que fait le pion e3 ?`, opts: [`Il soutient d4 ET défend le fou f4`, `Rien, c'est un coup d'attente`, `Il ouvre la diagonale du fou c1`, `Il attaque le pion d5`], answer: 0, explain: `Un pion blanc en e3 couvre d4 et f4 : c'est le coup qui verrouille le dispositif. D'où l'ordre fou → e3, jamais l'inverse.` },
+        { at: 3, q: `Après 4…Db6 (qui attaque b2), quelle défense garde le fou f4 ET les dames pour jouer le gain ?`, opts: ['5.Dc1 (ou 5.Dc2)', '5.Db3 (propose l\'échange)', '5.Fxb8 (on rend le bon fou)', '5.dxc5'], answer: 0, explain: `Dc1 et Dc2 protègent b2 sans rien lâcher ; Db3 mène souvent à l'échange des dames et à l'égalité, et Fxb8 brûle le fou sur lequel tout le système repose.` },
+        { at: 1, q: `Quel est le schéma d'attaque typique du Londres contre un roque adverse ?`, opts: [`Ce5, Fd3, Dc1-h6 et parfois Fxh7+`, `Roque long et pion h`, `Échanger toutes les pièces`, `Pousser a4-a5`], answer: 0, explain: `Le fou d3 vise h7, le cavalier e5 renforce, la dame vient en h6 : schéma standard, avec le sacrifice grec Fxh7+ en embuscade.` }
       ]
     },
 
@@ -1065,6 +1103,18 @@ const Courses = (() => {
   };
   Object.keys(EXTRA).forEach(k => { if (COURSES[k]) Object.assign(COURSES[k], EXTRA[k]); });
 
+  // Un même cours peut être atteint par deux ordres de coups : le Londres se
+  // joue 2.Ff4 (accéléré) ou 2.Cf3 Cf6 3.Ff4 (classique), et une partie jouée
+  // dans le second ordre ne commence PAS par la clé `d4 d5 Bf4` — match() ne
+  // retrouvait donc pas le cours. L'alias fait pointer l'autre clé sur le MÊME
+  // objet ; le vérificateur les saute (déjà contrôlées sous la clé canonique).
+  const ALIASES = {
+    'd4 d5 Nf3 Nf6 Bf4': 'd4 d5 Bf4',
+    'd4 Nf6 Bf4': 'd4 d5 Bf4',
+    'd4 Nf6 Nf3 d5 Bf4': 'd4 d5 Bf4'
+  };
+  Object.keys(ALIASES).forEach(k => { if (!COURSES[k] && COURSES[ALIASES[k]]) COURSES[k] = COURSES[ALIASES[k]]; });
+
   function get(line) { return (line && COURSES[line]) || null; }
   function has(line) { return !!(line && COURSES[line]); }
 
@@ -1178,7 +1228,7 @@ const Courses = (() => {
     return out;
   }
 
-  return { get, has, match, COURSES, buildBranches, spread };
+  return { get, has, match, COURSES, ALIASES, buildBranches, spread };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Courses;

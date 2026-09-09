@@ -4579,13 +4579,14 @@ const App = (() => {
       ] },
     { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Système de Londres', en: 'London System', eco: 'D00', side: 'w', level: '👍 Facile à jouer',
       line: 'd4 d5 Bf4',
-      desc: `Une configuration <b>passe-partout</b> : le fou sort en f4 et les Blancs jouent presque toujours les mêmes coups, quelle que soit la réponse noire. Peu de théorie, idéal pour gagner du temps et jouer sur plan.`,
-      idea: `Un système « passe-partout » : on sort le fou en f4 (avant de jouer e3, pour ne pas l'enfermer) et on répète presque les mêmes coups quelle que soit la réponse noire. Peu de théorie, beaucoup de temps gagné.`,
+      desc: `Une configuration <b>passe-partout</b> : le fou sort en f4 et les Blancs jouent presque toujours les mêmes coups, quelle que soit la réponse noire. Deux ordres possibles - <b>2.Cf3 Cf6 3.Ff4</b> (classique) ou <b>2.Ff4</b> tout de suite (accéléré) : ils transposent. Peu de théorie, idéal pour gagner du temps et jouer sur plan.`,
+      idea: `Un système « passe-partout » : on sort le fou en f4 (avant de jouer e3, pour ne pas l'enfermer), puis e3 qui soutient d4 ET défend le fou, et on répète presque les mêmes coups quelle que soit la réponse noire. L'ordre de référence sort le cavalier d'abord (2.Cf3 Cf6 3.Ff4) ; 2.Ff4 immédiat est la version accélérée. Peu de théorie, beaucoup de temps gagné.`,
       plans: { w: `Pyramide Ff4, e3, Fd3, c3, Cbd2, roque ; puis Ce5 et un assaut à l'aile roi si l'occasion se présente.`, b: `…c5 et …Db6 pour harceler b2 et d4, ou …Ff5 pour neutraliser le fou f4 par un échange ou …Cf6-h5.` },
       structure: `Structure fixe et symétrique d4-e3-c3 : sûre, mais peu ambitieuse si on la joue passivement, sur pilote automatique.`,
       mistakes: `Jouer en pilote automatique sans réagir quand les Noirs frappent par …c5 et …Db6 : b2 et d4 deviennent alors des cibles concrètes.`,
       deviations: [
-        { label: `…c5 + …Db6`, note: `La meilleure réponse noire : elle attaque b2 et d4 à la fois. Les Blancs doivent défendre précisément (Db3 ou Cc3), sinon ils perdent l'initiative dès l'ouverture.` }
+        { label: `…c5 + …Db6`, note: `La réponse qui pique : elle attaque b2 et d4 à la fois, et elle arrive un temps plus tôt contre l'ordre accéléré. Les Blancs doivent défendre précisément (Dc1, Dc2 ou b3 - pas Db3, qui brade les dames), sinon ils perdent l'initiative dès l'ouverture.` },
+        { label: `Ordre classique ou accéléré`, note: `<b>2.Cf3 Cf6 3.Ff4</b> (classique, l'ordre de référence) et <b>2.Ff4</b> (accéléré) mènent à la même position. Seule règle intangible : le fou sort AVANT e3, sinon il reste enfermé en c1.` }
       ] },
 
     // ── Indian defenses: 1.d4 Nf6 ──

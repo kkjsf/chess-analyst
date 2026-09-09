@@ -98,6 +98,37 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v224 - LE LONDRES A DEUX ORDRES DE COUPS (classique / accelere).** Sa question : « d4 d5 Ff4,
+  ce n'est pas la version acceleree ? il n'y a pas un Cf3 avant le fou ? » - si. Le cours ne
+  presentait que 2.Ff4 et reduisait l'ordre de reference a une note de transposition.
+  - `js/courses.js` : nouvelle ligne 0 **Ordre classique (2.Cf3 puis 3.Ff4)** (`altOrder: 1`),
+    l'ancien « Plan principal » devient **Version acceleree (2.Ff4 tout de suite)**, et la ligne
+    …c5+…Db6 devient **Le prix de l'acceleration**. Les deux ordres transposent : verifie par le
+    verificateur, positions finales identiques (`r1bq1rk1/pp3ppp/2nbpn2/2pp4/3P4/2PBPNB1/PP1N1PPP/R2QK2R`).
+    L'arbre des branches fourche donc maintenant des `1...d5` : DEPART -> 2.Cf3 (classique) | 2.Ff4
+    (accelere -> …Cf6 3.e3 -> plan principal / clone …Ff5 ; …c5 -> le prix).
+  - Le point qu'il a lui-meme formule (« on verrouille en defendant le fou avec e3 ») est desormais
+    dit partout : un pion blanc en e3 couvre **d4 ET f4**. Nouvelle question de quiz dessus, plus une
+    sur « lequel est l'ordre classique ». Piege « ordre des coups » reecrit : le seul ordre qui compte
+    est fou -> e3, Cf3 avant ou apres est au choix.
+  - Nouveau piege joue : **…Ch5 -> Fg5 !** (harcelement typique de l'ordre accelere apres 1.d4 Cf6
+    2.Ff4). Stockfish d18 : Fg5 +0.97, Fd2 +0.82, Fc1 +0.56 - le fou reste dehors, et si …h6, Fh4.
+  - Correction d'un distracteur FAUX dans le quiz …Db6 : « 5.b3 (affaiblit) » etait donne comme
+    mauvais alors que Stockfish d18 met b3 en tete (+0.38, devant Dc2 +0.19 et Dc1 +0.17). Remplace
+    par « 5.Fxb8 (on rend le bon fou) », et la note de la ligne dit maintenant que Dc1 = Dc2 = b3 et
+    que le coup a eviter est Db3.
+  - Aucun des deux ordres n'est refute (Stockfish d18 : egalite apres 2.Ff4 comme apres 3.Ff4 ; sa
+    reponse preferee a l'accelere est …Ff5, pas …c5) - le cours le dit au lieu de laisser croire que
+    …c5 punit.
+  - **Alias de cles de cours** (`Courses.ALIASES`) : `d4 d5 Cf3 Cf6 Ff4`, `d4 Cf6 Ff4` et
+    `d4 Cf6 Cf3 d5 Ff4` pointent sur le MEME objet que `d4 d5 Ff4`. Sans ca, `Courses.match()` ne
+    retrouvait pas le cours pour une partie jouee dans l'ordre classique (le prefixe ne collait pas).
+  - `tools/verify_openings.cjs` : saute les cles alias, et comprend `altOrder: j` - il exige alors
+    deux choses PLUS fortes que le prefixe (les coups de la ligne de base joues dans le meme ordre
+    relatif, et la position finale identique a celle de `lines[j]`). 121 controles OK.
+  - Aussi : fiche catalogue `app.js` (desc/idea/deviations) et noeud de l'arbre `opening-tree.js`
+    (idea + nouvelle branche « Londres - ordre classique », FEN calee chess.js). Verifie en preview
+    (rail des variantes, carte DEPART, branche classique), 0 erreur console. APP_VERSION 223->224.
 - **v212-v223 - REFONTE DE L'ECRAN ANALYSE + COURS D'OUVERTURE BRANCHES SUR SES PARTIES**
   (SHIPPED `6e43aa1`, verifie en live). Les deux maquettes de `_mockups/`
   (analysis-redesign-2026-09.html, opening-lesson-enrich-2026-09.html) sont IMPLEMENTEES.
