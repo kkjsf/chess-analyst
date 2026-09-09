@@ -127,7 +127,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v225-v232 - LE MODE ENTRAINEUR : jouer une partie complete contre le coach.**
+- **v225-v232 - LE MODE ENTRAINEUR : jouer une partie complete contre le coach** (SHIPPED `fe398a1`, verifie en live).
   La maquette `_mockups/coach-mode-2026-09.html` (6 ecrans) est implementee. Nouveau module
   `js/coachgame.js` (~900 lignes), tuile en TETE du hub Apprendre. 66 tests unitaires OK
   (39 + 27 nouveaux), 121 controles de verify_openings OK, 0 erreur console, verifie en jouant
