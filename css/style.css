@@ -4907,6 +4907,11 @@ body.guess-open { overflow: hidden; }
    le user demandait (« en tout cas en mode desktop »). Les couleurs sont
    celles de `.eval-badge` de l'ecran d'analyse - un seul jeu de couleurs pour
    toute l'app. */
+/* GARDE-FOU : dans ce calque, `[hidden]` doit toujours gagner. Un
+   `display: grid` / `display: flex` plus specifique le bat sinon - c'est ce qui
+   affichait l'ecran de partie (plateau vide) SOUS les reglages en desktop, et
+   c'est le meme piege que `.cg-opts[hidden]` juste en dessous. */
+#cg-overlay [hidden] { display: none !important; }
 .cg-side { display: none; }
 .cg-why { margin-top: 7px; }
 .cg-why p { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); margin: 5px 0 0; }
