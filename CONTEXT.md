@@ -1,7 +1,7 @@
-# Chess Analyst — Context
+# Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v244** (`3903d7f`). **v245 en cours, non commitée** (voir l'historique en bas).
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -127,6 +127,54 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v245-v248 - LA TYPOLOGIE DES COUPS, CORRIGEE A LA RACINE, + navigation dans le suivi.**
+  Signale par le user : en Petrov (1.e4 e5 2.Cf3 Cf6), les coups **du coach** sortaient
+  « ?! Imprecision » (…e5) et « ? Erreur » (…Cf6). Non, ce n'est pas normal - deux causes, l'une
+  de cablage, l'autre de methode.
+  - **Cablage** : je passais `inBook: false` EN DUR pour ses coups, donc la regle du livre ne
+    valait que pour les miens (et son `winBefore`/`stillOk` etaient bidonnes, il ne pouvait donc
+    jamais ecoper d'un « coup manque »). La theorie ne depend pas du camp qui joue : `myMoveWasBook`
+    devient **`lastMoveWasBook`** et sert aux deux cotes, avec les vrais `winBefore`/`stillOk`
+    calcules de SON point de vue.
+  - **Le test « on est encore dans le livre » etait faux** : `Openings.detect()` cherche une ligne
+    du catalogue qui soit un PREFIXE des coups joues, elle ne peut donc rien dire de « 1.e4 e5 »
+    (qui n'est le nom d'aucune ouverture mais le debut de trente) - d'ou ma rustine « les 6
+    premiers demi-coups comptent comme du livre », qui excusait aussi n'importe quoi. Nouveau
+    **`Openings.inBook(sans)`** : la sequence jouee est-elle le DEBUT d'une ligne du catalogue ?
+    C'est la bonne question, et elle vit la ou vit le catalogue. 8 tests dessus.
+  - **Methode : je notais un coup en SOUSTRAYANT DEUX RECHERCHES** (celle d'avant, celle d'apres),
+    ce qui additionne le vrai changement et le bruit de profondeur - un coup de developpement
+    tranquille sortait « ?! » pour cette seule raison. L'analyseur de l'app ne fait pas ca : il lit
+    la perte **dans les lignes MultiPV d'une seule recherche**, ou les scores sont comparables et
+    ou le meilleur coup perd exactement 0. Nouveau `lineLoss(lines, uci)`, applique aux DEUX camps
+    - la recherche faite apres mon coup porte justement sur SES coups candidats, donc son coup se
+    note immediatement et sans bruit. Repli sur l'ancienne methode quand le coup n'est pas dans les
+    5 lignes. 6 tests dessus.
+  - **Verifie en jouant la Petrov** : `1. e4 📖 / e5 📖 / 2. Cf3 📖 / Cf6 📖`. Et un vrai mauvais
+    coup reste sanctionne : `3.De2` (hors livre) -> « ? Erreur » avec l'explication complete.
+  - **Un test a rattrape MON erreur** : j'avais ecrit que `3.Cxe5` dans la Petrov etait hors livre.
+    C'est la ligne principale, et le catalogue la contient (`Petrov - variante classique`). Le test
+    a echoue, pas le code.
+  - **Navigation dans le suivi des coups** (demande du user) : chaque case du suivi est un bouton,
+    un clic rejoue la position depuis le depart (`fenAtPly`, `game` n'est jamais modifie), un
+    bandeau « 👁 Tu regardes le coup 1.e4 » avec ◀ ▶ et « ▶▶ Revenir a la partie », la case
+    courante est cerclee, et **le plateau est verrouille pendant la revue** (on ne joue pas depuis
+    le passe). Un coup joue ou la reponse du coach ramenent d'office au present.
+- **v245 (EN COURS, NON COMMITE au 2026-09-09) - LES COUPS DU COACH SONT NOTES AVEC LES MEMES
+  REGLES QUE LES TIENS.** Fichiers modifies dans l'arbre de travail : `index.html`
+  (`APP_VERSION` deja a `245`) et `js/coachgame.js`. Le journal des coups notait le camp du coach
+  avec des valeurs par defaut (`inBook` faux, base a 0,5), donc **en Petrov ses `...e5` et
+  `...Cf6` sortaient « imprecision » et « erreur »** alors que ce sont des coups de theorie.
+  Ce qui change :
+  - `myMoveWasBook` devient **`lastMoveWasBook`** : la theorie depend de la **position atteinte**,
+    pas du camp qui joue, donc la meme fonction sert pour les deux cotes.
+  - `pendingOpp` porte un drapeau **`inBook`** rempli au moment ou le coach joue.
+  - `classify` recoit la vraie base en **chances de gain** (`Analyzer.cpToWinPct(evalBefore)`) au
+    lieu du 0,5 code en dur, plus le test « il reste au-dessus de -150 ».
+  - le **tout premier coup du coach** (quand il ouvre) est journalise et badge « theorique » sans
+    note : il n'y a aucune eval de reference avant lui.
+  **A finir avant de livrer :** rejouer une Petrov pour verifier les libelles des deux camps, puis
+  commiter/pousser (APP_VERSION est deja bumpe, ne pas le rebumper).
 - **v244 (SHIPPED `3903d7f`, verifie en live) - FIX D'AFFICHAGE : l'ecran de partie s'affichait
   SOUS les reglages en desktop** (plateau vide + colonne « Suivi des coups »), signale capture
   d'ecran a l'appui. Cause : `#cg-game { display: grid }` - la mise en page deux colonnes du
@@ -1271,7 +1319,7 @@
     Un FEN pré-existant cassé du Gambit du Roi (rangée à 9 pions) corrigé au passage.
   - **Catalogue de détection** (`js/openings.js`) : +~25 lignes nommées (Marshall, échange espagnol,
     Evans accepté/décliné, Deux Cav. Cg5/Traxler/Polerio/Fegatello, hongroise, gambit Écossais,
-    Falkbeer, gambit viennois…) ; label « Slave — semi-Slave » erroné corrigé en « Slave acceptée ».
+    Falkbeer, gambit viennois…) ; label « Slave - semi-Slave » erroné corrigé en « Slave acceptée ».
   - **Catalogue explorable** (`OPENINGS` dans `js/app.js`) : ajout des fiches complètes **Giuoco Piano**,
     **Gambit Evans**, **Défense des deux cavaliers** (les 3 exemples cités par l'user) pour que le bouton
     « Ouvrir dans Chess Analyst » de l'arbre ouvre une vraie fiche cours plutôt que la liste.
@@ -1350,7 +1398,7 @@
   vérifié 200) + entrée riche dans le catalogue `OPENINGS` (`js/app.js`, `line: 'e4 e5 Nc3'`, desc/idea/
   plans/structure/mistakes/deviations) → clic dans l'arbre ouvre bien l'explorateur Viennoise (pas le
   fallback). Demande user (il joue souvent e4 e5 Cc3 et ne le trouvait pas). **GOTCHA rappel** : le SW
-  est cache-first sur `?v=` — j'ai dû bumper 151→152 (les edits opening-tree.js/app.js faits APRÈS que
+  est cache-first sur `?v=` - j'ai dû bumper 151→152 (les edits opening-tree.js/app.js faits APRÈS que
   v151 ait été mis en cache pendant la vérif du panneau étaient servis périmés).
 - Cours sur les mats (v150): l'onglet du bas **Finales** (ancien entraîneur roi-seul, `js/endgame.js`)
   est SUPPRIMÉ (Chess.com le fait déjà bien) et remplacé par un onglet **Mats** = un vrai cours illustré.
@@ -1367,7 +1415,7 @@
   endgame.js→mates.js, tab finales→mats + icône, home-hint), `app.js` (navTo/wireTabSync finales→mats,
   Endgame→Mates, handler mort `btn-open-endgame` retiré), `sw.js` (précache endgame.js→mates.js),
   `css/style.css` (bloc `.eg-*` remplacé par `.mate-*`). Vérifié en preview (menu, diagrammes, flèches,
-  lancement exo, résolution clic → « ✅ Résolu — De6# »).
+  lancement exo, résolution clic → « ✅ Résolu - De6# »).
 - UI Coach + Analyse (v147): (A) le dashboard Coach est découpé en 5 sections thématiques
   labellisées (Vue d'ensemble / Résultats & progression / Erreurs & faiblesses / Style de jeu &
   adversaires / Passer à l'action), chacune avec sa propre masonry + un panneau teinté à couleur
@@ -1412,12 +1460,12 @@
 - Correctness-edges + polish: cacheKey enrichi (Link/composite, plus de collision même-jour), garde deux-comptes IDB pour le Coach, puzzle accepte tout mat, SEE ep-aware, rate-limit fetch chess.com, modal aria-dialog + focus trap.
 - Labels/couleurs FR façon Chess.com: Occasion manquée→Coup manqué, couleur "miss" en rouge (distincte de l'orange "erreur"). NB: le mapping great/excellent posé ici en v106 (great="Très bon") était faux, corrigé en v145 (great="Excellent", excellent="Très bien").
 
-- v154 — deux ajouts orientés "montrer les coups" :
+- v154 - deux ajouts orientés "montrer les coups" :
   1. **Entraînement (puzzles)** : le contexte de partie nomme désormais l'adversaire et la date
      ("Coup N · tu avais joué X lors de ta partie contre Y le 12 mai 2024"). Helpers `formatCardDate`
      + `opponentName` + `puzzleContextHtml` dans `js/training.js` ; l'adversaire = couleur non jouée,
      date PGN `YYYY.MM.DD` → FR.
-  2. **Coach — carte "✨ Tes plus beaux coups"** (`renderHighlights`/`bindHighlights`/`collectHighlights`
+  2. **Coach - carte "✨ Tes plus beaux coups"** (`renderHighlights`/`bindHighlights`/`collectHighlights`
      dans `js/coach.js`, groupe `wins`) : galerie de mini-échiquiers des coups **brillants** et **très bons**
      (BoardRenderer.render du `fenBefore` + surbrillance du coup joué), badge + `vs adversaire · date` + tip.
      Source des positions = `analysis.highlights` (nouveau, ajouté à `computeGameStats` dans `js/analysis.js`,
@@ -1428,7 +1476,7 @@
      GitHub Actions, non déclenchable en CLI) car les brillants n'étaient pas stockés per-move avant v154 ;
      les 5 brillants "rapide" de Simon apparaissent immédiatement dans la liste "à voir".
 
-- v155 — **fix confusion libellés + carte beaux coups scindée en 2 tiers**. (1) Le libellé du coup
+- v155 - **fix confusion libellés + carte beaux coups scindée en 2 tiers**. (1) Le libellé du coup
   `!` (`great`) était incohérent : « Excellent » dans l'analyseur/les commentaires moteur mais « Très
   bon » dans le Coach + ma galerie (badge « Très bon » AVEC un tip « Excellent ! » = contradiction).
   Unifié sur le canonique (= MOVE_CLASS app.js, aligné Chess.com FR) : `great`=**Excellent** (!),
@@ -1439,7 +1487,7 @@
   Excellent sous un titre brillants. ⚠️ Toujours : les brillants de Simon (5 rapide + 9 daily) n'ont pas
   de position stockée → ils sont dans la liste 👁 (re-run Coach FULL requise pour les échiquiers).
 
-- v156 — **mode exploration après un puzzle résolu** (`js/training.js`). Une fois le puzzle résolu,
+- v156 - **mode exploration après un puzzle résolu** (`js/training.js`). Une fois le puzzle résolu,
   bouton « 🔍 Continuer à jouer » (masqué si la position est déjà terminale) → mode analyse libre :
   l'échiquier redevient jouable (n'importe quel coup légal, les deux camps), Stockfish trace son
   meilleur coup (flèche bleue) et affiche une éval en direct (relative aux Blancs) + la suite en FR.
@@ -1451,7 +1499,7 @@
   Vérifié en preview : reveal → Continuer → coup g7g6 (trait passe aux Blancs) → Annuler → Départ →
   notation avance au puzzle suivant ; éval/flèche/PV OK (moteur fonctionnel sous npx serve). CSS
   `.train-feedback.explore`. APP_VERSION 155→156.
-- v157 — **contexte des puzzles enrichi du résultat + de la cadence** (`js/training.js`, `js/coach.js`).
+- v157 - **contexte des puzzles enrichi du résultat + de la cadence** (`js/training.js`, `js/coach.js`).
   La ligne de contexte d'un puzzle d'entraînement affiche désormais, après l'adversaire et la date,
   le résultat vu du joueur (**victoire / défaite / partie nulle**) et la **cadence** (rapide /
   journalière), ex. « ... le 12 mai 2024 · **défaite** · partie rapide ». Nouveaux champs `result`
@@ -1467,3 +1515,8 @@
 - Volontairement laissés: adherence-after-deviation, tactics forced-replies, profondeur item #20, accuracy=100, renderRepeated en brut.
 
 **Notes:** Les data de coaching sont liées au compte utilisateur analysé (garde IDB deux-comptes en place). Sur un changement de correctness, prévoir une re-run complète du coach pour que ça se voie.
+
+---
+Index de tous les projets perso et regles de travail : **`../AGENTS.md`** (lisible par
+n'importe quel assistant IA). Transfert vers une autre machine / un autre compte / une autre IA :
+**`../HANDOFF.md`**.

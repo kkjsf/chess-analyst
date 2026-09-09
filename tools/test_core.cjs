@@ -228,6 +228,32 @@ function T(group, label, fen, from, to, fn, want, promotion) {
     produced.filter(k => !types.some(t => t.k === k)), []);
 }
 
+// ────────────── « encore dans le livre » (js/openings.js) ───────────────────
+// Signale par le user : en Petrov, les coups DU COACH sortaient « ?! » et « ? ».
+// detect() nomme une position (une ligne du catalogue prefixe des coups joues) ;
+// inBook() repond a l'autre question - les coups joues sont-ils le DEBUT d'une
+// ligne connue - et c'est celle-la qui dit « c'est de la theorie ».
+{
+  const G = 'LIVRE';
+  const B = global.Openings.inBook;
+  const sp = (s) => s.split(' ');
+
+  check(G, '1.e4 : dans le livre', B(sp('e4')), true);
+  check(G, '1.e4 e5 : dans le livre (aucune ligne ne s\'appelle ainsi)', B(sp('e4 e5')), true);
+  check(G, 'Petrov 1.e4 e5 2.Cf3 Cf6 : dans le livre', B(sp('e4 e5 Nf3 Nf6')), true);
+  check(G, 'Londres classique : dans le livre', B(sp('d4 d5 Nf3 Nf6 Bf4')), true);
+  // 3.Cxe5 EST la ligne principale de la Petrov : le test l'avait d'abord
+  // classe « hors livre », c'est moi qui avais tort, pas le catalogue.
+  check(G, '3.Cxe5 : la ligne principale de la Petrov, donc du livre', B(sp('e4 e5 Nf3 Nf6 Nxe5')), true);
+  // Et ce qui n'est PAS de la theorie doit sortir du livre, sinon la regle
+  // excuse n'importe quoi (c'est ce que faisait mon rustine « 6 demi-coups »).
+  check(G, '3.Cg5 dans la Petrov : hors livre', B(sp('e4 e5 Nf3 Nf6 Ng5')), false);
+  check(G, '1.e4 h5 : hors livre des le 2e demi-coup', B(sp('e4 h5')), false);
+  check(G, '1.b4 : hors livre', B(sp('b4')), false);
+  check(G, 'position vide : dans le livre', B([]), true);
+  check(G, '2.Dh5 est bien AU catalogue (mais ca ne le rend pas bon)', B(sp('e4 e5 Qh5')), true);
+}
+
 // ────────────── force de jeu du mode entraineur (js/coachgame.js) ──────────
 // Le moteur embarque n'a pas d'option d'Elo (ni UCI_Elo ni UCI_LimitStrength),
 // donc le niveau est FABRIQUE : Skill Level + movetime + tirage pondere dans le
@@ -290,6 +316,21 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   // Et le resserrement doit vraiment changer le coup joue, pas juste le chiffre.
   const obvious = [.3, .5, .7, .9].map(r => pick(5, eff(L2(920, 20), 4), r));
   check(G, 'devant une piece gratuite, le coach prend', Math.max(...obvious) <= 1, true);
+
+  // La perte se lit DANS une seule recherche (lignes MultiPV), pas en
+  // soustrayant deux recherches : c'est ce qui faisait sortir « ?! » sur un coup
+  // de developpement tranquille (bruit de profondeur compte comme une perte).
+  const LL = CoachGame.lineLoss;
+  const lines = [
+    { move: 'e2e4', score: 30 }, { move: 'd2d4', score: 26 },
+    { move: 'g1f3', score: 20 }, { move: 'c2c4', score: 12 }, { move: 'b2b4', score: -60 },
+  ];
+  check(G, 'le meilleur coup perd exactement 0', LL(lines, 'e2e4').cp, 0);
+  check(G, 'le 2e coup perd peu', LL(lines, 'd2d4').cp, 4);
+  check(G, 'un coup faible perd beaucoup', LL(lines, 'b2b4').cp, 90);
+  check(G, 'le 2e coup reste sous le seuil d\'imprecision', LL(lines, 'd2d4').wpl < 0.05, true);
+  check(G, 'coup absent des lignes : pas de note exacte', LL(lines, 'h2h4'), null);
+  check(G, 'pas de lignes : pas de note exacte', LL(null, 'e2e4'), null);
 
   // La note de MES coups se lit en chances de gain, pas en centiemes bruts.
   // Mesure en jouant : juge en centiemes, 1.e4 sortait « erreur (-63 cp) ».

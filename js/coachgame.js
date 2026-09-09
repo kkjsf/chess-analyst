@@ -112,7 +112,7 @@ const CoachGame = (() => {
   let mySide = 'w';
   let busy = false, token = 0;
   let curEvalMe = null;     // eval a mon trait, vue de mon camp (centipions)
-  let myBestUci = null, myBestPv = '';
+  let myBestUci = null, myBestPv = '', myLines = null;
   let stats = null;         // { moves, best, slips, hints, mistakes: [] }
   let track = [];           // eval vue de mon camp, coup par coup (courbe du bilan)
   let hintLevel = 0, hintArrow = false;
@@ -126,7 +126,10 @@ const CoachGame = (() => {
   // « avant » est celle qu'on mesure apres MON coup, son eval « apres » celle du
   // tour suivant - deux recherches qu'on fait de toute facon.
   let moveLog = [];
-  let pendingOpp = null;            // { idx, evalBefore } : le coup du coach en attente de note
+  // Mode revue : nombre de demi-coups affiches depuis le depart, ou null quand
+  // on regarde la position courante. La PARTIE (`game`) n'est jamais touchee.
+  let reviewPly = null;
+  let pendingOpp = null;            // { idx, evalBefore, inBook } : coup du coach en attente de note
   let saved = false;
 
   // ── Utilitaires ──────────────────────────────────────────────────────────
@@ -315,6 +318,7 @@ const CoachGame = (() => {
               <span class="cg-capt" id="cg-bot-capt"></span>
               <span class="cg-mat" id="cg-bot-mat"></span>
             </div>
+            <div class="cg-review" id="cg-review" hidden></div>
             <div class="guess-feedback rp-comment">
               <div class="rp-verdict" id="cg-verdict"></div>
               <div class="rp-status" id="cg-status"></div>
@@ -371,6 +375,14 @@ const CoachGame = (() => {
     $('#cg-hinton').onclick = () => $('#cg-hinton').classList.toggle('on');
     $('#cg-book').onchange = () => { $('#cg-bookmode').hidden = !$('#cg-book').value; };
     // « Reprendre ce coup » est injecte dans le verdict : delegation.
+    $('#cg-review').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-rev]');
+      if (!b || !game) return;
+      const total = game.history().length;
+      if (b.dataset.rev === 'live') gotoPly(total);
+      else if (b.dataset.rev === 'prev') gotoPly((reviewPly == null ? total : reviewPly) - 1);
+      else if (b.dataset.rev === 'next') gotoPly((reviewPly == null ? total : reviewPly) + 1);
+    });
     $('#cg-verdict').addEventListener('click', (e) => {
       if (!e.target) return;
       if (e.target.id === 'cg-retry' && !busy) undo();
@@ -388,7 +400,7 @@ const CoachGame = (() => {
       BoardRenderer.enableDrag(boardSvg, {
         getFen: () => curFen(),
         arrows: arrowsSvg,
-        canMove: () => !busy && myTurn(),
+        canMove: () => !busy && myTurn() && reviewPly === null,
         onMove: (from, to) => playMyMove(from, to),
       });
     }
@@ -512,7 +524,7 @@ const CoachGame = (() => {
 
     game = new Chess();
     stats = { moves: 0, best: 0, slips: 0, hints: 0, mistakes: [] };
-    moveLog = []; pendingOpp = null;
+    moveLog = []; pendingOpp = null; myLines = null; reviewPly = null;
     track = []; saved = false; curEvalMe = null; myBestUci = null; hintLevel = 0; hintArrow = false;
     busy = false; token++; threatArrows = false;
 
@@ -527,6 +539,8 @@ const CoachGame = (() => {
   }
 
   function renderBoard(lastMove, animateFrom) {
+    // Un coup joue (ou la reponse du coach) ramene forcement au present.
+    if (reviewPly !== null) { reviewPly = null; renderReviewBar(); }
     if (animateFrom) BoardRenderer.renderAnimated(boardSvg, animateFrom, curFen(), lastMove, ANIM_MS);
     else BoardRenderer.render(boardSvg, curFen(), lastMove);
     syncControls();
@@ -632,13 +646,15 @@ const CoachGame = (() => {
     renderMoves();
   }
 
-  function mvCell(e) {
+  function mvCell(e, idx) {
     if (!e) return '<span class="cg-mv empty"></span>';
     const T = e.k ? typeOf(e.k) : null;
-    const cls = 'cg-mv' + (e.k ? ' ' + e.k : '') + (e.mine ? ' mine' : '');
+    const live = reviewPly == null ? moveLog.length : reviewPly;
+    const cur = (idx + 1) === live;
+    const cls = 'cg-mv' + (e.k ? ' ' + e.k : '') + (e.mine ? ' mine' : '') + (cur ? ' cur' : '');
     const mark = T && T.mark ? `<i>${T.mark}</i>` : '';
-    const title = T ? T.label : '';
-    return `<span class="${cls}" title="${title}">${e.san}${mark}</span>`;
+    const title = (T ? T.label + ' — ' : '') + 'cliquer pour revoir cette position';
+    return `<button type="button" class="${cls}" data-ply="${idx + 1}" title="${title}">${e.san}${mark}</button>`;
   }
 
   function renderMoves() {
@@ -648,10 +664,17 @@ const CoachGame = (() => {
     const rows = [];
     for (let i = 0; i < moveLog.length; i += 2) {
       const a = moveLog[i], b = moveLog[i + 1];
-      rows.push(`<div class="cg-mvrow"><span class="cg-no">${a.n}.</span>${mvCell(a)}${mvCell(b)}</div>`);
+      rows.push(`<div class="cg-mvrow"><span class="cg-no">${a.n}.</span>${mvCell(a, i)}${mvCell(b, i + 1)}</div>`);
     }
-    host.innerHTML = rows.join('') || `<p class="cg-mv-empty">Les coups s'afficheront ici, notés au fur et à mesure.</p>`;
-    host.scrollTop = host.scrollHeight;
+    host.innerHTML = rows.join('') || `<p class="cg-mv-empty">Les coups s'afficheront ici, notés au fur et à mesure. Clique sur un coup pour revoir la position.</p>`;
+    if (reviewPly == null) host.scrollTop = host.scrollHeight;
+    if (!host.dataset.bound) {
+      host.dataset.bound = '1';
+      host.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-ply]');
+        if (b) gotoPly(+b.dataset.ply);
+      });
+    }
 
     // Le decompte de MES coups, dans l'ordre du dictionnaire de l'app.
     const tally = $('#cg-tally');
@@ -673,6 +696,62 @@ const CoachGame = (() => {
         return `<span class="cg-leg"><i class="eval-badge ${k}">${T.mark}</i>${T.label}</span>`;
       }).join('');
     }
+  }
+
+  // ── Mode revue : regarder un coup passe ─────────────────────────────────
+  // La position est rejouee depuis le depart d'apres l'historique de la partie ;
+  // `game` n'est jamais modifie, donc revenir a la partie ne coute rien et il
+  // n'y a aucun risque de perdre le fil.
+  function fenAtPly(ply) {
+    try {
+      const g = new Chess();
+      const h = game.history();
+      const n = Math.max(0, Math.min(ply, h.length));
+      let last = null;
+      for (let i = 0; i < n; i++) last = g.move(h[i], { sloppy: true });
+      return { fen: g.fen(), last };
+    } catch (_) { return null; }
+  }
+
+  function gotoPly(ply) {
+    if (!game) return;
+    const total = game.history().length;
+    const p = Math.max(1, Math.min(ply, total));
+    const from = curShownFen();
+    reviewPly = (p === total) ? null : p;
+    const at = fenAtPly(p);
+    if (!at) return;
+    threatArrows = false;
+    BoardRenderer.clearArrows(arrowsSvg);
+    BoardRenderer.renderAnimated(boardSvg, from, at.fen,
+      at.last ? { from: at.last.from, to: at.last.to } : null, ANIM_MS);
+    renderReviewBar();
+    renderMoves();
+    syncControls();
+    // De retour au coup courant : on rend la main (fleches d'aide comprises).
+    if (reviewPly == null && myTurn() && !busy) onMyTurn();
+  }
+
+  // La FEN actuellement AFFICHEE (live ou revue) : c'est elle qui sert de point
+  // de depart a l'animation, sinon le glissement part de la mauvaise position.
+  function curShownFen() {
+    if (reviewPly == null) return curFen();
+    const at = fenAtPly(reviewPly);
+    return at ? at.fen : curFen();
+  }
+
+  function renderReviewBar() {
+    const el = $('#cg-review');
+    if (!el) return;
+    if (reviewPly == null) { el.hidden = true; el.innerHTML = ''; return; }
+    const n = Math.ceil(reviewPly / 2);
+    const dots = reviewPly % 2 === 1 ? '.' : '…';
+    const e = moveLog[reviewPly - 1];
+    el.hidden = false;
+    el.innerHTML = `<span class="t">👁 Tu regardes le coup <b>${n}${dots}${e ? ' ' + e.san : ''}</b></span>`
+      + `<button type="button" class="train-btn ghost" data-rev="prev">◀</button>`
+      + `<button type="button" class="train-btn ghost" data-rev="next">▶</button>`
+      + `<button type="button" class="train-btn" data-rev="live">▶▶ Revenir à la partie</button>`;
   }
 
   // ── Le bandeau du livre ──────────────────────────────────────────────────
@@ -747,12 +826,18 @@ const CoachGame = (() => {
     curEvalMe = meScore(res, fen);
     myBestUci = res && res.bestMove ? res.bestMove : null;
     myBestPv = res && res.pv ? res.pv : '';
+    myLines = (res && res.lines) ? res.lines : null;   // mes coups candidats, notes dans LA MEME recherche
     // Le coup que le coach vient de jouer se note maintenant : son eval avant
     // (mesuree juste apres mon coup) contre son eval apres (celle-ci, vue de son
     // cote). Zero recherche supplementaire.
     if (pendingOpp && curEvalMe != null && pendingOpp.evalBefore != null) {
-      const w = winLoss(pendingOpp.evalBefore, -curEvalMe);
-      gradeLogged(pendingOpp.idx, classify(false, w, false, 0.5, false, false, false));
+      // Tout est vu de SON cote : son eval « avant » a ete mesuree juste apres
+      // mon coup, son eval « apres » est l'inverse de la mienne maintenant.
+      const oppAfter = -curEvalMe;
+      const w = winLoss(pendingOpp.evalBefore, oppAfter);
+      const winB = (typeof Analyzer !== 'undefined' && Analyzer.cpToWinPct)
+        ? Analyzer.cpToWinPct(pendingOpp.evalBefore) : 0.5;
+      gradeLogged(pendingOpp.idx, classify(false, w, !!pendingOpp.inBook, winB, oppAfter > -150, false, false));
       pendingOpp = null;
     }
     busy = false;
@@ -836,28 +921,27 @@ const CoachGame = (() => {
   }
 
   // ═════════════════════════ Je joue ═════════════════════════
-  // Mon coup est-il de la theorie ? Deux sources : la ligne imposee (priorite),
-  // et le catalogue des ouvertures - meme regle que l'analyseur, qui fait primer
-  // « Theorique » sur « Imprecision » dans une ligne reconnue.
-  function myMoveWasBook(onLine) {
+  // Le DERNIER coup joue est-il de la theorie ? Deux sources : la ligne imposee
+  // (priorite) et le catalogue des ouvertures - meme regle que l'analyseur, qui
+  // fait primer « Theorique » sur « Imprecision » dans une ligne reconnue.
+  // Vaut pour les deux camps : la theorie ne depend pas de qui joue.
+  function lastMoveWasBook(onLine) {
     if (onLine) return true;
     try {
-      if (typeof Openings === 'undefined' || !Openings.detect) return false;
+      if (typeof Openings === 'undefined') return false;
       const h = game.history();
-      const det = Openings.detect(h);
-      if (!det) return false;
-      if (det.moves >= 3 && h.length <= det.moves) return true;
-      // Les tout premiers coups : `Openings.detect` reconnait « Ouverture Pion
-      // Roi » (moves 1) mais rend `???` sur un coup exotique. Un coup du
-      // catalogue dans les 6 premiers demi-coups est de la theorie - le moteur
-      // chipote 7 points de chances de gain entre 1.e4 et 1.d4, et personne ne
-      // croira un coach qui appelle ca une imprecision.
-      return h.length <= 6 && det.moves >= 1 && det.eco !== '???';
+      // « Encore dans le livre » = la sequence jouee est le debut d'une ligne du
+      // catalogue (Openings.inBook), OU une ligne nommee couvre exactement ce
+      // qui a ete joue (Openings.detect). Le premier test est celui qui repond
+      // pour 1.e4 e5 ; le second pour une ligne longue deja nommee.
+      if (Openings.inBook && Openings.inBook(h)) return true;
+      const det = Openings.detect ? Openings.detect(h) : null;
+      return !!(det && det.moves >= 3 && h.length <= det.moves);
     } catch (_) { return false; }
   }
 
   function playMyMove(from, to) {
-    if (busy || !myTurn()) return;
+    if (busy || !myTurn() || reviewPly !== null) return;
     const fen = curFen();
     let mv = null;
     try { mv = game.move({ from, to, promotion: 'q' }); } catch (_) { mv = null; }
@@ -870,7 +954,7 @@ const CoachGame = (() => {
       if (expected && mv.san !== expected) bookOut = 'me';
       else { bookPly = game.history().length; onLine = !!expected; }
     }
-    lastWasBook = myMoveWasBook(onLine);
+    lastWasBook = lastMoveWasBook(onLine);
 
     BoardRenderer.clearArrows(arrowsSvg);
     threatArrows = false;
@@ -901,13 +985,17 @@ const CoachGame = (() => {
     if (my !== token) return;
 
     const after = meScore(res, fenAfter);
-    const cpLoss = (curEvalMe != null && after != null) ? Math.max(0, curEvalMe - after) : null;
     stats.moves++;
     track.push(after == null ? null : Math.max(-1500, Math.min(1500, after)));
 
     const isBest = myUci === myBestUci;
     if (isBest) stats.best++;
-    const wpl = winLoss(curEvalMe, after);
+    // Priorite a la lecture dans la recherche d'AVANT le coup ; a defaut (mon
+    // coup n'est pas dans les 5 lignes), on retombe sur la difference des deux
+    // recherches, moins fine mais toujours mieux que rien.
+    const exact = lineLoss(myLines, myUci);
+    const cpLoss = exact ? exact.cp : ((curEvalMe != null && after != null) ? Math.max(0, curEvalMe - after) : null);
+    const wpl = exact ? exact.wpl : winLoss(curEvalMe, after);
     const v = gradeMove(isBest, cpLoss, fenBefore, myMove, fenAfter, lastWasBook, wpl, {
       fenBefore, fenAfter, myMove, evalBefore: curEvalMe, evalAfter: after,
       res, bestUci: myBestUci, bestPv: myBestPv,
@@ -938,7 +1026,23 @@ const CoachGame = (() => {
     if (reply) {
       renderBoard(reply.mv, fenAfter);
       renderBookBar();
-      pendingOpp = { idx: logMove(reply.mv.san, false, null), evalBefore: oppBefore };
+      // Meme regle que pour moi : la theorie ne depend pas du camp qui joue,
+      // mais de la position atteinte (c'est ce qui manquait - en Petrov, ses
+      // …e5 et …Cf6 sortaient « imprecision » et « erreur »).
+      const oppBook = lastMoveWasBook(reply.tag === 'coup du livre');
+      const oppIdx = logMove(reply.mv.san, false, null);
+      const oppUciPlayed = reply.mv.from + reply.mv.to + (reply.mv.promotion || '');
+      // La recherche faite apres MON coup portait sur SES options : si son coup
+      // y figure, on le note immediatement et sans bruit.
+      const oppExact = lineLoss(res && res.lines, oppUciPlayed);
+      if (oppExact) {
+        const winB = (typeof Analyzer !== 'undefined' && Analyzer.cpToWinPct && res && res.lines && res.lines[0])
+          ? Analyzer.cpToWinPct(res.lines[0].score) : 0.5;
+        gradeLogged(oppIdx, classify(oppUciPlayed === (res && res.bestMove), oppExact.wpl, oppBook, winB, true, false, false));
+        pendingOpp = null;
+      } else {
+        pendingOpp = { idx: oppIdx, evalBefore: oppBefore, inBook: oppBook };
+      }
       replyHtml = `<div class="cg-reply">Il joue <b>${fr(reply.mv.san)}</b>${reply.tag ? ` <span class="rp-hint">${reply.tag}</span>` : ''}.</div>`;
       // C'est ICI que le mode libre montre ce qui a ete rate : les fleches
       // n'apparaissent qu'apres, sur le coup qui punit.
@@ -967,6 +1071,24 @@ const CoachGame = (() => {
   // defaite ». Volontairement pas partage avec replay.js : ici le texte doit
   // pouvoir etre MUET avant le coup et bavard apres, et la version de replay.js
   // porte les specificites du mode conversion.
+  // Perte lue DANS une seule recherche : les scores des lignes MultiPV sont
+  // comparables entre eux (meme profondeur, meme instant), et le meilleur coup
+  // perd exactement 0. Soustraire deux recherches differentes - ce que je
+  // faisais - ajoute le bruit de profondeur au vrai changement, et c'est ce qui
+  // faisait sortir « ?! » sur un coup de developpement tranquille.
+  // `lines[i].score` est vu du camp au trait dans la position analysee.
+  function lineLoss(lines, uci) {
+    if (!lines || !lines.length || !uci) return null;
+    const top = lines[0];
+    const mine = lines.find(l => l && l.move === uci);
+    if (!mine || typeof top.score !== 'number' || typeof mine.score !== 'number') return null;
+    if (typeof Analyzer === 'undefined' || !Analyzer.cpToWinPct) return null;
+    return {
+      cp: Math.max(0, top.score - mine.score),
+      wpl: Math.max(0, Analyzer.cpToWinPct(top.score) - Analyzer.cpToWinPct(mine.score)),
+    };
+  }
+
   // Perte en CHANCES DE GAIN, comme tout le reste de l'app. Juger en centiemes
   // de pion bruts donnait « 1.e4 = erreur (-63 cp) » : 63 centiemes valent 6
   // points de chances de gain a l'egalite (une imprecision) mais presque rien
@@ -1175,7 +1297,13 @@ const CoachGame = (() => {
     const my = ++token;
     const r = await coachReply(curFen(), my);
     if (my !== token) return;
-    if (r) { renderBoard(r.mv, null); renderBookBar(); logMove(r.mv.san, false, null); }
+    if (r) {
+      renderBoard(r.mv, null); renderBookBar();
+      // Son 1er coup : pas d'eval de reference (aucune recherche avant lui), on
+      // le journalise donc sans note, mais deja marque theorique s'il l'est.
+      const idx = logMove(r.mv.san, false, null);
+      if (lastMoveWasBook(r.tag === 'coup du livre')) gradeLogged(idx, 'book');
+    }
     busy = false;
     onMyTurn();
   }
@@ -1194,7 +1322,7 @@ const CoachGame = (() => {
     while (moveLog.length > game.history().length) moveLog.pop();
     pendingOpp = null;
     renderMoves();
-    curEvalMe = null; myBestUci = null; threatArrows = false;
+    curEvalMe = null; myBestUci = null; myLines = null; threatArrows = false;
     bookOut = null;
     bookPly = Math.min(bookPly, game.history().length);
     setVerdict('');
@@ -1491,7 +1619,7 @@ const CoachGame = (() => {
     fr2.readAsText(file);
   }
 
-  return { open, showHistory, close, inProgress, paramsFor, pickIndex, effSpread, winLoss, LADDER };
+  return { open, showHistory, close, inProgress, paramsFor, pickIndex, effSpread, winLoss, lineLoss, LADDER };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CoachGame;

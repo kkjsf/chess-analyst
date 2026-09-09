@@ -299,7 +299,25 @@ const Openings = (() => {
     return null;
   }
 
-  return { detect };
+  // L'inverse de detect() : la sequence jouee est-elle le DEBUT d'une ligne du
+  // catalogue ? detect() nomme une position en cherchant une ligne qui soit un
+  // prefixe des coups joues ; elle ne peut donc rien dire de « 1.e4 e5 », qui
+  // n'est le nom d'aucune ouverture mais le debut de trente. C'est ce test-la
+  // qu'il faut pour repondre « on est encore dans le livre » - il sert a la
+  // notation des coups du mode entraineur, des DEUX cotes.
+  function inBook(sans) {
+    if (!sans || !sans.length) return true;
+    for (const entry of DB) {
+      const tokens = entry[0].split(' ');
+      if (tokens.length < sans.length) continue;
+      let ok = true;
+      for (let i = 0; i < sans.length; i++) { if (tokens[i] !== sans[i]) { ok = false; break; } }
+      if (ok) return true;
+    }
+    return false;
+  }
+
+  return { detect, inBook };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Openings;
