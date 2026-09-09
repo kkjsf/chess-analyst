@@ -4753,3 +4753,151 @@ body.guess-open { overflow: hidden; }
   font-size: 12px; color: var(--text-dim);
 }
 .story-lesson b { color: var(--text); }
+
+/* ══ « Jouer avec le coach » (js/coachgame.js) ══════════════════════════════
+   Reprend la coquille .guess-* et les blocs .rp-* de « Rejoue ta defaite » ;
+   n'ajoute que ce qui lui est propre : les reglages, le bandeau du livre, le
+   bilan et l'historique separe. */
+.cg-setup { text-align: left; padding: 2px 0 8px; }
+.cg-fld { margin-bottom: 15px; }
+.cg-fld > label {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--text-dim); margin-bottom: 7px;
+}
+.cg-segs { display: flex; gap: 4px; background: var(--bg-2); border-radius: 10px; padding: 3px; }
+.cg-segs button {
+  flex: 1; border: 0; background: none; color: var(--text-dim); font: inherit;
+  font-size: 13px; font-weight: 600; padding: 9px 4px; border-radius: 8px; cursor: pointer;
+  min-height: 40px;
+}
+.cg-segs button.on { background: var(--card-2); color: var(--text); }
+.cg-lvl { background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; }
+.cg-lvl-row { display: flex; align-items: baseline; gap: 8px; }
+.cg-lvl-row .v { font-size: 21px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.cg-lvl-row .t { font-size: 12.5px; color: var(--text); font-weight: 600; }
+.cg-me {
+  margin-left: auto; border: 0; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700;
+  color: #1a1a2e; background: var(--accent); padding: 9px 13px; border-radius: 999px; min-height: 36px;
+}
+#cg-elo { width: 100%; margin: 11px 0 2px; accent-color: var(--accent); }
+.cg-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); }
+.cg-hint b { color: var(--text); }
+.cg-opts { display: flex; flex-direction: column; gap: 6px; }
+/* `display: flex` bat `[hidden]` (meme piege que le chrono de renfo_mobile) :
+   sans cette ligne, le choix « il joue le jeu / il sort du livre » reste
+   affiche alors qu'aucune ouverture n'est imposee. */
+.cg-opts[hidden] { display: none; }
+.cg-opt {
+  display: flex; gap: 9px; align-items: flex-start; text-align: left; width: 100%;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 11px; cursor: pointer; color: var(--text); font: inherit;
+}
+.cg-opt.on { border-color: rgba(226,184,87,.5); background: rgba(226,184,87,.07); }
+.cg-opt .rd {
+  width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--text-dim);
+  margin-top: 2px; flex: 0 0 auto;
+}
+.cg-opt.on .rd { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 42%, transparent 45%); }
+.cg-opt .bd { flex: 1; min-width: 0; }
+.cg-opt .bd b { display: block; font-size: 13px; font-weight: 600; }
+.cg-opt .bd small { display: block; font-size: 12px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
+.cg-sw {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 11px; margin-top: 6px; cursor: pointer; color: var(--text-dim); font: inherit; font-size: 12.5px;
+}
+.cg-sw .bd { flex: 1; }
+.cg-sw .bd b { color: var(--text); font-weight: 600; }
+.cg-sw .tg { width: 34px; height: 19px; border-radius: 999px; background: var(--card-2); position: relative; flex: 0 0 auto; }
+.cg-sw .tg::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px;
+  border-radius: 50%; background: var(--text-dim); transition: left .15s;
+}
+.cg-sw.on .tg { background: rgba(226,184,87,.35); }
+.cg-sw.on .tg::after { left: 17px; background: var(--accent); }
+.cg-select {
+  width: 100%; background: var(--bg-card); color: var(--text); font: inherit; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 12px; padding: 11px 10px; min-height: 44px;
+}
+.cg-go {
+  display: block; width: 100%; margin-top: 4px; border: 0; border-radius: 13px; padding: 14px;
+  font: inherit; font-size: 15px; font-weight: 700; color: #1a1a2e; background: var(--accent); cursor: pointer;
+}
+.cg-histbtn { width: 100%; margin-top: 8px; }
+
+/* le bandeau du livre */
+.cg-bookbar {
+  text-align: left; background: rgba(91,143,185,.13); border: 1px solid rgba(91,143,185,.28);
+  border-radius: 12px; padding: 8px 10px; margin-bottom: 9px;
+}
+.cg-bookbar.out { background: rgba(226,184,87,.1); border-color: rgba(226,184,87,.3); }
+.cg-bookbar .t { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; }
+.cg-bookbar .t .n { margin-left: auto; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.cg-bookbar .dots { display: flex; gap: 4px; margin-top: 7px; }
+.cg-bookbar .dots i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.13); }
+.cg-bookbar .dots i.on { background: var(--blue); }
+.cg-bookbar .dots i.cur { background: var(--accent); }
+.cg-bookbar .sub { font-size: 11.5px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; }
+.cg-bookbar .sub b { color: var(--text); }
+.cg-reply { margin-top: 5px; font-size: 13px; color: var(--text-dim); }
+.cg-reply b { color: var(--text); }
+.cg-threat { margin-top: 5px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); }
+.cg-threat b { color: var(--text); }
+
+/* bilan + historique */
+.cg-end { text-align: left; padding: 2px 0 10px; }
+.cg-res {
+  border-radius: 14px; padding: 12px 13px;
+  background: linear-gradient(180deg, rgba(226,184,87,.13), rgba(226,184,87,.04));
+  border: 1px solid rgba(226,184,87,.26);
+}
+.cg-res.win { background: linear-gradient(180deg, rgba(74,222,128,.14), rgba(74,222,128,.04)); border-color: rgba(74,222,128,.28); }
+.cg-res.loss { background: linear-gradient(180deg, rgba(248,113,113,.13), rgba(248,113,113,.04)); border-color: rgba(248,113,113,.26); }
+.cg-res .t { font-size: 16px; font-weight: 700; }
+.cg-res .s { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; }
+.cg-kpis { display: flex; gap: 6px; margin-top: 11px; }
+.cg-kpi {
+  flex: 1; background: var(--bg-card); border: 1px solid var(--line); border-radius: 11px;
+  padding: 8px 5px; text-align: center;
+}
+.cg-kpi .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cg-kpi .l { display: block; font-size: 9.5px; color: var(--text-dim); margin-top: 1px; line-height: 1.25; }
+.cg-kpi.ok .v { color: var(--success); }
+.cg-kpi.bad .v { color: var(--danger); }
+.cg-spark { margin-top: 11px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; }
+.cg-spark .h { font-size: 11px; color: var(--text-dim); margin-bottom: 5px; }
+.cg-spark svg { display: block; width: 100%; height: 46px; }
+.cg-sep {
+  margin-top: 11px; background: rgba(91,143,185,.11); border: 1px solid rgba(91,143,185,.26);
+  border-radius: 12px; padding: 10px 11px; font-size: 12px; line-height: 1.55; color: var(--text-dim);
+}
+.cg-sep .t { display: block; font-weight: 700; color: #9dc4e0; margin-bottom: 3px; }
+.cg-sep b { color: var(--text); }
+.cg-next {
+  margin-top: 10px; background: rgba(226,184,87,.08); border: 1px solid rgba(226,184,87,.22);
+  border-radius: 12px; padding: 10px 11px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
+}
+.cg-next b { color: var(--accent); }
+.cg-dev { margin-top: 11px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px; }
+.cg-dev .t { font-size: 12.5px; font-weight: 600; margin-bottom: 7px; }
+.cg-devrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; color: var(--text-dim); }
+.cg-devrow .n { flex: 1; color: var(--text); }
+.cg-devrow .c { color: var(--text-dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.cg-dev .sub {
+  font-size: 11.5px; line-height: 1.5; color: var(--text-dim); margin-top: 7px;
+  border-top: 1px solid var(--line); padding-top: 7px;
+}
+.cg-dev .sub b { color: var(--text); }
+.cg-hist-list { margin-top: 11px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.cg-hrow { display: flex; align-items: center; gap: 8px; padding: 9px 11px; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+.cg-hrow:last-child { border-bottom: 0; }
+.cg-hrow .d { width: 36px; color: var(--text-dim); font-size: 11px; }
+.cg-hrow .r {
+  width: 18px; height: 18px; border-radius: 5px; font-size: 10.5px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; background: var(--card-2); color: var(--text-dim);
+}
+.cg-hrow .r.ok { background: rgba(74,222,128,.18); color: var(--success); }
+.cg-hrow .r.bad { background: rgba(248,113,113,.16); color: var(--danger); }
+.cg-hrow .m { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-hrow .g { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+.cg-empty { font-size: 13px; color: var(--text-dim); line-height: 1.55; padding: 6px 2px; }

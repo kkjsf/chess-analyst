@@ -17,6 +17,21 @@ const StockfishEngine = (() => {
   // null and so never triggers the heuristic fallback).
   let active = null;   // { id, deliver } — the in-flight search, or null
   let searchId = 0;
+
+  // ── Force de jeu (mode entraineur) ────────────────────────────────────────
+  // Le build embarque est un Stockfish 2019-08-15 Multi-Variant : il n'a NI
+  // `UCI_Elo` NI `UCI_LimitStrength` (verifie en envoyant `uci` au worker), donc
+  // le seul levier cote moteur est `Skill Level` (0-20). js/coachgame.js le
+  // complete par un movetime court et un tirage dans les lignes MultiPV.
+  //
+  // Choix de conception : le niveau est un PARAMETRE DE RECHERCHE, jamais un
+  // etat a restaurer. Chaque evaluate() reposte l'option quand la valeur
+  // demandee differe de la courante, et un appel SANS `opts.skill` vaut
+  // ANALYSIS_SKILL. Un mode de jeu qui oublierait de « remettre » le moteur ne
+  // peut donc pas degrader l'analyseur en silence - c'etait le piege evident
+  // d'un setStrength() a etat.
+  const ANALYSIS_SKILL = 20;
+  let curSkill = ANALYSIS_SKILL;
   // evaluate() calls run strictly one at a time: a new `position` is never
   // posted while a previous search still owes us its bestmove.
   let chain = Promise.resolve();
@@ -132,7 +147,9 @@ const StockfishEngine = (() => {
     });
   }
 
-  function evaluate(fen, depth) {
+  // `opts.skill` (0-20) baisse volontairement la force pour ce coup-la ; omis,
+  // la recherche revient d'office a la pleine force de l'analyseur.
+  function evaluate(fen, depth, opts) {
     if (!ready) return Promise.reject(new Error('not_ready'));
 
     const run = () => new Promise((resolve) => {
@@ -175,6 +192,12 @@ const StockfishEngine = (() => {
         }, DRAIN_TIMEOUT);
       }, EVAL_TIMEOUT);
 
+      const wantSkill = (opts && typeof opts.skill === 'number')
+        ? Math.max(0, Math.min(20, Math.round(opts.skill))) : ANALYSIS_SKILL;
+      if (wantSkill !== curSkill) {
+        worker.postMessage('setoption name Skill Level value ' + wantSkill);
+        curSkill = wantSkill;
+      }
       worker.postMessage('position fen ' + fen);
       if (typeof depth === 'string' && depth.startsWith('movetime')) {
         worker.postMessage('go ' + depth);
@@ -198,6 +221,7 @@ const StockfishEngine = (() => {
     }
     ready = false;
     failed = false;
+    curSkill = ANALYSIS_SKILL;
     if (active) { const cur = active; active = null; cur.deliver(null); }
     chain = Promise.resolve();
     currentLines = [];
@@ -205,5 +229,5 @@ const StockfishEngine = (() => {
 
   function isReady() { return ready; }
 
-  return { init, evaluate, destroy, isReady };
+  return { init, evaluate, destroy, isReady, ANALYSIS_SKILL, skillNow: () => curSkill };
 })();

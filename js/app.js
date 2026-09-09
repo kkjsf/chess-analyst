@@ -1,5 +1,10 @@
 const App = (() => {
   const STORAGE_KEY = 'chess-analyst-games';
+  // Analyse « en lecture seule » (mode entraineur) : `noIngest` est arme par
+  // loadPgnAndAnalyze({ingest:false}) et consomme au debut d'onAnalyze dans
+  // `readOnlyRun`, qui pilote les deux ecritures (paquet d'exercices + liste
+  // des parties recentes).
+  let noIngest = false, readOnlyRun = false;
   const CACHE_KEY = 'chess-analyst-cache';
   const MAX_CACHED = 15;
   let currentAnalysis = null;
@@ -364,6 +369,12 @@ const App = (() => {
       return;
     }
     analyzing = true;
+    // Le drapeau « lecture seule » est consomme ICI, pas au moment d'ecrire :
+    // une sortie en erreur (PGN invalide, URL injoignable) le laisserait sinon
+    // arme, et l'analyse SUIVANTE - une vraie partie - ne serait plus ingeree,
+    // en silence.
+    readOnlyRun = noIngest;
+    noIngest = false;
     try {
       await runAnalyze();
     } finally {
@@ -465,11 +476,11 @@ const App = (() => {
     // Only persist a full engine analysis. A transient engine failure produces
     // a heuristic fallback; caching it under this key would pin the weaker
     // result forever, so leave the key empty and let a later run replace it.
-    if (engineUsed) {
+    if (engineUsed && !readOnlyRun) {
       saveCachedAnalysis(ck, analysis, summary, header, detectUser(header));
       if (typeof Training !== 'undefined') Training.capture(ck, analysis, header, detectUser(header));
     }
-    saveGame(pgnText, header, moves.length);
+    if (!readOnlyRun) saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
     showAnalysis(header, moves, analysis, summary);
   }
@@ -590,7 +601,12 @@ const App = (() => {
 
   // Load a PGN into the analyzer and run the engine (the normal flow), used for
   // coach games that don't embed a server report.
-  function loadPgnAndAnalyze(pgn) {
+  // `opts.ingest === false` : analyser SANS rien inscrire dans le paquet
+  // d'exercices ni dans la liste des parties recentes. C'est ce que demande le
+  // mode entraineur : une partie contre le coach doit pouvoir passer par
+  // l'ecran d'analyse tout en restant hors de l'archive et hors des stats.
+  function loadPgnAndAnalyze(pgn, opts) {
+    noIngest = !!(opts && opts.ingest === false);
     const input = $('#pgn-input');
     if (input) input.value = pgn;
     $('#screen-coach').classList.remove('active');
@@ -4217,6 +4233,7 @@ const App = (() => {
       $$('#screen-learn .learn-tile').forEach(tile => {
         tile.addEventListener('click', () => {
           if (tile.dataset.panel === 'mats') { if (typeof Mates !== 'undefined') Mates.show(); return; }
+          if (tile.dataset.panel === 'coachgame') { if (typeof CoachGame !== 'undefined') CoachGame.open(); return; }
           if (_openPanel) _openPanel(tile.dataset.panel);
         });
       });

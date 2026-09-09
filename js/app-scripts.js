@@ -27,6 +27,9 @@ self.APP_SCRIPTS = [
   'js/courses.js',
   'js/opening-tree.js',
   'js/replay.js',
+  // Mode entraineur : hote de partie complete. Apres replay.js (meme coquille
+  // .guess-*) et avant coach.js, dont il lit myRatings() pour le niveau par defaut.
+  'js/coachgame.js',
   'js/coach.js',
   'js/app.js'
 ];

@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '224';
+window.APP_VERSION = '232';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -662,6 +662,14 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     </div>
   </div>
   <div class="learn-body">
+    <button class="learn-tile learn-tile-hero" data-panel="coachgame">
+      <div class="learn-tile-icon">♟️</div>
+      <div class="learn-tile-txt">
+        <span class="learn-tile-title">Jouer avec le coach</span>
+        <span class="learn-tile-sub">Une partie complète contre le moteur, <b>au niveau que tu choisis</b> (par défaut le tien). En <b>libre</b> il ne dit rien pendant ton coup et montre après ce que tu n'as pas vu ; en <b>assisté</b> tu as les flèches de menace, le meilleur coup et le pourquoi. Tu peux aussi lui <b>imposer une ouverture</b> - ou lui demander d'en sortir exprès.</span>
+      </div>
+      <div class="learn-tile-arrow">→</div>
+    </button>
     <button class="learn-tile learn-tile-hero" data-panel="concepts">
       <div class="learn-tile-icon">⚔️</div>
       <div class="learn-tile-txt">

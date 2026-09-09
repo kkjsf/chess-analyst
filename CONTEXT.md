@@ -94,10 +94,93 @@
   enchaine au bout de 2 s et masque l'explication), rejeu en aveugle, position-type en diagramme,
   deep-link analyse -> noeud du cours, fiche « 3 choses a retenir », budget temps affiche,
   et l'ordre de creation des cours manquants pilote par ses parties (2.Dh5 > Eveque > Francaise > Sicilienne).
+- **`_mockups/coach-mode-2026-09.html` (09/09/2026) - VALIDEE ET IMPLEMENTEE en v225-v232.**
+  Maquette du **mode entraineur** demande par le user : jouer une partie complete contre le coach,
+  avec le **niveau de l'adversaire** reglable (defaut = son Elo par cadence, 760 rapide / 946
+  journalier), un **mode libre** (aucune aide pendant, commentaire + fleches de menace APRES coup),
+  un **mode assiste** (menaces + meilleur coup + le pourquoi), et une **ouverture imposee** ou le
+  coach suit sa ligne - ou en sort expres. 6 ecrans (reglages / libre / assiste / ouverture
+  pilotee / fin de partie / historique separe). **Arbitrage du user (09/09) : ces parties restent A
+  PART.** Elles vont dans un magasin dedie (jamais l'IndexedDB des parties Chess.com) et ne comptent
+  dans aucune stat de l'archive - courbe Elo, « ton vrai niveau », `lineStats`, gaffes/100 coups ;
+  une seule passerelle, sur demande : un interrupteur « envoyer cette gaffe dans mes exercices ».
+  Deux raisons TECHNIQUES en plus de la mesure : `Coach.clearStore()` vide tout le magasin des
+  parties quand le pseudo Chess.com change (des parties d'entrainement y seraient effacees sans
+  preavis, et rechargeables depuis aucun serveur), et le pipeline d'analyse appelle
+  `Training.capture()` a la fin (app.js:470 et 584), donc « analyser cette partie » remplirait le
+  paquet d'exercices tout seul sans un drapeau explicite. **Sa question PC / PWA Android :** les
+  vraies parties convergent (rechargees de l'API + `coach-data.json`), mais les parties du coach se
+  jouent sur l'appareil sans serveur -> chaque partie est ETIQUETEE par appareil, avec export/import
+  JSON dans l'ecran 6. A noter au passage : la progression locale (`chess-analyst-training`,
+  `ca_lessons_srs`, `chess-analyst-sessions`, `ca_checklist_v1`) **diverge deja** entre son PC et
+  son Android, en silence - le meme export/import reglerait les deux. Contient l'analyse de faisabilite : ce qui est
+  deja code (`replay.js` = deja un moteur de mode entraineur avec ses DEUX niveaux d'aide,
+  `tactics.js` pour les menaces, `freeplay.js`, le livre des cours) et ce qui reste a ecrire (le
+  reglage du niveau, un hote de partie complete avec PGN, le pilote d'ouverture).
+  **Fait technique verifie en live (envoi de `uci` au worker) : le moteur embarque est Stockfish
+  2019-08-15 Multi-Variant, il a `Skill Level` 0-20 mais PAS `UCI_Elo` ni `UCI_LimitStrength`.**
+  Un niveau se fabrique donc en combinant Skill Level + movetime court + tirage pondere dans les
+  5 lignes de MultiPV + taux de gaffe volontaire, et il faudra le calibrer en jouant. **Piege :
+  `Skill Level 20` et `MultiPV 5` sont poses une seule fois a l'init de `js/engine.js` - si le
+  mode les baisse sans les restaurer, tout l'analyseur se degrade en silence.**
 - Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v225-v232 - LE MODE ENTRAINEUR : jouer une partie complete contre le coach.**
+  La maquette `_mockups/coach-mode-2026-09.html` (6 ecrans) est implementee. Nouveau module
+  `js/coachgame.js` (~900 lignes), tuile en TETE du hub Apprendre. 66 tests unitaires OK
+  (39 + 27 nouveaux), 121 controles de verify_openings OK, 0 erreur console, verifie en jouant
+  vraiment des parties dans le navigateur (mobile 375 px compris).
+  - **Ce qui existait deja et n'a PAS ete reecrit** : `replay.js` (boucle je joue / l'ordi repond,
+    notation du coup, explication de la gaffe, reprendre-ce-coup, indice en 3 temps),
+    `tactics.js` (`threats`/`threatSentence` + SEE, donc une piece defendue ne declenche rien),
+    `freeplay.js` (eval FR, PV FR, terminal), `board.js` (glisser-deposer, fleches), et le LIVRE :
+    les `sans` des cours d'ouverture, deja verifies. Le mode n'ajoute que l'hote de partie.
+  - **Le niveau de l'adversaire, sans option d'Elo.** `js/engine.js` accepte desormais
+    `evaluate(fen, depth, { skill })`. Choix de conception : le niveau est un PARAMETRE DE
+    RECHERCHE, jamais un etat a restaurer - un appel sans `skill` revient d'office a
+    `ANALYSIS_SKILL` (20), donc un mode de jeu qui oublie de « remettre » le moteur ne peut pas
+    degrader l'analyseur en silence. Un niveau = Skill Level + movetime + **tirage pondere dans
+    les 5 lignes MultiPV** + **taux de gaffe volontaire** (echelle `LADDER`, 250 a 1400).
+  - **Deux corrections trouvees en JOUANT, pas en relisant le code.** (1) A ~350 le coach a
+    **laisse passer une dame gratuite** : le tirage pondere seul suffisait a le rendre aveugle.
+    Ajout de `effSpread()` - quand la meilleure ligne devance la suivante d'au moins une piece
+    (ou qu'un mat est en vue), le tirage se resserre fortement ; mesure : il ne rate plus la piece
+    que dans **3,5 %** des coups, et la gaffe volontaire est desactivee dans ces positions.
+    (2) **1.e4 etait note « erreur (-63 cp) »** : je jugeais en centiemes de pion bruts alors que
+    toute l'app juge en CHANCES DE GAIN. Passage a `Analyzer.cpToWinPct` avec les seuils de
+    `analysis.js` (0,20 / 0,10 / 0,05 / 0,02) - une seule definition de « gaffe » dans l'app.
+    Plus la regle « theorie connue » (`Openings.detect` + la ligne imposee) qui fait primer
+    **📖 Coup theorique** sur « imprecision », comme l'analyseur.
+  - **Son Elo reel n'etait pas celui que je croyais.** `Coach.myRatings()` (nouveau) trie par
+    `endTime` : **rapide 348 (07/09), journalier 735 (05/09)**. Lire le DERNIER ELEMENT du tableau
+    `games` de `coach-data.json` donne 760/946 - le tableau n'est pas trie chronologiquement.
+    D'ou aussi le plancher de l'echelle a 250 et non 400.
+  - **Le magasin est SEPARE** (demande explicite du user) : `localStorage['ca_coachgames']`,
+    jamais l'IndexedDB des parties Chess.com. Raisons techniques en plus de la mesure :
+    `Coach.clearStore()` vide ce magasin des que le pseudo change (et une partie du coach n'est
+    rechargeable depuis aucun serveur), et le pipeline d'analyse appelle `Training.capture()` a la
+    fin. D'ou `App.loadPgnAndAnalyze(pgn, { ingest: false })` - drapeau **consomme au debut**
+    d'`onAnalyze` (sinon une sortie en erreur le laisserait arme et l'analyse suivante, une VRAIE
+    partie, ne serait plus ingeree en silence). Verifie en direct : la partie du coach s'analyse
+    entierement et n'ecrit rien (0 recente, 0 carte, 0 cache) ; un PGN normal ecrit bien (1/1).
+  - **Une seule passerelle vers l'entrainement, explicite** : un interrupteur du bilan appelle
+    `Training.ingestGame('coach:<id>', ...)` - meme paquet, meme repetition espacee, cartes
+    reconnaissables (`timeClass: 'coach'`).
+  - **PC vs PWA Android** : chaque partie porte son `device`, l'ecran historique montre la
+    repartition, et un **export/import JSON** (fusion par `id`, rien ne s'ecrase) les reunit.
+  - **Ouverture imposee** : le catalogue est construit sur les lignes des cours
+    (`Courses.COURSES`, alias exclus) et nommee par `Openings.detect`. Deux sous-modes verifies en
+    jouant : « il joue le jeu » (bandeau `0/15 -> 10/15`, coups tagues « coup du livre ») et
+    « il sort du livre expres » (deviation tiree au sort sur un coup DU COACH, bandeau
+    « ⚡ Il vient de sortir du livre »).
+  - **Piege CSS deja rencontre ailleurs** : `.cg-opts { display:flex }` battait `[hidden]`, donc le
+    choix « il joue le jeu / il sort du livre » restait affiche sans ouverture imposee. Corrige par
+    `.cg-opts[hidden] { display:none }`. Et la pastille « mon niveau » faisait 22 px de haut
+    (cible tactile) -> 36 px.
+  - Les fleches de menace du mode libre survivent au changement de trait : `onMyTurn()` commencait
+    par vider le calque, donc la phrase « le pion d5 attaque e4 » s'affichait SANS les fleches.
 - **v224 - LE LONDRES A DEUX ORDRES DE COUPS (classique / accelere)** (SHIPPED `336a21c`, live). Sa question : « d4 d5 Ff4,
   ce n'est pas la version acceleree ? il n'y a pas un Cf3 avant le fou ? » - si. Le cours ne
   presentait que 2.Ff4 et reduisait l'ordre de reference a une note de transposition.

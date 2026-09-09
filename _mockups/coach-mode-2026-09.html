@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess Analyst - maquette « Mode entraineur » (sept. 2026)</title>
+<style>
+  :root{
+    --bg:#12172b; --bg-2:#0e1223; --card:#1a2140; --card-2:#242c52; --elev:#212a4d;
+    --gold:#e2b857; --text:#eef1f7; --dim:#9aa4bd; --dim2:#6b7590;
+    --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --blue:#5b8fb9;
+    --line:rgba(255,255,255,.07); --line-str:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:radial-gradient(1100px 560px at 18% -12%,#1c2140 0,transparent 60%),var(--bg-2);
+       color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:26px 18px 60px}
+  h1{font-size:22px;font-weight:700;color:var(--gold)}
+  .lede{max-width:940px;color:var(--dim);font-size:14px;line-height:1.65;margin-top:8px}
+  .lede b{color:var(--text)}
+  .lede + .lede{margin-top:10px}
+  h2{font-size:15px;font-weight:600;margin:36px 0 10px;color:var(--text)}
+  h2 span{color:var(--dim2);font-weight:400;font-size:13px}
+  .principles{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;max-width:1080px}
+  .principles div{flex:1 1 230px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--dim)}
+  .principles b{color:var(--text);font-weight:600}
+  .principles b.k{display:block;color:var(--gold);font-weight:600;font-size:12px;margin-bottom:3px;letter-spacing:.02em}
+
+  .frames{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;margin-top:20px}
+  .col{width:352px}
+  .col > .cap{font-size:12px;color:var(--dim2);margin:0 0 8px 4px;line-height:1.5}
+  .col > .cap b{color:var(--gold);font-weight:600}
+  .col > .note{font-size:11.5px;color:var(--dim2);line-height:1.55;margin:9px 4px 0}
+  .col > .note b{color:var(--text)}
+  .phone{width:352px;background:var(--bg);border-radius:28px;border:1px solid var(--line-str);
+         overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  .notch{height:22px;display:flex;align-items:center;justify-content:center}
+  .notch span{width:70px;height:5px;border-radius:3px;background:rgba(255,255,255,.16)}
+
+  /* barre de titre */
+  .tb{display:flex;align-items:center;gap:9px;padding:2px 14px 10px}
+  .tb .bk{color:var(--dim);font-size:19px}
+  .tb .who{flex:1;font-size:13.5px;line-height:1.35}
+  .tb .who b{font-weight:600}
+  .tb .who small{display:block;color:var(--dim2);font-size:11.5px}
+  .chip{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .chip.g{background:rgba(226,184,87,.16);color:var(--gold)}
+  .chip.b{background:rgba(91,143,185,.18);color:#9dc4e0}
+  .chip.o{background:rgba(74,222,128,.14);color:var(--ok)}
+  .chip.r{background:rgba(248,113,113,.15);color:var(--bad)}
+
+  /* reglages */
+  .set{padding:2px 14px 16px}
+  .fld{margin-bottom:15px}
+  .fld > label{display:block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim2);margin-bottom:7px}
+  .segs{display:flex;gap:4px;background:var(--bg-2);border-radius:10px;padding:3px}
+  .segs button{flex:1;border:0;background:none;color:var(--dim);font:inherit;font-size:12.5px;font-weight:600;
+               padding:7px 4px;border-radius:8px;cursor:pointer}
+  .segs button.on{background:var(--card-2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.06) inset}
+  .lvl{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+  .lvl .row{display:flex;align-items:baseline;gap:8px}
+  .lvl .row .v{font-size:20px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+  .lvl .row .t{font-size:12.5px;color:var(--text);font-weight:600}
+  .lvl .row .me{margin-left:auto;font-size:10.5px;font-weight:600;color:#1a1a2e;background:var(--gold);padding:2px 7px;border-radius:999px}
+  .track{position:relative;height:26px;margin:9px 0 2px}
+  .track i{position:absolute;left:0;right:0;top:11px;height:4px;border-radius:3px;background:#2b3457}
+  .track i.f{right:auto;width:47%;background:linear-gradient(90deg,#5b8fb9,#e2b857)}
+  .track b{position:absolute;top:5px;width:16px;height:16px;border-radius:50%;background:var(--gold);border:2px solid #12172b;left:calc(47% - 8px)}
+  .track u{position:absolute;top:20px;font-size:9.5px;color:var(--dim2);text-decoration:none;transform:translateX(-50%)}
+  .track s{position:absolute;top:9px;width:2px;height:8px;background:rgba(255,255,255,.22);text-decoration:none}
+  .hint{font-size:11.5px;line-height:1.5;color:var(--dim2);margin-top:8px}
+  .hint b{color:var(--text)}
+  .opts{display:flex;flex-direction:column;gap:6px}
+  .opt{display:flex;gap:9px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
+       border-radius:12px;padding:9px 11px;cursor:pointer}
+  .opt.on{border-color:rgba(226,184,87,.5);background:rgba(226,184,87,.07)}
+  .opt .rd{width:15px;height:15px;border-radius:50%;border:2px solid var(--dim2);margin-top:2px;flex:0 0 auto}
+  .opt.on .rd{border-color:var(--gold);background:radial-gradient(circle,var(--gold) 0 42%,transparent 45%)}
+  .opt .bd{flex:1;min-width:0}
+  .opt .bd b{display:block;font-size:12.5px;font-weight:600}
+  .opt .bd small{display:block;font-size:11.5px;color:var(--dim);line-height:1.45;margin-top:2px}
+  .sw{display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-top:6px}
+  .sw .bd{flex:1;font-size:12px;color:var(--dim)}
+  .sw .bd b{color:var(--text);font-weight:600}
+  .sw .tg{width:34px;height:19px;border-radius:999px;background:var(--card-2);position:relative;flex:0 0 auto}
+  .sw .tg::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--dim2)}
+  .sw.on .tg{background:rgba(226,184,87,.35)}
+  .sw.on .tg::after{left:auto;right:2px;background:var(--gold)}
+  .book{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 11px}
+  .book .pick{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600}
+  .book .pick .ic{font-size:15px}
+  .book .pick .ch{margin-left:auto;font-size:11px;color:var(--blue);font-weight:600}
+  .book .line{font-size:11.5px;color:var(--dim2);margin-top:5px;font-variant-numeric:tabular-nums}
+  .go{display:block;width:100%;margin-top:4px;border:0;border-radius:13px;padding:13px;font:inherit;
+      font-size:14px;font-weight:700;color:#1a1a2e;background:var(--gold);cursor:pointer}
+
+  /* echiquier */
+  .bwrap{padding:0 14px;position:relative}
+  .pbar{display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 2px;color:var(--dim)}
+  .pbar b{color:var(--text);font-weight:600}
+  .pbar .sp{flex:1}
+  .pbar .clk{font-variant-numeric:tabular-nums;background:var(--card-2);padding:2px 7px;border-radius:6px;font-size:11.5px}
+  .boardrow{display:flex;gap:6px;align-items:stretch}
+  .evalbar{width:7px;border-radius:4px;background:#2b3457;overflow:hidden;display:flex;flex-direction:column-reverse}
+  .evalbar i{display:block;background:#e9edf5}
+  .bd8{flex:1;position:relative}
+  .grid{aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border-radius:8px;overflow:hidden}
+  .sq{position:relative;display:flex;align-items:center;justify-content:center;font-size:27px;line-height:1}
+  .sq.l{background:#ebd7b2}.sq.d{background:#ae8a68}
+  .sq.hl::after{content:"";position:absolute;inset:0;background:rgba(226,184,87,.42)}
+  .sq.warn::after{content:"";position:absolute;inset:0;background:rgba(248,113,113,.34)}
+  .pc{position:relative;z-index:1}
+  .pc.w{color:#fff;text-shadow:0 0 1px #000,0 1px 2px rgba(0,0,0,.55)}
+  .pc.b{color:#272522;text-shadow:0 1px 1px rgba(255,255,255,.22)}
+  .arrows{position:absolute;inset:0;pointer-events:none}
+
+  /* ligne d'etat + commentaire */
+  .st{margin:9px 14px 0;font-size:12.5px;line-height:1.5;color:var(--dim)}
+  .st b{color:var(--text)}
+  .st .mute{color:var(--dim2)}
+  .cmt{margin:9px 14px 0;font-size:12.5px;line-height:1.55;color:#d6dcea;border-left:2px solid var(--gold);padding-left:10px}
+  .cmt.bad{border-color:var(--bad)}
+  .cmt.good{border-color:var(--ok)}
+  .cmt .h{display:block;font-weight:700;color:var(--text);margin-bottom:3px}
+  .cmt.bad .h{color:#ffb4b4}
+  .cmt.good .h{color:#a7f3c0}
+  .cmt b{color:var(--gold)}
+  .cmt .sub{display:block;margin-top:6px;color:var(--dim2);font-size:11.5px}
+  .acts{display:flex;gap:7px;margin:10px 14px 0}
+  .acts button{flex:1;border:1px solid var(--line-str);background:var(--card);color:var(--text);font:inherit;
+               font-size:12px;font-weight:600;padding:9px 6px;border-radius:10px;cursor:pointer}
+  .acts button.pri{background:var(--gold);color:#1a1a2e;border-color:transparent}
+  .acts button.gh{background:none;color:var(--dim)}
+  .foot{margin:12px 14px 16px;font-size:11px;color:var(--dim2);line-height:1.5}
+
+  /* bandeau ouverture */
+  .bkbar{margin:0 14px 9px;background:rgba(91,143,185,.13);border:1px solid rgba(91,143,185,.28);
+         border-radius:12px;padding:8px 10px}
+  .bkbar .t{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600}
+  .bkbar .t .ic{font-size:14px}
+  .bkbar .t .n{margin-left:auto;font-size:11px;color:#9dc4e0;font-variant-numeric:tabular-nums}
+  .dots{display:flex;gap:4px;margin-top:7px}
+  .dots i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.13)}
+  .dots i.on{background:var(--blue)}
+  .dots i.cur{background:var(--gold)}
+  .bkbar .sub{font-size:11.5px;color:var(--dim2);margin-top:6px;line-height:1.45}
+  .bkbar.out{background:rgba(226,184,87,.1);border-color:rgba(226,184,87,.3)}
+
+  /* fin de partie */
+  .end{padding:4px 14px 16px}
+  .res{background:linear-gradient(180deg,rgba(74,222,128,.14),rgba(74,222,128,.05));
+       border:1px solid rgba(74,222,128,.28);border-radius:14px;padding:12px 13px}
+  .res .t{font-size:16px;font-weight:700}
+  .res .s{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.5}
+  .kpis{display:flex;gap:6px;margin-top:11px}
+  .kpi{flex:1;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 6px;text-align:center}
+  .kpi .v{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:9.5px;color:var(--dim2);display:block;margin-top:1px;line-height:1.25}
+  .kpi.bad .v{color:var(--bad)} .kpi.ok .v{color:var(--ok)}
+  .spark{margin-top:11px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 10px}
+  .spark .h{font-size:11px;color:var(--dim2);margin-bottom:5px}
+  .spark svg{display:block;width:100%;height:46px;overflow:visible}
+  .nextlvl{margin-top:10px;background:rgba(226,184,87,.08);border:1px solid rgba(226,184,87,.22);
+           border-radius:12px;padding:10px 11px;font-size:12px;line-height:1.5;color:var(--dim)}
+  .nextlvl b{color:var(--gold)}
+
+  /* bloc « rangee a part » + appareils + historique */
+  .sep{margin-top:11px;background:rgba(91,143,185,.11);border:1px solid rgba(91,143,185,.26);border-radius:12px;
+       padding:10px 11px;font-size:12px;line-height:1.55;color:var(--dim)}
+  .sep .t{display:block;font-weight:700;color:#9dc4e0;margin-bottom:3px;font-size:12px}
+  .sep b{color:var(--text)}
+  .dev{margin-top:11px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 11px}
+  .dev .t{font-size:12px;font-weight:600;margin-bottom:7px}
+  .devrow{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0;color:var(--dim)}
+  .devrow .ic{font-size:14px}
+  .devrow .n{flex:1;color:var(--text)}
+  .devrow .c{color:var(--dim2);font-variant-numeric:tabular-nums;font-size:11.5px}
+  .dev .sub{font-size:11.5px;line-height:1.5;color:var(--dim2);margin-top:7px;border-top:1px solid var(--line);padding-top:7px}
+  .dev .sub b{color:var(--text)}
+  .hist{margin-top:11px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .hrow{display:flex;align-items:center;gap:8px;padding:8px 11px;font-size:12px;border-bottom:1px solid var(--line)}
+  .hrow:last-child{border-bottom:0}
+  .hrow .d{width:34px;color:var(--dim2);font-size:11px}
+  .hrow .r{width:17px;height:17px;border-radius:5px;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .hrow .r.ok{background:rgba(74,222,128,.18);color:var(--ok)}
+  .hrow .r.bad{background:rgba(248,113,113,.16);color:var(--bad)}
+  .hrow .m{flex:1;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hrow .g{color:var(--dim2);font-size:11px;white-space:nowrap}
+
+  /* tableaux / sections techniques */
+  .wide{max-width:1080px}
+  table{border-collapse:collapse;width:100%;max-width:1080px;margin-top:12px;font-size:12.5px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--dim2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  td b{color:var(--text)} td{color:var(--dim)}
+  code{background:var(--card-2);padding:1px 5px;border-radius:5px;font-size:11.5px;color:#cfe0f0}
+  .cols{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;max-width:1080px}
+  .cols > div{flex:1 1 330px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 14px}
+  .cols h3{font-size:12.5px;color:var(--gold);margin-bottom:7px}
+  .cols ul{margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:var(--dim)}
+  .cols li b{color:var(--text)}
+  .warnbox{max-width:1080px;margin-top:14px;background:rgba(248,113,113,.09);border:1px solid rgba(248,113,113,.26);
+           border-radius:13px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:#e7c9c9}
+  .warnbox b{color:#ffb4b4}
+</style>
+</head>
+<body>
+
+<h1>Mode entraineur - jouer contre le coach</h1>
+<p class="lede">Sa demande : <b>un mode entraineur facon Chess.com</b>, avec le <b>niveau de l'adversaire</b> reglable
+(par defaut « mon niveau »), un <b>mode libre</b> (aucune aide pendant, commentaires du coach APRES coup avec les
+fleches de menace qui apparaissent alors) et un <b>mode assiste</b> (fleches de menace + meilleur coup + le pourquoi).
+Puis : un <b>mode avance</b> ou l'on choisit son ouverture et ou le coach « joue le jeu » de cette ouverture - ou en
+sort expres.</p>
+<p class="lede">Ce que ca coute, honnetement : <b>l'essentiel existe deja</b>. <code>js/replay.js</code> (« Rejoue ta
+defaite » / « Termine la partie ») EST un moteur de mode entraineur : tu joues un camp contre Stockfish, il note
+chaque coup (perte en centiemes, mat, <code>explainBadMove</code>), decrit la reponse de l'ordi, propose de reprendre
+le coup, et il a <b>deja les deux niveaux d'aide</b> - le mode <code>replay</code> montre tout (eval + fleche bleue),
+le mode <code>convert</code> ne dit rien et donne un indice en trois temps a la demande. Les fleches de menace sont
+dans <code>js/tactics.js</code> (<code>threats</code>, <code>seeOn</code>, <code>netGain</code>), et le livre
+d'ouvertures existe en donnees verifiees (172 lignes dans <code>js/openings.js</code>, les <code>sans</code> des
+12 cours, les 95 noeuds de l'arbre).</p>
+<p class="lede">Ce qui manque vraiment : <b>le reglage du niveau</b> (le vrai morceau, voir tout en bas), un <b>hote de
+partie complete</b> (position de depart, choix du camp, resultat, PGN) et le <b>pilote d'ouverture</b>. Le reste est
+de l'assemblage.</p>
+
+<div class="principles">
+  <div><b class="k">MESURE 1</b>112 de tes 166 parties quittent le livre <b>avant le 4e demi-coup</b> (mediane : 3). Seules 28
+    depassent 5 demi-coups. Le mode « ouverture pilotee » attaque exactement ca.</div>
+  <div><b class="k">MESURE 2</b>Elo actuel : <b>760 en rapide</b>, <b>946 en journalier</b>. « Mon niveau » n'est donc pas un
+    reglage abstrait : c'est un chiffre que l'app connait deja par cadence.</div>
+  <div><b class="k">MESURE 3</b>La revue pedagogique d'aout l'a chiffre : <b>+29 % de gaffes des que la pendule tourne</b>. Donc
+    le mode qui fait progresser est le mode <b>libre</b> (muet pendant le coup) ; l'assiste sert a etudier, pas a
+    s'entrainer.</div>
+  <div><b class="k">REGLE</b>Un coach qui parle a chaque coup devient une bequille. Ici : muet pendant ton coup, bavard apres,
+    et le commentaire nomme la piece et la case - jamais « attention, sois vigilant ».</div>
+</div>
+
+<h2>Les ecrans <span>- 6 etats, mobile d'abord (le desktop reprend la meme colonne + le rapport a droite)</span></h2>
+
+<div class="frames">
+
+  <!-- ══════════ 1. REGLAGES ══════════ -->
+  <div class="col">
+    <p class="cap"><b>1. Nouvelle partie</b> - un seul ecran de reglages, tout est pre-rempli sur TES chiffres. Le
+      bouton du bas est la seule chose obligatoire a toucher.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb">
+        <span class="bk">←</span>
+        <span class="who"><b>Jouer avec le coach</b><small>partie complete, notee coup par coup</small></span>
+        <span class="chip g">nouveau</span>
+      </div>
+      <div class="set">
+
+        <div class="fld">
+          <label>Ton camp</label>
+          <div class="segs">
+            <button class="on">♔ Blancs</button><button>♚ Noirs</button><button>🎲 Au hasard</button>
+          </div>
+        </div>
+
+        <div class="fld">
+          <label>Niveau de l'adversaire</label>
+          <div class="lvl">
+            <div class="row"><span class="v">760</span><span class="t">Elo cible</span><span class="me">mon niveau</span></div>
+            <div class="track">
+              <i></i><i class="f"></i>
+              <s style="left:8%"></s><s style="left:47%"></s><s style="left:76%"></s>
+              <b></b>
+              <u style="left:8%">400</u><u style="left:47%">760</u><u style="left:76%">1000</u><u style="left:96%">1400</u>
+            </div>
+            <p class="hint">Ton Elo <b>rapide</b> (journalier : 946). Les adversaires qui te battent tournent vers
+              <b>+150</b> : c'est le cran conseille quand tu gagnes deux parties de suite.</p>
+          </div>
+        </div>
+
+        <div class="fld">
+          <label>Aide pendant la partie</label>
+          <div class="opts">
+            <div class="opt on">
+              <span class="rd"></span>
+              <span class="bd"><b>Libre - rien pendant, tout apres</b>
+                <small>Aucune eval, aucune fleche, aucun indice. Le coach parle APRES ton coup et montre alors ce que
+                  tu n'as pas vu.</small></span>
+            </div>
+            <div class="opt">
+              <span class="rd"></span>
+              <span class="bd"><b>Assiste - menaces + meilleur coup</b>
+                <small>Fleches rouges sur ce qui est attaque, fleche bleue sur le meilleur coup, et le pourquoi en une
+                  phrase. Pour etudier une ouverture ou un plan.</small></span>
+            </div>
+          </div>
+          <div class="sw on">
+            <span class="bd"><b>💡 Indice a la demande</b> - 3 temps : le theme, la piece, puis le coup</span>
+            <span class="tg"></span>
+          </div>
+        </div>
+
+        <div class="fld">
+          <label>Ouverture imposee</label>
+          <div class="book">
+            <div class="pick"><span class="ic">📖</span><span>Systeme de Londres - ordre classique</span><span class="ch">changer</span></div>
+            <p class="line">1.d4 d5 2.Cf3 Cf6 3.Ff4 e6 4.e3 c5 5.c3 Cc6…</p>
+          </div>
+          <div class="opts" style="margin-top:6px">
+            <div class="opt on">
+              <span class="rd"></span>
+              <span class="bd"><b>Il joue le jeu</b><small>Le coach suit ta ligne tant que tu la suis : tu repetes ton
+                ouverture jusqu'a la position type, puis il joue normalement.</small></span>
+            </div>
+            <div class="opt">
+              <span class="rd"></span>
+              <span class="bd"><b>Il sort du livre expres</b><small>A un coup tire au hasard, il joue une deviation
+                jouable. C'est ce qui t'arrive dans 112 parties sur 166.</small></span>
+            </div>
+          </div>
+        </div>
+
+        <button class="go">Jouer ▸</button>
+      </div>
+    </div>
+    <p class="note"><b>Pourquoi un seul ecran :</b> le mode ne doit pas demander 4 decisions avant de jouer. Camp,
+      niveau, aide et ouverture ont tous une valeur par defaut sensee (Blancs, mon Elo, libre, aucune ouverture) -
+      on peut appuyer sur <b>Jouer</b> tout de suite.</p>
+  </div>
+
+  <!-- ══════════ 2. MODE LIBRE ══════════ -->
+  <div class="col">
+    <p class="cap"><b>2. Mode libre</b> - l'ecran est MUET pendant ton coup (etat du haut), et le coach parle une fois
+      la reponse jouee : la menace ratee apparait alors en fleches rouges.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb">
+        <span class="bk">←</span>
+        <span class="who"><b>Coach 760</b><small>mode libre · coup 8 · tu joues les Noirs</small></span>
+        <span class="chip r">-3,1</span>
+      </div>
+
+      <div class="st" style="margin-bottom:8px"><span class="mute">Avant ton coup :</span> Trait aux <b>Noirs</b>.
+        <span class="mute">A toi de trouver - aucune aide affichee.</span></div>
+
+      <div class="bwrap">
+        <div class="pbar"><b>Coach</b><span class="sp"></span><span class="clk">4:58</span></div>
+        <div class="boardrow">
+          <div class="evalbar"><i style="height:78%"></i></div>
+          <div class="bd8">
+            <div class="grid" id="b-libre"></div>
+            <svg class="arrows" id="a-libre" viewBox="0 0 8 8"></svg>
+          </div>
+        </div>
+        <div class="pbar"><b>Toi</b><span class="sp"></span><span class="clk">5:12</span></div>
+      </div>
+
+      <div class="cmt bad">
+        <span class="h">🔴 Tu n'as pas vu la menace</span>
+        Ton <b>…Cxe5</b> permet <b>dxe5</b> : le pion reprend et attaque <b>a la fois ton fou d6 et ton cavalier f6</b>,
+        et il est defendu par le fou g3. Tu perds une piece.
+        <span class="sub">Reflexe : quand tu prends une piece defendue, regarde ce que le pion qui reprend attaquera.</span>
+      </div>
+
+      <div class="acts">
+        <button class="pri">↺ Reprendre ce coup</button>
+        <button>Continuer</button>
+      </div>
+      <p class="foot">Les fleches n'existent qu'ici, <b>apres</b>. Pendant ton coup : pas d'eval, pas de fleche, pas de
+        meilleur coup - c'est ce qui entraine l'attention.</p>
+    </div>
+    <p class="note"><b>Deja code :</b> la notation du coup (<code>gradeMyMove</code>), l'explication
+      (<code>badExplain</code> → <code>Analyzer.explainBadMove</code>), le bouton « reprendre » et l'annulation
+      (<code>undo</code>) sont dans <code>replay.js</code>. Nouveau : dessiner les fleches de menace au moment du
+      verdict (<code>Tactics.threats</code> le calcule deja pour les exercices).</p>
+  </div>
+
+  <!-- ══════════ 3. MODE ASSISTE ══════════ -->
+  <div class="col">
+    <p class="cap"><b>3. Mode assiste</b> - meme partie, meme position, mais AVANT ton coup : fleche bleue sur le
+      meilleur coup, fleches rouges sur ce qu'il attaquera, et une phrase qui dit pourquoi.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb">
+        <span class="bk">←</span>
+        <span class="who"><b>Coach 760</b><small>mode assiste · coup 8 · tu joues les Blancs</small></span>
+        <span class="chip b">+0,3</span>
+      </div>
+
+      <div class="bwrap">
+        <div class="pbar"><b>Coach</b><span class="sp"></span><span class="clk">4:41</span></div>
+        <div class="boardrow">
+          <div class="evalbar"><i style="height:54%"></i></div>
+          <div class="bd8">
+            <div class="grid" id="b-assist"></div>
+            <svg class="arrows" id="a-assist" viewBox="0 0 8 8"></svg>
+          </div>
+        </div>
+        <div class="pbar"><b>Toi</b><span class="sp"></span><span class="clk">5:03</span></div>
+      </div>
+
+      <div class="st">Trait aux <b>Blancs</b>. Eval <b>+0,3</b>. Meilleur : <b>dxe5</b>
+        <span class="mute">(fleche bleue)</span>.</div>
+
+      <div class="cmt">
+        <span class="h">Pourquoi dxe5</span>
+        Ton fou est en <b>g3</b>, donc le pion arrive en e5 <b>defendu</b>. Et de la, il attaque le <b>fou d6</b> et le
+        <b>cavalier f6</b> en meme temps : deux pieces pour un pion, il n'y a pas de parade.
+        <span class="sub">Suite : dxe5 Fxe5 Fxe5 Cd7 - tu restes une piece devant.</span>
+      </div>
+
+      <div class="acts">
+        <button class="gh">🙈 Cacher les fleches</button>
+        <button>Passer en libre</button>
+      </div>
+      <p class="foot">Bascule libre ⇄ assiste <b>en cours de partie</b> : on peut demarrer assiste pour apprendre une
+        ligne, puis couper l'aide au coup 10.</p>
+    </div>
+    <p class="note"><b>Deja code :</b> exactement le comportement du mode <code>replay</code> (eval + fleche bleue via
+      <code>drawMyArrow</code>, suite en francais via <code>FreePlay.pvToFr</code>). Nouveau : la phrase « pourquoi »,
+      qui se derive de <code>Tactics.threats</code> + <code>threatSentence</code> (deja ecrit pour les exercices).</p>
+  </div>
+
+  <!-- ══════════ 4. OUVERTURE PILOTEE ══════════ -->
+  <div class="col">
+    <p class="cap"><b>4. Ouverture pilotee</b> - le bandeau bleu dit ou tu en es dans TA ligne. En bas : le meme
+      bandeau quand le coach sort du livre expres.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb">
+        <span class="bk">←</span>
+        <span class="who"><b>Coach 760</b><small>Londres · ordre classique · tu joues les Blancs</small></span>
+        <span class="chip b">📖 3/8</span>
+      </div>
+
+      <div class="bkbar">
+        <div class="t"><span class="ic">📖</span><span>Il suit ta ligne</span><span class="n">coup 3 sur 8</span></div>
+        <div class="dots"><i class="on"></i><i class="on"></i><i class="cur"></i><i></i><i></i><i></i><i></i><i></i></div>
+        <p class="sub">Prochain coup de ta ligne : <b>3…e6</b> puis <b>4.e3</b> (le verrou : e3 defend d4 ET ton fou f4).</p>
+      </div>
+
+      <div class="bwrap">
+        <div class="boardrow">
+          <div class="bd8">
+            <div class="grid" id="b-book"></div>
+            <svg class="arrows" id="a-book" viewBox="0 0 8 8"></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="st">Trait aux <b>Noirs</b>. <span class="mute">Le coach joue le coup du livre.</span></div>
+
+      <div class="bkbar out" style="margin-top:12px">
+        <div class="t"><span class="ic">⚡</span><span>Il vient de sortir du livre</span><span class="n">coup 5</span></div>
+        <p class="sub"><b>5…Db6</b> - hors de ta ligne. Il attaque <b>b2</b>. A toi de trouver la parade : tu as
+          <b>Dc1</b>, <b>Dc2</b> ou <b>b3</b>, mais pas Db3 (il brade les dames).
+          <span style="color:var(--dim2)">Le cours du Londres t'a donne cette position - c'est le meme exercice, sauf
+          que la tu joues la suite.</span></p>
+      </div>
+
+      <p class="foot">Sortie de livre <b>de ton cote</b> aussi : si tu deviez, le bandeau passe en « tu quittes le livre
+        ici », comme dans les cours.</p>
+    </div>
+    <p class="note"><b>Deja code :</b> les lignes (les <code>sans</code> des cours, deja verifies chess.js) et la
+      phrase « tu quittes le livre ici » (<code>Coach.lineStats</code>). Nouveau : le petit pilote qui joue le coup du
+      livre tant qu'on est dedans, et le tirage de la deviation.</p>
+  </div>
+
+  <!-- ══════════ 5. FIN DE PARTIE ══════════ -->
+  <div class="col">
+    <p class="cap"><b>5. Fin de partie</b> - le bilan, <b>range a part</b> : la partie va dans l'historique du mode
+      entraineur, pas dans tes stats Chess.com. Toute remontee vers l'entrainement est un choix explicite.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb">
+        <span class="bk">←</span>
+        <span class="who"><b>Partie terminee</b><small>Coach 760 · mode libre · 34 coups</small></span>
+        <span class="chip o">gagne</span>
+      </div>
+      <div class="end">
+        <div class="res">
+          <div class="t">🏆 Victoire - mat au 34e</div>
+          <p class="s">Tu as tenu ton avantage de bout en bout : jamais repasse sous +1 apres le coup 12.</p>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi ok"><span class="v">9</span><span class="l">meilleurs coups</span></div>
+          <div class="kpi"><span class="v">12</span><span class="l">imprecisions</span></div>
+          <div class="kpi bad"><span class="v">3</span><span class="l">gaffes</span></div>
+          <div class="kpi"><span class="v">2</span><span class="l">indices</span></div>
+        </div>
+
+        <div class="spark">
+          <div class="h">Ton avantage, coup par coup</div>
+          <svg viewBox="0 0 320 46" id="sp"></svg>
+        </div>
+
+        <div class="nextlvl">
+          <b>Niveau conseille : 810</b> (+50). Tu as gagne les deux dernieres au niveau 760 - on monte d'un cran, pas
+          de trois : le but est de rester dans la zone ou tu dois vraiment reflechir.
+        </div>
+
+        <div class="sep">
+          <span class="t">🗄 Rangee a part</span>
+          Cette partie va dans <b>Tes parties avec le coach</b>. Elle n'entre <b>pas</b> dans l'archive Chess.com :
+          ni dans ta courbe Elo, ni dans « ton vrai niveau », ni dans « tes parties apres 2.Ff4 ».
+        </div>
+
+        <div class="sw" style="margin-top:8px">
+          <span class="bd"><b>Envoyer la gaffe du coup 12 dans mes exercices</b> - une carte de plus dans la
+            repetition espacee</span>
+          <span class="tg"></span>
+        </div>
+
+        <div class="acts" style="margin-left:0;margin-right:0">
+          <button class="pri">🔍 Analyser cette partie</button>
+          <button>↻ Rejouer</button>
+        </div>
+        <p class="foot" style="margin:10px 0 0">« Analyser » ouvre le vrai ecran d'analyse (timeline, moments,
+          verdicts) <b>sans</b> ingerer la partie dans le Coach.</p>
+      </div>
+    </div>
+    <p class="note"><b>Le point souleve par le user :</b> le bilan est utile, mais melanger ces parties aux vraies
+      fausserait tout ce qui est mesure sur l'archive - la courbe Elo, « ton vrai niveau » (0 % contre plus fort),
+      « tu quittes le livre ici », les gaffes/100 coups. Donc : <b>magasin separe</b>, et une seule passerelle, sur
+      demande - la gaffe qu'on veut revoir.</p>
+  </div>
+
+  <!-- 6. HISTORIQUE SEPARE + APPAREILS -->
+  <div class="col">
+    <p class="cap"><b>6. Tes parties avec le coach</b> - l'historique du mode, a cote de l'archive Chess.com et jamais
+      dedans. C'est aussi ici que se regle la question PC / telephone.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb">
+        <span class="bk">←</span>
+        <span class="who"><b>Tes parties avec le coach</b><small>entrainement · separe de tes parties Chess.com</small></span>
+        <span class="chip b">14</span>
+      </div>
+      <div class="end">
+        <div class="kpis">
+          <div class="kpi"><span class="v">14</span><span class="l">parties</span></div>
+          <div class="kpi ok"><span class="v">8/1/5</span><span class="l">V/N/D</span></div>
+          <div class="kpi"><span class="v">780</span><span class="l">niveau moyen</span></div>
+          <div class="kpi bad"><span class="v">2,4</span><span class="l">gaffes / partie</span></div>
+        </div>
+
+        <div class="dev">
+          <div class="t">📱 Sur quel appareil ?</div>
+          <div class="devrow"><span class="ic">💻</span><span class="n">Cet ordinateur</span><span class="c">9 parties</span></div>
+          <div class="devrow"><span class="ic">📱</span><span class="n">Android (importe le 07/09)</span><span class="c">5 parties</span></div>
+          <p class="sub">Les parties contre le coach se jouent <b>sur l'appareil</b>, sans serveur pour les
+            rassembler. Chaque partie est donc <b>etiquetee</b>, et un export/import JSON permet de les reunir quand
+            tu veux. <b>Rien ne se melange, rien ne s'ecrase.</b></p>
+          <div class="acts" style="margin:9px 0 0">
+            <button>⤓ Exporter</button><button>⤒ Importer</button>
+          </div>
+        </div>
+
+        <div class="hist">
+          <div class="hrow"><span class="d">auj.</span><span class="r ok">V</span><span class="m">Londres · libre · niv. 760</span><span class="g">3 gaffes</span></div>
+          <div class="hrow"><span class="d">auj.</span><span class="r bad">D</span><span class="m">libre · niv. 810</span><span class="g">5 gaffes</span></div>
+          <div class="hrow"><span class="d">hier</span><span class="r ok">V</span><span class="m">Italienne · assiste · niv. 700</span><span class="g">1 gaffe</span></div>
+          <div class="hrow"><span class="d">07/09</span><span class="r bad">D</span><span class="m">📱 hors livre · libre · niv. 760</span><span class="g">4 gaffes</span></div>
+        </div>
+
+        <div class="nextlvl">
+          <b>Ce que ca mesure</b> - au niveau 760 tu es a 8 victoires sur 14, mais 2,4 gaffes par partie : c'est ce
+          chiffre-la qu'il faut faire baisser, pas le niveau qu'il faut monter.
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>A savoir, et ca vaut deja aujourd'hui :</b> tes vraies parties se rechargent depuis Chess.com
+      (API + <code>coach-data.json</code>), donc PC et telephone convergent tout seuls. Mais tout ce qui est
+      <b>progression locale</b> - le paquet d'exercices, la routine, la repetition espacee des ouvertures, le journal
+      de seances - vit dans le <code>localStorage</code> de l'appareil et <b>diverge deja</b> entre ton PC et ton
+      Android. L'export/import ci-dessus est le meme mecanisme : autant le faire une fois pour les deux.</p>
+  </div>
+
+</div>
+
+<h2>Stockage : pourquoi ca ne se melange pas <span>- la question du user, en detail</span></h2>
+
+<p class="lede wide">Trois magasins distincts - et les deux premiers existent deja tels quels :</p>
+
+<table>
+  <tr><th>Quoi</th><th>Ou</th><th>PC ⇄ Android</th><th>Compte dans les stats ?</th></tr>
+  <tr><td><b>Tes parties Chess.com</b></td><td>IndexedDB <code>STORE</code>, remplie par l'API Chess.com +
+    <code>coach-data.json</code></td><td><b>Convergent</b> - les deux appareils rechargent la meme archive depuis le
+    serveur</td><td>Oui : Elo, precision, « ton vrai niveau », lineStats</td></tr>
+  <tr><td><b>Tes parties avec le coach</b> (nouveau)</td><td><b>Magasin separe</b> (son propre store IDB), record
+    <code>{source:'coach', device, level, mode, opening, pgn, result, moves[]}</code></td><td>Par appareil, etiquete,
+    export/import JSON</td><td><b>Non</b> - uniquement dans son propre bilan</td></tr>
+  <tr><td>Progression locale (exercices, routine, journal)</td><td><code>localStorage</code> :
+    <code>chess-analyst-training</code>, <code>ca_lessons_srs</code>, <code>chess-analyst-sessions</code>,
+    <code>ca_checklist_v1</code>…</td><td><b>Diverge deja</b> aujourd'hui, en silence</td><td>Alimente
+    l'entrainement, pas les stats de jeu</td></tr>
+</table>
+
+<div class="warnbox">
+  <b>⚠ Deux raisons techniques de NE PAS ranger les parties du coach dans l'archive</b> - en plus du fait que ca
+  fausserait les mesures. <b>1)</b> <code>Coach.clearStore()</code> vide tout le magasin des parties des que le pseudo
+  Chess.com configure change (c'est le garde-fou deux-comptes) : des parties d'entrainement rangees la seraient
+  <b>effacees sans preavis</b>, et elles ne sont rechargeables depuis aucun serveur. <b>2)</b> le pipeline d'analyse
+  appelle <code>Training.capture()</code> a la fin (<code>app.js:470</code> et <code>584</code>) : une partie du coach
+  passee par « analyser » <b>remplirait automatiquement</b> le paquet d'exercices. Il faut donc un drapeau explicite
+  pour que cette remontee reste un choix - c'est l'interrupteur de l'ecran 5.
+</div>
+
+<h2>Sous le capot <span>- ce qui est reutilise, ce qui est a ecrire</span></h2>
+
+<div class="cols">
+  <div>
+    <h3>Reutilise tel quel</h3>
+    <ul>
+      <li><b>replay.js</b> - la boucle « je joue / l'ordi repond », la notation du coup, l'explication de la gaffe, le
+        reprendre-ce-coup, l'indice en 3 temps, le bilan de session.</li>
+      <li><b>tactics.js</b> - <code>threats</code> / <code>threatSentence</code> pour les fleches et la phrase,
+        <code>seeOn</code> / <code>netGain</code> pour ne signaler que ce qui est <b>vraiment</b> en prise (une piece
+        defendue ne declenche rien).</li>
+      <li><b>freeplay.js</b> - eval au point de vue des Blancs, PV en francais, detection mat/pat, et le
+        <code>hints:false</code> qui coupe tout ce que le moteur sait.</li>
+      <li><b>board.js</b> - rendu, glisser-deposer, fleches (coudes de cavalier compris).</li>
+      <li><b>courses.js / openings.js / opening-tree.js</b> - le livre : 172 lignes + les <code>sans</code> des cours,
+        deja verifies.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>A ecrire</h3>
+    <ul>
+      <li><b>Le reglage du niveau</b> (<code>StockfishEngine.setStrength</code>) - le vrai morceau, voir ci-dessous.</li>
+      <li><b>Un hote de partie complete</b> : position de depart, choix du camp, pendule optionnelle, abandon /
+        nulle, resultat, <b>export PGN</b>. <code>replay.js</code> part d'une FEN au milieu d'une partie et n'a pas de
+        notion de resultat.</li>
+      <li><b>Le pilote d'ouverture</b> : jouer le coup du livre tant qu'on est dans la ligne, tirer une deviation
+        jouable sinon, et afficher le bandeau.</li>
+      <li><b>L'ecran de reglages</b> + la tuile dans Apprendre + la reprise (« continuer la partie en cours »).</li>
+      <li><b>La boucle d'analyse</b> : brancher le PGN produit sur <code>loadPgnAndAnalyze</code> (deja exporte par
+        app.js) et sur l'ingestion Coach.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Le niveau de l'adversaire <span>- le seul point techniquement delicat</span></h2>
+
+<p class="lede wide">Verifie sur le moteur embarque (envoi de <code>uci</code> au worker en live) : c'est
+<b>Stockfish 2019-08-15 Multi-Variant</b>. Il expose <code>Skill Level</code> (0-20) mais <b>PAS</b>
+<code>UCI_Elo</code> ni <code>UCI_LimitStrength</code> - les deux options que Chess.com / Lichess utilisent pour
+annoncer un Elo. On ne peut donc pas ecrire « joue a 760 » et s'arreter la. Et <code>Skill Level 0</code> reste tres
+au-dessus de 760 : il faut un deuxieme etage.</p>
+
+<p class="lede wide">Le mecanisme propose (tout est deja a portee : <code>MultiPV 5</code> est deja actif pour
+l'analyseur) : <b>1)</b> <code>Skill Level</code> + <b>2)</b> un <code>movetime</code> court + <b>3)</b> un tirage
+pondere parmi les 5 meilleures lignes - c'est ce troisieme etage qui fabrique vraiment un adversaire de 500 ou de 800,
+parce qu'il joue alors le 2e ou 3e meilleur coup comme le fait un humain de ce niveau + <b>4)</b> un taux de gaffe
+volontaire (a Elo bas, jouer de temps en temps un coup qui perd du materiel, sinon l'adversaire ne perd jamais de
+piece, ce qui est faux a 600).</p>
+
+<table>
+  <tr><th>Elo vise</th><th>Skill</th><th>Movetime</th><th>Tirage dans le top 5</th><th>Gaffe volontaire</th></tr>
+  <tr><td><b>400</b> debutant</td><td>0</td><td>50 ms</td><td>tres large (souvent le 4e/5e coup)</td><td>~12 % des coups</td></tr>
+  <tr><td><b>600</b></td><td>1</td><td>80 ms</td><td>large</td><td>~8 %</td></tr>
+  <tr><td><b>760</b> son niveau</td><td>3</td><td>120 ms</td><td>moyen (2e-3e coup souvent)</td><td>~5 %</td></tr>
+  <tr><td><b>900</b> +150</td><td>5</td><td>200 ms</td><td>etroit</td><td>~3 %</td></tr>
+  <tr><td><b>1200</b></td><td>9</td><td>400 ms</td><td>le meilleur, sauf exception</td><td>0</td></tr>
+</table>
+<p class="lede wide" style="margin-top:10px">Ces valeurs sont un <b>point de depart a calibrer en jouant</b> : la seule
+mesure honnete est un mini-tournoi du moteur contre lui-meme a deux reglages, et surtout le ressenti sur 5 parties. Le
+mode affichera donc « niveau <b>~</b>760 » et pas « 760 » : personne ne peut garantir un Elo a 50 points pres avec un
+moteur qui n'a pas d'option d'Elo.</p>
+
+<div class="warnbox">
+  <b>⚠ Le piege a ne pas rater.</b> <code>Skill Level 20</code> et <code>MultiPV 5</code> sont poses <b>une seule
+  fois</b>, a l'init du worker (<code>js/engine.js</code>, phase <code>uci</code>). Si le mode entraineur descend
+  Skill a 3 et ne le remonte pas en sortant, <b>tout l'analyseur se met a analyser a Skill 3</b> - silencieusement, et
+  les notes de precision deviennent fausses sans qu'aucun message ne le dise. Donc : <code>setStrength()</code> doit
+  etre <b>symetrique</b> (une restauration explicite a la fermeture du mode ET sur <code>destroy()</code>), et le
+  verificateur <code>tools/test_core.cjs</code> doit avoir un test qui l'exige.
+</div>
+
+<h2>Ce que je ne mettrais PAS</h2>
+<div class="cols">
+  <div>
+    <h3>Pas de pendule serieuse au depart</h3>
+    <ul><li>Une horloge qui joue vraiment (avec chute de drapeau) ferait de ce mode un simulateur de blitz - or son
+      probleme mesure est justement l'attention sous pendule. On garde une pendule <b>decorative</b> d'abord, et on
+      ajoute un vrai controle de temps quand le reste est solide.</li></ul>
+  </div>
+  <div>
+    <h3>Pas de niveau « adaptatif » automatique</h3>
+    <ul><li>Monter le niveau tout seul apres une victoire brouille la mesure : on ne sait plus a quel niveau on a
+      progresse. Le mode <b>propose</b> le cran suivant (ecran 5), c'est lui qui accepte.</li></ul>
+  </div>
+</div>
+
+<script>
+const GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙', k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
+
+// Rend un echiquier depuis une FEN (champ pieces seulement), avec cases mises
+// en avant et fleches. `flip` = les Noirs en bas.
+function board(id, fen, opts) {
+  const o = opts || {}, flip = !!o.flip, host = document.getElementById(id);
+  const rows = fen.split(' ')[0].split('/');
+  const cells = [];
+  rows.forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) { for (let i = 0; i < +ch; i++) cells.push({ r, f: f++, p: null }); }
+      else cells.push({ r, f: f++, p: ch });
+    }
+  });
+  const at = (file, rank) => cells.find(c => 'abcdefgh'[c.f] === file && 8 - c.r === rank);
+  const order = flip ? cells.slice().sort((a, b) => (a.r - b.r) * -1 || (b.f - a.f)) : cells;
+  host.innerHTML = '';
+  for (const c of order) {
+    const sq = 'abcdefgh'[c.f] + (8 - c.r);
+    const d = document.createElement('div');
+    d.className = 'sq ' + ((c.r + c.f) % 2 ? 'd' : 'l');
+    if ((o.hl || []).includes(sq)) d.classList.add('hl');
+    if ((o.warn || []).includes(sq)) d.classList.add('warn');
+    if (c.p) d.innerHTML = '<span class="pc ' + (c.p === c.p.toUpperCase() ? 'w' : 'b') + '">' + GLYPH[c.p] + '</span>';
+    host.appendChild(d);
+  }
+  // fleches, en coordonnees de cases (viewBox 0 0 8 8)
+  if (o.svg) {
+    const xy = (sq) => {
+      let x = 'abcdefgh'.indexOf(sq[0]) + .5, y = 8 - (+sq[1]) + .5;
+      if (flip) { x = 8 - x; y = 8 - y; }
+      return [x, y];
+    };
+    const COL = { bad: '#e05252', good: '#4ade80', best: '#3d7ea6' };
+    let out = '<defs>';
+    for (const k in COL) out += '<marker id="mk-' + id + '-' + k + '" viewBox="0 0 10 10" refX="7" refY="5" '
+      + 'markerWidth="4" markerHeight="4" orient="auto"><path d="M0,1 L9,5 L0,9 z" fill="' + COL[k] + '"/></marker>';
+    out += '</defs>';
+    for (const a of (o.arrows || [])) {
+      const [x1, y1] = xy(a[0]), [x2, y2] = xy(a[1]), k = a[2] || 'best';
+      // on raccourcit la fleche pour ne pas manger la piece d'arrivee
+      const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
+      const ex = x2 - dx / L * .30, ey = y2 - dy / L * .30;
+      out += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + ex + '" y2="' + ey + '" stroke="' + COL[k]
+        + '" stroke-width=".13" stroke-linecap="round" opacity=".92" marker-end="url(#mk-' + id + '-' + k + ')"/>';
+    }
+    document.getElementById(o.svg).innerHTML = out;
+  }
+}
+
+// 2. Mode libre : APRES 8.dxe5, le pion fourche le fou d6 et le cavalier f6.
+//    (position verifiee chess.js, c'est le piege du cours du Londres)
+board('b-libre', 'r1bq1rk1/ppp2ppp/3bpn2/3pP3/8/4P1B1/PPPN1PPP/R2QKB1R', {
+  flip: true, svg: 'a-libre', hl: ['e5'], warn: ['d6', 'f6'],
+  arrows: [['e5', 'd6', 'bad'], ['e5', 'f6', 'bad']]
+});
+
+// 3. Mode assiste : la MEME position un demi-coup plus tot, cote Blancs.
+board('b-assist', 'r1bq1rk1/ppp2ppp/3bpn2/3pn3/3P4/4P1B1/PPPN1PPP/R2QKB1R', {
+  svg: 'a-assist', arrows: [['d4', 'e5', 'best'], ['e5', 'd6', 'bad'], ['e5', 'f6', 'bad']]
+});
+
+// 4. Ouverture pilotee : 1.d4 d5 2.Cf3 Cf6 3.Ff4, l'ordre classique du Londres.
+board('b-book', 'rnbqkb1r/ppp1pppp/5n2/3p4/3P1B2/5N2/PPP1PPPP/RN1QKB1R', {
+  svg: 'a-book', hl: ['f4'], arrows: [['c1', 'f4', 'good']]
+});
+
+// 5. Courbe d'avantage de la partie (illustrative)
+const EV = [0,.1,.2,.1,.3,.2,-.2,.4,1.1,.9,1.4,1.2,2.1,2.4,2.2,2.9,3.1,2.6,3.4,3.8,3.6,4.2,4.9,4.6,5.4,6.1,6.8,6.4,7.9,8.6,9.4,12,18,30];
+(function () {
+  const W = 320, H = 46, hi = Math.max(...EV), lo = Math.min(...EV);
+  const x = i => (i / (EV.length - 1)) * W;
+  const y = v => H - 3 - ((v - lo) / (hi - lo || 1)) * (H - 8);
+  const pts = EV.map((v, i) => x(i) + ',' + y(v)).join(' ');
+  document.getElementById('sp').innerHTML =
+    '<line x1="0" y1="' + y(0) + '" x2="' + W + '" y2="' + y(0) + '" stroke="rgba(255,255,255,.13)" stroke-dasharray="3 3"/>'
+    + '<polygon points="0,' + H + ' ' + pts + ' ' + W + ',' + H + '" fill="rgba(74,222,128,.13)"/>'
+    + '<polyline points="' + pts + '" fill="none" stroke="#4ade80" stroke-width="1.6"/>'
+    + [12, 22, 28].map(i => '<circle cx="' + x(i) + '" cy="' + y(EV[i]) + '" r="2.6" fill="#f87171"/>').join('');
+})();
+</script>
+</body>
+</html>

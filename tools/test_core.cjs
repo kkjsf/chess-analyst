@@ -21,6 +21,10 @@ const Tactics = require(path.join(ROOT, 'js/tactics.js'));
 global.Tactics = Tactics;
 global.Openings = require(path.join(ROOT, 'js/openings.js'));
 const Analyzer = require(path.join(ROOT, 'js/analysis.js'));
+// coachgame.js ne touche au DOM que dans ses fonctions : requerable tel quel.
+// Il lit Analyzer.cpToWinPct au travers du global, comme dans le navigateur.
+global.Analyzer = Analyzer;
+const CoachGame = require(path.join(ROOT, 'js/coachgame.js'));
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -220,6 +224,80 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   const produced = ['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'forced', 'inaccuracy', 'miss', 'mistake', 'blunder'];
   check(G, 'tous les types produits sont décrits',
     produced.filter(k => !types.some(t => t.k === k)), []);
+}
+
+// ────────────── force de jeu du mode entraineur (js/coachgame.js) ──────────
+// Le moteur embarque n'a pas d'option d'Elo (ni UCI_Elo ni UCI_LimitStrength),
+// donc le niveau est FABRIQUE : Skill Level + movetime + tirage pondere dans le
+// top 5 + gaffe volontaire. Ces quatre etages n'ont de sens que s'ils varient
+// dans le bon sens, et c'est exactement le genre de table qu'on casse en la
+// retouchant a la main.
+{
+  const G = 'NIVEAU';
+  const P = CoachGame.paramsFor;
+
+  // Monotonie : plus l'Elo vise est haut, plus le moteur est fort et regulier.
+  const elos = [400, 500, 600, 760, 900, 1100, 1200, 1400];
+  const params = elos.map(P);
+  const nonDecr = (k) => params.every((p, i) => i === 0 || p[k] >= params[i - 1][k]);
+  const nonIncr = (k) => params.every((p, i) => i === 0 || p[k] <= params[i - 1][k]);
+  check(G, 'skill croit avec l\'Elo', nonDecr('skill'), true);
+  check(G, 'movetime croit avec l\'Elo', nonDecr('mt'), true);
+  check(G, 'le tirage se resserre quand l\'Elo monte', nonIncr('spread'), true);
+  check(G, 'la gaffe volontaire diminue quand l\'Elo monte', nonIncr('blunder'), true);
+
+  // Bornes : un curseur hors echelle ne doit pas produire de reglage absurde.
+  check(G, 'sous le plancher on retombe sur le 1er barreau', P(100).elo, CoachGame.LADDER[0].elo);
+  check(G, 'au-dessus du plafond on retombe sur le dernier', P(3000).elo,
+    CoachGame.LADDER[CoachGame.LADDER.length - 1].elo);
+  check(G, 'skill reste dans 0-20',
+    params.filter(p => p.skill < 0 || p.skill > 20).length, 0);
+  check(G, 'la proba de gaffe reste une proba',
+    params.filter(p => p.blunder < 0 || p.blunder > 1).length, 0);
+  // Son niveau (760 rapide) doit rester un adversaire faible mais pas nul.
+  check(G, 'a ~760 le moteur est bride sans etre absurde',
+    P(760).skill <= 5 && P(760).skill >= 1, true);
+  // Au plafond, plus de coup lache au hasard : le mode doit pouvoir servir
+  // d'adversaire propre quand il aura progresse.
+  check(G, 'au plafond, aucune gaffe volontaire', P(1400).blunder, 0);
+
+  // Tirage dans les lignes MultiPV. `rnd` est injecte, donc deterministe.
+  const pick = CoachGame.pickIndex;
+  check(G, 'rnd=0 prend toujours le meilleur coup', pick(5, 2, 0), 0);
+  check(G, 'spread nul = toujours le meilleur coup', pick(5, 0, 0.99), 0);
+  check(G, 'une seule ligne : index 0', pick(1, 4, 0.99), 0);
+  check(G, 'jamais hors bornes',
+    [0, .2, .4, .6, .8, .999].map(r => pick(5, 4, r)).filter(i => i < 0 || i > 4).length, 0);
+  // Un tirage large doit reellement descendre dans la liste, sinon les niveaux
+  // bas ne sont qu'un Stockfish un peu lent.
+  const deep = [.5, .7, .9, .99].map(r => pick(5, 4, r));
+  check(G, 'un tirage large atteint le 3e coup ou plus loin', Math.max(...deep) >= 2, true);
+  const tight = [.5, .7, .9].map(r => pick(5, 0.7, r));
+  check(G, 'un tirage etroit reste sur les 2 premiers', Math.max(...tight) <= 1, true);
+
+  // Le coup EVIDENT. Mesure en jouant : sans ce resserrement, le coach laissait
+  // passer une dame gratuite deux fois sur trois - un adversaire faible doit
+  // rester faible dans les positions floues, pas aveugle devant une piece.
+  const eff = CoachGame.effSpread;
+  const L2 = (a, b) => [{ move: 'a', score: a, mate: null }, { move: 'b', score: b, mate: null }];
+  check(G, 'coups equivalents : etalement inchange', eff(L2(20, 15), 4), 4);
+  check(G, 'ecart net : etalement reduit', eff(L2(140, 20), 4) < 4, true);
+  check(G, 'une piece a ramasser : etalement fortement reduit', eff(L2(920, 20), 4) <= 1, true);
+  check(G, 'mat en vue : etalement quasi nul', eff([{ move: 'a', score: 3000, mate: 3 }, { move: 'b', score: 90, mate: null }], 4) < 1, true);
+  check(G, 'une seule ligne : rien a resserrer', eff([{ move: 'a', score: 0, mate: null }], 4), 4);
+  // Et le resserrement doit vraiment changer le coup joue, pas juste le chiffre.
+  const obvious = [.3, .5, .7, .9].map(r => pick(5, eff(L2(920, 20), 4), r));
+  check(G, 'devant une piece gratuite, le coach prend', Math.max(...obvious) <= 1, true);
+
+  // La note de MES coups se lit en chances de gain, pas en centiemes bruts.
+  // Mesure en jouant : juge en centiemes, 1.e4 sortait « erreur (-63 cp) ».
+  const wl = CoachGame.winLoss;
+  const pts = (a, b) => Math.round(wl(a, b) * 100);
+  check(G, '1.e4 a -63 cp = une imprecision, pas une erreur', pts(0, -63) < 10, true);
+  check(G, 'une dame lachee = une gaffe', pts(0, -800) >= 20, true);
+  check(G, 'les memes 63 cp dans une position perdue ne comptent plus', pts(-1200, -1263) < 2, true);
+  check(G, 'un coup qui ameliore ne perd rien', wl(0, 50), 0);
+  check(G, 'eval manquante : pas de note', wl(null, -800), null);
 }
 
 // ─────────────────────────── rapport ────────────────────────────────────────

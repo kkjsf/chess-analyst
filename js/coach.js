@@ -2856,5 +2856,27 @@ const Coach = (() => {
     return g._moves;
   }
 
-  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, lineStats };
+  // Dernier Elo connu par cadence, lu dans l'archive deja chargee. Sert au
+  // defaut « mon niveau » du mode entraineur : un niveau d'adversaire ne doit
+  // pas etre un reglage abstrait quand l'app connait le chiffre.
+  // `latest` = l'Elo de la partie la plus RECENTE toutes cadences confondues :
+  // c'est ce qui repond a « mon niveau aujourd'hui ». Attention, le tableau des
+  // parties n'est pas trie chronologiquement (lire le dernier element donne un
+  // chiffre faux), d'ou le tri par `endTime`.
+  function myRatings() {
+    const last = {};
+    let top = null;
+    for (const g of games) {
+      if (!g || !g.timeClass || typeof g.myRating !== 'number') continue;
+      const t = g.endTime || 0;
+      if (!last[g.timeClass] || t >= last[g.timeClass].t) last[g.timeClass] = { t, r: g.myRating };
+      if (!top || t >= top.t) top = { t, r: g.myRating, tc: g.timeClass };
+    }
+    const out = {};
+    for (const k in last) out[k] = last[k].r;
+    if (top) { out.latest = top.r; out.latestClass = top.tc; }
+    return out;
+  }
+
+  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, lineStats, myRatings };
 })();
