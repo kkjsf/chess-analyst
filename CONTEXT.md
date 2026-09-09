@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v244** (`3903d7f`). **v245 en cours, non commitée** (voir l'historique en bas).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v248** (`668582a`).
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -127,7 +127,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v245-v248 - LA TYPOLOGIE DES COUPS, CORRIGEE A LA RACINE, + navigation dans le suivi.**
+- **v245-v248 (SHIPPED `668582a`, verifie en live) - LA TYPOLOGIE DES COUPS, CORRIGEE A LA RACINE, + navigation dans le suivi.**
   Signale par le user : en Petrov (1.e4 e5 2.Cf3 Cf6), les coups **du coach** sortaient
   « ?! Imprecision » (…e5) et « ? Erreur » (…Cf6). Non, ce n'est pas normal - deux causes, l'une
   de cablage, l'autre de methode.
@@ -160,21 +160,6 @@
     bandeau « 👁 Tu regardes le coup 1.e4 » avec ◀ ▶ et « ▶▶ Revenir a la partie », la case
     courante est cerclee, et **le plateau est verrouille pendant la revue** (on ne joue pas depuis
     le passe). Un coup joue ou la reponse du coach ramenent d'office au present.
-- **v245 (EN COURS, NON COMMITE au 2026-09-09) - LES COUPS DU COACH SONT NOTES AVEC LES MEMES
-  REGLES QUE LES TIENS.** Fichiers modifies dans l'arbre de travail : `index.html`
-  (`APP_VERSION` deja a `245`) et `js/coachgame.js`. Le journal des coups notait le camp du coach
-  avec des valeurs par defaut (`inBook` faux, base a 0,5), donc **en Petrov ses `...e5` et
-  `...Cf6` sortaient « imprecision » et « erreur »** alors que ce sont des coups de theorie.
-  Ce qui change :
-  - `myMoveWasBook` devient **`lastMoveWasBook`** : la theorie depend de la **position atteinte**,
-    pas du camp qui joue, donc la meme fonction sert pour les deux cotes.
-  - `pendingOpp` porte un drapeau **`inBook`** rempli au moment ou le coach joue.
-  - `classify` recoit la vraie base en **chances de gain** (`Analyzer.cpToWinPct(evalBefore)`) au
-    lieu du 0,5 code en dur, plus le test « il reste au-dessus de -150 ».
-  - le **tout premier coup du coach** (quand il ouvre) est journalise et badge « theorique » sans
-    note : il n'y a aucune eval de reference avant lui.
-  **A finir avant de livrer :** rejouer une Petrov pour verifier les libelles des deux camps, puis
-  commiter/pousser (APP_VERSION est deja bumpe, ne pas le rebumper).
 - **v244 (SHIPPED `3903d7f`, verifie en live) - FIX D'AFFICHAGE : l'ecran de partie s'affichait
   SOUS les reglages en desktop** (plateau vide + colonne « Suivi des coups »), signale capture
   d'ecran a l'appui. Cause : `#cg-game { display: grid }` - la mise en page deux colonnes du
