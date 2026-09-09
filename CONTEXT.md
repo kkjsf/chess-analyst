@@ -98,7 +98,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v224 - LE LONDRES A DEUX ORDRES DE COUPS (classique / accelere).** Sa question : « d4 d5 Ff4,
+- **v224 - LE LONDRES A DEUX ORDRES DE COUPS (classique / accelere)** (SHIPPED `336a21c`, live). Sa question : « d4 d5 Ff4,
   ce n'est pas la version acceleree ? il n'y a pas un Cf3 avant le fou ? » - si. Le cours ne
   presentait que 2.Ff4 et reduisait l'ordre de reference a une note de transposition.
   - `js/courses.js` : nouvelle ligne 0 **Ordre classique (2.Cf3 puis 3.Ff4)** (`altOrder: 1`),
