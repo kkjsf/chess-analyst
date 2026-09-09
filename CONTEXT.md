@@ -127,7 +127,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v235-v236 - LES DEPLACEMENTS DE PIECES GLISSENT, PARTOUT.** Demande du user (« + lent /
+- **v235-v236 (SHIPPED `2e6a3d7`, verifie en live) - LES DEPLACEMENTS DE PIECES GLISSENT, PARTOUT.** Demande du user (« + lent /
   glissant et pas de teleportation »). `js/board.js` ne faisait glisser QUE la piece nommee par
   `lastMove`, en 240 ms, et seulement si l'appelant pensait a passer la position precedente : tout
   le reste se teleportait - la **tour du roque**, le **pion pris en passant**, la piece
