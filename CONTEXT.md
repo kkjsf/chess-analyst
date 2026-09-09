@@ -127,6 +127,15 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v244 (SHIPPED `3903d7f`, verifie en live) - FIX D'AFFICHAGE : l'ecran de partie s'affichait
+  SOUS les reglages en desktop** (plateau vide + colonne « Suivi des coups »), signale capture
+  d'ecran a l'appui. Cause : `#cg-game { display: grid }` - la mise en page deux colonnes du
+  desktop, ajoutee en v243 - **bat `[hidden]`**. C'est la **troisieme fois** que ce piege mord dans
+  ce projet (le chrono de `renfo_mobile`, puis `.cg-opts[hidden]` en v232). Garde-fou pose une fois
+  pour toutes sur tout le calque : `#cg-overlay [hidden] { display: none !important; }`. A retenir :
+  **des qu'on donne un `display:` a un conteneur qui se cache par `hidden`, il faut la regle
+  `[hidden]` qui va avec** - le tester en regardant les hauteurs des quatre vues, pas seulement
+  celle qu'on vient d'ouvrir.
 - **v237-v243 (SHIPPED `cb46ee2`, verifie en live) - LE MODE ENTRAINEUR SE MET A PARLER : suivi des coups, barre d'avantage,
   explications longues, et on ne t'arrete plus.** Cinq demandes du user d'affilee.
   - **« N'arrete pas la partie si je fais une erreur. »** Mesure d'abord : elle ne s'arretait
