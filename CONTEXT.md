@@ -127,7 +127,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v233-v234 - LE MODE ENTRAINEUR PREND SON PROPRE ONGLET, l'ancien Coach devient
+- **v233-v234 (SHIPPED `e60fe20`, verifie en live) - LE MODE ENTRAINEUR PREND SON PROPRE ONGLET, l'ancien Coach devient
   « Statistiques ».** Demande du user. La barre de navigation passe a 5 entrees :
   **Analyser | Coach | Statistiques | Apprendre | Entrainer**. Les cles internes suivent les
   libelles (`data-tab="coach"` = JOUER, `data-tab="stats"` = le bilan de l'archive) pour que le
