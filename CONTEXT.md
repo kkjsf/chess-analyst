@@ -127,7 +127,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v237-v243 - LE MODE ENTRAINEUR SE MET A PARLER : suivi des coups, barre d'avantage,
+- **v237-v243 (SHIPPED `cb46ee2`, verifie en live) - LE MODE ENTRAINEUR SE MET A PARLER : suivi des coups, barre d'avantage,
   explications longues, et on ne t'arrete plus.** Cinq demandes du user d'affilee.
   - **« N'arrete pas la partie si je fais une erreur. »** Mesure d'abord : elle ne s'arretait
     PAS - verifie en jouant, on peut enchainer apres une gaffe. Mais la seule action proposee
