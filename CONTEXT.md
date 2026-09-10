@@ -145,7 +145,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v253-v256 - LE MODE COACH SUR TELEPHONE.** Signale par le user (« c'est maintenant tres bien
+- **v253-v256 (SHIPPED `9081784`, verifie en live sur telephone 375 px) - LE MODE COACH SUR TELEPHONE.** Signale par le user (« c'est maintenant tres bien
   sur desktop mais sur mobile moins - pas de barre blanc vs noir, pas d'acces a la liste des coups
   et navigation, pas d'acces au gain de materiel »). Verification en 375 px : les trois infos
   EXISTAIENT deja, elles etaient invisibles. C'etait un probleme de PLACE, pas de donnees - aucune
