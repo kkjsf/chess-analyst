@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess Analyst - maquette « Mode Coach sur mobile » (sept. 2026)</title>
+<style>
+  :root{
+    --bg:#12172b; --bg-2:#0e1223; --card:#1a2140; --card-2:#242c52;
+    --gold:#e2b857; --text:#eef1f7; --dim:#9aa4bd; --dim2:#6b7590;
+    --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --blue:#5b8fb9;
+    --line:rgba(255,255,255,.07); --line-str:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:radial-gradient(1100px 560px at 18% -12%,#1c2140 0,transparent 60%),var(--bg-2);
+       color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:26px 18px 60px}
+  h1{font-size:22px;font-weight:700;color:var(--gold)}
+  .lede{max-width:960px;color:var(--dim);font-size:14px;line-height:1.65;margin-top:8px}
+  .lede b{color:var(--text)}
+  .lede + .lede{margin-top:10px}
+  h2{font-size:15px;font-weight:600;margin:34px 0 10px}
+  h2 span{color:var(--dim2);font-weight:400;font-size:13px}
+  .principles{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;max-width:1080px}
+  .principles div{flex:1 1 240px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+                  padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--dim)}
+  .principles b{color:var(--text);font-weight:600}
+  .principles b.k{display:block;color:var(--gold);font-size:12px;margin-bottom:3px;letter-spacing:.02em}
+
+  .frames{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;margin-top:20px}
+  .col{width:330px}
+  .col > .cap{font-size:12px;color:var(--dim2);margin:0 0 8px 4px;line-height:1.5}
+  .col > .cap b{color:var(--gold);font-weight:600}
+  .col > .note{font-size:11.5px;color:var(--dim2);line-height:1.55;margin:9px 4px 0}
+  .col > .note b{color:var(--text)}
+  .phone{width:330px;background:var(--bg);border-radius:26px;border:1px solid var(--line-str);
+         overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  .notch{height:20px;display:flex;align-items:center;justify-content:center}
+  .notch span{width:66px;height:5px;border-radius:3px;background:rgba(255,255,255,.16)}
+
+  .tb{display:flex;align-items:center;gap:9px;padding:0 12px 8px}
+  .tb .bk{width:30px;height:30px;border-radius:9px;background:var(--card);display:grid;place-items:center;color:var(--dim);font-size:15px}
+  .tb .ti{flex:1;font-size:14px;font-weight:700}
+  .tb .st{font-size:12px;font-weight:600;color:var(--gold)}
+
+  /* barres joueur */
+  .pbar{display:flex;align-items:center;gap:7px;padding:4px 12px;font-size:12px;color:var(--dim)}
+  .pbar .who{font-weight:600;color:var(--text);white-space:nowrap}
+  .pbar .capt{flex:1;min-width:0;font-size:15px;line-height:1;color:#cfd6e6;letter-spacing:-1px}
+  .pbar .mat{font-size:11px;font-weight:700;color:var(--gold);background:rgba(226,184,87,.14);
+             padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .pbar .mat.zero{color:var(--dim2);background:rgba(255,255,255,.06)}
+
+  /* barre d'avantage horizontale */
+  .evalh{margin:2px 12px 6px;display:flex;align-items:center;gap:8px}
+  .evalh .track{flex:1;height:10px;border-radius:6px;overflow:hidden;background:#20263f;display:flex}
+  .evalh .track i{display:block;height:100%}
+  .evalh .track i.w{background:#e9edf5}
+  .evalh .track i.b{background:#39405e}
+  .evalh .num{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);min-width:34px;text-align:right}
+  .evalh .num.neg{color:#ffb4b4}
+
+  /* echiquier */
+  .bwrap{padding:0 12px;position:relative}
+  .grid{aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border-radius:8px;overflow:hidden}
+  .sq{position:relative;display:flex;align-items:center;justify-content:center;font-size:26px;line-height:1}
+  .sq.l{background:#eeeed2}.sq.d{background:#769656}
+  .sq.hl::after{content:"";position:absolute;inset:0;background:rgba(226,184,87,.42)}
+  .pc{position:relative;z-index:1}
+  .pc.w{color:#fff;text-shadow:0 0 1px #000,0 1px 2px rgba(0,0,0,.55)}
+  .pc.b{color:#272522;text-shadow:0 1px 1px rgba(255,255,255,.22)}
+  .oldbar{position:absolute;left:0;top:0;bottom:0;width:12px;border-radius:4px;background:#333;overflow:hidden}
+  .oldbar i{position:absolute;left:0;right:0;bottom:0;background:#e8e8e8}
+
+  /* ruban des coups */
+  .strip{margin:9px 0 0;padding:7px 12px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .strip .row{display:flex;align-items:center;gap:6px}
+  .strip .nav{width:30px;height:30px;border-radius:9px;border:1px solid var(--line-str);background:none;
+              color:var(--dim);font-size:13px;flex:0 0 auto;display:grid;place-items:center}
+  .strip .rail{flex:1;display:flex;gap:4px;overflow-x:auto;padding:2px 0;scrollbar-width:none}
+  .strip .rail::-webkit-scrollbar{display:none}
+  .mv{display:inline-flex;align-items:baseline;gap:3px;white-space:nowrap;font-size:12.5px;
+      padding:4px 7px;border-radius:8px;border:1px solid transparent;color:var(--text)}
+  .mv i{font-style:normal;font-size:10.5px}
+  .mv .no{color:var(--dim2);font-size:10.5px;margin-right:1px}
+  .mv.cur{outline:2px solid var(--gold);outline-offset:-2px}
+  .mv.best{background:#14331f;color:#4ade80}
+  .mv.excellent{background:#17321f;color:#86d99a}
+  .mv.good{background:#262f18;color:#c2d69a}
+  .mv.book{background:#2f2717;color:#d4b177}
+  .mv.inaccuracy{background:#3b2e1a;color:var(--warn)}
+  .mv.mistake{background:#3b2a1a;color:#f0a050}
+  .mv.blunder{background:#3b1a1a;color:var(--bad)}
+  .strip .more{width:30px;height:30px;border-radius:9px;border:1px solid var(--line-str);background:none;
+               color:var(--gold);font-size:13px;flex:0 0 auto;display:grid;place-items:center}
+
+  /* commentaire */
+  .cmt{padding:9px 12px 0;font-size:12.5px;line-height:1.55;color:var(--dim)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:7px}
+  .badge.blunder{background:#3b1a1a;color:var(--bad)}
+  .badge.book{background:#2f2717;color:#d4b177}
+  .badge.excellent{background:#17321f;color:#86d99a}
+  .cmt p{margin-top:6px}
+  .cmt p b{color:var(--text)}
+  .cmt .cost{color:var(--dim2);font-size:11.5px}
+  .acts{display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px 14px}
+  .acts button{flex:1 1 45%;border:1px solid var(--line-str);background:var(--card);color:var(--text);
+               font:inherit;font-size:12px;font-weight:600;padding:9px 6px;border-radius:10px}
+  .acts button.pri{background:var(--gold);color:#1a1a2e;border-color:transparent}
+
+  /* feuille « tous les coups » */
+  .sheet{position:relative;background:var(--card);border-top:1px solid var(--line-str);
+         border-radius:16px 16px 0 0;padding:10px 12px 14px;margin-top:8px}
+  .sheet .grab{width:38px;height:4px;border-radius:3px;background:rgba(255,255,255,.18);margin:0 auto 9px}
+  .sheet h4{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim2);margin-bottom:8px}
+  .tally{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:9px}
+  .tally span{font-size:11px;font-weight:700;padding:2px 7px;border-radius:7px}
+  .mvrow{display:grid;grid-template-columns:26px 1fr 1fr;gap:5px;align-items:center;padding:2px 0}
+  .mvrow .no{color:var(--dim2);font-size:11.5px}
+  .legend{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+  .legend span{display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--dim2)}
+  .legend i{font-style:normal;font-size:10px;font-weight:700;padding:1px 5px;border-radius:6px}
+
+  .review{margin:9px 12px 0;display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+          background:rgba(91,143,185,.13);border:1px solid rgba(91,143,185,.3);border-radius:11px;padding:7px 9px;
+          font-size:12px;color:var(--dim)}
+  .review b{color:var(--text)}
+  .review .btn{margin-left:auto;font-size:11.5px;font-weight:600;color:#1a1a2e;background:var(--gold);
+               padding:5px 9px;border-radius:8px}
+
+  .callout{position:absolute;font-size:10.5px;font-weight:600;color:#ffd7d7;background:rgba(248,113,113,.16);
+           border:1px solid rgba(248,113,113,.4);border-radius:8px;padding:3px 7px;z-index:5}
+  .rel{position:relative}
+
+  table{border-collapse:collapse;width:100%;max-width:1080px;margin-top:12px;font-size:12.5px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  td{color:var(--dim)} td b{color:var(--text)}
+  code{background:var(--card-2);padding:1px 5px;border-radius:5px;font-size:11.5px;color:#cfe0f0}
+  .cols{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;max-width:1080px}
+  .cols > div{flex:1 1 330px;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 14px}
+  .cols h3{font-size:12.5px;color:var(--gold);margin-bottom:7px}
+  .cols ul{margin:0;padding-left:17px;font-size:12.5px;line-height:1.65;color:var(--dim)}
+  .cols li b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<h1>Mode Coach sur mobile - ce qui manque, et la proposition</h1>
+<p class="lede">Son constat : « c'est maintenant tres bien sur desktop mais sur mobile moins - <b>pas de barre
+blanc vs noir</b>, <b>pas d'acces a la liste des coups et navigation</b>, <b>pas d'acces au gain de materiel</b>
+(+5, +3, etc) ».</p>
+<p class="lede">Verifie dans l'app en 375 px (capture a l'appui) : la barre d'avantage <b>existe</b> mais c'est un
+filet vertical de 12 px colle au bord gauche, sans chiffre - de loin, ca ressemble a une barre de defilement ; le
+materiel <b>existe</b> mais ne s'affiche <b>que</b> s'il y a une prise ET un ecart, donc la plupart du temps la ligne
+joueur ne montre qu'un nom ; et le suivi des coups est <b>masque sous 1000 px</b>, donc ni liste ni navigation. Le bas
+de l'ecran, lui, est <b>vide</b> : il y a la place.</p>
+
+<div class="principles">
+  <div><b class="k">PRINCIPE 1</b>Ne pas voler de largeur a l'echiquier. Sur telephone, l'echiquier est
+    l'element utile ; tout le reste passe au-dessus ou en dessous, jamais a cote.</div>
+  <div><b class="k">PRINCIPE 2</b>Une info qui n'apparait que parfois passe pour absente. Le materiel affiche
+    <b>toujours</b> quelque chose (« = » a l'equilibre), sinon on croit que la fonction n'existe pas.</div>
+  <div><b class="k">PRINCIPE 3</b>Le mode libre reste muet <b>pendant</b> ton coup. La barre et le materiel
+    disent l'etat de la position - une information que le verdict donne deja apres chaque coup - jamais le meilleur
+    coup.</div>
+  <div><b class="k">PRINCIPE 4</b>Rien de neuf a calculer : les trois manques sont deja produits par le code
+    (barre, materiel, journal des coups). C'est un probleme de <b>place</b>, pas de donnees.</div>
+</div>
+
+<h2>Les ecrans <span>- 1 = l'existant annote, 2-4 = la proposition</span></h2>
+
+<div class="frames">
+
+  <!-- 1. EXISTANT -->
+  <div class="col">
+    <p class="cap"><b>1. Aujourd'hui</b> - ce que donne la v252 sur un telephone de 375 px.</p>
+    <div class="phone rel">
+      <span class="callout" style="left:10px;bottom:196px">← le filet d'avantage : 12 px, sans chiffre</span>
+      <span class="callout" style="right:10px;top:57px">lignes joueur : aucun matériel</span>
+      <span class="callout" style="left:10px;bottom:26px">↓ ni liste des coups, ni navigation</span>
+      <div class="notch"><span></span></div>
+      <div class="tb"><span class="bk">←</span><span class="ti">Coach ~350 · libre</span><span class="st">À toi</span></div>
+      <div class="pbar"><span class="who">Coach ~350</span><span class="capt"></span></div>
+      <div class="bwrap" style="padding-left:26px">
+        <div class="oldbar" style="left:12px"><i style="height:64%"></i></div>
+        <div class="grid" id="b-old"></div>
+      </div>
+      <div class="pbar"><span class="who">Toi</span><span class="capt"></span></div>
+      <div class="cmt">
+        <span class="badge excellent">✔ Très bien</span>
+        <p>Il joue <b>d6</b>.</p>
+        <p class="cost">Trait à <b>toi</b>. À toi de trouver - aucune aide affichée.</p>
+      </div>
+      <div class="acts">
+        <button>💡 Indice</button><button>↶ Annuler</button>
+        <button>👁 Passer en assisté</button><button>🏳 Abandonner</button>
+      </div>
+      <div style="height:120px"></div>
+    </div>
+    <p class="note">Le bas de l'ecran est vide sur ~150 px : c'est la que tient le ruban des coups, sans toucher a
+      l'echiquier.</p>
+  </div>
+
+  <!-- 2. PROPOSITION -->
+  <div class="col">
+    <p class="cap"><b>2. La proposition, en jeu</b> - barre d'avantage <b>horizontale et chiffree</b>, materiel dans
+      les lignes joueur, ruban des coups sous le commentaire.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb"><span class="bk">←</span><span class="ti">Coach ~350 · libre</span><span class="st">À toi</span></div>
+
+      <div class="pbar"><span class="who">Coach ~350</span><span class="capt">♝♞</span><span class="mat">+0</span></div>
+      <div class="evalh">
+        <span class="track"><i class="w" style="width:58%"></i><i class="b" style="width:42%"></i></span>
+        <span class="num">+0.6</span>
+      </div>
+      <div class="bwrap"><div class="grid" id="b-new"></div></div>
+      <div class="pbar"><span class="who">Toi</span><span class="capt">♜♟</span><span class="mat">+2</span></div>
+
+      <div class="strip">
+        <div class="row">
+          <button class="nav">◀</button>
+          <div class="rail">
+            <span class="mv book"><span class="no">1.</span>e4<i>📖</i></span>
+            <span class="mv book">e5<i>📖</i></span>
+            <span class="mv book"><span class="no">2.</span>Cf3<i>📖</i></span>
+            <span class="mv book">Cc6<i>📖</i></span>
+            <span class="mv good"><span class="no">3.</span>Fc4<i>✓</i></span>
+            <span class="mv excellent">Fc5<i>✔</i></span>
+            <span class="mv inaccuracy"><span class="no">4.</span>d3<i>?!</i></span>
+            <span class="mv best">Cf6<i>★</i></span>
+            <span class="mv blunder cur"><span class="no">5.</span>Cg5<i>??</i></span>
+          </div>
+          <button class="more">⤢</button>
+        </div>
+      </div>
+
+      <div class="cmt">
+        <span class="badge blunder">?? Gaffe</span> <span class="cost">-39 pts de chances de gain</span>
+        <p><b>Ce que ça coûte</b> : tu passes de <b>+1.2</b> à <b>-3.6</b> (ton point de vue).</p>
+        <p><b>Ce que ça lui donne</b> : <b>Txf7</b> - la tour reprend et ton cavalier tombe ensuite.</p>
+        <p><b>Il fallait jouer</b> : <b>Cc3</b> - développe et tient e4.</p>
+      </div>
+      <div class="acts">
+        <button class="pri">↶ Reprendre ce coup</button><button>▶ Continuer</button>
+        <button>💡 Indice</button><button>🏳 Abandonner</button>
+      </div>
+    </div>
+    <p class="note"><b>Le ruban défile tout seul</b> jusqu'au dernier coup, et un appui sur une case montre la
+      position (mode revue, ci-contre). <b>Trois changements, zéro donnée nouvelle :</b> la barre passe a l'horizontale <b>avec son
+      chiffre</b> (et se lit d'un coup d'oeil), le materiel est toujours affiche dans la ligne du camp concerne
+      (« +2 » cote toi, « +0 » cote coach), et le ruban reprend exactement le journal du suivi desktop.</p>
+  </div>
+
+  <!-- 3. FEUILLE -->
+  <div class="col">
+    <p class="cap"><b>3. La feuille « tous les coups »</b> - un appui sur <b>⤢</b> deroule le suivi complet, avec le
+      decompte et la legende. C'est le panneau desktop, en feuille.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb"><span class="bk">←</span><span class="ti">Coach ~350 · libre</span><span class="st">À toi</span></div>
+      <div class="pbar"><span class="who">Coach ~350</span><span class="capt">♝♞</span><span class="mat">+0</span></div>
+      <div class="evalh">
+        <span class="track"><i class="w" style="width:34%"></i><i class="b" style="width:66%"></i></span>
+        <span class="num neg">-3.6</span>
+      </div>
+      <div class="bwrap" style="opacity:.35"><div class="grid" id="b-sheet"></div></div>
+
+      <div class="sheet">
+        <div class="grab"></div>
+        <h4>Suivi des coups · 5 coups</h4>
+        <div class="tally">
+          <span class="mv book" style="padding:2px 7px">📖 4</span>
+          <span class="mv best" style="padding:2px 7px">★ 1</span>
+          <span class="mv good" style="padding:2px 7px">✓ 1</span>
+          <span class="mv inaccuracy" style="padding:2px 7px">?! 1</span>
+          <span class="mv blunder" style="padding:2px 7px">?? 1</span>
+        </div>
+        <div class="mvrow"><span class="no">1.</span><span class="mv book">e4<i>📖</i></span><span class="mv book">e5<i>📖</i></span></div>
+        <div class="mvrow"><span class="no">2.</span><span class="mv book">Cf3<i>📖</i></span><span class="mv book">Cc6<i>📖</i></span></div>
+        <div class="mvrow"><span class="no">3.</span><span class="mv good">Fc4<i>✓</i></span><span class="mv excellent">Fc5<i>✔</i></span></div>
+        <div class="mvrow"><span class="no">4.</span><span class="mv inaccuracy">d3<i>?!</i></span><span class="mv best">Cf6<i>★</i></span></div>
+        <div class="mvrow"><span class="no">5.</span><span class="mv blunder cur">Cg5<i>??</i></span><span class="mv"></span></div>
+        <div class="legend">
+          <span><i class="mv best" style="padding:1px 5px">★</i>Meilleur</span>
+          <span><i class="mv good" style="padding:1px 5px">✓</i>Bon</span>
+          <span><i class="mv inaccuracy" style="padding:1px 5px">?!</i>Imprécision</span>
+          <span><i class="mv mistake" style="padding:1px 5px">?</i>Erreur</span>
+          <span><i class="mv blunder" style="padding:1px 5px">??</i>Gaffe</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">La feuille glisse par-dessus l'echiquier (qui reste visible en fond) et se referme d'un appui ou
+      d'un glissement vers le bas. Un appui sur un coup <b>ferme la feuille et montre la position</b>.</p>
+  </div>
+
+  <!-- 4. REVUE -->
+  <div class="col">
+    <p class="cap"><b>4. La revue sur mobile</b> - meme comportement que le desktop : le plateau est verrouille, on
+      navigue au coup par coup, et un bouton ramene a la partie.</p>
+    <div class="phone">
+      <div class="notch"><span></span></div>
+      <div class="tb"><span class="bk">←</span><span class="ti">Coach ~350 · libre</span><span class="st" style="color:#9dc4e0">👁 revue</span></div>
+      <div class="pbar"><span class="who">Coach ~350</span><span class="capt">♝</span><span class="mat">+0</span></div>
+      <div class="evalh">
+        <span class="track"><i class="w" style="width:62%"></i><i class="b" style="width:38%"></i></span>
+        <span class="num">+1.2</span>
+      </div>
+      <div class="bwrap"><div class="grid" id="b-rev"></div></div>
+      <div class="pbar"><span class="who">Toi</span><span class="capt">♟</span><span class="mat">+1</span></div>
+
+      <div class="review">
+        <span>👁 Tu regardes le coup <b>4.d3</b></span>
+        <span class="btn">▶▶ Revenir</span>
+      </div>
+
+      <div class="strip">
+        <div class="row">
+          <button class="nav">◀</button>
+          <div class="rail">
+            <span class="mv book"><span class="no">1.</span>e4<i>📖</i></span>
+            <span class="mv book">e5<i>📖</i></span>
+            <span class="mv book"><span class="no">2.</span>Cf3<i>📖</i></span>
+            <span class="mv book">Cc6<i>📖</i></span>
+            <span class="mv good"><span class="no">3.</span>Fc4<i>✓</i></span>
+            <span class="mv excellent">Fc5<i>✔</i></span>
+            <span class="mv inaccuracy cur"><span class="no">4.</span>d3<i>?!</i></span>
+            <span class="mv best">Cf6<i>★</i></span>
+            <span class="mv blunder"><span class="no">5.</span>Cg5<i>??</i></span>
+          </div>
+          <button class="nav">▶</button>
+        </div>
+      </div>
+
+      <div class="cmt"><p class="cost">Pendant la revue, l'échiquier ne se joue pas : le ruban et les flèches
+        naviguent, « Revenir » rend la main.</p></div>
+      <div style="height:40px"></div>
+    </div>
+    <p class="note">Le ruban <b>defile tout seul</b> jusqu'au coup regarde, et la case courante est cerclee - c'est
+      la meme regle que sur desktop.</p>
+  </div>
+
+</div>
+
+<h2>Le detail des trois manques <span>- ce qui existe deja, et ce qu'on en fait</span></h2>
+
+<table>
+  <tr><th>Manque</th><th>Etat reel en v252</th><th>Proposition mobile</th></tr>
+  <tr>
+    <td><b>Barre blanc vs noir</b></td>
+    <td>Elle existe : filet vertical de 12 px a gauche du plateau (`.cg-evalbar`), part claire = les Blancs. Sans
+      chiffre, sur fond sombre, elle se lit comme une barre de defilement.</td>
+    <td><b>Horizontale, au-dessus de l'echiquier</b>, 10 px de haut, avec <b>l'eval en clair a droite</b>
+      (+0.6 / -3.6, rouge quand c'est contre toi). Elle ne vole aucune largeur au plateau.</td>
+  </tr>
+  <tr>
+    <td><b>Gain de materiel</b></td>
+    <td>Il existe : pieces prises + ecart en points dans les lignes joueur - mais l'ecart est <b>masque</b> quand il
+      vaut 0, et les pieces prises sont vides tant qu'il n'y a pas eu de capture. Resultat : au debut, la ligne ne
+      montre qu'un nom.</td>
+    <td><b>Toujours visible</b> : la pastille affiche « +2 », « +0 » ou « = ». Les pieces prises restent a cote, en
+      symboles, et la ligne du camp qui mene passe en dore.</td>
+  </tr>
+  <tr>
+    <td><b>Liste des coups + navigation</b></td>
+    <td><b>Masquee sous 1000 px</b> (`.cg-side { display: none }`) : c'etait le choix assume de la v243, faute de
+      place a cote du plateau.</td>
+    <td><b>Ruban horizontal</b> sous le commentaire (defilement lateral, memes couleurs et glyphes), <b>◀ ▶</b> pour
+      avancer coup par coup, et <b>⤢</b> qui deroule la feuille complete (decompte + legende). Le bas de l'ecran est
+      libre : rien n'est pousse.</td>
+  </tr>
+</table>
+
+<h2>Ce que ca coute a coder <span>- peu : les donnees sont deja la</span></h2>
+<div class="cols">
+  <div>
+    <h3>Reutilise tel quel</h3>
+    <ul>
+      <li><code>moveLog</code> et <code>renderMoves()</code> : le journal existe deja, note des deux cotes. Le ruban
+        est une <b>seconde vue</b> du meme tableau.</li>
+      <li><code>gotoPly()</code> / <code>renderReviewBar()</code> : la revue et le verrouillage du plateau
+        fonctionnent deja, ils ne dependent pas de la largeur.</li>
+      <li><code>syncMaterial()</code> et <code>syncEvalBar()</code> : les valeurs sont deja calculees a chaque coup.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>A ecrire</h3>
+    <ul>
+      <li>Le <b>ruban</b> (markup + CSS + defilement automatique sur le coup courant) et la <b>feuille</b> - deux
+        blocs de rendu, pas de logique nouvelle.</li>
+      <li>La <b>barre horizontale</b> : meme calcul que la verticale, un rendu de plus, affichee sous 1000 px et
+        cachee au-dessus (le desktop garde la verticale, qui y est bien).</li>
+      <li>Le materiel <b>toujours affiche</b> : une ligne de condition a retirer.</li>
+      <li>Un test de plus : sous 1000 px, ruban et barre horizontale presents ; au-dessus, colonne et barre
+        verticale. C'est le genre de bascule qui casse en silence.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙', k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
+function board(id, fen, hl) {
+  const host = document.getElementById(id);
+  if (!host) return;
+  const rows = fen.split(' ')[0].split('/');
+  let out = '';
+  rows.forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) { for (let i = 0; i < +ch; i++) out += sq(r, f++, null); }
+      else out += sq(r, f++, ch);
+    }
+  });
+  host.innerHTML = out;
+  function sq(r, f, p) {
+    const name = 'abcdefgh'[f] + (8 - r);
+    const cls = 'sq ' + ((r + f) % 2 ? 'd' : 'l') + ((hl || []).includes(name) ? ' hl' : '');
+    return `<div class="${cls}">${p ? `<span class="pc ${p === p.toUpperCase() ? 'w' : 'b'}">${GLYPH[p]}</span>` : ''}</div>`;
+  }
+}
+
+// 1. L'existant : la position de sa capture d'ecran (1.e4 e6 2.d4 d6).
+board('b-old', 'rnbqkbnr/ppp2ppp/3pp3/8/3PP3/8/PPP2PPP/RNBQKBNR', ['d6', 'd7']);
+// 2-4. Une position avec des prises des DEUX cotes, pour montrer le materiel :
+//      1.e4 e5 2.Cf3 Cc6 3.Fc4 Fc5 4.d3 Cf6 5.Cg5 O-O 6.Cxf7 Txf7 7.Fxf7+ Rxf7
+//      (verifie chess.js : pris par les Blancs ♜♟, par les Noirs ♝♞).
+const FEN = 'r1bq4/pppp1kpp/2n2n2/2b1p3/4P3/3P4/PPP2PPP/RNBQK2R';
+board('b-new', FEN, ['f7']);
+board('b-sheet', FEN, ['f7']);
+board('b-rev', 'r1bqk2r/pppp1ppp/2n2n2/2b1p1N1/2B1P3/3P4/PPP2PPP/RNBQK2R', ['d3', 'd2']);
+</script>
+</body>
+</html>

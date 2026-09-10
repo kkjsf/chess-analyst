@@ -129,6 +129,8 @@ const CoachGame = (() => {
   // Mode revue : nombre de demi-coups affiches depuis le depart, ou null quand
   // on regarde la position courante. La PARTIE (`game`) n'est jamais touchee.
   let reviewPly = null;
+  // Feuille « tous les coups » ouverte (telephone uniquement).
+  let sheetOpen = false;
   let pendingOpp = null;            // { idx, evalBefore, inBook } : coup du coach en attente de note
   let saved = false;
 
@@ -306,6 +308,14 @@ const CoachGame = (() => {
               <span class="cg-capt" id="cg-top-capt"></span>
               <span class="cg-mat" id="cg-top-mat"></span>
             </div>
+            <!-- La barre d'avantage du telephone : horizontale, avec le
+                 chiffre. La barre verticale de 12 px (a gauche du plateau)
+                 reste, mais seulement en desktop - sans chiffre et collee au
+                 bord, elle se lisait comme une barre de defilement. -->
+            <div class="cg-evalh" id="cg-evalh">
+              <span class="cg-track"><i class="w" id="cg-evalh-w"></i><i class="b" id="cg-evalh-b"></i></span>
+              <span class="cg-num" id="cg-evalh-num" title="Avantage du point de vue des Blancs">=</span>
+            </div>
             <div class="guess-board-wrap cg-boardwrap">
               <div class="eval-bar-container cg-evalbar" title="Avantage vu par le moteur">
                 <div class="eval-bar-fill" id="cg-eval-fill"></div>
@@ -319,6 +329,14 @@ const CoachGame = (() => {
               <span class="cg-mat" id="cg-bot-mat"></span>
             </div>
             <div class="cg-review" id="cg-review" hidden></div>
+            <!-- Le ruban des coups : le meme journal que la colonne desktop,
+                 mais qui defile a l'horizontale. ⤢ ouvre la feuille complete. -->
+            <div class="cg-strip" id="cg-strip">
+              <button type="button" class="cg-nav" data-rev="prev" title="Coup précédent">◀</button>
+              <div class="cg-rail" id="cg-rail"></div>
+              <button type="button" class="cg-nav" data-rev="next" title="Coup suivant">▶</button>
+              <button type="button" class="cg-more" id="cg-sheet-open" title="Tous les coups">⤢</button>
+            </div>
             <div class="guess-feedback rp-comment">
               <div class="rp-verdict" id="cg-verdict"></div>
               <div class="rp-status" id="cg-status"></div>
@@ -331,8 +349,13 @@ const CoachGame = (() => {
               <button class="train-btn ghost" id="cg-resign">🏳 Abandonner</button>
             </div>
           </div>
-          <aside class="cg-side">
-            <div class="cg-side-head">Suivi des coups</div>
+          <div class="cg-backdrop" id="cg-backdrop" hidden></div>
+          <aside class="cg-side" id="cg-sidepane">
+            <div class="cg-grab"></div>
+            <div class="cg-side-head">
+              <span id="cg-side-title">Suivi des coups</span>
+              <button type="button" class="cg-sheet-close" id="cg-sheet-close">Fermer</button>
+            </div>
             <div class="cg-tally" id="cg-tally"></div>
             <div class="cg-mvlist" id="cg-moves"></div>
             <div class="cg-legend" id="cg-legend"></div>
@@ -375,14 +398,17 @@ const CoachGame = (() => {
     $('#cg-hinton').onclick = () => $('#cg-hinton').classList.toggle('on');
     $('#cg-book').onchange = () => { $('#cg-bookmode').hidden = !$('#cg-book').value; };
     // « Reprendre ce coup » est injecte dans le verdict : delegation.
-    $('#cg-review').addEventListener('click', (e) => {
-      const b = e.target.closest('button[data-rev]');
-      if (!b || !game) return;
-      const total = game.history().length;
-      if (b.dataset.rev === 'live') gotoPly(total);
-      else if (b.dataset.rev === 'prev') gotoPly((reviewPly == null ? total : reviewPly) - 1);
-      else if (b.dataset.rev === 'next') gotoPly((reviewPly == null ? total : reviewPly) + 1);
+    $('#cg-review').addEventListener('click', (e) => navRev(e));
+    // Le ruban : les fleches naviguent, une case va a la position, ⤢ deroule
+    // la feuille complete.
+    $('#cg-strip').addEventListener('click', (e) => {
+      const c = e.target.closest('button[data-ply]');
+      if (c) { gotoPly(+c.dataset.ply); return; }
+      navRev(e);
     });
+    $('#cg-sheet-open').onclick = () => setSheet(!sheetOpen);
+    $('#cg-sheet-close').onclick = () => setSheet(false);
+    $('#cg-backdrop').onclick = () => setSheet(false);
     $('#cg-verdict').addEventListener('click', (e) => {
       if (!e.target) return;
       if (e.target.id === 'cg-retry' && !busy) undo();
@@ -525,6 +551,7 @@ const CoachGame = (() => {
     game = new Chess();
     stats = { moves: 0, best: 0, slips: 0, hints: 0, mistakes: [] };
     moveLog = []; pendingOpp = null; myLines = null; reviewPly = null;
+    setSheet(false);
     track = []; saved = false; curEvalMe = null; myBestUci = null; hintLevel = 0; hintArrow = false;
     busy = false; token++; threatArrows = false;
 
@@ -554,9 +581,14 @@ const CoachGame = (() => {
   function syncEvalBar() {
     const fill = $('#cg-eval-fill');
     if (!fill) return;
-    const fen = curFen();
-    // curEvalMe est vue de MON camp : la barre se lit du cote des Blancs.
-    const cpWhite = curEvalMe == null ? null : (mySide === 'w' ? curEvalMe : -curEvalMe);
+    const fen = curShownFen();
+    // curEvalMe est vue de MON camp : la barre se lit du cote des Blancs. En
+    // revue, c'est l'eval MEMORISEE du demi-coup regarde, pas celle de la
+    // partie en cours - sinon le chiffre contredit l'echiquier.
+    const revEntry = reviewPly === null ? null : moveLog[reviewPly - 1];
+    const cpWhite = reviewPly !== null
+      ? (revEntry && typeof revEntry.ev === 'number' ? revEntry.ev : null)
+      : (curEvalMe == null ? null : (mySide === 'w' ? curEvalMe : -curEvalMe));
     let pct;
     if (cpWhite != null) {
       pct = Math.max(5, Math.min(95, 50 + 50 * (2 / (1 + Math.exp(-0.004 * cpWhite)) - 1)));
@@ -567,12 +599,31 @@ const CoachGame = (() => {
     fill.style.height = pct + '%';
     if (BoardRenderer.isFlipped()) { fill.style.top = '0'; fill.style.bottom = 'auto'; }
     else { fill.style.bottom = '0'; fill.style.top = 'auto'; }
+    // La version telephone : meme part de blanc, mais a l'horizontale et avec
+    // le chiffre - c'est le chiffre qui manquait le plus.
+    const hw = $('#cg-evalh-w'), hb = $('#cg-evalh-b'), num = $('#cg-evalh-num');
+    if (hw) hw.style.width = pct + '%';
+    if (hb) hb.style.width = (100 - pct) + '%';
+    if (num) {
+      num.textContent = cpWhite == null ? '·' : fmtWhite(cpWhite);
+      num.classList.toggle('neg', cpWhite != null && cpWhite < 0);
+    }
+  }
+
+  // Le chiffre de la barre se lit du point de vue des BLANCS, comme la barre
+  // elle-meme (et comme partout ailleurs aux echecs).
+  function fmtWhite(cp) {
+    if (cp == null) return '·';
+    if (Math.abs(cp) > 20000) return cp > 0 ? 'M+' : 'M-';
+    const v = cp / 100;
+    if (Math.abs(v) < 0.05) return '0.0';
+    return (v > 0 ? '+' : '') + v.toFixed(1);
   }
 
   // Le materiel : les pieces prises par chaque camp + l'ecart en points, sous
   // le nom du camp qui est de ce cote de l'echiquier.
   function syncMaterial() {
-    const fen = curFen();
+    const fen = curShownFen();
     let capt = { white: '', black: '' }, diff = 0;
     try { capt = BoardRenderer.getCapturedPieces(fen); } catch (_) {}
     try {
@@ -585,7 +636,14 @@ const CoachGame = (() => {
       const n = $(nameEl), c = $(captEl), mt = $(matEl);
       if (n) n.textContent = label;
       if (c) c.textContent = captured;
-      if (mt) { mt.textContent = d > 0 ? '+' + d : ''; mt.hidden = !(d > 0); }
+      // Toujours visible : une info qui n'apparait que parfois passe pour
+      // absente (c'est exactement ce qui s'est passe - « pas d'acces au gain de
+      // materiel » alors que le calcul etait deja la).
+      if (mt) {
+        mt.hidden = false;
+        mt.textContent = d > 0 ? '+' + d : (d < 0 ? '-' + (-d) : '=');
+        mt.classList.toggle('zero', d <= 0);
+      }
     };
     // En haut : l'adversaire (le plateau est retourne quand je joue les Noirs).
     set('#cg-top-name', '#cg-top-capt', '#cg-top-mat',
@@ -601,6 +659,13 @@ const CoachGame = (() => {
     syncMaterial();
     syncEvalBar();
     const u = $('#cg-undo'); if (u) u.disabled = busy || !game || game.history().length < 1;
+    // Les fleches du ruban se grisent aux bornes : on voit tout de suite qu'on
+    // est au premier ou au dernier coup.
+    const total = game ? game.history().length : 0;
+    const at = reviewPly == null ? total : reviewPly;
+    const pv = $('#cg-strip [data-rev="prev"]'), nx = $('#cg-strip [data-rev="next"]');
+    if (pv) pv.disabled = at <= 1;
+    if (nx) nx.disabled = at >= total;
     const turn = $('#cg-turn');
     if (turn) turn.textContent = gameOver() ? '' : (myTurn() ? 'À toi' : 'Coach…');
     syncHintBtn();
@@ -657,6 +722,19 @@ const CoachGame = (() => {
     return `<button type="button" class="${cls}" data-ply="${idx + 1}" title="${title}">${e.san}${mark}</button>`;
   }
 
+  // La meme case, en pastille pour le ruban : le numero de coup est porte par
+  // la pastille des Blancs, sinon on ne sait plus ou on en est en defilant.
+  function mvChip(e, idx) {
+    const T = e.k ? typeOf(e.k) : null;
+    const live = reviewPly == null ? moveLog.length : reviewPly;
+    const cls = 'cg-mv' + (e.k ? ' ' + e.k : '') + (e.mine ? ' mine' : '')
+      + ((idx + 1) === live ? ' cur' : '');
+    const no = idx % 2 === 0 ? `<span class="cg-no">${e.n}.</span>` : '';
+    const mark = T && T.mark ? `<i>${T.mark}</i>` : '';
+    const title = (T ? T.label + ' - ' : '') + 'revoir cette position';
+    return `<button type="button" class="${cls}" data-ply="${idx + 1}" title="${title}">${no}${e.san}${mark}</button>`;
+  }
+
   function renderMoves() {
     const host = $('#cg-moves');
     if (!host) return;
@@ -672,9 +750,26 @@ const CoachGame = (() => {
       host.dataset.bound = '1';
       host.addEventListener('click', (e) => {
         const b = e.target.closest('button[data-ply]');
-        if (b) gotoPly(+b.dataset.ply);
+        if (!b) return;
+        gotoPly(+b.dataset.ply);
+        setSheet(false);   // sur telephone : la feuille se referme sur la position
       });
     }
+
+    // Le ruban du telephone : le meme journal, en une seule ligne qui defile.
+    const rail = $('#cg-rail');
+    if (rail) {
+      rail.innerHTML = moveLog.length
+        ? moveLog.map((e, i) => mvChip(e, i)).join('')
+        : `<span class="cg-rail-empty">Les coups s'afficheront ici.</span>`;
+      // On centre la case courante sans passer par scrollIntoView, qui ferait
+      // aussi defiler la page verticalement.
+      const cur = rail.querySelector('.cg-mv.cur');
+      if (cur) rail.scrollLeft = cur.offsetLeft - (rail.clientWidth - cur.offsetWidth) / 2;
+      else rail.scrollLeft = rail.scrollWidth;
+    }
+    const title = $('#cg-side-title');
+    if (title) title.textContent = 'Suivi des coups' + (moveLog.length ? ` · ${moveLog.length} coups` : '');
 
     // Le decompte de MES coups, dans l'ordre du dictionnaire de l'app.
     const tally = $('#cg-tally');
@@ -738,6 +833,32 @@ const CoachGame = (() => {
     if (reviewPly == null) return curFen();
     const at = fenAtPly(reviewPly);
     return at ? at.fen : curFen();
+  }
+
+  // Les fleches du bandeau de revue ET celles du ruban : meme code, memes
+  // bornes, pour ne pas avoir deux comportements de navigation dans l'ecran.
+  function navRev(e) {
+    const b = e.target.closest('button[data-rev]');
+    if (!b || !game) return;
+    const total = game.history().length;
+    if (b.dataset.rev === 'live') gotoPly(total);
+    else if (b.dataset.rev === 'prev') gotoPly((reviewPly == null ? total : reviewPly) - 1);
+    else if (b.dataset.rev === 'next') gotoPly((reviewPly == null ? total : reviewPly) + 1);
+  }
+
+  // La feuille « tous les coups » : sur telephone, la colonne de droite du
+  // desktop remonte en panneau bas par-dessus l'echiquier. Un seul DOM, une
+  // seule fonction de rendu - c'est le CSS qui change de presentation.
+  function setSheet(on) {
+    const g = $('#cg-game'), bd = $('#cg-backdrop');
+    if (!g) return;
+    sheetOpen = !!on;
+    g.classList.toggle('cg-sheeton', sheetOpen);
+    if (bd) bd.hidden = !sheetOpen;
+    if (sheetOpen) {
+      const host = $('#cg-moves');
+      if (host && reviewPly == null) host.scrollTop = host.scrollHeight;
+    }
   }
 
   function renderReviewBar() {
@@ -824,6 +945,11 @@ const CoachGame = (() => {
     if (my !== token) return;
 
     curEvalMe = meScore(res, fen);
+    // Cette eval est celle de la position APRES la reponse du coach : on la
+    // range sur le demi-coup correspondant (point de vue des Blancs) pour que
+    // le mode revue affiche la bonne valeur. Aucune recherche en plus.
+    const lastLog = moveLog[game.history().length - 1];
+    if (lastLog && curEvalMe != null) lastLog.ev = mySide === 'w' ? curEvalMe : -curEvalMe;
     myBestUci = res && res.bestMove ? res.bestMove : null;
     myBestPv = res && res.pv ? res.pv : '';
     myLines = (res && res.lines) ? res.lines : null;   // mes coups candidats, notes dans LA MEME recherche
@@ -1000,7 +1126,8 @@ const CoachGame = (() => {
       fenBefore, fenAfter, myMove, evalBefore: curEvalMe, evalAfter: after,
       res, bestUci: myBestUci, bestPv: myBestPv,
     });
-    logMove(myMove.san, true, v.k);
+    const myIdx = logMove(myMove.san, true, v.k);
+    if (moveLog[myIdx] && after != null) moveLog[myIdx].ev = mySide === 'w' ? after : -after;
     // L'eval de reference du coach : son point de vue, c'est l'oppose du mien.
     const oppBefore = after == null ? null : -after;
     if (v.slip) {

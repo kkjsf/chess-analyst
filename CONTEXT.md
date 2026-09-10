@@ -123,10 +123,58 @@
   5 lignes de MultiPV + taux de gaffe volontaire, et il faudra le calibrer en jouant. **Piege :
   `Skill Level 20` et `MultiPV 5` sont poses une seule fois a l'init de `js/engine.js` - si le
   mode les baisse sans les restaurer, tout l'analyseur se degrade en silence.**
+- **`_mockups/coach-mobile-2026-09.html` (10/09/2026) - VALIDEE ET IMPLEMENTEE en v253-v256.**
+  Maquette du **mode Coach sur telephone**, demandee par le user : « c'est maintenant tres bien sur
+  desktop mais sur mobile moins - pas de barre blanc vs noir, pas d'acces a la liste des coups et
+  navigation, pas d'acces au gain de materiel (+5, +3) ». Verifie dans la v252 en 375 px : les
+  trois infos EXISTENT mais sont invisibles - la barre d'avantage est un filet vertical de 12 px
+  colle au bord gauche, sans chiffre (elle se lit comme une barre de defilement) ; le materiel ne
+  s'affiche que s'il y a eu une prise ET un ecart non nul, donc la ligne joueur est vide la plupart
+  du temps ; et le suivi des coups est masque sous 1000 px (`.cg-side { display: none }`), donc ni
+  liste ni navigation. Le bas de l'ecran, lui, est vide sur ~150 px. **C'est un probleme de place,
+  pas de donnees : tout est deja calcule** (`syncEvalBar`, `syncMaterial`, `moveLog`).
+  4 ecrans : (1) l'existant annote, (2) la proposition en jeu = **barre d'avantage HORIZONTALE
+  avec son chiffre** au-dessus de l'echiquier + **materiel toujours affiche** dans les deux lignes
+  joueur (« = » a l'equilibre, sinon +2 avec les pieces prises) + **ruban des coups qui defile
+  horizontalement** sous le commentaire (memes couleurs que le desktop, ◀ ▶ pour naviguer, ⤢ pour
+  ouvrir la feuille), (3) la **feuille « tous les coups »** en panneau bas (decompte par categorie
+  + legende), (4) la **revue sur mobile** (plateau verrouille, bandeau de retour a la partie).
+  Principes tenus : ne pas voler de largeur a l'echiquier (tout passe au-dessus ou en dessous,
+  jamais a cote) et **une info qui n'apparait que parfois passe pour absente**.
 - Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v253-v256 - LE MODE COACH SUR TELEPHONE.** Signale par le user (« c'est maintenant tres bien
+  sur desktop mais sur mobile moins - pas de barre blanc vs noir, pas d'acces a la liste des coups
+  et navigation, pas d'acces au gain de materiel »). Verification en 375 px : les trois infos
+  EXISTAIENT deja, elles etaient invisibles. C'etait un probleme de PLACE, pas de donnees - aucune
+  recherche moteur en plus dans tout le lot.
+  1. **Barre d'avantage horizontale et CHIFFREE** (`.cg-evalh`) au-dessus de l'echiquier. La barre
+     verticale de 12 px collee au bord gauche (sans chiffre) se lisait comme une barre de
+     defilement ; elle reste, mais seulement en desktop. Bonus : les 26 px qu'elle reservait
+     reviennent a l'echiquier (336 -> 362 px a 390 px de large).
+  2. **Materiel toujours affiche** dans les deux lignes joueur : `+2` du cote qui mene, `-2` de
+     l'autre, `=` a l'equilibre. Avant, la pastille n'apparaissait qu'avec une prise ET un ecart
+     non nul - donc presque jamais, et « une info qui n'apparait que parfois passe pour absente ».
+  3. **Ruban des coups** (`.cg-strip` / `#cg-rail`) sous le commentaire : le MEME `moveLog`, les
+     memes couleurs, en une ligne qui defile et se recentre toute seule sur le coup courant.
+     `◀ ▶` naviguent (meme code que le bandeau de revue, `navRev`), `⤢` ouvre la **feuille
+     « tous les coups »** : la colonne de droite du desktop remontee en panneau bas
+     (`#cg-game.cg-sheeton .cg-side`, un seul DOM, une seule fonction de rendu, c'est le CSS qui
+     change de presentation). Un appui sur un coup ferme la feuille et montre la position.
+  **Deux effets de bord corriges dans la foulee**, tous deux invisibles tant que la barre n'avait
+  pas de chiffre et que le materiel etait masque : en mode revue, la barre et le materiel
+  decrivaient encore la position COURANTE et contredisaient l'echiquier -> le materiel se lit
+  desormais sur la position AFFICHEE (`curShownFen`) et l'eval de chaque demi-coup est MEMORISEE
+  au passage (`moveLog[i].ev`, point de vue des Blancs, deja calculee par `onMyTurn` et par la
+  notation du coup) ; et `.eval-badge` porte un `margin-left: auto` (il est aligne a droite dans
+  les bulles du coach) qui ecartait les pastilles du decompte.
+  **Pieges rencontres :** (a) `scroll-behavior: smooth` sur le ruban - le recentrage programme ne
+  se termine pas quand le rendu est en pause, le ruban restait bloque au premier coup (meme famille
+  que le ResizeObserver de v252) ; (b) a specificite egale c'est la DERNIERE regle qui gagne : le
+  `@media (min-width:1000px)` qui masque le ruban et la barre horizontale doit etre place APRES
+  leurs declarations, sinon le desktop affiche les deux barres.
 - **v249-v252 (SHIPPED `d0e4c32`, verifie en live) - LES COURBES ETAIENT ETIREES EN DESKTOP.** Signale par le user (« les graphiques
   gains / matiere de Analyser sont etires »). Cause : le SVG de la timeline est dessine dans un
   repere FIXE `viewBox="0 0 320 64"` avec `preserveAspectRatio="none"` et une largeur CSS de
