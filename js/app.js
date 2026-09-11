@@ -88,7 +88,38 @@ const App = (() => {
     initPanels();
     initConcepts();
     initOpenings();
+    initSettings();
     refreshHome();
+  }
+
+  // Vitesse de l'animation des pieces, avec un apercu qui rejoue un coup a
+  // chaque changement : regler une vitesse sans la voir n'a pas de sens.
+  function initSettings() {
+    const seg = $('#anim-speed'), demo = $('#anim-demo');
+    if (!seg || !demo) return;
+    const A = '4k3/8/8/8/8/8/8/1N2K3 w - - 0 1';
+    const B = '4k3/8/8/8/8/2N5/8/4K3 w - - 0 1';
+    let back = false;
+    const sync = () => {
+      const cur = BoardRenderer.getSpeed();
+      for (const b of seg.children) b.classList.toggle('on', b.dataset.speed === cur);
+    };
+    const play = () => {
+      const from = back ? B : A, to = back ? A : B;
+      const mv = back ? { from: 'c3', to: 'b1' } : { from: 'b1', to: 'c3' };
+      BoardRenderer.render(demo, from);
+      BoardRenderer.renderAnimated(demo, from, to, mv);
+      back = !back;
+    };
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-speed]');
+      if (!b) return;
+      BoardRenderer.setSpeed(b.dataset.speed);
+      sync();
+      play();
+    });
+    sync();
+    BoardRenderer.render(demo, A);
   }
 
   function bindEvents() {

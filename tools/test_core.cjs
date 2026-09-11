@@ -414,9 +414,14 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   check(G, 'meme position : rien a animer',
     key(same), { moves: [], promos: [], added: [], removed: [] });
 
-  // La duree par defaut est la source unique partagee par les 6 ecrans.
-  check(G, 'une duree par defaut, lente et glissante',
-    BoardRenderer.ANIM_MS >= 380 && BoardRenderer.ANIM_MS <= 600, true);
+  // La duree vient du reglage de vitesse, source unique partagee par les ecrans.
+  check(G, 'la duree par defaut est la vitesse « normale »',
+    BoardRenderer.ANIM_MS, BoardRenderer.SPEEDS.normal);
+  BoardRenderer.setSpeed('glide');
+  check(G, 'changer de vitesse change la duree lue', BoardRenderer.ANIM_MS, 460);
+  BoardRenderer.setSpeed('pas-une-vitesse');
+  check(G, 'une vitesse inconnue est ignoree', BoardRenderer.getSpeed(), 'glide');
+  BoardRenderer.setSpeed('normal');
 }
 
 // ─────────────────────────── rapport ────────────────────────────────────────

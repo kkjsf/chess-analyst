@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chess Analyst - maquette « Animation des pieces » (sept. 2026)</title>
+<style>
+  :root{
+    --bg:#12172b; --bg-2:#0e1223; --card:#1a2140; --card-2:#242c52;
+    --gold:#e2b857; --text:#eef1f7; --dim:#9aa4bd; --dim2:#6b7590;
+    --ok:#4ade80; --bad:#f87171; --warn:#fbbf24;
+    --line:rgba(255,255,255,.07); --line-str:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:radial-gradient(1100px 560px at 18% -12%,#1c2140 0,transparent 60%),var(--bg-2);
+       color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;padding:26px 18px 70px}
+  h1{font-size:22px;font-weight:700;color:var(--gold)}
+  .lede{max-width:1000px;color:var(--dim);font-size:14px;line-height:1.65;margin-top:8px}
+  .lede b{color:var(--text)}
+  .lede + .lede{margin-top:10px}
+  h2{font-size:15px;font-weight:600;margin:34px 0 10px}
+  h2 span{color:var(--dim2);font-weight:400;font-size:13px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;color:#cfd8ea}
+
+  .gaps{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;max-width:1180px}
+  .gaps div{flex:1 1 250px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+            padding:11px 13px;font-size:12.5px;line-height:1.55;color:var(--dim)}
+  .gaps b{color:var(--text);font-weight:600}
+  .gaps b.k{display:block;color:var(--gold);font-size:12px;margin-bottom:3px;letter-spacing:.02em}
+
+  .bench{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;margin-top:18px}
+  .boardcol{width:330px}
+  .boardcol .cap{font-size:12.5px;font-weight:700;margin:0 0 7px 2px}
+  .boardcol .cap em{font-style:normal;font-weight:400;color:var(--dim2);font-size:11.5px}
+  .boardcol.cur .cap{color:#ffb4b4}
+  .boardcol.new .cap{color:var(--ok)}
+  .bwrap{background:var(--card);border:1px solid var(--line-str);border-radius:14px;padding:10px;
+         box-shadow:0 18px 44px rgba(0,0,0,.42)}
+  .bwrap svg{width:100%;height:auto;display:block;border-radius:6px}
+  .boardcol .sub{font-size:11.5px;color:var(--dim2);line-height:1.55;margin:9px 2px 0}
+  .boardcol .sub b{color:var(--text)}
+
+  .panel{width:370px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 15px}
+  .panel h3{font-size:12px;color:var(--gold);font-weight:700;letter-spacing:.03em;margin:0 0 10px}
+  .panel h3.sep{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+  .row{display:flex;align-items:center;gap:9px;margin-bottom:9px;font-size:12.5px;color:var(--dim)}
+  .row label{flex:0 0 62px;color:var(--dim2);font-size:11.5px}
+  .row input[type=range]{flex:1;accent-color:var(--gold)}
+  .row select{flex:1;background:var(--card-2);color:var(--text);border:1px solid var(--line-str);
+              border-radius:8px;padding:5px 7px;font-size:12px;font-family:inherit}
+  .row .val{font-variant-numeric:tabular-nums;font-weight:700;color:var(--text);min-width:54px;text-align:right}
+  .chk{display:flex;align-items:flex-start;gap:8px;margin-bottom:9px;font-size:12px;color:var(--dim);line-height:1.5}
+  .chk input{margin-top:2px;accent-color:var(--gold)}
+  .chk b{color:var(--text);font-weight:600}
+  .presets{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .presets button{flex:1 1 auto;background:var(--card-2);color:var(--dim);border:1px solid var(--line-str);
+                  border-radius:8px;padding:6px 8px;font-size:11.5px;font-family:inherit;cursor:pointer}
+  .presets button.on{background:rgba(226,184,87,.16);color:var(--gold);border-color:rgba(226,184,87,.4);font-weight:700}
+
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px;max-width:1180px}
+  .controls button{background:var(--card-2);color:var(--text);border:1px solid var(--line-str);border-radius:9px;
+                   padding:8px 13px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:600}
+  .controls button:hover{border-color:var(--gold);color:var(--gold)}
+  .controls button:disabled{opacity:.4;cursor:default}
+  .controls button.prim{background:rgba(226,184,87,.16);color:var(--gold);border-color:rgba(226,184,87,.4)}
+  .controls select{background:var(--card-2);color:var(--text);border:1px solid var(--line-str);border-radius:9px;
+                   padding:8px 10px;font-size:12.5px;font-family:inherit}
+  .controls .movetxt{font-size:12.5px;color:var(--dim2);margin-left:6px}
+  .controls .movetxt b{color:var(--gold)}
+
+  pre.code{background:#0b0f1e;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:12px;
+           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;line-height:1.65;color:#c8d2e6;
+           overflow-x:auto;white-space:pre}
+  pre.code .c{color:var(--dim2)}
+  pre.code .v{color:var(--gold)}
+
+  table{border-collapse:collapse;margin-top:12px;font-size:12.5px;max-width:1180px;width:100%}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;line-height:1.5}
+  th{background:var(--card);color:var(--gold);font-weight:600;font-size:11.5px;letter-spacing:.02em}
+  td{color:var(--dim)}
+  td b{color:var(--text);font-weight:600}
+  td.no{color:#ffb4b4}
+  td.yes{color:#9ae6b4}
+
+  .notes{max-width:1000px;font-size:12.5px;color:var(--dim);line-height:1.7;margin-top:12px;padding-left:18px}
+  .notes li{margin-bottom:7px}
+  .notes b{color:var(--text)}
+  .warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:10px;
+        padding:11px 13px;margin-top:14px;font-size:12.5px;color:#e8d9b0;line-height:1.6;max-width:1000px}
+  .warn b{color:var(--warn)}
+  svg#sprites{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+  /* Les fondus passent par une ANIMATION, pas par une transition : quand elle
+     est retiree, la piece revient a son opacite normale (1). Une transition
+     figee - rendu en pause, onglet cache - garde, elle, sa valeur de depart et
+     la piece reste invisible. */
+  @keyframes bd-in{ from{ opacity:0 } }
+  @keyframes bd-out{ to{ opacity:0 } }
+</style>
+</head>
+<body>
+
+<h1>Animation des pieces - banc d'essai</h1>
+<p class="lede">Tu demandes « un mouvement facon chess.com ». Avant de toucher <b>js/board.js</b> (qui sert
+tous les echiquiers de l'app : analyse, Coach, tactiques, mats, entrainement, replay, cours), voici de quoi
+<b>comparer et regler</b>. Le plateau de gauche fait tourner le moteur d'animation actuel (v256) tel quel ;
+celui de droite fait tourner le moteur propose. Les deux recoivent <b>exactement le meme coup au meme
+instant</b>.</p>
+<p class="lede">Ce qui separe l'actuel de chess.com, mesure dans le code et pas a l'oeil :</p>
+
+<div class="gaps">
+  <div><b class="k">1. C'est deux fois trop lent</b><b>460 ms</b> par coup (<code>ANIM_MS</code>,
+    board.js:122). chess.com tourne autour de <b>200 ms</b> et propose un reglage. Avec la courbe tres
+    « ease-out » actuelle, la fin du trajet s'etire : c'est ce qui donne la sensation de flotter.</div>
+  <div><b class="k">2. Chaque coup redessine tout</b><code>svgEl.innerHTML = html</code> : les 32 pieces sont
+    detruites puis re-analysees (le jeu Tatiana, c'est ~30 Ko de chemins SVG). Une animation en cours est
+    <b>coupee net</b> : la piece en vol <b>saute</b> sur sa case d'arrivee.</div>
+  <div><b class="k">3. La piece prise disparait trop tot</b>Le fondu de sortie dure 260 ms et demarre a
+    l'instant 0 : la piece capturee a <b>disparu 200 ms avant</b> que la piece qui la prend arrive. On ne
+    voit pas une prise, on voit une disparition puis une arrivee.</div>
+  <div><b class="k">4. SMIL, pas CSS</b><code>animateTransform</code> n'est pas compose par le GPU dans
+    Chrome, ne s'interrompt pas et ne se redirige pas. Une transition CSS sur <code>transform</code>
+    repart, elle, de la position courante : c'est ce qui rend la navigation rapide fluide.</div>
+</div>
+
+<h2>Le banc d'essai <span>- les deux plateaux recoivent le meme coup ; regle la colonne de droite</span></h2>
+
+<div class="controls">
+  <select id="scenario"></select>
+  <button id="prev">◀ Precedent</button>
+  <button id="next" class="prim">Suivant ▶</button>
+  <button id="auto">▶ Derouler</button>
+  <button id="burst">⚡ Rafale (6 coups / 0,8 s)</button>
+  <button id="reset">↺ Debut</button>
+  <span class="movetxt" id="movetxt"></span>
+</div>
+
+<div class="bench">
+  <div class="boardcol cur">
+    <div class="cap">Ancien - v256 <em>(SMIL, 460 ms, redessin complet)</em></div>
+    <div class="bwrap"><svg id="board-cur" viewBox="0 0 360 360"></svg></div>
+    <div class="sub">Regarde <b>la rafale</b> : la piece en vol saute sur sa case des que le coup suivant
+      arrive. Et sur une prise, la piece mangee s'efface bien avant l'arrivee.</div>
+  </div>
+
+  <div class="boardcol new">
+    <div class="cap">Nouveau - v257 <em>(transform CSS, noeuds persistants)</em></div>
+    <div class="bwrap"><svg id="board-new" viewBox="0 0 360 360"></svg></div>
+    <div class="sub">Les pieces sont des <b>noeuds qui survivent</b> d'un coup a l'autre : une animation
+      interrompue est <b>redirigee</b> depuis sa position reelle au lieu d'etre coupee.</div>
+  </div>
+
+  <div class="panel">
+    <h3>REGLAGES DU MOTEUR PROPOSE</h3>
+    <div class="presets" id="presets">
+      <button data-ms="0">Aucune</button>
+      <button data-ms="130">Rapide</button>
+      <button data-ms="200" class="on">Normale</button>
+      <button data-ms="320">Lente</button>
+    </div>
+    <div class="row">
+      <label>Duree</label>
+      <input type="range" id="ms" min="0" max="500" step="10" value="200">
+      <span class="val" id="msv">200 ms</span>
+    </div>
+    <div class="row">
+      <label>Courbe</label>
+      <select id="ease">
+        <option value="cubic-bezier(.22,.61,.36,1)" selected>Facon chess.com (sortie franche)</option>
+        <option value="cubic-bezier(.4,0,.2,1)">Doux (entree + sortie)</option>
+        <option value="cubic-bezier(.16,.84,.24,1)">Celle d'aujourd'hui (longue traine)</option>
+        <option value="cubic-bezier(.34,1.28,.64,1)">Avec un leger rebond</option>
+        <option value="linear">Lineaire</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Prise</label>
+      <select id="cap">
+        <option value="0.62" selected>La piece tient jusqu'a l'arrivee</option>
+        <option value="0.35">Fondu a mi-chemin</option>
+        <option value="0">Fondu immediat (comme aujourd'hui)</option>
+      </select>
+    </div>
+    <div class="chk"><input type="checkbox" id="dist"><span><b>Duree liee a la distance</b> - un pion d'une
+      case va plus vite qu'une dame qui traverse (±22 %). chess.com ne le fait pas ; a toi de juger.</span></div>
+    <div class="chk"><input type="checkbox" id="lift"><span><b>Levee de la piece</b> - ombre portee et
+      +5 % de taille pendant le vol. Ce n'est pas dans chess.com pour un coup joue (seulement au
+      glisser-deposer) : supplement maison.</span></div>
+    <div class="chk"><input type="checkbox" id="trail"><span><b>Marquer les interruptions</b> - un point
+      rouge la ou une piece etait encore en vol quand le coup suivant est arrive. A activer pendant la
+      rafale.</span></div>
+
+    <h3 class="sep">VALEURS RETENUES</h3>
+    <pre class="code" id="out"></pre>
+    <div class="chk" style="margin-top:10px;color:var(--dim2)">Dis-moi simplement la ligne que tu veux et
+      j'implante exactement ces valeurs.</div>
+  </div>
+</div>
+
+<h2>Ce que ca change, precisement</h2>
+<table>
+  <tr><th style="width:23%">Situation</th><th style="width:38%">Aujourd'hui (v256)</th><th>Propose</th></tr>
+  <tr><td><b>Coup simple</b></td><td class="no">460 ms, longue traine, SMIL</td>
+      <td class="yes">200 ms par defaut, reglable, transition CSS composee par le GPU</td></tr>
+  <tr><td><b>Prise</b></td><td class="no">La piece prise est effacee en 260 ms, soit 200 ms avant l'arrivee</td>
+      <td class="yes">Elle tient jusqu'a ~62 % du trajet puis s'efface sous la piece qui arrive</td></tr>
+  <tr><td><b>Navigation rapide</b> (fleche maintenue, rafale, reponse de l'ordi juste apres ton coup)</td>
+      <td class="no">Le redessin coupe l'animation : la piece en vol saute sur sa case</td>
+      <td class="yes">Les noeuds survivent : la piece en vol est redirigee depuis sa position reelle</td></tr>
+  <tr><td><b>Cout par coup</b></td><td class="no">32 groupes <code>&lt;g&gt;</code> detruits et re-analysees (~30 Ko de chemins)</td>
+      <td class="yes">Seules les cases (64 <code>&lt;rect&gt;</code>) sont redessinees ; les pieces sont deplacees</td></tr>
+  <tr><td><b>Roque, prise en passant, promotion</b></td>
+      <td>Deja corrects (le diff v236 les couvre)</td>
+      <td class="yes">Inchanges : <code>diffPositions()</code> n'est pas touche, c'est le rendu qui change</td></tr>
+  <tr><td><b>prefers-reduced-motion</b></td><td>Respecte (rendu sec)</td><td class="yes">Respecte a l'identique</td></tr>
+</table>
+
+<h2>Si tu valides, voila ce que je touche</h2>
+<ul class="notes">
+  <li><b>js/board.js seulement</b> - <code>render()</code> et <code>renderAnimated()</code> gardent
+    exactement la meme signature, donc les <b>27 appels</b> repartis dans app.js, replay.js, coachgame.js,
+    tactics.js, training.js, guess.js, mates.js et opening-tree.js <b>ne bougent pas</b>.</li>
+  <li>Le plateau devient deux couches : <code>&lt;g class="bd-sq"&gt;</code> (cases et reperes) et
+    <code>&lt;g class="bd-pc"&gt;</code> (les pieces, un <code>&lt;g data-sq&gt;</code> chacune, conserve
+    d'un coup a l'autre).</li>
+  <li>Un <b>reglage de vitesse</b> dans les parametres de l'app (Aucune / Rapide / Normale / Lente),
+    memorise en <code>localStorage</code>, comme chess.com.</li>
+  <li><b>Piege repere</b> : <code>enableDrag()</code> clone la piece et positionne le fantome avec
+    <code>setAttribute('transform', …)</code>. Une position posee en <b>style CSS</b> l'emporte sur
+    l'attribut : le fantome resterait colle a sa case. Il faut passer le fantome en
+    <code>style.transform</code> dans le meme lot - sinon « la piece ne suit plus la souris ».</li>
+</ul>
+
+<div class="warn"><b>Honnete :</b> ca ne change <b>aucune information</b> affichee, c'est du confort de
+lecture. Le vrai gain mesurable est la 3e ligne du tableau : aujourd'hui, <b>toute</b> navigation plus rapide
+que 460 ms coupe l'animation en cours, et la repetition du clavier tourne autour de 30 ms. Autrement dit,
+quand tu parcours une partie a la fleche, tu ne vois <b>jamais</b> une animation entiere - tu vois des sauts.
+C'est probablement ca qui te fait dire « pas fluide », plus que la courbe elle-meme.</div>
+
+<svg id="sprites" viewBox="0 0 360 360"></svg>
+
+<script src="../js/chess.min.js"></script>
+<script src="board-v256.js"></script>
+<script src="../js/board.js"></script>
+<script>
+(() => {
+  const SQ = 45, FILES = 'abcdefgh';
+  const LIGHT = '#eeeed2', DARK = '#769656', HL_FROM = '#f6f669', HL_TO = '#baca2b';
+
+  /* Les dessins de pieces : on les recolte dans le moteur existant plutot que de
+     les recopier (dans la vraie implementation, PIECE_DEFS est deja a portee). */
+  const DEFS = {};
+  (function harvest(){
+    const s = document.getElementById('sprites');
+    BoardRenderer.render(s, 'kqrbnp2/8/8/8/8/8/8/KQRBNP2 w - - 0 1');
+    const map = { a8:'k', b8:'q', c8:'r', d8:'b', e8:'n', f8:'p',
+                  a1:'K', b1:'Q', c1:'R', d1:'B', e1:'N', f1:'P' };
+    for (const sq in map) {
+      const g = s.querySelector('g[data-sq="' + sq + '"]');
+      if (g) DEFS[map[sq]] = g.innerHTML;
+    }
+  })();
+
+  const xy = (sq) => ({ x: FILES.indexOf(sq[0]) * SQ, y: (8 - +sq[1]) * SQ });
+  const dist = (a, b) => Math.max(Math.abs(FILES.indexOf(a[0]) - FILES.indexOf(b[0])),
+                                  Math.abs(+a[1] - +b[1]));
+
+  function fenBoard(fen){
+    const rows = fen.split(' ')[0].split('/'), b = [];
+    for (const row of rows){
+      const r = [];
+      for (const ch of row){ if (ch >= '1' && ch <= '8'){ for (let i = 0; i < +ch; i++) r.push(null); } else r.push(ch); }
+      b.push(r);
+    }
+    return b;
+  }
+
+  function squaresHtml(lastMove){
+    let html = '';
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++){
+      const sq = FILES[col] + (8 - row);
+      const isLight = (row + col) % 2 === 0;
+      let fill = isLight ? LIGHT : DARK;
+      if (lastMove && sq === lastMove.to) fill = HL_TO;
+      else if (lastMove && sq === lastMove.from) fill = HL_FROM;
+      html += '<rect x="' + col * SQ + '" y="' + row * SQ + '" width="' + SQ + '" height="' + SQ + '" fill="' + fill + '"/>';
+      const clr = isLight ? DARK : LIGHT;
+      if (col === 0) html += '<text x="' + (col * SQ + 3) + '" y="' + (row * SQ + 12) + '" fill="' + clr + '" font-size="10" font-weight="700" opacity=".8">' + (8 - row) + '</text>';
+      if (row === 7) html += '<text x="' + (col * SQ + SQ - 8) + '" y="' + (row * SQ + SQ - 3) + '" fill="' + clr + '" font-size="10" font-weight="700" opacity=".8">' + FILES[col] + '</text>';
+    }
+    return html;
+  }
+
+  /* ── Le moteur propose ───────────────────────────────────────────────────
+     Une piece = un noeud <g data-sq> qui SURVIT d'un coup a l'autre. On ne
+     redessine que les cases ; les pieces sont deplacees par une transition CSS
+     sur `transform`, qui repart d'elle-meme de la position courante quand on la
+     redirige en plein vol. */
+  const Smooth = {
+    cfg: { ms: 200, ease: 'cubic-bezier(.22,.61,.36,1)', capture: 0.62, dist: false, lift: false, trail: false },
+
+    node(piece, sq){
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('data-sq', sq);
+      g.style.pointerEvents = 'none';
+      g.style.transformBox = 'fill-box';
+      g.style.transformOrigin = '50% 50%';
+      const p = xy(sq);
+      g.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+      g.innerHTML = DEFS[piece] || '';
+      return g;
+    },
+
+    paint(svg, fen, lastMove){
+      svg.innerHTML = '<g class="bd-sq">' + squaresHtml(lastMove) + '</g><g class="bd-pc"></g>';
+      const pc = svg.querySelector('.bd-pc'), b = fenBoard(fen), nodes = {};
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++){
+        if (!b[r][c]) continue;
+        const sq = FILES[c] + (8 - r);
+        nodes[sq] = pc.appendChild(this.node(b[r][c], sq));
+      }
+      svg.__st = { fen, nodes, pc };
+    },
+
+    animate(svg, prevFen, fen, lastMove){
+      const st = svg.__st, cfg = this.cfg;
+      const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!st || st.fen !== prevFen || cfg.ms <= 0 || reduced){ this.paint(svg, fen, lastMove); return; }
+
+      const d = BoardRenderer.diffPositions(prevFen, fen, lastMove);
+      if (!d.moves.length && !d.added.length && !d.promos.length){ this.paint(svg, fen, lastMove); return; }
+
+      svg.querySelector('.bd-sq').innerHTML = squaresHtml(lastMove);
+
+      /* On preleve TOUS les noeuds sources avant d'ecrire les destinations : la
+         case d'arrivee d'un coup peut etre la case de depart d'un autre. */
+      const taken = d.moves.map(m => ({ m, g: st.nodes[m.from] }));
+      const promo = d.promos.map(q => ({ q, g: st.nodes[q.from] }));
+      for (const m of d.moves) delete st.nodes[m.from];
+      for (const q of d.promos) delete st.nodes[q.from];
+      for (const g of d.removed) this.kill(st, g.sq, cfg);
+
+      for (const t of taken){
+        if (!t.g){ this.paint(svg, fen, lastMove); return; }
+        this.fly(st, t.g, t.m.from, t.m.to, cfg, svg);
+        st.nodes[t.m.to] = t.g;
+      }
+      for (const t of promo){
+        if (!t.g) continue;
+        const ms = this.dur(t.q.from, t.q.to, cfg);
+        this.fly(st, t.g, t.q.from, t.q.to, cfg, svg);
+        const half = Math.round(ms * 0.45), late = Math.round(ms * 0.55);
+        t.g.style.animation = 'bd-out ' + half + 'ms linear ' + late + 'ms both';
+        setTimeout(() => t.g.remove(), ms + 120);
+        st.nodes[t.q.to] = this.appear(st, t.q.piece, t.q.to, half, late);
+      }
+      for (const a of d.added) st.nodes[a.sq] = this.appear(st, a.p, a.sq, cfg.ms, 0);
+      st.fen = fen;
+    },
+
+    /* Une piece qui apparait (promotion, retour en arriere sur une prise).
+       Ni requestAnimationFrame (il ne se declenche pas quand le rendu est en
+       pause : onglet cache, panneau replie) ni transition d'opacite (figee, elle
+       garde sa valeur de DEPART, donc 0 : la piece resterait invisible). Une
+       animation, elle, ne fait que masquer l'opacite normale : des qu'on la
+       retire - et le minuteur finit toujours par tomber - la piece est visible. */
+    appear(st, piece, sq, fade, delay){
+      const n = st.pc.appendChild(this.node(piece, sq));
+      n.style.animation = 'bd-in ' + fade + 'ms linear ' + delay + 'ms both';
+      setTimeout(() => { n.style.animation = ''; }, fade + delay + 60);
+      return n;
+    },
+
+    dur(from, to, cfg){
+      if (!cfg.dist) return cfg.ms;
+      return Math.round(cfg.ms * (0.78 + 0.44 * (dist(from, to) - 1) / 6));
+    },
+
+    fly(st, g, from, to, cfg, svg){
+      const ms = this.dur(from, to, cfg);
+      const p = xy(to);
+      if (cfg.trail && g.__flying) this.mark(svg, g);
+      g.setAttribute('data-sq', to);
+      st.pc.appendChild(g);                        /* la piece qui bouge passe au-dessus */
+      g.style.transition = 'transform ' + ms + 'ms ' + cfg.ease;
+      if (cfg.lift){
+        g.style.filter = 'drop-shadow(0 4px 5px rgba(0,0,0,.45))';
+        g.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px) scale(1.05)';
+      } else {
+        g.style.filter = '';
+        g.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+      }
+      g.__flying = true;
+      clearTimeout(g.__t);
+      /* A l'echeance on POSE l'etat final : si la transition a ete mise en pause
+         avec le rendu, la piece doit quand meme finir sur sa case. On coupe la
+         transition ET on force le recalcul avant d'ecrire, sinon la transition
+         figee garderait la main. */
+      const settle = () => {
+        g.style.transition = 'none';
+        void getComputedStyle(g).transform;
+        g.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+        g.style.filter = '';
+      };
+      g.__t = setTimeout(() => {
+        g.__flying = false;
+        if (cfg.lift){                             /* la piece se repose sur sa case */
+          g.style.transition = 'transform 90ms ease-out';
+          g.style.transform = 'translate(' + p.x + 'px,' + p.y + 'px)';
+          g.style.filter = '';
+          g.__t = setTimeout(settle, 120);
+        } else settle();
+      }, ms);
+    },
+
+    /* La piece prise tient sa case jusqu'a ce que l'autre arrive dessus. */
+    kill(st, sq, cfg){
+      const g = st.nodes[sq];
+      delete st.nodes[sq];
+      if (!g) return;
+      const delay = Math.round(cfg.ms * cfg.capture);
+      const fade = Math.max(90, cfg.ms - delay);
+      g.style.animation = 'bd-out ' + fade + 'ms linear ' + delay + 'ms both';
+      setTimeout(() => g.remove(), delay + fade + 80);
+    },
+
+    mark(svg, g){
+      const r = g.getBoundingClientRect(), box = svg.getBoundingClientRect();
+      if (!box.width) return;
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', (r.left + r.width / 2 - box.left) / box.width * 360);
+      c.setAttribute('cy', (r.top + r.height / 2 - box.top) / box.height * 360);
+      c.setAttribute('r', 5.5);
+      c.setAttribute('fill', '#f87171');
+      c.setAttribute('opacity', '.9');
+      svg.appendChild(c);
+      setTimeout(() => c.remove(), 1100);
+    }
+  };
+
+  /* ── Les scenarios ───────────────────────────────────────────────────── */
+  const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const SCEN = [
+    { n: 'Partie italienne (prises, echecs, roques)', fen: START,
+      mv: ['e4','e5','Nf3','Nc6','Bc4','Bc5','c3','Nf6','d4','exd4','cxd4','Bb4+','Bd2','Bxd2+','Nbxd2','d5','exd5','Nxd5','O-O','O-O'] },
+    { n: 'Prise en passant', fen: START, mv: ['e4','d5','e5','f5','exf6'] },
+    { n: 'Promotion (en prenant, puis la dame)', fen: '1r6/P7/8/8/6k1/8/8/4K3 w - - 0 1',
+      mv: ['axb8=Q','Kf5','Qb5+','Kf6','Qe8'] },
+    { n: 'Les deux roques (roi et tour ensemble)', fen: 'r3k2r/pp4pp/8/8/8/8/PP4PP/R3K2R w KQkq - 0 1',
+      mv: ['O-O','O-O-O','Rfe1','Rde8','Re4','Re5'] },
+    { n: 'Grands deplacements (la distance)', fen: '4k3/8/8/8/8/8/8/Q3K3 w - - 0 1',
+      mv: ['Qa8+','Kd7','Qh8','Kc7','Qh1','Kb6','Qa8'] },
+    { n: 'Le cavalier (trajet en L)', fen: '4k3/8/8/8/8/8/8/1N2K3 w - - 0 1',
+      mv: ['Nc3','Ke7','Nd5+','Kd7','Nf6','Ke6','Nh5'] }
+  ];
+
+  let sc = 0, positions = [], idx = 0, timer = null;
+  const cur = document.getElementById('board-cur');
+  const nw = document.getElementById('board-new');
+  const $ = (id) => document.getElementById(id);
+
+  function build(){
+    const s = SCEN[sc], g = new Chess(s.fen);
+    positions = [{ fen: g.fen(), move: null, san: null }];
+    for (const san of s.mv){
+      const m = g.move(san, { sloppy: true });
+      if (!m){ console.warn('coup refuse :', san, '-', s.n); break; }
+      positions.push({ fen: g.fen(), move: { from: m.from, to: m.to }, san: m.san });
+    }
+    idx = 0;
+    const p = positions[0];
+    BoardRendererV256.render(cur, p.fen, null);
+    Smooth.paint(nw, p.fen, null);
+    label();
+  }
+
+  function label(){
+    $('movetxt').innerHTML = idx === 0
+      ? 'Position de depart'
+      : 'Coup ' + idx + ' / ' + (positions.length - 1) + ' : <b>' + positions[idx].san + '</b>';
+    $('prev').disabled = idx === 0;
+    $('next').disabled = idx === positions.length - 1;
+  }
+
+  function step(delta){
+    const n = idx + delta;
+    if (n < 0 || n >= positions.length) return false;
+    const prev = positions[idx].fen;
+    idx = n;
+    /* En arriere, le coup a animer est celui qui menait a la position quittee. */
+    const mv = delta > 0 ? positions[idx].move : (positions[idx + 1] ? positions[idx + 1].move : null);
+    BoardRendererV256.renderAnimated(cur, prev, positions[idx].fen, mv, BoardRendererV256.ANIM_MS);
+    Smooth.animate(nw, prev, positions[idx].fen, mv);
+    label();
+    return true;
+  }
+
+  $('scenario').innerHTML = SCEN.map((s, i) => '<option value="' + i + '">' + s.n + '</option>').join('');
+  $('scenario').onchange = () => { sc = +$('scenario').value; stop(); build(); };
+
+  function stop(){ if (timer){ clearInterval(timer); timer = null; $('auto').textContent = '▶ Derouler'; } }
+  $('next').onclick = () => { stop(); step(1); };
+  $('prev').onclick = () => { stop(); step(-1); };
+  $('reset').onclick = () => { stop(); build(); };
+  $('auto').onclick = () => {
+    if (timer){ stop(); return; }
+    if (idx === positions.length - 1) build();
+    $('auto').textContent = '❚❚ Pause';
+    timer = setInterval(() => { if (!step(1)) stop(); }, 700);
+  };
+  $('burst').onclick = () => {
+    stop();
+    if (positions.length - idx < 7) build();
+    let k = 0;
+    timer = setInterval(() => { if (++k > 6 || !step(1)) stop(); }, 133);
+  };
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight'){ stop(); step(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft'){ stop(); step(-1); e.preventDefault(); }
+  });
+
+  function sync(){
+    const c = Smooth.cfg;
+    c.ms = +$('ms').value;
+    c.ease = $('ease').value;
+    c.capture = +$('cap').value;
+    c.dist = $('dist').checked;
+    c.lift = $('lift').checked;
+    c.trail = $('trail').checked;
+    $('msv').textContent = c.ms === 0 ? 'aucune' : c.ms + ' ms';
+    for (const b of $('presets').children) b.classList.toggle('on', +b.dataset.ms === c.ms);
+    $('out').innerHTML =
+      '<span class="c">// js/board.js</span>\n' +
+      'const ANIM_MS  = <span class="v">' + c.ms + '</span>;  <span class="c">// aujourd\'hui : 460</span>\n' +
+      'const EASE     = <span class="v">\'' + c.ease + '\'</span>;\n' +
+      'const CAP_HOLD = <span class="v">' + c.capture + '</span>;  <span class="c">// part du trajet avant le fondu de la prise</span>\n' +
+      'const DIST_ADJ = <span class="v">' + c.dist + '</span>;\n' +
+      'const LIFT     = <span class="v">' + c.lift + '</span>;';
+  }
+  ['ms','ease','cap','dist','lift','trail'].forEach(id => { $(id).oninput = sync; $(id).onchange = sync; });
+  for (const b of $('presets').children) b.onclick = () => { $('ms').value = b.dataset.ms; sync(); };
+
+  sync();
+  build();
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,6 @@
-const BoardRenderer = (() => {
+/* Copie FIGEE du moteur v256 (SMIL, 460 ms), gardee pour que le banc d essai
+   garde un point de comparaison apres le passage au nouveau moteur. */
+const BoardRendererV256 = (() => {
   const SQ = 45;
   const PIECE_CHAR = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
   // Vector pieces — Tatiana set by sadsnake1 (sharechess.github.io), CC BY-NC-SA 4.0.
@@ -99,79 +101,28 @@ const BoardRenderer = (() => {
     return { boardHtml: html, pieces };
   }
 
-  // Une piece = un <g> place par le `transform` CSS (et NON par l'attribut) :
-  // c'est ce qui permet de la deplacer par une transition, et de rediriger cette
-  // transition en plein vol. `transform-box: fill-box` met l'origine au centre
-  // de la piece, pour que la mise a l'echelle du vol ne la decale pas.
-  function pieceHtml(piece, x, y, sq) {
-    return `<g data-sq="${sq}" style="pointer-events:none;transform-box:fill-box;transform-origin:50% 50%;`
-      + `transform:translate(${x}px,${y}px)">${PIECE_DEFS[piece]}</g>`;
+  function renderPieceHtml(p) {
+    return `<g transform="translate(${p.x},${p.y})" data-sq="${p.sq}" style="pointer-events:none">${PIECE_DEFS[p.piece]}</g>`;
   }
 
-  // Le plateau tient en DEUX couches : les cases (redessinees a chaque coup,
-  // 64 rects) et les pieces (des noeuds qui SURVIENNENT d'un coup a l'autre).
-  // `svgEl.__bd` retient la position dessinee et le noeud de chaque case.
   function render(svgEl, fen, lastMove) {
     const { boardHtml, pieces } = buildBoard(fen, lastMove);
-    let html = `<g class="bd-sq">${boardHtml}</g><g class="bd-pc">`;
-    for (const p of pieces) html += pieceHtml(p.piece, p.x, p.y, p.sq);
-    svgEl.innerHTML = html + '</g>';
-    const pc = svgEl.querySelector('.bd-pc');
-    const nodes = {};
-    for (const g of pc.children) nodes[g.getAttribute('data-sq')] = g;
-    svgEl.__bd = { fen: fen.split(' ')[0], nodes, pc, flip: flipped };
+    let html = boardHtml;
+    for (const p of pieces) html += renderPieceHtml(p);
+    svgEl.innerHTML = html;
   }
 
   // ── L'animation des deplacements ──────────────────────────────────────────
-  // Refaite (banc d'essai `_mockups/board-animation-2026-09.html`) : transition
-  // CSS sur `transform` au lieu de SMIL, et des noeuds de pieces qui survivent
-  // d'un coup a l'autre. Ce qui change pour de vrai : une animation interrompue
-  // est REDIRIGEE depuis la position reelle de la piece au lieu d'etre coupee.
-  // Avant, tout enchainement plus rapide que la duree faisait sauter la piece en
-  // vol sur sa case - et la repetition du clavier tourne autour de 30 ms, donc
-  // en parcourant une partie a la fleche on ne voyait jamais une animation
-  // entiere.
-  const EASE = 'cubic-bezier(.22,.61,.36,1)';   // sortie franche, facon chess.com
-  // Vitesses proposees a l'utilisateur, en ms. Reglage memorise.
-  const SPEEDS = { none: 0, fast: 130, normal: 200, slow: 320, glide: 460 };
-  const SPEED_KEY = 'ca_anim_speed';
-  let speedKey = 'normal';
-  try {
-    const v = localStorage.getItem(SPEED_KEY);
-    if (v && SPEEDS[v] != null) speedKey = v;
-  } catch (_) {}
-  function setSpeed(k) {
-    if (SPEEDS[k] == null) return;
-    speedKey = k;
-    try { localStorage.setItem(SPEED_KEY, k); } catch (_) {}
-  }
-  function getSpeed() { return speedKey; }
-  function animMs() { return SPEEDS[speedKey]; }
-
-  const CAP_HOLD = 0.62;  // la piece prise tient 62 % du trajet avant de s'effacer
-  const LIFT = 1.06;      // elle se souleve legerement pendant le vol
-  const BLUR_MAX = 0.9;   // flou de vitesse, en unites du plateau (une case = 45)
-
-  // Les fondus passent par une ANIMATION et pas par une transition : retiree,
-  // l'animation rend a la piece son opacite normale. Une transition FIGEE - le
-  // rendu se met en pause des que l'onglet est cache - garderait sa valeur de
-  // depart, donc une piece qui apparait resterait invisible. Meme raison pour
-  // laquelle on n'utilise nulle part `requestAnimationFrame` ici : il ne se
-  // declenche pas quand le rendu est en pause.
-  function ensureStyle() {
-    if (typeof document === 'undefined' || document.getElementById('bd-anim-css')) return;
-    const s = document.createElement('style');
-    s.id = 'bd-anim-css';
-    s.textContent =
-      '@keyframes bd-in{from{opacity:0}}'
-      + '@keyframes bd-out{to{opacity:0}}'
-      + '@keyframes bd-fly{'
-      + '0%{filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)) blur(0)}'
-      + '28%{filter:drop-shadow(0 4px 5px rgba(0,0,0,.45)) blur(var(--bd-bl,0px))}'
-      + '72%{filter:drop-shadow(0 4px 5px rgba(0,0,0,.45)) blur(var(--bd-bl,0px))}'
-      + '100%{filter:drop-shadow(0 0 0 rgba(0,0,0,0)) blur(0)}}';
-    document.head.appendChild(s);
-  }
+  // Courbe d'ease-out (depart franc, arrivee qui freine) : la piece se pose sur
+  // sa case au lieu de s'arreter net.
+  // Courbe plus douce que l'easeOutCubic d'origine : le depart est franc mais
+  // la fin s'etire, ce qui donne la sensation de « glisse » demandee.
+  const EASE_OUT = '0.16 0.84 0.24 1';
+  // Duree par defaut. Deux passes de reglage avec le user : 240 ms donnaient un
+  // saut, 340 ms restaient trop vifs -> 460 ms. C'est la seule valeur a bouger
+  // pour rendre TOUTE l'app plus ou moins vive.
+  const ANIM_MS = 460;
+  const FADE_MS = 260;    // effacement d'une piece capturee / retiree
 
   function reducedMotion() {
     try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
@@ -253,115 +204,59 @@ const BoardRenderer = (() => {
     return { moves, promos, added: appeared.filter(a => !a.used), removed: gone.filter(g => !g.used) };
   }
 
-  // Une piece qui apparait : promotion, ou retour en arriere sur une prise.
-  function appear(st, piece, sq, fade, delay) {
+  function pieceGroup(sq, piece, inner) {
     const c = squareToCoords(sq);
-    const n = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    n.setAttribute('data-sq', sq);
-    n.style.cssText = 'pointer-events:none;transform-box:fill-box;transform-origin:50% 50%;'
-      + `transform:translate(${c.col * SQ}px,${c.row * SQ}px)`;
-    n.innerHTML = PIECE_DEFS[piece] || '';
-    n.style.animation = `bd-in ${fade}ms linear ${delay}ms both`;
-    st.pc.appendChild(n);
-    setTimeout(() => { n.style.animation = ''; }, fade + delay + 60);
-    return n;
-  }
-
-  // La piece prise TIENT sa case jusqu'a ce que l'autre arrive dessus (avant,
-  // elle s'effacait en 260 ms alors que la piece qui la prend mettait 460 ms a
-  // arriver : on voyait une disparition, puis une arrivee, jamais une prise).
-  function vanish(st, sq, ms) {
-    const g = st.nodes[sq];
-    delete st.nodes[sq];
-    if (!g) return;
-    const delay = Math.round(ms * CAP_HOLD);
-    const fade = Math.max(90, ms - delay);
-    g.style.animation = `bd-out ${fade}ms linear ${delay}ms both`;
-    setTimeout(() => g.remove(), delay + fade + 80);
-  }
-
-  // Le vol d'une piece. La transition CSS repart d'elle-meme de la position
-  // COURANTE si on la redirige en cours de route. Le minuteur de fin pose l'etat
-  // final : si la transition a ete mise en pause avec le rendu, la piece doit
-  // quand meme finir sur sa case.
-  function fly(st, g, from, to, ms) {
-    const t = squareToCoords(to);
-    const x = t.col * SQ, y = t.row * SQ;
-    const dist = Math.max(Math.abs(FILES.indexOf(from[0]) - FILES.indexOf(to[0])),
-                          Math.abs(+from[1] - +to[1]));
-    g.setAttribute('data-sq', to);
-    st.pc.appendChild(g);                    // la piece qui bouge passe au-dessus
-    g.style.setProperty('--bd-bl', Math.min(BLUR_MAX, 0.22 * dist).toFixed(2) + 'px');
-    g.style.animation = 'none';              // relance l'ombre meme sur une piece deja en vol
-    void getComputedStyle(g).animationName;
-    g.style.animation = `bd-fly ${ms}ms linear`;
-    // Force le calcul de la position COURANTE avant de poser la transition :
-    // sinon une piece dessinee et deplacee dans le meme tour de boucle n'a pas
-    // de valeur de depart et saute sur sa case. C'est aussi ce qui fait repartir
-    // proprement une piece deja en vol, depuis la ou elle est vraiment.
-    void getComputedStyle(g).transform;
-    g.style.transition = `transform ${ms}ms ${EASE}`;
-    g.style.transform = `translate(${x}px,${y}px) scale(${LIFT})`;
-    clearTimeout(g.__bdT);
-    g.__bdT = setTimeout(() => {
-      g.style.transition = 'transform 90ms ease-out';   // la piece se repose
-      g.style.transform = `translate(${x}px,${y}px)`;
-      g.__bdT = setTimeout(() => {
-        g.style.animation = '';
-        g.style.transition = 'none';
-        void getComputedStyle(g).transform;             // coupe une transition figee
-        g.style.transform = `translate(${x}px,${y}px)`;
-      }, 110);
-    }, ms);
+    return `<g transform="translate(${c.col * SQ},${c.row * SQ})" data-sq="${sq}" style="pointer-events:none">${inner}${PIECE_DEFS[piece]}</g>`;
   }
 
   function renderAnimated(svgEl, prevFen, fen, lastMove, duration) {
-    // La duree vient du reglage de l'app, pas de l'appelant : plusieurs modules
-    // avaient copie `BoardRenderer.ANIM_MS` au chargement et resteraient sur
-    // l'ancienne valeur. Un 0 explicite reste respecte (« pas d'animation »).
-    const ms = duration === 0 ? 0 : animMs();
+    const ms = duration == null ? ANIM_MS : duration;
     const samePos = prevFen && prevFen.split(' ')[0] === fen.split(' ')[0];
     if (!prevFen || ms <= 0 || samePos || reducedMotion()) { render(svgEl, fen, lastMove); return; }
 
-    // Rendu sec des qu'on n'est pas sur de ce qui est a l'ecran : position
-    // affichee differente de `prevFen`, ou plateau retourne entre-temps (sinon
-    // les pieces immobiles resteraient dans l'ancienne orientation).
-    const st = svgEl.__bd;
-    if (!st || st.fen !== prevFen.split(' ')[0] || st.flip !== flipped) { render(svgEl, fen, lastMove); return; }
-
+    const { boardHtml, pieces } = buildBoard(fen, lastMove);
     const d = diffPositions(prevFen, fen, lastMove);
     if (!d.moves.length && !d.added.length && !d.promos.length) { render(svgEl, fen, lastMove); return; }
 
-    ensureStyle();
-    svgEl.querySelector('.bd-sq').innerHTML = buildBoard(fen, lastMove).boardHtml;
+    const busy = {};
+    for (const m of d.moves) busy[m.to] = true;
+    for (const a of d.added) busy[a.sq] = true;
+    for (const q of d.promos) busy[q.to] = true;
 
-    // On preleve TOUS les noeuds de depart avant d'ecrire les arrivees : la case
-    // d'arrivee d'un coup peut etre la case de depart d'un autre.
-    const taken = d.moves.map(m => ({ m, g: st.nodes[m.from] }));
-    const promo = d.promos.map(q => ({ q, g: st.nodes[q.from] }));
-    if (taken.some(t => !t.g) || promo.some(t => !t.g)) { render(svgEl, fen, lastMove); return; }
-    for (const m of d.moves) delete st.nodes[m.from];
-    for (const q of d.promos) delete st.nodes[q.from];
-
-    for (const g of d.removed) vanish(st, g.sq, ms);
-
-    for (const t of taken) {
-      fly(st, t.g, t.m.from, t.m.to, ms);
-      st.nodes[t.m.to] = t.g;
+    let html = boardHtml;
+    // 1. Ce qui ne bouge pas, dessous.
+    for (const p of pieces) if (!busy[p.sq]) html += renderPieceHtml(p);
+    // 2. Les pieces capturees s'EFFACENT au lieu de disparaitre d'un coup.
+    for (const g of d.removed) {
+      html += pieceGroup(g.sq, g.p,
+        `<animate attributeName="opacity" from="1" to="0" dur="${Math.min(FADE_MS, ms)}ms" fill="freeze"/>`);
     }
-    // La promotion : le pion glisse, puis les deux pieces se fondent l'une dans
-    // l'autre sur la seconde moitie du trajet.
-    const fade = Math.round(ms * 0.45), late = Math.round(ms * 0.55);
-    for (const t of promo) {
-      fly(st, t.g, t.q.from, t.q.to, ms);
-      t.g.style.animation = `bd-out ${fade}ms linear ${late}ms both`;
-      clearTimeout(t.g.__bdT);
-      setTimeout(() => t.g.remove(), ms + 120);
-      st.nodes[t.q.to] = appear(st, t.q.piece, t.q.to, fade, late);
+    // 3. Les pieces qui glissent, par-dessus (et avec `data-sq` sur la case
+    //    d'ARRIVEE : un glisser-deposer juste apres doit les retrouver).
+    for (const m of d.moves) {
+      const f = squareToCoords(m.from), t = squareToCoords(m.to);
+      html += `<g transform="translate(${f.col * SQ},${f.row * SQ})" data-sq="${m.to}" style="pointer-events:none">`
+        + `<animateTransform attributeName="transform" type="translate" from="${f.col * SQ} ${f.row * SQ}" to="${t.col * SQ} ${t.row * SQ}" dur="${ms}ms" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="${EASE_OUT}"/>`
+        + `${PIECE_DEFS[m.piece]}</g>`;
     }
-    for (const a of d.added) st.nodes[a.sq] = appear(st, a.p, a.sq, ms, 0);
-
-    st.fen = fen.split(' ')[0];
+    // 4. La promotion : le pion glisse, puis les deux pieces se fondent l'une
+    //    dans l'autre sur la seconde moitie du trajet.
+    const half = Math.round(ms / 2);
+    for (const q of d.promos) {
+      const f = squareToCoords(q.from), t = squareToCoords(q.to);
+      html += `<g transform="translate(${f.col * SQ},${f.row * SQ})" style="pointer-events:none">`
+        + `<animateTransform attributeName="transform" type="translate" from="${f.col * SQ} ${f.row * SQ}" to="${t.col * SQ} ${t.row * SQ}" dur="${ms}ms" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="${EASE_OUT}"/>`
+        + `<animate attributeName="opacity" from="1" to="0" begin="${half}ms" dur="${half}ms" fill="freeze"/>`
+        + `${PIECE_DEFS[q.pawn]}</g>`;
+      html += pieceGroup(q.to, q.piece,
+        `<animate attributeName="opacity" from="0" to="1" begin="${half}ms" dur="${half}ms" fill="freeze"/>`);
+    }
+    // 5. Les apparitions sans lien : simple fondu d'entree.
+    for (const a of d.added) {
+      html += pieceGroup(a.sq, a.p,
+        `<animate attributeName="opacity" from="0" to="1" dur="${ms}ms" fill="freeze"/>`);
+    }
+    svgEl.innerHTML = html;
   }
 
   function drawArrow(overlaySvg, fromSq, toSq) {
@@ -619,16 +514,10 @@ const BoardRenderer = (() => {
           ghost = orig.cloneNode(true);
           ghost.removeAttribute('data-sq');
           ghost.style.pointerEvents = 'none';
-          // Le fantome se place par le STYLE, comme les pieces : une position
-          // posee en CSS l'emporte sur l'attribut `transform`, donc un
-          // setAttribute ici laisserait le fantome colle a sa case.
-          ghost.style.animation = '';
-          ghost.style.transition = 'none';
-          ghost.style.filter = 'drop-shadow(0 5px 6px rgba(0,0,0,.5))';
           svgEl.appendChild(ghost);
         }
       }
-      if (ghost) { const u = toUser(e.clientX, e.clientY); ghost.style.transform = `translate(${u.x - SQ / 2}px,${u.y - SQ / 2}px) scale(${LIFT})`; }
+      if (ghost) { const u = toUser(e.clientX, e.clientY); ghost.setAttribute('transform', `translate(${u.x - SQ / 2},${u.y - SQ / 2})`); }
     });
 
     svgEl.addEventListener('pointerup', (e) => {
@@ -646,13 +535,9 @@ const BoardRenderer = (() => {
     }, true);
   }
 
-  const api = { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions, setSpeed, getSpeed, SPEEDS };
-  // `ANIM_MS` suit le reglage en cours : les modules qui l'avaient copie au
-  // chargement lisent quand meme la bonne valeur s'ils la relisent.
-  Object.defineProperty(api, 'ANIM_MS', { get: animMs, enumerable: true });
-  return api;
+  return { render, renderAnimated, ANIM_MS, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions };
 })();
 
 // Export CommonJS pour les tests hors navigateur (tools/test_core.cjs) : le
 // diff des positions est une fonction pure, elle se teste sans DOM.
-if (typeof module !== 'undefined' && module.exports) module.exports = BoardRenderer;
+if (typeof module !== 'undefined' && module.exports) module.exports = BoardRendererV256;

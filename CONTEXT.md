@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v248** (`668582a`).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v258**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -141,10 +141,76 @@
   + legende), (4) la **revue sur mobile** (plateau verrouille, bandeau de retour a la partie).
   Principes tenus : ne pas voler de largeur a l'echiquier (tout passe au-dessus ou en dessous,
   jamais a cote) et **une info qui n'apparait que parfois passe pour absente**.
+- **`_mockups/board-animation-2026-09.html` (11/09/2026) - VALIDEE ET IMPLEMENTEE en v257-v258.** Banc
+  d'essai du **deplacement des pieces**, demande par le user (« une meilleure animation, facon
+  chess.com »). Deux plateaux cote a cote qui recoivent le meme coup au meme instant : a gauche le
+  moteur actuel charge depuis `../js/board.js` (donc toujours a jour), a droite le moteur propose,
+  reglable en direct (duree, courbe, moment du fondu de la prise, duree liee a la distance, levee
+  de la piece), avec 6 scenarios (partie italienne, prise en passant, promotion en prenant, les
+  deux roques, grands deplacements, cavalier) et une **rafale** de 6 coups en 0,8 s. Les 4 ecarts
+  avec chess.com sont mesures dans le code, pas juges a l'oeil : 460 ms (contre ~200), redessin
+  complet a chaque coup (`innerHTML`) qui **coupe l'animation en cours**, piece prise effacee
+  200 ms avant l'arrivee de la piece qui la prend, et SMIL (ni compose par le GPU, ni
+  redirigeable). Le moteur propose garde `render()` / `renderAnimated()` a l'identique (27 appels
+  dans 8 fichiers ne bougent pas) : il persiste les noeuds de pieces dans un calque `.bd-pc` et
+  ne redessine que les cases.
+  **Pieges trouves en verifiant la maquette, a reprendre a l'implementation :**
+  (1) **`requestAnimationFrame` ne se declenche pas quand le rendu est en pause** (volet masque,
+  onglet cache) - une piece qui apparaissait via rAF restait invisible ; (2) **une transition CSS
+  figee garde sa valeur de DEPART**, donc un fondu d'entree par transition laisse la piece a
+  `opacity: 0` : les fondus passent par une **animation** (`@keyframes`), dont le retrait rend
+  l'opacite normale, et chaque deplacement a un **minuteur qui pose l'etat final** (transition
+  coupee + recalcul force + transform finale) ; (3) `enableDrag()` positionne le fantome avec
+  `setAttribute('transform', …)`, que le style CSS du nouveau moteur ecraserait - a passer en
+  `style.transform` dans le meme lot. Recette : 6 scenarios x aller-retour, jeu de cases et
+  **position reelle de chaque piece** compares au moteur actuel, 0 ecart, rafale comprise.
+  Le plateau de gauche charge desormais `_mockups/board-v256.js` (copie figee de l'ancien moteur),
+  sans quoi les deux colonnes montreraient le meme moteur.
 - Prototypes/mockups (non prod), tous deplaces dans `_mockups/` en v186: `home-redesign-mockup.html` (maquette accueil mobile, v173), `home-redesign-desktop-mockup.html` (maquette accueil desktop, v173), `mockup.html`, `redesign-mockup.html`, `openings-tree-mockup.html`, `openings-tree-visual.html`, `mon-bilan-10min.html` (bilan standalone des parties 10 min ; rafraîchi le 11/08/2026 à 53 parties, mai→11 août : 23V/29D/1N, 43% de victoires, Elo 346, 15 mats subis - stats moteur précision 84/83 & 2,2 gaffes/défaite conservées telles quelles, non recalculées sans re-run Stockfish. Données via l'API publique chess.com `nimokaji`, filtre TimeControl=600).
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v257-v258 - LE DEPLACEMENT DES PIECES, REFAIT (moteur d'animation).** Demande du user : « une
+  meilleure animation, facon chess.com, avec un effet sur la piece (ombre, flou) ». Maquette
+  `_mockups/board-animation-2026-09.html` d'abord, puis implementation. Les 4 ecarts avaient ete
+  **mesures dans le code** : 460 ms (chess.com ~200), `innerHTML` a chaque coup (donc une animation
+  en cours **coupee net**), piece prise effacee 200 ms avant l'arrivee, et SMIL (ni compose par le
+  GPU, ni redirigeable).
+  1. **Des noeuds de pieces qui survivent.** Le plateau a deux couches : `<g class="bd-sq">` (les
+     64 cases, redessinees a chaque coup) et `<g class="bd-pc">` (une piece = un `<g data-sq>`
+     conserve). `svgEl.__bd = { fen, nodes, pc, flip }` retient ce qui est dessine. On ne redessine
+     a fond que si on n'est pas sur de l'ecran : `fen` differente de `prevFen`, plateau retourne
+     entre-temps, ou noeud de depart introuvable.
+  2. **Transition CSS sur `transform`** (et non l'attribut SVG) : une animation interrompue est
+     **redirigee depuis la position reelle** de la piece. C'est LE gain - avant, tout enchainement
+     plus rapide que la duree faisait sauter la piece, et la repetition clavier tourne autour de
+     30 ms, donc parcourir une partie a la fleche ne montrait jamais une animation entiere.
+  3. **L'effet sur la piece** : elle se souleve (`scale(1.06)`), porte une ombre qui grandit puis
+     retombe, et prend un **flou de vitesse** proportionnel a la distance (`--bd-bl`, plafonne a
+     0,9 unite). Ombre + flou sont une **animation `bd-fly`** sur `filter`, la levee est dans le
+     `transform` (on ne peut pas avoir transition ET animation sur la meme propriete).
+  4. **La piece prise tient sa case** jusqu'a 62 % du trajet (`CAP_HOLD`), puis s'efface sous la
+     piece qui arrive : on voit une prise, plus une disparition suivie d'une arrivee.
+  5. **Reglage de vitesse** (Aucune / Rapide 130 / Normale 200 / Lente 320 / Glissee 460) dans une
+     section **Reglages** de l'accueil, avec un apercu qui rejoue un coup a chaque changement,
+     memorise en `localStorage` (`ca_anim_speed`). **`renderAnimated` ignore la duree passee par
+     l'appelant** (sauf un 0 explicite) : trois modules avaient copie `BoardRenderer.ANIM_MS` au
+     chargement et seraient restes sur l'ancienne valeur. `ANIM_MS` est devenu un getter.
+  - **Les 3 pieges, tous rencontres pour de vrai :** (a) **`requestAnimationFrame` ne se declenche
+    pas quand le rendu est en pause** (onglet cache, volet masque) - une piece qui apparaissait par
+    rAF restait invisible ; (b) **une transition CSS figee garde sa valeur de DEPART**, donc un
+    fondu d'entree par transition laisse la piece a `opacity: 0` : les fondus passent par une
+    **animation** (`@keyframes bd-in/bd-out`, dont le retrait rend l'opacite normale) et chaque vol
+    a un **minuteur qui pose l'etat final** (transition coupee + recalcul force + transform finale) ;
+    (c) `enableDrag()` placait le fantome avec `setAttribute('transform', …)`, que le style CSS des
+    pieces ecrase desormais - passe en `style.transform`.
+  - **Recette :** 4 scenarios (italienne 20 coups, prise en passant, promotion en prenant, les deux
+    roques) joues **aller et retour**, position reelle de chaque piece verifiee contre la FEN a
+    chaque demi-coup : 0 ecart. **Rafale** : 20 coups enchaines toutes les 80 ms avec une animation
+    de 320 ms, aller-retour, etat final exact et 32 noeuds (aucune fuite). Glisser-depose simule
+    (fantome qui suit, coup emis, plateau juste, fantome retire). 94 tests unitaires OK.
+  - `_mockups/board-v256.js` = **copie figee de l'ancien moteur** (renomme `BoardRendererV256`)
+    pour que le banc d'essai garde son point de comparaison maintenant que `js/board.js` a change.
 - **v253-v256 (SHIPPED `9081784`, verifie en live sur telephone 375 px) - LE MODE COACH SUR TELEPHONE.** Signale par le user (« c'est maintenant tres bien
   sur desktop mais sur mobile moins - pas de barre blanc vs noir, pas d'acces a la liste des coups
   et navigation, pas d'acces au gain de materiel »). Verification en 375 px : les trois infos

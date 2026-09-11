@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '256';
+window.APP_VERSION = '258';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -466,6 +466,28 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     <section class="recent-section" id="recent-section" hidden>
       <div class="home-sec-label">Parties récentes</div>
       <div id="recent-list"></div>
+    </section>
+
+    <!-- Réglages -->
+    <section class="home-settings">
+      <div class="home-sec-label">Réglages</div>
+      <div class="hs-row">
+        <div class="hs-txt">
+          <span class="hs-title">Animation des pièces</span>
+          <span class="hs-sub">La vitesse du glissement, sur tous les échiquiers de l'app.</span>
+        </div>
+        <div class="hs-seg" id="anim-speed" role="group" aria-label="Vitesse de l'animation des pièces">
+          <button type="button" data-speed="none">Aucune</button>
+          <button type="button" data-speed="fast">Rapide</button>
+          <button type="button" data-speed="normal">Normale</button>
+          <button type="button" data-speed="slow">Lente</button>
+          <button type="button" data-speed="glide">Glissée</button>
+        </div>
+      </div>
+      <div class="hs-demo">
+        <svg id="anim-demo" viewBox="0 0 360 360" aria-hidden="true"></svg>
+        <span class="hs-demo-txt">Aperçu : le cavalier rejoue son coup à chaque changement.</span>
+      </div>
     </section>
 
   </div><!-- /home-main -->
