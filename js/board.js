@@ -109,8 +109,8 @@ const BoardRenderer = (() => {
   }
 
   // Le plateau tient en DEUX couches : les cases (redessinees a chaque coup,
-  // 64 rects) et les pieces (des noeuds qui SURVIENNENT d'un coup a l'autre).
-  // `svgEl.__bd` retient la position dessinee et le noeud de chaque case.
+  // 64 rects) et les pieces (des noeuds qui SURVIVENT d'un coup a l'autre).
+  // `svgEl.__bd` retient la position dessinee et le noeud de chaque piece.
   function render(svgEl, fen, lastMove) {
     const { boardHtml, pieces } = buildBoard(fen, lastMove);
     let html = `<g class="bd-sq">${boardHtml}</g><g class="bd-pc">`;
@@ -274,6 +274,10 @@ const BoardRenderer = (() => {
     const g = st.nodes[sq];
     delete st.nodes[sq];
     if (!g) return;
+    // Une piece en train de s'effacer n'est plus sur sa case : sans ca, un
+    // glisser-depose lance juste apres la prise pourrait l'attraper, elle, et
+    // pas la piece qui vient d'arriver.
+    g.removeAttribute('data-sq');
     const delay = Math.round(ms * CAP_HOLD);
     const fade = Math.max(90, ms - delay);
     g.style.animation = `bd-out ${fade}ms linear ${delay}ms both`;
@@ -355,6 +359,7 @@ const BoardRenderer = (() => {
     for (const t of promo) {
       fly(st, t.g, t.q.from, t.q.to, ms);
       t.g.style.animation = `bd-out ${fade}ms linear ${late}ms both`;
+      t.g.removeAttribute('data-sq');          // le pion cede la case a la dame
       clearTimeout(t.g.__bdT);
       setTimeout(() => t.g.remove(), ms + 120);
       st.nodes[t.q.to] = appear(st, t.q.piece, t.q.to, fade, late);

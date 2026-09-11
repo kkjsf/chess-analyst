@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v258**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v259**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,7 +170,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-- **v257-v258 - LE DEPLACEMENT DES PIECES, REFAIT (moteur d'animation).** Demande du user : « une
+- **v257-v259 - LE DEPLACEMENT DES PIECES, REFAIT (moteur d'animation).** Demande du user : « une
   meilleure animation, facon chess.com, avec un effet sur la piece (ombre, flou) ». Maquette
   `_mockups/board-animation-2026-09.html` d'abord, puis implementation. Les 4 ecarts avaient ete
   **mesures dans le code** : 460 ms (chess.com ~200), `innerHTML` a chaque coup (donc une animation
@@ -209,6 +209,9 @@
     chaque demi-coup : 0 ecart. **Rafale** : 20 coups enchaines toutes les 80 ms avec une animation
     de 320 ms, aller-retour, etat final exact et 32 noeuds (aucune fuite). Glisser-depose simule
     (fantome qui suit, coup emis, plateau juste, fantome retire). 94 tests unitaires OK.
+  - Detail qui evite un bug rare : une piece en train de s'effacer (prise, ou pion qui se promeut)
+    **perd son `data-sq`**, sinon un glisser-depose lance dans les 280 ms suivant une prise pouvait
+    attraper le fantome de la piece mangee au lieu de celle qui venait d'arriver.
   - `_mockups/board-v256.js` = **copie figee de l'ancien moteur** (renomme `BoardRendererV256`)
     pour que le banc d'essai garde son point de comparaison maintenant que `js/board.js` a change.
 - **v253-v256 (SHIPPED `9081784`, verifie en live sur telephone 375 px) - LE MODE COACH SUR TELEPHONE.** Signale par le user (« c'est maintenant tres bien
