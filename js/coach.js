@@ -28,6 +28,24 @@ const Coach = (() => {
   let hostedInfo = null;
   let syncedOnce = false; // feed the SRS deck once per session, or when data changes
   let dataPromise = null; // Coach.ensureData() : chargement partagé, une seule fois
+  let hostedOnce = false; // le bilan serveur (1,4 Mo) n'est tiré qu'une fois par session
+  // Sections repliables du bilan : « Résultats » ouvert d'office, le reste replié
+  // tant que l'utilisateur ne l'a pas ouvert lui-même. Voir group().
+  const GROUP_KEY = 'ca_coach_open';
+  const GROUP_DEFAULT = { results: true, errors: false, style: false, action: false };
+  function groupState() {
+    try { return Object.assign({}, GROUP_DEFAULT, JSON.parse(localStorage.getItem(GROUP_KEY) || '{}')); }
+    catch (_) { return Object.assign({}, GROUP_DEFAULT); }
+  }
+  function groupOpen(k) { return !!groupState()[k]; }
+  function setGroupOpen(k, v) {
+    const st = groupState(); st[k] = !!v;
+    try { localStorage.setItem(GROUP_KEY, JSON.stringify(st)); } catch (_) {}
+  }
+  function bindGroups() {
+    document.querySelectorAll('#coach-dashboard details.coach-group').forEach(d =>
+      d.addEventListener('toggle', () => setGroupOpen(d.dataset.group, d.open)));
+  }
   // Whole-page cadence filter. Defaults to 'all' (rapid + daily, minus
   // bullet/blitz) so Coach's default view matches exactly what the SRS trainer
   // drills — one and the same set of mistakes. The chips still let you narrow
@@ -140,7 +158,7 @@ const Coach = (() => {
     let wiped = false;
     if (owner && owner !== user) {
       await clearStore();
-      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null;
+      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null; hostedOnce = false;
       wiped = true;
     }
     await setMeta('owner', user);
@@ -300,11 +318,16 @@ const Coach = (() => {
   // ─────────────── Hosted analysis (GitHub Action output) ───────────────
   // Server-computed analysis is authoritative. Falls back gracefully if the
   // file doesn't exist yet (app then works fully in local-engine mode).
-  async function loadHosted() {
+  // `force` = l'utilisateur a touché « Actualiser ». Sinon on laisse le cache HTTP
+  // revalider : `no-store` interdisait le 304 et retéléchargeait les 1,4 Mo du
+  // bilan À CHAQUE ouverture de l'onglet, pour un fichier régénéré une fois par
+  // semaine. `no-cache` revalide sans jamais servir de périmé — même fraîcheur,
+  // corps vide quand rien n'a bougé. Voir aussi le garde `hostedOnce` de show().
+  async function loadHosted(force) {
     if (getUser().toLowerCase() !== HOSTED_USER) return null; // hosted set is one account's games
     let data;
     try {
-      const r = await fetch(HOSTED_URL, { cache: 'no-store' });
+      const r = await fetch(HOSTED_URL, { cache: force ? 'no-store' : 'no-cache' });
       if (!r.ok) return null;
       data = await r.json();
     } catch (_) { return null; }
@@ -374,7 +397,13 @@ const Coach = (() => {
   function stop() { stopFlag = true; }
 
   // ─────────────── Aggregation helpers ───────────────
-  function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && !excludedOpp(g.oppName) && !skipCadence(g.timeClass)); }
+  // `rated` écarte les parties amicales et les bots : 9 parties du compte, TOUTES
+  // gagnées (dont une contre Coach-Magnus, un bot noté 900, avec ses reprises),
+  // gonflaient le taux de victoire journalier de 49 à 53 % et faussaient
+  // « Ton vrai niveau ». Le drapeau était stocké depuis toujours mais ne servait
+  // qu'à la série Elo.
+  function ratedGame(g) { return g.rated !== false; }
+  function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && ratedGame(g) && !excludedOpp(g.oppName) && !skipCadence(g.timeClass)); }
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
   function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
   function fmtDate(ts) { const d = new Date(ts * 1000); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }); }
@@ -385,15 +414,33 @@ const Coach = (() => {
   // (analysis.js, |éval| < 3.0), sinon les compteurs bruts des parties analysées
   // avant ce changement — sans quoi tout le bilan tomberait à vide en attendant
   // la prochaine passe complète du coach serveur. Voir CONTESTED_CP.
+  //
+  // ⚠ Le repli est PAR PARTIE, jamais par phase. Il l'a été, et ça annulait toute
+  // la correction : une partie dont la finale s'est jouée entièrement en position
+  // décidée a `contested.endgame.count === 0`, ce qui est EXACTEMENT le cas visé —
+  // et retomber alors sur le compteur brut réinjectait la précision saturée. 20 des
+  // 68 parties rapides y retombaient, et comme ce sont celles à ~100 %, elles
+  // écrasaient la moyenne : la finale s'affichait à 95 % (= le chiffre brut) au lieu
+  // de ses 68 % réels, et se retrouvait couronnée « point fort ».
+  // Zéro coup disputé dans une phase, c'est une contribution nulle, pas un repli.
   function phasePool(a, p) {
     const c = a.phaseAccuracyContested;
-    if (c && c[p] && c[p].count) return c[p];
+    if (c) return c[p] || null;
     return (a.phaseAccuracy && a.phaseAccuracy[p]) || null;
   }
   // Vrai dès qu'au moins une partie du lot porte les compteurs disputés : sert
-  // uniquement à nommer la métrique honnêtement dans l'interface.
+  // uniquement à nommer la métrique honnêtement dans l'interface. Même règle que
+  // `phasePool` — la présence de l'objet suffit, une phase vide est une phase sans
+  // coup disputé, pas une donnée manquante.
   function hasContested(an) {
-    return an.some(g => { const c = g.analysis && g.analysis.phaseAccuracyContested; return c && ['opening', 'middle', 'endgame'].some(p => c[p] && c[p].count); });
+    return an.some(g => !!(g.analysis && g.analysis.phaseAccuracyContested));
+  }
+  // Erreurs par phase, disputées quand on les a : afficher « 95 % de précision en
+  // position disputée · 27 err. » en mélangeant les deux bases n'avait pas de sens.
+  function phaseErrOf(a, p) {
+    const c = a.phaseErrorsContested;
+    if (c && typeof c[p] === 'number') return c[p];
+    return (a.phaseErrors && a.phaseErrors[p]) || 0;
   }
   const accLabel = an => hasContested(an) ? 'précision en position disputée' : 'précision';
 
@@ -446,14 +493,28 @@ const Coach = (() => {
     // together (results with results, errors with errors …) with a clear
     // labelled band between categories — much easier to scan on desktop than
     // one long undifferentiated masonry.
-    const group = (key, title, items) => {
+    // Les sections autres que la premiere sont REPLIABLES, et fermees par defaut.
+    // Le tableau de bord pesait 27 cartes, 2 466 mots et 12 645 px, soit plus de
+    // 15 ecrans de telephone d'affilee - « Nationalites de tes adversaires » a la
+    // meme place visuelle que la conversion. Rien n'est supprime : tout reste a un
+    // geste, mais l'ecran s'ouvre desormais sur la priorite et les essentiels.
+    // L'etat d'ouverture est memorise (`ca_coach_open`), le contenu reste dans le
+    // DOM meme replie donc les bind* fonctionnent sans changement.
+    const group = (key, title, items, open) => {
       const inner = items.filter(Boolean).join('');
       // Treat an empty hero-row wrapper as no content.
       const meaningful = inner.replace(/<div class="coach-hero-row"><\/div>/g, '').trim();
-      return meaningful ? `<section class="coach-group coach-group-${key}">
+      if (!meaningful) return '';
+      const n = (inner.match(/coach-card/g) || []).length;
+      if (open === true) return `<section class="coach-group coach-group-${key}">
         <h2 class="coach-group-head">${title}</h2>
         <div class="coach-group-cards">${inner}</div>
-      </section>` : '';
+      </section>`;
+      const isOpen = groupOpen(key);
+      return `<details class="coach-group coach-group-${key}" data-group="${key}"${isOpen ? ' open' : ''}>
+        <summary class="coach-group-head"><span>${title}</span><span class="coach-group-n">${n} carte${n > 1 ? 's' : ''}</span></summary>
+        <div class="coach-group-cards">${inner}</div>
+      </details>`;
     };
     const cards = an.length
       ? group('now', 'Vue d\'ensemble', [
@@ -464,7 +525,7 @@ const Coach = (() => {
           `<div class="coach-hero-row">${renderVsStronger(an)}${renderPace(an)}</div>`,
           renderConvertCta(an),
           renderRecentGames(anAll)
-        ]) +
+        ], true) +
         group('results', 'Résultats & progression', [
           renderTrends(an, allForTc),
           renderProgressStory(an),
@@ -499,6 +560,7 @@ const Coach = (() => {
     body.innerHTML = renderFilterBar(anAll) + cards;
     body.dataset.ready = '1';
     bindFilterBar();
+    bindGroups();
     if (an.length) {
       bindVigilance();
       bindFocus();
@@ -567,7 +629,7 @@ const Coach = (() => {
         // Switching accounts mid-session: wipe the previous account's games so
         // the two never mix, then pull the new account's games.
         await clearStore();
-        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null;
+        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null; hostedOnce = false;
         await setMeta('owner', next);
         render();
         onRefresh();
@@ -877,6 +939,10 @@ const Coach = (() => {
       });
       // Le meilleur candidat = le plus joué parmi ceux au score correct, sinon
       // simplement le plus joué. On ne recommande pas une ligne vue 2 fois.
+      // Le critère de choix est le SCORE : c'est donc le score qu'on affiche.
+      // Afficher la précision à la place laissait croire que la ligne avait été
+      // retenue pour ça, et pouvait la donner à 72 % deux centimètres au-dessus
+      // d'une barre qui la donne à 46 %.
       const solid = rows.filter(r => r.n >= 4).sort((a, b) => (b.score - a.score) || (b.n - a.n));
       return { rows: rows.sort((a, b) => b.n - a.n), pick: solid[0] || null, count: rows.length };
     };
@@ -891,7 +957,7 @@ const Coach = (() => {
       // pas te dire « garde celle-là » : ce qui se choisit, c'est ta réponse.
       const rec = mine
         ? (o.pick
-            ? `Garde <b>${esc(o.pick.name)}</b> (${o.pick.n} parties, ${o.pick.acc}% de précision) et joue-la à chaque fois.`
+            ? `Garde <b>${esc(o.pick.name)}</b> (${o.pick.n} parties, ${Math.round(o.pick.score * 100)}% de points marqués) et joue-la à chaque fois.`
             : `Aucune ligne assez jouée pour en faire ton système : choisis-en une et tiens-la.`)
         : `Ici la famille est l'ouverture de l'adversaire, pas la tienne : ce qui se choisit, c'est ta <b>réponse</b>. Fixe-en <b>une contre 1.e4</b> et <b>une contre 1.d4</b>, et joue-les toujours.`;
       return `<div class="sys-row"><span class="sys-ic">${ic}</span><div><b>${lbl}</b> — ${spread}. ${rec}</div></div>`;
@@ -1019,33 +1085,67 @@ const Coach = (() => {
   }
 
   // ── Erreurs répétées: the exact same losing move across several games ──
+  //
+  // Le classement ne filtre PLUS sur les motifs tactiques. Il le faisait, et il
+  // ratait de ce fait les deux coups les plus répétés de l'archive : la poussée du
+  // pion g devant son propre roi, `g5` 13 fois avec les Noirs et `g3` 12 fois avec
+  // les Blancs — 25 fois le même geste, invisible parce qu'aucun motif tactique
+  // nommé ne s'y accroche. Il montrait `f3` et `Fb5` à la place. Le motif reste
+  // utile pour le bouton d'entraînement, il n'a rien à faire dans le tri.
   function renderRepeated(an) {
     if (typeof Training === 'undefined' || !Training.detectMotif) return '';
     const tactical = Training.TACTICAL || [];
     const labels = Training.MOTIF_LABELS || {};
     const seen = {};
+    const files = {};   // roll-up par colonne pour les poussées de pion
     an.forEach(g => (g.analysis.blunderList || []).forEach(b => {
       if (!b.fenBefore || !b.playedSan) return;
-      const motif = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
-      if (!tactical.includes(motif)) return;
       const san = b.playedSan.replace(/[+#!?]+$/, '');
-      const key = san + '|' + motif;
-      const e = seen[key] = seen[key] || { san, motif, n: 0, games: new Set() };
+      const motif = Training.detectMotif(b.fenBefore, b.bestUci, g.userColor, b.playedSan);
+      const e = seen[san] = seen[san] || { san, n: 0, games: new Set(), motifs: {}, blunders: 0 };
       e.n++; e.games.add(g.uuid);
+      e.motifs[motif] = (e.motifs[motif] || 0) + 1;
+      if (b.type === 'blunder') e.blunders++;
+      // Poussée de pion simple (« g5 », « h4 ») : on cumule aussi par COLONNE, les
+      // deux couleurs confondues. Le même geste s'écrit g5 en Noirs et g3 en Blancs.
+      if (/^[a-h][1-8]$/.test(san)) {
+        const f = san[0];
+        const o = files[f] = files[f] || { f, n: 0, games: new Set(), w: 0, b: 0 };
+        o.n++; o.games.add(g.uuid);
+        if (g.userColor === 'w') o.w++; else o.b++;
+      }
     }));
+    const dominant = e => Object.keys(e.motifs).sort((a, b) => e.motifs[b] - e.motifs[a])[0];
     const reps = Object.values(seen)
       .filter(e => e.n >= 3 && e.games.size >= 2)
       .sort((a, b) => b.n - a.n)
-      .slice(0, 3);
-    if (!reps.length) return '';
+      .slice(0, 4);
+    // La colonne n'est mise en avant que si elle pèse nettement plus qu'un coup
+    // isolé et qu'elle traverse vraiment l'archive.
+    const push = Object.values(files)
+      .filter(o => o.n >= 8 && o.games.size >= 5 && o.w > 0 && o.b > 0)
+      .sort((a, b) => b.n - a.n)[0];
+    if (!reps.length && !push) return '';
     const canDrill = typeof Training.showMotif === 'function';
-    const rows = reps.map(e =>
-      `<div class="coach-repeat-row"><span class="coach-repeat-san">${esc(e.san)}</span>
-        <span class="coach-repeat-txt"><b>${e.n} fois</b> dans ${e.games.size} parties — ${esc((labels[e.motif] || e.motif).toLowerCase())}</span>
-        ${canDrill ? `<button class="coach-repeat-btn" data-motif="${e.motif}">🎯</button>` : ''}</div>`).join('');
+    const rows = reps.map(e => {
+      const m = dominant(e);
+      const tag = e.blunders >= 3 && e.blunders / e.n >= 0.6
+        ? `dont <b>${e.blunders} gaffes</b>`
+        : esc((labels[m] || m).toLowerCase());
+      return `<div class="coach-repeat-row"><span class="coach-repeat-san">${esc(e.san)}</span>
+        <span class="coach-repeat-txt"><b>${e.n} fois</b> dans ${e.games.size} parties — ${tag}</span>
+        ${canDrill && tactical.includes(m) ? `<button class="coach-repeat-btn" data-motif="${m}">🎯</button>` : ''}</div>`;
+    }).join('');
+    const pushRow = push ? `<div class="coach-repeat-head">
+        <span class="coach-repeat-san">pion ${push.f}</span>
+        <span class="coach-repeat-txt"><b>${push.n} poussées coûteuses</b> dans ${push.games.size} parties —
+        ${push.w} avec les Blancs, ${push.b} avec les Noirs. C'est le même geste des deux côtés :
+        avancer ce pion devant ton propre roi ouvre les lignes chez toi.</span>
+      </div>` : '';
     return `<div class="home-card coach-card coach-repeat" id="coach-repeat">
       <h3>🔁 La même erreur revient</h3>
-      <p class="coach-focus-sub">Ces coups précis t'ont coûté du matériel <b>plusieurs fois</b>. Quand l'un d'eux te démange, c'est le moment de prendre 20 secondes.</p>
+      <p class="coach-focus-sub">Les coups qui t'ont coûté du matériel <b>le plus souvent</b>. Un coup n'est pas mauvais en soi, mais quand le même te coûte cher dix fois, c'est un réflexe à revoir — pas une malchance.</p>
+      ${pushRow}
       <div class="coach-repeat-list">${rows}</div>
     </div>`;
   }
@@ -1097,14 +1197,15 @@ const Coach = (() => {
     // couronnée alors qu'elle était seulement facile. Sans les compteurs
     // « position disputée » (analysis.js), on ne désigne que le maillon faible.
     if (best && worst && best.k !== worst.k && contested)
-      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de ${accLabel(an)}) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%). ${phaseAdvice(worst.k)}`);
+      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de ${accLabel(an)}) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%).`);
     else if (worst)
-      s.push(`Ton maillon faible est <b>${worst.l}</b> (${worst.a}% de précision). ${phaseAdvice(worst.k)}`);
+      s.push(`Ton maillon faible est <b>${worst.l}</b> (${worst.a}% de précision).`);
     if (blRate > 0)
       s.push(`Tu lâches une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
     if (priorWin !== null && Math.abs(recentWin - priorWin) >= 15)
       s.push(`Tendance récente : tu <b>${recentWin > priorWin ? 'progresses' : 'marques le pas'}</b> (${recentWin}% sur tes ${TREND_WIN} dernières parties contre ${priorWin}% sur les ${TREND_WIN} d'avant).`);
-    s.push(`Concrètement : ouvre le <b>Mode entraînement</b> ci-dessous (tes erreurs y deviennent des exercices) et relis tes parties perdues dans <b>${worst.l}</b>.`);
+    // Pas de « concrètement, fais ceci » ici : la prescription unique de l'écran
+    // est celle de renderFocus, tout en haut. Ce paragraphe décrit, il n'ordonne pas.
 
     return `<div class="home-card coach-card coach-narrative" id="coach-word"><h3>📋 Le mot du coach</h3><p>${s.join(' ')}</p></div>`;
   }
@@ -1276,14 +1377,31 @@ const Coach = (() => {
     const y = (r) => H - pad - ((r - min) / range) * (H - 2 * pad);
     const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.myRating).toFixed(1)}`).join(' ');
     const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="2.4" fill="${resColor(p)}"/>`).join('');
-    const last = ratings[ratings.length - 1], first = ratings[0], delta = last - first;
+    const last = ratings[ratings.length - 1], first = ratings[0];
+    // Le delta AFFICHÉ exclut le classement provisoire. `calibInfo` savait déjà le
+    // faire et ne servait qu'au plein écran, si bien que la vignette montrait
+    // « 356 ▼ -404 » : elle soustrayait simplement la dernière valeur de la
+    // première, or les 8 premières parties d'une cadence sont un placement
+    // (760 → 392 en huit parties). Hors fenêtre le vrai chiffre est -36 en rapide
+    // et +153 en journalier. C'est le nombre le plus gros de l'écran, il ne peut
+    // pas être le seul à ignorer une correction que l'app calcule déjà.
+    const info = calibInfo(pts);
+    const useCal = info.showCal && ratings.length > info.calN + 2;
+    const base = useCal ? ratings[info.calN] : first;
+    const delta = last - base;
+    const floor = Math.min(...(useCal ? ratings.slice(info.calN) : ratings));
+    const note = useCal
+      ? `hors classement provisoire · plancher ${floor} (${last - floor >= 0 ? '+' : ''}${last - floor})`
+      : '';
     return `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
       <div class="coach-rating-head"><span>Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶ plein écran</span></span>
         <b class="${delta >= 0 ? 'up' : 'down'}">${last} ${delta >= 0 ? '▲ +' + delta : '▼ ' + delta}</b></div>
       <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg">
+        ${useCal ? `<rect x="${pad}" y="0" width="${(x(info.calN) - pad).toFixed(1)}" height="${H}" fill="#ffffff" opacity="0.05"/>` : ''}
         <path d="${path}" fill="none" stroke="#e2b857" stroke-width="2"/>
         ${dots}
-      </svg></div>`;
+      </svg>
+      ${note ? `<div class="coach-rating-note">${note}</div>` : ''}</div>`;
   }
 
   // Rich fullscreen chart for one pool: calibration zone, real-level band,
@@ -1481,37 +1599,42 @@ const Coach = (() => {
   // from. Groups by French family name, scores each (win + ½ draw), and shows a
   // ranked bar list + a per-colour headline + best/worst call-outs — the "where
   // do I actually win/lose by opening" view.
+  // ⚠ Les deux couleurs sont comptées SÉPARÉMENT. Elles ne l'étaient pas, et une
+  // même ligne mélangeait deux choses opposées : avec les Blancs la famille
+  // détectée est TON ouverture, avec les Noirs c'est celle de l'ADVERSAIRE.
+  // « Viennoise, 13 parties » valait donc 9 Viennoises jouées par lui + 4 subies,
+  // et les verdicts « la plus rentable / la plus fragile » sortaient du mélange —
+  // alors que la carte « Ton système », juste au-dessus, explique précisément
+  // pourquoi ce mélange n'a pas de sens.
   function renderOpeningPerf(an) {
     if (an.length < 4) return '';
-    const colorScore = (c) => {
-      const gs = an.filter(g => g.userColor === c);
-      if (!gs.length) return null;
-      const w = gs.filter(g => g.result === 'win').length;
-      const d = gs.filter(g => g.result === 'draw').length;
-      return { n: gs.length, score: (w + d * 0.5) / gs.length };
-    };
-    const wc = colorScore('w'), bc = colorScore('b');
-    const fam = {};
-    an.forEach(g => {
-      const f = frenchOpening(g).family;
-      if (!f || f === 'Inconnue') return;
-      const o = fam[f] || (fam[f] = { n: 0, w: 0, d: 0, l: 0 });
-      o.n++;
-      if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++; else o.l++;
-    });
     const MIN = 3;
     // Lister une ouverture dès 3 parties est utile. La NOMMER « la plus fragile »
     // demande beaucoup plus : sur 2 ou 3 parties le score est du bruit (l'app
     // conseillait de réviser la Petrov sur la foi de deux défaites). Au-dessous
     // de MIN_VERDICT on affiche la ligne, sans conclusion.
     const MIN_VERDICT = 8;
-    const ranked = Object.keys(fam)
-      .map(name => { const o = fam[name]; return { name, n: o.n, w: o.w, d: o.d, l: o.l, score: (o.w + o.d * 0.5) / o.n }; })
-      .filter(r => r.n >= MIN)
-      .sort((a, b) => b.n - a.n);
-    if (!ranked.length) return '';
-    const byScore = ranked.slice().sort((a, b) => b.score - a.score || b.n - a.n);
-    const best = byScore[0], worst = byScore[byScore.length - 1];
+    const side = (c) => {
+      const gs = an.filter(g => g.userColor === c);
+      if (!gs.length) return null;
+      const fam = {};
+      gs.forEach(g => {
+        const f = frenchOpening(g).family;
+        if (!f || f === 'Inconnue') return;
+        const o = fam[f] || (fam[f] = { n: 0, w: 0, d: 0, l: 0 });
+        o.n++;
+        if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++; else o.l++;
+      });
+      const ranked = Object.keys(fam)
+        .map(name => { const o = fam[name]; return { name, n: o.n, w: o.w, d: o.d, l: o.l, score: (o.w + o.d * 0.5) / o.n }; })
+        .filter(r => r.n >= MIN)
+        .sort((a, b) => b.n - a.n);
+      const w = gs.filter(g => g.result === 'win').length;
+      const d = gs.filter(g => g.result === 'draw').length;
+      return { n: gs.length, score: (w + d * 0.5) / gs.length, ranked };
+    };
+    const wc = side('w'), bc = side('b');
+    if (!wc && !bc) return '';
     const barRow = (r) => {
       const s = Math.round(r.score * 100);
       const cls = s >= 55 ? 'op-good' : s <= 45 ? 'op-bad' : 'op-mid';
@@ -1521,19 +1644,26 @@ const Coach = (() => {
         <span class="op-wdl"><span class="wdl-w">${r.w}</span>/<span class="wdl-d">${r.d}</span>/<span class="wdl-l">${r.l}</span> · ${r.n}p</span>
       </div>`;
     };
-    const colorPill = (o, ic, lbl) => o
-      ? `<span class="op-color">${ic} ${lbl} <b>${Math.round(o.score * 100)}%</b> <span class="op-n">${o.n}p</span></span>` : '';
+    const verdict = (o, mine) => {
+      const solid = o.ranked.slice().sort((a, b) => b.score - a.score || b.n - a.n).filter(r => r.n >= MIN_VERDICT);
+      if (solid.length < 2) return `<div class="coach-note">Pas encore ${MIN_VERDICT} parties sur deux lignes différentes de ce côté — au-dessous, le score est du hasard.</div>`;
+      const b = solid[0], w = solid[solid.length - 1];
+      return mine
+        ? `<div class="coach-flag">💪 Ta plus rentable : <b>${esc(b.name)}</b> (${Math.round(b.score * 100)}% sur ${b.n}p) · ⚠ la plus fragile : <b>${esc(w.name)}</b> (${Math.round(w.score * 100)}% sur ${w.n}p).</div>`
+        : `<div class="coach-flag">💪 Tu t'en sors le mieux contre <b>${esc(b.name)}</b> (${Math.round(b.score * 100)}% sur ${b.n}p) · ⚠ le moins bien contre <b>${esc(w.name)}</b> (${Math.round(w.score * 100)}% sur ${w.n}p) : c'est ta <b>réponse</b> à celle-là qu'il faut fixer.</div>`;
+    };
+    const block = (o, ic, lbl, sub, mine) => !o || !o.ranked.length ? '' : `
+      <div class="op-side">
+        <div class="op-side-head">${ic} <b>${lbl}</b> <span class="op-side-sc">${Math.round(o.score * 100)}%</span> <span class="op-n">${o.n}p</span></div>
+        <p class="op-side-sub">${sub}</p>
+        <div class="op-list">${o.ranked.map(barRow).join('')}</div>
+        ${verdict(o, mine)}
+      </div>`;
     return `<div class="home-card coach-card" id="coach-opening-perf">
       <h3>🎯 Performance par ouverture</h3>
-      <p class="coach-sub2">Ton score (V + ½N) par famille d'ouverture sur tes parties analysées — au moins ${MIN} parties par ligne.</p>
-      <div class="op-colors">${colorPill(wc, '♔', 'avec les Blancs')}${colorPill(bc, '♚', 'avec les Noirs')}</div>
-      <div class="op-list">${ranked.map(barRow).join('')}</div>
-      ${(() => {
-        const solid = byScore.filter(r => r.n >= MIN_VERDICT);
-        if (solid.length < 2) return `<div class="coach-note">Pas encore assez de parties par ouverture (${MIN_VERDICT} minimum) pour désigner une ligne forte ou faible — sur 3 ou 4 parties, le score est du hasard.</div>`;
-        const b = solid[0], w = solid[solid.length - 1];
-        return `<div class="coach-flag">💪 Ta plus rentable : <b>${esc(b.name)}</b> (${Math.round(b.score * 100)}% sur ${b.n}p) · ⚠ la plus fragile : <b>${esc(w.name)}</b> (${Math.round(w.score * 100)}% sur ${w.n}p).</div>`;
-      })()}
+      <p class="coach-sub2">Ton score (V + ½N) par famille, <b>chaque couleur à part</b> — au moins ${MIN} parties par ligne.</p>
+      ${block(wc, '♔', 'Avec les Blancs', "Ce sont TES ouvertures : ce tableau dit lesquelles te rapportent.", true)}
+      ${block(bc, '♚', 'Avec les Noirs', "Ce sont les ouvertures de l'ADVERSAIRE. Le tableau ne dit donc pas quoi jouer, il dit contre quoi tu souffres.", false)}
     </div>`;
   }
 
@@ -1624,7 +1754,7 @@ const Coach = (() => {
     an.forEach(g => {
       const a = g.analysis;
       ['opening', 'middle', 'endgame'].forEach(p => {
-        pe[p] += a.phaseErrors[p] || 0;
+        pe[p] += phaseErrOf(a, p);
         const src = phasePool(a, p);
         if (src) { pa[p].total += src.total; pa[p].count += src.count; }
         if (a.phaseAcpl && typeof a.phaseAcpl[p] === 'number') pc[p].push(a.phaseAcpl[p]);
@@ -1642,12 +1772,17 @@ const Coach = (() => {
     // Only rank phases that actually have moves — an unplayed phase isn't a weakness.
     const worstPhase = phases.filter(p => p.acc !== null).sort((a, b) => a.acc - b.acc)[0];
 
-    // prioritized recommendations
+    // Constats, pas prescriptions. Cette carte listait un « Plan d'action
+    // prioritaire » de trois verbes, alors que « Ta priorité en ce moment » en
+    // haut de l'écran en donne déjà un et que « Le mot du coach » en glissait un
+    // troisième : trois destinations différentes sur une page. La règle « une
+    // prescription par tableau de bord » appartient à renderFocus ; ici on se
+    // contente de décrire ce que les chiffres montrent.
     const recs = [];
-    if (worstPhase && worstPhase.acc < 80) recs.push(`Ton <b>${worstPhase.label.toLowerCase()}</b> est ton maillon faible (${worstPhase.acc}% de précision, ${worstPhase.errors} erreurs). ${phaseAdvice(worstPhase.k)}`);
-    if (blunderRate > 6) recs.push(`Tu commets une gaffe tous les ${Math.round(100 / blunderRate)} coups environ. Avant de jouer, applique la méthode <b>CCT</b> — passe en revue les <b>Checks</b> (échecs), <b>Captures</b> et <b>Threats</b> (menaces) possibles, pour toi comme pour l'adversaire. C'est le réflexe anti-gaffe n°1.`);
-    if (totalMistakes + totalBlunders > 0) recs.push(`Entraîne-toi sur tes <b>${totalMistakes + totalBlunders} erreurs réelles</b> dans la section ci-dessous — c'est le moyen le plus rapide de progresser.`);
-    if (!recs.length) recs.push('Belle régularité ! Continue à analyser et vise moins d\'imprécisions.');
+    if (worstPhase && worstPhase.acc < 80) recs.push(`Ta phase la plus fragile est <b>${worstPhase.label.toLowerCase()}</b> (${worstPhase.acc}% de précision, ${worstPhase.errors} erreurs).`);
+    if (blunderRate > 6) recs.push(`Tu lâches une gaffe tous les <b>${Math.round(100 / blunderRate)} coups</b> environ.`);
+    if (totalMistakes + totalBlunders > 0) recs.push(`Ces chiffres viennent de <b>${totalMistakes + totalBlunders} erreurs réelles</b>, toutes rejouables dans Entraîner.`);
+    if (!recs.length) recs.push('Belle régularité : rien ne ressort comme point faible marqué.');
 
     const phaseRows = phases.map(p => `
       <div class="coach-row">
@@ -1666,8 +1801,9 @@ const Coach = (() => {
         <div class="coach-metric"><b>${totalBlunders}</b><span>gaffes</span></div>
         <div class="coach-metric"><b>${totalMistakes}</b><span>erreurs</span></div>
       </div>
-      <div class="coach-sub">Plan d'action prioritaire</div>
+      <div class="coach-sub">Ce que ça dit</div>
       <ol class="coach-recs">${recs.map(r => `<li>${r}</li>`).join('')}</ol>
+      <p class="coach-cap">Le geste à travailler est en haut de l'écran, dans « Ta priorité en ce moment » — un seul à la fois.</p>
     </div>`;
   }
 
@@ -2600,7 +2736,8 @@ const Coach = (() => {
     const btn = $('#coach-refresh-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⟳ …'; }
     setProgress(true, 0, 'Mise à jour depuis le serveur…');
-    const info = await loadHosted();
+    const info = await loadHosted(true);   // geste explicite : on court-circuite le cache
+    hostedOnce = true;
     try { await sync((s) => setProgress(true, 0, s)); } catch (_) {}
     games = await getAll();
     setProgress(false);
@@ -2701,6 +2838,7 @@ const Coach = (() => {
         } catch (_) { games = []; }
       }
       try { await loadHosted(); } catch (_) {}
+      hostedOnce = true;
       return games.length;
     })();
     return dataPromise;
@@ -2725,7 +2863,11 @@ const Coach = (() => {
     // (still synchronous) classification pass blocks the main thread.
     await raf();
     render(); // instant from local cache
-    const info = await loadHosted(); // server analysis is authoritative
+    // Une seule fois par session : le bilan serveur est régénéré chaque lundi, le
+    // retélécharger à chaque aller-retour dans l'onglet ne rapportait rien et
+    // coûtait 1,4 Mo. « ⟳ Actualiser » reste là pour forcer.
+    const info = hostedOnce ? null : await loadHosted(); // server analysis is authoritative
+    hostedOnce = true;
     const changed = info && !info.unchanged;
     if (changed) { render(); } // unchanged → first render already correct
     else if (!info && !games.length) {

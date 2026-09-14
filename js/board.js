@@ -460,16 +460,24 @@ const BoardRenderer = (() => {
     for (const ch of boardPart) {
       if ('pnbrqkPNBRQK'.includes(ch)) current[ch] = (current[ch] || 0) + 1;
     }
+    // Une promotion retire un pion du plateau sans qu'il ait ete pris : sans ce
+    // decompte, promouvoir faisait apparaitre un pion de plus dans les prises de
+    // l'adversaire. On compte les officiers EN TROP (au-dela du materiel initial)
+    // et on retranche autant de pions manquants.
+    const promos = (set) => set.reduce((n, p) => n + Math.max(0, (current[p] || 0) - (initial[p] || 0)), 0);
+    const side = (officers, pawn, out) => {
+      let extra = promos(officers);
+      for (const p of officers) {
+        const missing = (initial[p] || 0) - (current[p] || 0);
+        for (let i = 0; i < missing; i++) out.push(PIECE_CHAR[p.toLowerCase()]);
+      }
+      const missingPawns = Math.max(0, (initial[pawn] || 0) - (current[pawn] || 0) - extra);
+      for (let i = 0; i < missingPawns; i++) out.push(PIECE_CHAR['p']);
+    };
     const whiteCaptures = [];
     const blackCaptures = [];
-    for (const p of ['q', 'r', 'b', 'n', 'p']) {
-      const missing = (initial[p] || 0) - (current[p] || 0);
-      for (let i = 0; i < missing; i++) whiteCaptures.push(PIECE_CHAR[p]);
-    }
-    for (const p of ['Q', 'R', 'B', 'N', 'P']) {
-      const missing = (initial[p] || 0) - (current[p] || 0);
-      for (let i = 0; i < missing; i++) blackCaptures.push(PIECE_CHAR[p.toLowerCase()]);
-    }
+    side(['q', 'r', 'b', 'n'], 'p', whiteCaptures);
+    side(['Q', 'R', 'B', 'N'], 'P', blackCaptures);
     return { white: whiteCaptures.join(''), black: blackCaptures.join('') };
   }
 

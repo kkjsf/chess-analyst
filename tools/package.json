@@ -8,6 +8,10 @@
     "chess.js": "0.12.1"
   },
   "scripts": {
-    "test": "node test_core.cjs"
+    "test": "node test_core.cjs",
+    "verify:openings": "node verify_openings.cjs",
+    "verify:mates": "node verify_mates.cjs",
+    "verify:lessons": "node verify_lessons.cjs",
+    "verify:final": "node validate_final.cjs"
   }
 }

@@ -1707,7 +1707,11 @@ const CoachGame = (() => {
 
   function exportGames() {
     const st = load();
-    const blob = new Blob([JSON.stringify({ v: 1, exportedAt: Date.now(), device: deviceLabel(), games: st.games }, null, 1)],
+    // Le journal de seances part avec : c'est la seule donnee du bilan qui vivait
+    // uniquement dans le localStorage de l'appareil (voir Training.mergeLog).
+    let log = [];
+    try { if (typeof Training !== 'undefined' && Training.loadLog) log = Training.loadLog(); } catch (_) {}
+    const blob = new Blob([JSON.stringify({ v: 2, exportedAt: Date.now(), device: deviceLabel(), games: st.games, sessions: log }, null, 1)],
       { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1716,18 +1720,21 @@ const CoachGame = (() => {
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
     const io = $('#cg-io');
-    if (io) io.innerHTML = `<b>${st.games.length} partie(s) exportée(s).</b> Ouvre ce fichier depuis l'autre appareil avec « Importer ».`;
+    if (io) io.innerHTML = `<b>${st.games.length} partie(s) exportée(s)</b>${log.length ? ` et <b>${log.length} séance(s) d'entraînement</b>` : ''}. Ouvre ce fichier depuis l'autre appareil avec « Importer ».`;
   }
 
   function importGames(file) {
     if (!file) return;
     const fr2 = new FileReader();
     fr2.onload = () => {
-      let inc = [];
+      let inc = [], sess = [];
       try {
         const o = JSON.parse(String(fr2.result || '{}'));
         inc = Array.isArray(o.games) ? o.games : [];
+        sess = Array.isArray(o.sessions) ? o.sessions : [];
       } catch (_) { inc = []; }
+      let addedLog = 0;
+      try { if (typeof Training !== 'undefined' && Training.mergeLog) addedLog = Training.mergeLog(sess); } catch (_) {}
       const st = load();
       const seen = new Set(st.games.map(g => g.id));
       let added = 0;
@@ -1739,9 +1746,10 @@ const CoachGame = (() => {
       save(st);
       showHistory();
       const io = $('#cg-io');
-      if (io) io.innerHTML = added
+      const logTxt = addedLog ? ` Plus <b>${addedLog} séance(s) d'entraînement</b> : la carte « Est-ce que ça marche ? » des Statistiques en tient compte.` : '';
+      if (io) io.innerHTML = (added
         ? `<b>${added} partie(s) importée(s)</b> sur ${inc.length} du fichier (les autres étaient déjà là).`
-        : `Rien à importer : ces ${inc.length} partie(s) sont déjà dans l'historique.`;
+        : `Rien à importer : ces ${inc.length} partie(s) sont déjà dans l'historique.`) + logTxt;
     };
     fr2.readAsText(file);
   }

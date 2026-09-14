@@ -89,6 +89,7 @@ const App = (() => {
     initConcepts();
     initOpenings();
     initSettings();
+    pruneRoutineKeys();
     refreshHome();
   }
 
@@ -598,7 +599,13 @@ const App = (() => {
     buildSummary(summary, analysis);
     probeEndgameTablebase(analysis);
 
-    $('#screen-import').classList.remove('active');
+    // Balayage COMPLET, comme Coach.show / Training.show / showLearn. On ne
+    // retirait `active` que de #screen-import, si bien qu'ouvrir un rapport depuis
+    // Statistiques (« Voir l'analyse », qui passe par openStoredReport) laissait
+    // #screen-coach actif : `.screen.active` etant en display:flex dans le flux,
+    // les 27 cartes du bilan se reempilaient sous le rapport - 13 005 px de page
+    // en trop. loadPgnAndAnalyze rustinait le cas au coup par coup, plus besoin.
+    $$('.screen').forEach(s => s.classList.remove('active'));
     $('#screen-analysis').classList.add('active');
     setTab('analyser');
     // La timeline a ete CONSTRUITE avant que l'ecran soit affiche : la largeur
@@ -4113,6 +4120,20 @@ const App = (() => {
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   function routineTodayKey() { return 'chess-routine-' + isoDay(new Date()); }
   function routineState() { try { return JSON.parse(localStorage.getItem(routineTodayKey()) || '{}'); } catch (_) { return {}; } }
+  // Une cle par jour, et rien ne les effacait : elles s'empilaient indefiniment.
+  // On ne garde que les 7 derniers jours (la serie n'a besoin que d'hier).
+  function pruneRoutineKeys() {
+    try {
+      const keep = new Set();
+      for (let i = 0; i < 7; i++) { const d = new Date(); d.setDate(d.getDate() - i); keep.add('chess-routine-' + isoDay(d)); }
+      const dead = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('chess-routine-') && k !== 'chess-routine-streak' && !keep.has(k)) dead.push(k);
+      }
+      dead.forEach(k => localStorage.removeItem(k));
+    } catch (_) {}
+  }
 
   function renderRoutine() {
     const list = $('#routine-list');
@@ -4147,11 +4168,15 @@ const App = (() => {
     renderStreak();
   }
 
+  // La serie exigeait les SIX items, « joue une partie en rapide » compris : une
+  // serie tout-ou-rien a ce niveau ne demarre quasiment jamais, donc elle
+  // n'encourageait rien. Un jour compte des que la MOITIE de la routine est faite.
+  const ROUTINE_STREAK_MIN = 3;
   function toggleRoutine(key, checked) {
     const state = routineState();
     state[key] = checked;
     try { localStorage.setItem(routineTodayKey(), JSON.stringify(state)); } catch (_) {}
-    if (ROUTINE_ITEMS.every(it => state[it.key])) bumpStreak();
+    if (ROUTINE_ITEMS.filter(it => state[it.key]).length >= ROUTINE_STREAK_MIN) bumpStreak();
     renderRoutine();
   }
 

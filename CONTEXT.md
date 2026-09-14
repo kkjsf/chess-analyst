@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v259**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v261**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,137 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v260-v261 - LES 14 CONSTATS DE LA REVUE, TOUS CORRIGES.** Verifie en local sur la v261, zero
+  erreur console, `test_core` 94/94, `verify_openings` 121/121, `validate_final` 6/6,
+  `verify_lessons mates` **0 FAIL** (contre 12 avant).
+  - **`phasePool` (coach.js) : le repli devient PAR PARTIE.** `if (c) return c[p] || null;` au lieu
+    de tester `c[p].count`. Une phase disputee vide est une contribution NULLE, pas une donnee
+    manquante. Effet mesure, cadence rapide : la finale passe de **95 % (le chiffre brut) a 78 %**,
+    le milieu de 76 a 70, et « ton point fort » passe de LA FINALE a **L'OUVERTURE**. `hasContested`
+    suit la meme regle (presence de l'objet). Nouveau `phaseErrOf` : les erreurs par phase sont
+    disputees elles aussi, on n'affiche plus « 95 % en position disputee · 27 err. » en melangeant
+    deux bases.
+  - **La vignette Elo branche `calibInfo`.** Elle affiche le delta **hors classement provisoire**
+    plus une ligne « plancher N (+X) », et grise la fenetre de calibrage dans la sparkline.
+    Mesure : rapide **356 ▼ -404 devient 371 ▼ -21** (plancher 266, +105) ; journalier
+    **-211 devient +153**.
+  - **`showAnalysis` (app.js) fait le balayage complet** `$$('.screen').forEach(remove)` comme les
+    3 autres ecrans. Statistiques -> « Voir l'analyse » : hauteur de page **13 823 px -> 818 px**,
+    un seul ecran actif.
+  - **`analyzed()` filtre sur `rated`** (nouveau `ratedGame`). 9 parties non classees ecartees,
+    toutes gagnees, dont une contre le bot Coach-Magnus : journalier **99 -> 90 parties, 53 % -> 49 %**
+    de victoires.
+  - **`renderRepeated` ne filtre plus sur les motifs tactiques** et ajoute un **roll-up par
+    COLONNE** pour les poussees de pion (seuil n>=8, >=5 parties, les deux couleurs). La carte
+    ouvre desormais sur « **pion g : 39 poussees couteuses dans 38 parties, 19 Blancs / 20 Noirs** »
+    au lieu de `f3` et `Fb5`. Un coup dont >=60 % des occurrences sont des gaffes est etiquete
+    « dont N gaffes ».
+  - **`coach-data.json` : `cache:'no-cache'`** (revalidation + 304) au lieu de `no-store`, plus un
+    garde `hostedOnce` - une seule fois par session, « ⟳ Actualiser » force avec `no-store`.
+    1,4 Mo economises a chaque aller-retour dans l'onglet.
+  - **`renderOpeningPerf` separe les deux couleurs** (deux blocs, deux verdicts). « Viennoise 46 %
+    13p » (9 siennes + 4 subies) devient « **Viennoise 67 % 9p** » cote Blancs. Le verdict cote
+    Noirs est reformule : « tu t'en sors le moins bien contre X, c'est ta REPONSE qu'il faut
+    fixer ». Et `renderSystem` **affiche le score, le critere qui l'a fait choisir**, plus la
+    precision - les deux cartes disent maintenant 67 %, plus de contradiction.
+  - **Une seule prescription** : `renderWeakness` passe de « Plan d'action prioritaire » (3 verbes)
+    a « Ce que ca dit » (3 constats) + un renvoi vers la carte du haut ; `renderNarrative` perd son
+    « Concretement : ouvre le Mode entrainement… ».
+  - **Le tableau de bord se replie.** `group()` rend un `<details>` pour les 4 sections autres que
+    « Vue d'ensemble », etat memorise dans `ca_coach_open`, nombre de cartes dans le resume. Rien
+    n'est supprime, tout est a un geste : **12 645 px -> 5 017 px au repos, 15,6 -> 6,2 ecrans**,
+    27 cartes toujours la. Le contenu reste dans le DOM meme replie, donc les `bind*` ne bougent pas.
+  - **Le journal de seances voyage** : `Training.mergeLog` + l'export/import du mode entraineur
+    passe en `v: 2` avec un champ `sessions`. La carte « Est-ce que ca marche ? » n'est plus
+    prisonniere d'un appareil.
+  - **Outillage** : `verify_lessons.cjs` n'exige le mat que si `m.group !== 'finales'`, et un
+    nouveau champ **`outcome: 'win' | 'draw'`** dans mates.js sert de critere aux finales de pions
+    (une finale ne gagne pas de MATERIEL, elle emporte le RESULTAT - le test des tactiques les
+    recalait avec « materiel 0.0 »). **12 FAIL -> 0.** `tools/test_move.cjs` (commite avec une
+    erreur de syntaxe) et `tools/validate_puzzles.cjs` (brouillon testant des candidats jamais
+    livres, 0 FEN partagee avec tactics.js/mates.js) sont **supprimes**. `package.json` expose les
+    4 verificateurs en scripts npm.
+  - **Petites fuites** : `pruneRoutineKeys()` ne garde que 7 jours de cles `chess-routine-*` ; la
+    serie quotidienne demarre a **3 items sur 6** au lieu des 6 (une serie tout-ou-rien ne demarrait
+    jamais) ; `getCapturedPieces` retranche les promotions du compte de pions manquants (promouvoir
+    faisait apparaitre un pion fantome dans les prises adverses).
+  - **⚠ Piege re-rencontre, pour la 2e fois** : ecrire du JS depuis une chaine Python non brute a
+    grave **deux octets 0x08** a la place des `\b` de la regexp de comptage des cartes (elle
+    affichait « 0 carte »). Et il a fallu **bumper 260 -> 261 pour le voir** : le cache HTTP sert
+    `coach.js?v=260` tel quel. Les deux pieges sont deja notes dans la memoire du projet.
+- **2026-09-14 - REVUE COMPLETE sur la v259 (pedagogie + code + hygiene). 14 constats, TOUS
+  CORRIGES depuis en v260-v261 (voir l'entree ci-dessus).** Livrable : `revue_2026-09.html`
+  (racine, gitignore, ne pas servir depuis
+  Pages) + artifact « Le Coach se trompe de verdict »
+  (https://claude.ai/code/artifact/162d2932-2043-441f-a136-e29d8aac2f78). Methode : app servie en
+  local et instrumentee, 741 erreurs de `coach-data.json` rejouees avec chess.js, tout
+  l'outillage `tools/` execute.
+  - **BONNE NOUVELLE, et l'app ne la montre pas : il progresse pour de vrai.** Gaffes pour 100
+    coups par quart, JOURNALIER : 6,50 / 4,38 / 3,77 / 4,31 **pendant que l'Elo adverse monte de
+    672 a 786**. C'est la seule progression du corpus qui ne s'explique pas par une opposition
+    plus faible. En rapide la baisse existe (7,39 -> 5,25 entre moities) mais l'opposition
+    s'allege de 163 points, donc elle prouve moins. **Piege a retenir : agreges, les deux
+    progressions s'ANNULENT** (5,53 -> 5,52) parce que la part de rapide augmente dans la 2e
+    moitie - le chiffre doit rester PAR CADENCE.
+  - **⚠ CONSTAT N°1 : la correction « position disputee » de la v204 est annulee par son propre
+    repli.** `phasePool()` (js/coach.js:388) retombe sur les compteurs bruts **phase par phase**
+    des que le compteur disputé vaut 0. Or une partie dont la finale s'est jouee entierement en
+    position decidee est EXACTEMENT le cas vise : 20 parties rapides sur 68 y retombent, et comme
+    ce sont celles a ~100 %, elles ecrasent la moyenne. Mesure (rapide) : affiche **95 %**, brut
+    95 %, **vrai disputé 68 %**. Le milieu affiche 76 pour 68 reel. L'app dit donc toujours
+    « ton point fort est la finale (95 % de precision en position disputee) », le verdict que la
+    v204 avait ete ecrite pour tuer. **Le repli doit etre PAR PARTIE** (l'objet
+    `phaseAccuracyContested` existe-t-il ?), pas par phase. Vrai classement : ouverture 84 (point
+    fort), milieu 68 et finale 68 a egalite.
+  - **⚠ CONSTAT N°2 : la vignette Elo affiche « 356 ▼ -404 »** alors que `calibInfo()`
+    (js/coach.js:1241) sait deja exclure le classement provisoire et sert au graphique plein
+    ecran. `ratingChart` (1266) fait simplement `last - first`. Hors fenetre : **-36 en rapide**
+    (+90 depuis le plancher 266), **+153 en journalier** (que l'app afficherait -211). Le chiffre
+    le plus gros de l'ecran est celui qu'aout avait demontre faux.
+  - **CONSTAT N°9 (code, reproduit par le chemin normal) : DEUX ECRANS ACTIFS a la fois.**
+    Statistiques -> « 📊 Voir l'analyse » -> `openStoredReport` -> `showAnalysis`, qui ne retire
+    `active` que de `#screen-import` (js/app.js:601-602). `#screen-coach` la garde, et
+    `.screen.active{display:flex}` etant dans le flux, **13 005 px de tableau de bord se
+    reempilent sous le rapport** (hauteur de page mesuree 13 823 px). `Coach.show`,
+    `Training.show` et `showLearn` font tous les trois le nettoyage complet ; `showAnalysis` est
+    le seul a ne pas le faire (et `loadPgnAndAnalyze` le rustine au cas par cas, signe que le
+    probleme avait deja ete rencontre).
+  - **Autres constats** : `renderRepeated` filtre sur les motifs tactiques et **rate son coup le
+    plus repete** - la poussee du pion g devant son roi, `g5` x13 (12 en Noirs) + `g3` x12 (12 en
+    Blancs) = 25 fois le meme geste ; et `Cd4` (11 occurrences dont **9 gaffes**) ; il montre `f3`
+    et `Fb5` a la place. `renderOpeningPerf` **melange ses ouvertures et celles de l'adversaire**
+    (« Viennoise 13 parties » = 9 siennes + 4 subies) alors que `renderSystem`, juste au-dessus,
+    explique pourquoi c'est faux - et `renderSystem` classe par SCORE mais affiche la PRECISION.
+    **9 parties non classees, toutes gagnees, dont une contre le bot Coach-Magnus (900)**, entrent
+    dans le bilan (`analyzed()` ne filtre pas sur `g.rated`) : 53 % -> 49 % de victoires en
+    journalier sans elles. **Trois « priorites » concurrentes** sur un ecran de **27 cartes /
+    2 466 mots / 15,6 ecrans de telephone**. `coach-data.json` (1,4 Mo) **retelecharge en entier a
+    chaque ouverture** (`cache:'no-store'` interdit meme le 304, et `show()` n'utilise pas la
+    memoisation `ensureData`). La carte « Est-ce que ca marche ? » vit en `localStorage`
+    (`chess-analyst-sessions`) donc **par appareil**, contrairement a tout le reste du bilan.
+  - **Outillage : 3 scripts sur 7 mentent.** `tools/test_move.cjs` est **commite avec une erreur
+    de syntaxe** (ligne 274, appel de test ampute) donc n'a jamais tourne. `verify_lessons.cjs`
+    passe `mustMate:true` a TOUTES les entrees de `Mates.MATES`, or la v204 y a ajoute **5 finales
+    de pions** (`group:'finales'`) qui ne matent pas : **12 FAIL sur 151, tous faux positifs**,
+    plus `process.exit(1)` - l'outil ne peut plus detecter une vraie regression. Correctif :
+    `m.group !== 'finales'` (ligne 166) ; la branche « tactiques » du meme fichier le fait deja
+    bien. `validate_puzzles.cjs` est un **brouillon commite** : il teste des candidats jamais
+    livres (aucune FEN dans tactics.js/mates.js) et annonce « 7 failed » a chaque run.
+  - **CE QUI VA BIEN, verifie** : le « reste a faire » de la v204 **est fait** (167 parties,
+    compteurs disputes partout, `conversionMoment` sur 102) ; **le melange de notation FR/EN de
+    `blunderList` a disparu** (513 SAN, 100 % francais - ne plus se mefier de ce piege sur ce jeu
+    de donnees) ; `test_core` 94/94, `verify_mates` tout vert, `verify_openings` 121/121,
+    `validate_final` 6/6 ; zero erreur console sur tous les ecrans ; l'analyse bout-en-bout donne
+    71 % la ou le serveur en depth 20 donnait 73 % ; le moteur d'animation v257-259 est solide ;
+    « Ta trajectoire » porte bien l'avertissement Elo-adverse de la v204.
+  - **Le levier n'a pas bouge** : 93 parties atteignent +3, **28 sont perdues** ; 28 des 82
+    defaites sont des parties deja gagnees. En convertir la moitie fait passer de **50 % a 59 %**
+    de victoires sans une once de tactique en plus.
+  - **Ordre de correction propose** (les 3 premiers sont courts et changent ce que l'app raconte) :
+    1. repli par partie dans `phasePool` · 2. brancher `calibInfo` sur la vignette Elo ·
+    3. nettoyage complet des ecrans dans `showAnalysis` · 4. `g.rated` dans `analyzed()` ·
+    5. remonter la poussee du pion g · 6. `no-cache` + `ensureData` · 7. remettre `tools/` au vert ·
+    8. elaguer les 27 cartes (une session entiere).
 - **v257-v259 - LE DEPLACEMENT DES PIECES, REFAIT (moteur d'animation).** Demande du user : « une
   meilleure animation, facon chess.com, avec un effet sur la piece (ombre, flou) ». Maquette
   `_mockups/board-animation-2026-09.html` d'abord, puis implementation. Les 4 ecarts avaient ete

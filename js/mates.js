@@ -229,7 +229,7 @@ const Mates = (() => {
       fen: '8/8/4k3/7P/8/8/8/7K b - - 0 1',
       arrows: [{ from: 'e6', to: 'h6', color: G }, { from: 'h5', to: 'h8', color: B }],
       puzzles: [
-        { fen: '8/8/5k2/1P6/8/8/8/7K w - - 0 1', sol: ['b6'], hint: `Le carré du pion b5 couvre les colonnes b à e. Le roi noir est en f6, donc dehors. Un seul coup gagne — et ce n'est pas un coup de roi.` },
+        { fen: '8/8/5k2/1P6/8/8/8/7K w - - 0 1', sol: ['b6'], outcome: 'win', hint: `Le carré du pion b5 couvre les colonnes b à e. Le roi noir est en f6, donc dehors. Un seul coup gagne — et ce n'est pas un coup de roi.` },
       ] },
 
     { id: 'roi-devant', group: 'finales', icon: '🚶', name: 'Le roi devant son pion', en: 'King in front of the pawn',
@@ -253,8 +253,8 @@ const Mates = (() => {
       fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1',
       arrows: [{ from: 'b2', to: 'b8', color: G }, { from: 'g7', to: 'g1', color: R }],
       puzzles: [
-        { fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1', sol: ['b4'], hint: `Compte : ton pion b2 a besoin de 5 coups (avec le double pas), le sien de 5 aussi — mais c'est à toi. Un seul coup garde l'avance, et ce n'est pas un coup de roi.` },
-        { fen: '8/7k/6p1/8/8/1P6/7K/8 w - - 0 1', sol: ['b4'], hint: `Même compte, un rang de plus pour lui. Pousse, tout de suite.` },
+        { fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1', sol: ['b4'], outcome: 'win', hint: `Compte : ton pion b2 a besoin de 5 coups (avec le double pas), le sien de 5 aussi — mais c'est à toi. Un seul coup garde l'avance, et ce n'est pas un coup de roi.` },
+        { fen: '8/7k/6p1/8/8/1P6/7K/8 w - - 0 1', sol: ['b4'], outcome: 'win', hint: `Même compte, un rang de plus pour lui. Pousse, tout de suite.` },
       ] },
 
     { id: 'pion-tour', group: 'finales', icon: '🅰️', name: 'Le pion de tour : la nulle du coin', en: 'Rook pawn draw',
@@ -277,7 +277,7 @@ const Mates = (() => {
       fen: '7K/8/k1P5/7p/8/8/8/8 w - - 0 1',
       arrows: [{ from: 'h8', to: 'g7', color: G }, { from: 'g7', to: 'c3', color: B }],
       puzzles: [
-        { fen: '7K/8/k1P5/7p/8/8/8/8 w - - 0 1', sol: ['Kg7'], hint: `Pousser le pion perd, et courir droit sur le pion h5 aussi. Un seul coup fait les deux métiers en même temps : va en diagonale.` },
+        { fen: '7K/8/k1P5/7p/8/8/8/8 w - - 0 1', sol: ['Kg7'], outcome: 'draw', hint: `Pousser le pion perd, et courir droit sur le pion h5 aussi. Un seul coup fait les deux métiers en même temps : va en diagonale.` },
       ] },
 
   ];

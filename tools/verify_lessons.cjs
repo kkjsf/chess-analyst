@@ -136,6 +136,23 @@ async function checkPuzzle(label, p, opts) {
   if (mustMate) {
     if (!g.in_checkmate()) { log(`FAIL ${label} · la ligne ne finit pas par un mat`); fail++; return; }
     if (!/#$/.test(p.sol[p.sol.length - 1])) { log(`FAIL ${label} · dernier coup non noté #`); fail++; return; }
+  } else if (p.outcome) {
+    // Une finale de pions ne rapporte pas de MATERIEL, elle emporte le RESULTAT :
+    // le critere est l'evaluation finale, pas le gain de bois. Sans ca la regle du
+    // carre, la course et le Reti tombaient sur le test des tactiques (« la
+    // tactique ne rapporte rien, materiel 0.0 ») alors qu'elles sont justes.
+    // `outcome` est declare dans le contenu : 'win' = la technique doit gagner,
+    // 'draw' = elle doit TENIR la nulle (c'est tout le sujet du Reti et du pion
+    // de tour). L'unicite du coup est deja verifiee au ply 0, plus haut.
+    const end = await analyse(g.fen(), { depth: DEPTH, multipv: 1 });
+    const s = end[0] ? -scoreOf(end[0]) : 0; // du point de vue de celui qui resout
+    if (p.outcome === 'win' && s < 2) {
+      log(`FAIL ${label} · la technique ne gagne pas (éval ${s.toFixed(1)}) — ${g.fen()}`); fail++; return;
+    }
+    if (p.outcome === 'draw' && Math.abs(s) > 1) {
+      log(`FAIL ${label} · la technique ne tient pas la nulle (éval ${s.toFixed(1)}) — ${g.fen()}`); fail++; return;
+    }
+    notes.push(`finale ${p.outcome === 'win' ? 'gagnée' : 'tenue nulle'} (éval ${s.toFixed(1)})`);
   } else if (p.demo) {
     notes.push('démo de schéma');
   } else {
@@ -161,10 +178,19 @@ async function checkPuzzle(label, p, opts) {
     log('════════ MATS ════════');
     for (const m of Mates.MATES) {
       if (!picked(m.name + ' ' + m.id)) continue;
+      // Le catalogue s'appelle « Mats & finales » depuis qu'on y a ajoute 5 finales
+      // de pions (regle du carre, roi devant le pion, course, nulle du coin, Reti).
+      // Elles ne finissent PAS par un mat, et le verificateur l'exigeait de toutes
+      // les entrees : 12 FAIL, tous faux positifs, plus process.exit(1) - donc plus
+      // aucun moyen de reperer une vraie regression. Meme regle que la branche
+      // « tactiques » plus bas : on exige le mat quand le contenu le promet.
+      const isMate = m.group !== 'finales';
       const mated = m.fen && m.fen.split(' ').length > 1 ? m.fen.split(' ')[1] : 'b';
-      checkDiagram(`[mat ${m.id}] illustration`, m.fen, m.arrows, mated);
+      checkDiagram(`[mat ${m.id}] illustration`, m.fen, m.arrows, isMate ? mated : null);
       for (let i = 0; i < (m.puzzles || []).length; i++) {
-        await checkPuzzle(`[mat ${m.id}] ex${i + 1}`, m.puzzles[i], { mustMate: true });
+        const p = m.puzzles[i];
+        const mustMate = isMate || /#$/.test(p.sol[p.sol.length - 1]);
+        await checkPuzzle(`[mat ${m.id}] ex${i + 1}`, p, { mustMate });
       }
     }
   }

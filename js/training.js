@@ -59,6 +59,28 @@ const Training = (() => {
       localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(-LOG_MAX)));
     } catch (_) {}
   }
+  // Le journal voyage avec l'export du mode entraîneur. Sans ça, la carte
+  // « Est-ce que ça marche ? » — la seule qui répond à « est-ce que l'app sert à
+  // quelque chose » — était la seule donnée du bilan à ne pas quitter l'appareil :
+  // s'entraîner sur le téléphone et ouvrir l'app sur le PC la laissait vide, et un
+  // vidage de cache effaçait la mesure pour de bon. Fusion par horodatage, donc
+  // réimporter deux fois le même fichier ne double rien.
+  function mergeLog(incoming) {
+    if (!Array.isArray(incoming) || !incoming.length) return 0;
+    const log = loadLog();
+    const seen = new Set(log.map(e => e.t + '|' + e.kind));
+    let added = 0;
+    for (const e of incoming) {
+      if (!e || typeof e.t !== 'number') continue;
+      const k = e.t + '|' + e.kind;
+      if (seen.has(k)) continue;
+      log.push(e); seen.add(k); added++;
+    }
+    if (!added) return 0;
+    log.sort((a, b) => a.t - b.t);
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(-LOG_MAX))); } catch (_) {}
+    return added;
+  }
 
   // ───────────────────────── randomisation ─────────────────────────
   // Fisher-Yates in-place shuffle. Used to vary the puzzle order every session
@@ -1739,5 +1761,5 @@ const Training = (() => {
   // global — chess.min.js is included before this file).
   try { retagDeck(); } catch (_) {}
 
-  return { capture, ingestGame, dueCount, show, showMotif, drillPly, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, explainPuzzle, loadLog, logSession, MOTIF_LABELS, TACTICAL };
+  return { capture, ingestGame, dueCount, show, showMotif, drillPly, hungPiece, detectMotif, retagDeck, itemsForGames, motifCountsForGames, explainPuzzle, loadLog, logSession, mergeLog, MOTIF_LABELS, TACTICAL };
 })();
