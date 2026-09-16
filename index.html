@@ -17,12 +17,34 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '261';
+window.APP_VERSION = '271';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
 // defined before the loader at the end of the body runs.
 document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>');
+</script>
+<script>
+// Amorce du PREMIER rendu. La page se peint bien avant que les ~970 Ko de
+// scripts n'aient fini de charger, et jusqu'ici ce premier rendu montrait un
+// accueil vide (ni « Reprendre », ni « Parties récentes », routine sans ses
+// lignes) qui se remplissait ~1 s plus tard : le saut de mise en page se lisait
+// comme un rechargement. On marque le document `booting` (le CSS réserve alors
+// la place exacte des blocs à venir) et on lit tout de suite, SANS JSON.parse,
+// combien de parties sont en mémoire. init() retire la classe à la fin.
+(function () {
+  var r = document.documentElement;
+  r.classList.add('booting');
+  try {
+    var n = (localStorage.getItem('chess-analyst-games') || '').match(/"savedAt":/g);
+    if (n && n.length) {
+      r.classList.add('has-games');
+      r.style.setProperty('--boot-recent', Math.min(n.length, 5));
+    }
+  } catch (_) {}
+  // Filet : si un script n'arrive jamais, DOMContentLoaded (donc init) non plus.
+  window.addEventListener('load', function () { r.classList.remove('booting', 'has-games'); });
+})();
 </script>
 <script>
 // Fetch every app script IN PARALLEL, right now, while the parser is still in

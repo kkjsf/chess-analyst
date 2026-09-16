@@ -133,6 +133,13 @@ const CoachGame = (() => {
   let sheetOpen = false;
   let pendingOpp = null;            // { idx, evalBefore, inBook } : coup du coach en attente de note
   let saved = false;
+  // La partie est TERMINEE et enregistree, mais on reste sur l'echiquier :
+  // { rec, out, reason, an, lastMove, level, seen }. Tant que `endInfo` existe,
+  // l'ecran de partie est en mode « fin de partie » - navigation libre, aucun
+  // coup jouable, et le bilan seulement sur demande.
+  let endInfo = null;
+  let tailTimer = null;             // relecture au ralenti des derniers coups
+  let tailBusy = false;             // c'est la relecture qui navigue, pas l'utilisateur
 
   // ── Utilitaires ──────────────────────────────────────────────────────────
   function fr(san) { return (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(san) : san; }
@@ -181,7 +188,16 @@ const CoachGame = (() => {
     } catch (_) { return { v: 1, games: [] }; }
   }
   function save(st) {
-    try { localStorage.setItem(KEY, JSON.stringify({ v: 1, games: st.games.slice(-200) })); } catch (_) {}
+    try {
+      const games = st.games.slice(-200);
+      // Le journal coup par coup (~6 ko par partie) ne sert qu'au bilan
+      // detaille : on ne le garde que pour les 30 dernieres parties. Les
+      // agregats qui servent a se comparer (`acc`, `acpl`, resultat, erreurs)
+      // sont ranges A PLAT sur la partie, donc ils survivent a l'elagage.
+      const cut = games.length - 30;
+      const slim = games.map((g, i) => (i < cut && g && g.log) ? Object.assign({}, g, { log: null }) : g);
+      localStorage.setItem(KEY, JSON.stringify({ v: 1, games: slim }));
+    } catch (_) {}
   }
   function loadCfg() {
     try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}; } catch (_) { return {}; }
@@ -329,6 +345,9 @@ const CoachGame = (() => {
               <span class="cg-mat" id="cg-bot-mat"></span>
             </div>
             <div class="cg-review" id="cg-review" hidden></div>
+            <!-- La fin de partie : elle se lit SUR l'echiquier, pas sur un
+                 ecran de statistiques. Le bilan n'arrive que sur le bouton. -->
+            <div class="cg-over" id="cg-over" hidden></div>
             <!-- Le ruban des coups : le meme journal que la colonne desktop,
                  mais qui defile a l'horizontale. ⤢ ouvre la feuille complete. -->
             <div class="cg-strip" id="cg-strip">
@@ -399,6 +418,7 @@ const CoachGame = (() => {
     $('#cg-book').onchange = () => { $('#cg-bookmode').hidden = !$('#cg-book').value; };
     // « Reprendre ce coup » est injecte dans le verdict : delegation.
     $('#cg-review').addEventListener('click', (e) => navRev(e));
+    $('#cg-over').addEventListener('click', onOverClick);
     // Le ruban : les fleches naviguent, une case va a la position, ⤢ deroule
     // la feuille complete.
     $('#cg-strip').addEventListener('click', (e) => {
@@ -475,6 +495,15 @@ const CoachGame = (() => {
       if (myTurn() && !busy) onMyTurn();
       return;
     }
+    // Partie finie mais pas encore rangee : on revient exactement ou on etait,
+    // sur l'echiquier de fin ou sur le bilan. Fermer l'ecran par megarde ne doit
+    // pas effacer la position finale.
+    if (endInfo) {
+      renderBookBar();
+      if (endInfo.seen) { renderEnd(endInfo.rec, endInfo.out); view('end'); }
+      else enterEndBoard();
+      return;
+    }
     const c = loadCfg();
     cfg = null;
     view('setup');
@@ -508,6 +537,7 @@ const CoachGame = (() => {
   function close() {
     token++;
     busy = false;
+    stopTail();
     const ov = $('#cg-overlay');
     if (ov) ov.hidden = true;
     document.body.classList.remove('guess-open');
@@ -551,6 +581,7 @@ const CoachGame = (() => {
     game = new Chess();
     stats = { moves: 0, best: 0, slips: 0, hints: 0, mistakes: [] };
     moveLog = []; pendingOpp = null; myLines = null; reviewPly = null;
+    endInfo = null; stopTail();
     setSheet(false);
     track = []; saved = false; curEvalMe = null; myBestUci = null; hintLevel = 0; hintArrow = false;
     busy = false; token++; threatArrows = false;
@@ -663,12 +694,22 @@ const CoachGame = (() => {
     // est au premier ou au dernier coup.
     const total = game ? game.history().length : 0;
     const at = reviewPly == null ? total : reviewPly;
-    const pv = $('#cg-strip [data-rev="prev"]'), nx = $('#cg-strip [data-rev="next"]');
-    if (pv) pv.disabled = at <= 1;
-    if (nx) nx.disabled = at >= total;
+    // Le ruban ET le panneau de fin portent la meme navigation : les deux se
+    // grisent aux bornes, sinon l'un des deux ment sur ce qui reste a voir.
+    $$('#cg-strip [data-rev="prev"], #cg-over [data-rev="prev"]').forEach(b => { b.disabled = at <= 1; });
+    $$('#cg-strip [data-rev="next"], #cg-over [data-rev="next"]').forEach(b => { b.disabled = at >= total; });
     const turn = $('#cg-turn');
     if (turn) turn.textContent = gameOver() ? '' : (myTurn() ? 'À toi' : 'Coach…');
     syncHintBtn();
+    // Fin de partie : les boutons de jeu n'ont plus de sens (on ne peut ni
+    // annuler ni abandonner une partie deja enregistree), mais la navigation
+    // dans les coups, elle, reste entiere - c'est tout l'interet de l'ecran.
+    if (endInfo) {
+      for (const id of ['#cg-undo', '#cg-resign', '#cg-swap', '#cg-hint']) {
+        const b = $(id);
+        if (b) b.hidden = true;
+      }
+    }
   }
 
   function setVerdict(html, cls) {
@@ -810,6 +851,9 @@ const CoachGame = (() => {
 
   function gotoPly(ply) {
     if (!game) return;
+    // Une navigation VOULUE arrete la relecture au ralenti ; celle que la
+    // relecture declenche elle-meme, non (sinon elle se couperait au 1er pas).
+    if (!tailBusy) stopTail();
     const total = game.history().length;
     const p = Math.max(1, Math.min(ply, total));
     const from = curShownFen();
@@ -823,6 +867,8 @@ const CoachGame = (() => {
     renderReviewBar();
     renderMoves();
     syncControls();
+    // De retour sur la position finale : l'anatomie du mat se rallume.
+    if (endInfo) paintEndMarks();
     // De retour au coup courant : on rend la main (fleches d'aide comprises).
     if (reviewPly == null && myTurn() && !busy) onMyTurn();
   }
@@ -872,7 +918,7 @@ const CoachGame = (() => {
     el.innerHTML = `<span class="t">👁 Tu regardes le coup <b>${n}${dots}${e ? ' ' + e.san : ''}</b></span>`
       + `<button type="button" class="train-btn ghost" data-rev="prev">◀</button>`
       + `<button type="button" class="train-btn ghost" data-rev="next">▶</button>`
-      + `<button type="button" class="train-btn" data-rev="live">▶▶ Revenir à la partie</button>`;
+      + `<button type="button" class="train-btn" data-rev="live">${endInfo ? '▶▶ Revenir à la position finale' : '▶▶ Revenir à la partie'}</button>`;
   }
 
   // ── Le bandeau du livre ──────────────────────────────────────────────────
@@ -1128,6 +1174,20 @@ const CoachGame = (() => {
     });
     const myIdx = logMove(myMove.san, true, v.k);
     if (moveLog[myIdx] && after != null) moveLog[myIdx].ev = mySide === 'w' ? after : -after;
+    // Ce que le BILAN lira. Tout est deja calcule ici : le noter coute zero
+    // recherche, et sans ces quatre champs le bilan ne peut dire ni la
+    // precision, ni la phase qui casse, ni le coup qui a fait basculer.
+    if (moveLog[myIdx]) {
+      const e = moveLog[myIdx];
+      e.wpl = (typeof wpl === 'number') ? wpl : null;
+      e.cp = (cpLoss == null) ? null : cpLoss;
+      e.eb = curEvalMe; e.ea = after;
+      e.bs = myBestUci ? uciToFr(fenBefore, myBestUci) : null;
+      try {
+        e.ph = (typeof Analyzer !== 'undefined' && Analyzer.phaseOf)
+          ? Analyzer.phaseOf(fenBefore, game.history().length - 1) : 'middle';
+      } catch (_) { e.ph = 'middle'; }
+    }
     // L'eval de reference du coach : son point de vue, c'est l'oppose du mien.
     const oppBefore = after == null ? null : -after;
     if (v.slip) {
@@ -1458,40 +1518,540 @@ const CoachGame = (() => {
     if (myTurn()) onMyTurn(); else coachMove();
   }
 
+
+  // ═══════════════════ L'anatomie de la position finale ═══════════════════
+  // Une partie ne se termine pas sur un tableau de chiffres : elle se termine
+  // sur un ECHIQUIER. Avant, `finish()` basculait DROIT sur le bilan - le mat se
+  // lisait donc comme un verdict tombe du ciel, sans qu'on ait seulement vu le
+  // dernier coup se poser. Ces fonctions decrivent la position finale case par
+  // case : qui donne l'echec, qui tient chacune des cases de fuite, pourquoi la
+  // piece qui mate ne se prend pas, et pourquoi la ligne ne se coupe pas.
+  //
+  // Tout se calcule sur le PLATEAU (js/tactics.js), jamais sur une liste de
+  // coups legaux : « le roi n'a pas de case » n'apprend rien, « ton propre pion
+  // occupe g7 et la dame h7 tient f7 » s'explique ET se montre sur l'echiquier.
+  //
+  // UN POINT A NE PAS DEFAIRE : les cases de fuite se jugent sur un plateau ou
+  // le ROI MATE A ETE RETIRE. Sinon le roi fait lui-meme ecran a la piece qui le
+  // met en echec, et la case DERRIERE lui passe pour libre - c'est exactement le
+  // mat du couloir, le plus frequent de tous.
+  const FQ = 'abcdefgh';
+  const rcOf = (sq) => ({ r: 8 - +sq[1], c: FQ.indexOf(sq[0]) });
+  const sqOf = (r, c) => FQ[c] + (8 - r);
+  const AROUND = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+  const PC_FR = { k: 'le roi', q: 'la dame', r: 'la tour', b: 'le fou', n: 'le cavalier', p: 'le pion' };
+  const PC_MY = { k: 'ton roi', q: 'ta dame', r: 'ta tour', b: 'ton fou', n: 'ton cavalier', p: 'ton pion' };
+  const PC_HIS = { k: 'son roi', q: 'sa dame', r: 'sa tour', b: 'son fou', n: 'son cavalier', p: 'son pion' };
+  // Notation courte pour les pastilles. Le pion n'a pas de lettre dans un coup
+  // ecrit, mais « a3 » tout seul dans une liste de defenseurs ne veut rien dire :
+  // il est nomme.
+  const PC_SHORT = { k: 'R', q: 'D', r: 'T', b: 'F', n: 'C', p: 'pion ' };
+  // Le genre : seules la dame et la tour sont feminines. Sans ca, « son fou c2 »
+  // etait suivi de « elle est protegee », ce qui saute aux yeux.
+  const PC_FEM = { q: 1, r: 1 };
+  function gnd(t) {
+    const f = !!PC_FEM[t];
+    return { il: f ? 'Elle' : 'Il', la: f ? 'la' : 'le', e: f ? 'e' : '', lui: f ? "d'elle" : 'de lui' };
+  }
+  function pcFr(t) { return PC_FR[t] || 'la pièce'; }
+  function pcPoss(t, isMine) { return (isMine ? PC_MY : PC_HIS)[t] || (isMine ? 'ta pièce' : 'sa pièce'); }
+
+  function boardCopy(b) { return b.map(row => row.slice()); }
+  function findKingSq(b, color) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (p && p.t === 'k' && p.c === color) return sqOf(r, c);
+    }
+    return null;
+  }
+  function boardNoKing(b, color) {
+    const k = findKingSq(b, color);
+    if (!k) return b;
+    const n = boardCopy(b), { r, c } = rcOf(k);
+    n[r][c] = null;
+    return n;
+  }
+  // Les cases STRICTEMENT entre deux cases alignees ; [] si elles ne le sont pas.
+  function betweenSqs(a, z) {
+    const A = rcOf(a), Z = rcOf(z);
+    const dR = Z.r - A.r, dC = Z.c - A.c;
+    if (dR !== 0 && dC !== 0 && Math.abs(dR) !== Math.abs(dC)) return [];
+    const sr = Math.sign(dR), sc = Math.sign(dC);
+    const out = [];
+    let r = A.r + sr, c = A.c + sc;
+    while (r !== Z.r || c !== Z.c) { out.push(sqOf(r, c)); r += sr; c += sc; }
+    return out;
+  }
+  // Deplacer une piece sur un plateau de travail, puis regarder si le roi
+  // `color` est ENCORE attaque. C'est la reponse exacte a « pourquoi je ne peux
+  // pas prendre / m'interposer » : soit la piece etait clouee, soit l'echec
+  // venait aussi d'ailleurs (echec double).
+  function stillCheckAfter(b, from, to, color) {
+    const n = boardCopy(b);
+    const a = rcOf(from), z = rcOf(to);
+    n[z.r][z.c] = n[a.r][a.c];
+    n[a.r][a.c] = null;
+    const k = findKingSq(n, color);
+    if (!k) return [];
+    return Tactics.attackersOf(n, k, color === 'w' ? 'b' : 'w');
+  }
+  // Le pion du camp `color` qui pourrait venir sur `sq` par une poussee, ou
+  // null. `attackersOf` ne le trouve pas : un pion ne prend pas devant lui.
+  function pawnPushTo(b, sq, color) {
+    const { r: tr, c: tc } = rcOf(sq);
+    if (tr < 0 || tr > 7 || tc < 0 || tc > 7 || b[tr][tc]) return null;
+    const back = color === 'w' ? 1 : -1;           // la ligne d'ou vient le pion
+    const one = (tr + back >= 0 && tr + back < 8) ? b[tr + back][tc] : null;
+    if (one && one.c === color && one.t === 'p') return sqOf(tr + back, tc);
+    const home = color === 'w' ? 6 : 1;
+    if (!one && tr + 2 * back === home) {
+      const two = b[home][tc];
+      if (two && two.c === color && two.t === 'p') return sqOf(home, tc);
+    }
+    return null;
+  }
+
+  // La description complete de la position finale. Pure : aucun DOM, aucun etat
+  // de module - elle est testee dans tools/test_core.cjs sur des mats reels.
+  function endAnatomy(fen, reason, drawKind) {
+    const out = { kind: 'other', king: null, checkers: [], support: [], flight: [], takers: [], cut: null };
+    if (reason === 'resign') { out.kind = 'resign'; return out; }
+    let g = null;
+    try { g = new Chess(fen); } catch (_) { return out; }
+    const loser = (fen.split(' ')[1] === 'w') ? 'w' : 'b';
+    const winner = loser === 'w' ? 'b' : 'w';
+    out.loser = loser; out.winner = winner;
+    let mate = false, noMove = false;
+    try { mate = g.in_checkmate(); } catch (_) {}
+    try { noMove = g.moves().length === 0; } catch (_) {}
+    if (mate) out.kind = 'mate';
+    else if (noMove) out.kind = 'stalemate';
+    else if (drawKind) { out.kind = drawKind; return out; }
+    else {
+      // Sans historique, on ne peut reconnaitre que le materiel insuffisant.
+      try { if (g.insufficient_material()) out.kind = 'material'; } catch (_) {}
+      return out;
+    }
+
+    const b = Tactics.boardOf(fen);
+    const bk = boardNoKing(b, loser);
+    const k = findKingSq(b, loser);
+    out.king = k;
+    if (!k) return out;
+
+    out.checkers = Tactics.attackersOf(b, k, winner).map(p => ({ sq: p.sq, t: p.t }));
+    // Qui SOUTIENT la piece qui mate : sans ce soutien, le roi la croquerait et
+    // il n'y aurait pas de mat du tout. C'est la moitie de l'explication.
+    for (const ch of out.checkers) {
+      for (const s of Tactics.attackersOf(bk, ch.sq, winner)) {
+        if (s.sq !== ch.sq) out.support.push({ sq: s.sq, t: s.t, on: ch.sq });
+      }
+    }
+    // Les 8 cases autour du roi, jugees sur le plateau SANS le roi.
+    const { r, c } = rcOf(k);
+    for (const [dr, dc] of AROUND) {
+      const rr = r + dr, cc = c + dc;
+      if (rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+      const sq = sqOf(rr, cc);
+      const occ = b[rr][cc];
+      if (occ && occ.c === loser) { out.flight.push({ sq, state: 'own', t: occ.t, by: [] }); continue; }
+      const by = Tactics.attackersOf(bk, sq, winner).map(p => ({ sq: p.sq, t: p.t }));
+      out.flight.push({ sq, state: by.length ? 'held' : 'free', t: occ ? occ.t : null, cap: !!occ, by });
+    }
+
+    if (out.kind !== 'mate') return out;
+    // Prendre la piece qui mate ? On JOUE chaque prise sur un plateau de travail.
+    if (out.checkers.length === 1) {
+      const ch = out.checkers[0];
+      for (const p of Tactics.attackersOf(b, ch.sq, loser)) {
+        if (p.t === 'k') continue;               // le roi : c'est une case de fuite, traitee plus haut
+        const still = stillCheckAfter(b, p.sq, ch.sq, loser);
+        out.takers.push({ sq: p.sq, t: p.t, still: still.length ? still.map(x => ({ sq: x.sq, t: x.t })) : null });
+      }
+      // Couper la ligne : seulement pour une piece a longue portee.
+      if ('qrb'.indexOf(ch.t) >= 0) {
+        const path = betweenSqs(ch.sq, k);
+        if (path.length) {
+          const tries = [];
+          for (const s of path) {
+            for (const p of Tactics.attackersOf(b, s, loser)) {
+              if (p.t === 'k') continue;
+              const still = stillCheckAfter(b, p.sq, s, loser);
+              tries.push({ from: p.sq, t: p.t, to: s, still: still.length ? still.map(x => ({ sq: x.sq, t: x.t })) : null });
+            }
+            const pp = pawnPushTo(b, s, loser);
+            if (pp) {
+              const still = stillCheckAfter(b, pp, s, loser);
+              tries.push({ from: pp, t: 'p', to: s, still: still.length ? still.map(x => ({ sq: x.sq, t: x.t })) : null });
+            }
+          }
+          out.cut = { path, tries };
+        }
+      }
+    }
+    return out;
+  }
+
+  // Les fleches et les anneaux qui MONTRENT l'anatomie sur l'echiquier. Meme
+  // code couleur que partout dans l'app : rouge = ce qui tue, bleu = ce qui
+  // soutient, ambre = ta propre piece qui bouche la sortie, vert = une case
+  // reellement libre.
+  //   niveau 0 = l'echec et les cases ; niveau 1 = + qui tient chaque case.
+  function endArrows(an, level) {
+    if (!an || !an.king) return [];
+    const A = [];
+    for (const ch of an.checkers) A.push({ from: ch.sq, to: an.king, color: '#e05252', opacity: .95, width: 8 });
+    for (const f of an.flight) {
+      if (f.state === 'own') A.push({ from: f.sq, to: f.sq, color: '#e2b857', opacity: .8, width: 5 });
+      else if (f.state === 'held') A.push({ from: f.sq, to: f.sq, color: '#e05252', opacity: .7, width: 5 });
+      else A.push({ from: f.sq, to: f.sq, color: '#56b886', opacity: .9, width: 5 });
+    }
+    if (level >= 1) {
+      for (const s of an.support) A.push({ from: s.sq, to: s.on, color: '#5b8fb9', opacity: .85, width: 5 });
+      for (const f of an.flight) {
+        if (f.state !== 'held') continue;
+        for (const p of f.by) A.push({ from: p.sq, to: f.sq, color: '#e05252', opacity: .45, width: 4 });
+      }
+    }
+    return A;
+  }
+
+  // ── Le recit de la fin, en phrases ───────────────────────────────────────
+  // Chaque case citee est CLIQUABLE : elle s'allume sur l'echiquier. C'est tout
+  // l'interet de rester sur le plateau au lieu de sauter au bilan - on lit
+  // « la dame h7 tient f7 » ET on le voit.
+  function sqChip(s) { return `<b class="cg-sq" data-sq="${s}">${s}</b>`; }
+  function pcChip(p, isMine) { return pcPoss(p.t, isMine) + ' ' + sqChip(p.sq); }
+  function andList(arr) {
+    if (!arr.length) return '';
+    if (arr.length === 1) return arr[0];
+    return arr.slice(0, -1).join(', ') + ' et ' + arr[arr.length - 1];
+  }
+
+  function endStory(an, ctx) {
+    const pts = [];
+    const lastSan = ctx.lastSan ? `<b>${ctx.lastSan}</b>` : 'le dernier coup';
+    const iLose = an.loser === ctx.mySide;          // c'est MON roi qui subit
+    const mineWins = !iLose;
+    const K = iLose ? 'ton roi' : 'son roi';
+    let lead = '';
+
+    if (an.kind === 'mate') {
+      lead = `Le dernier coup est ${lastSan}. Avant de regarder les chiffres, regarde la position : `
+        + `voici exactement pourquoi ${K} n'a plus de coup.`;
+      // 1. L'echec.
+      if (an.checkers.length >= 2) {
+        pts.push({ ic: '⚔️', h: `<b>Échec double</b> — ${andList(an.checkers.map(c => pcChip(c, mineWins)))} attaquent ${K} en même temps. `
+          + `Contre un échec double il n'y a qu'une seule réponse possible aux échecs : <b>bouger le roi</b>. Ni prise ni interposition ne peuvent parer deux pièces d'un coup.` });
+      } else if (an.checkers.length === 1) {
+        const ch = an.checkers[0];
+        const sup = an.support.filter(s => s.on === ch.sq);
+        const g = gnd(ch.t);
+        let h = `<b>L'échec vient de ${pcChip(ch, mineWins)}.</b>`;
+        if (sup.length) h += ` ${g.il} est protégé${g.e} par ${andList(sup.map(s => pcChip(s, mineWins)))} : ${K} ne peut donc pas ${g.la} croquer.`;
+        else h += ` Rien ne ${g.la} protège, mais ${K} n'est pas à côté ${g.lui} — il ne peut pas ${g.la} prendre.`;
+        pts.push({ ic: '⚔️', h, arrows: 'check' });
+      }
+      // 2. Les cases.
+      pts.push(flightPoint(an, iLose, K));
+      // 3. La prise.
+      const ch = an.checkers.length === 1 ? an.checkers[0] : null;
+      if (ch) {
+        const real = an.takers.filter(t => t.still);
+        const adj = an.flight.some(f => f.sq === ch.sq);   // le roi y porte deja
+        if (real.length) {
+          const bits = real.slice(0, 3).map(t => `${pcChip(t, iLose)} y porte, mais après la prise ${K} serait <b>encore en échec</b> par ${andList(t.still.map(x => pcChip(x, mineWins)))} : ${gnd(t.t).il.toLowerCase()} est <b>cloué${gnd(t.t).e}</b>`);
+          pts.push({ ic: '🗡', h: `<b>Prendre ${pcFr(ch.t)} ${sqChip(ch.sq)} ?</b> ${andList(bits)}.` });
+        } else if (!an.takers.length && !adj) {
+          pts.push({ ic: '🗡', h: `<b>Prendre ${pcFr(ch.t)} ${sqChip(ch.sq)} ?</b> Aucune ${iLose ? 'de tes pièces' : 'de ses pièces'} ne porte sur cette case : ${gnd(ch.t).il.toLowerCase()} frappe de <b>loin</b>, bien à l'abri.` });
+        }
+      }
+      // 4. Couper la ligne.
+      if (an.cut && an.cut.path.length) {
+        const path = an.cut.path.map(sqChip).join(' ou ');
+        const tried = an.cut.tries.filter(t => t.still);
+        pts.push({
+          ic: '⛓', h: `<b>Couper la ligne ?</b> Il faudrait boucher ${path}. `
+            + (tried.length
+              ? `${andList(tried.slice(0, 2).map(t => `${pcChip(t, iLose)} pourrait y aller, mais ${gnd(t.t).il.toLowerCase()} est cloué${gnd(t.t).e}`))}.`
+              : `${iLose ? 'Aucune de tes pièces' : 'Aucune de ses pièces'} ne peut y venir.`),
+          arrows: 'cut',
+        });
+      }
+    } else if (an.kind === 'stalemate') {
+      lead = `Le dernier coup est ${lastSan}. <b>${cap(K)} n'est PAS en échec</b> — il n'a simplement plus aucun coup légal. C'est un pat : la partie est nulle, quel que soit le matériel sur l'échiquier.`;
+      pts.push(flightPoint(an, iLose, K));
+      pts.push({ ic: '🔒', h: `Et ${iLose ? 'aucune de tes autres pièces' : 'aucune de ses autres pièces'} ne peut bouger non plus : pions bloqués, pièces clouées, ou plus rien sur le plateau. Un seul coup légal aurait suffi à éviter le pat.` });
+    } else if (an.kind === 'material') {
+      lead = `${lastSan} laisse un matériel avec lequel <b>personne ne peut mater</b>, même en jouant les pires coups possibles. La règle arrête la partie immédiatement : nulle.`;
+    } else if (an.kind === 'repetition') {
+      lead = `La même position vient d'apparaître pour la <b>troisième fois</b>, avec le même camp au trait et les mêmes droits de roque. Nulle par répétition.`;
+    } else if (an.kind === 'fifty') {
+      lead = `<b>Cinquante coups</b> viennent de passer sans la moindre prise ni le moindre coup de pion. La partie est déclarée nulle : c'est la règle qui empêche de jouer une finale à l'infini.`;
+    } else if (an.kind === 'resign') {
+      lead = `Tu as rendu la partie. La position est restée telle quelle — remonte les coups tant que tu veux, elle ne va nulle part.`;
+    }
+    return { lead, pts: pts.filter(Boolean) };
+  }
+
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  // Les cases autour du roi, une par une : c'est le point que personne ne prend
+  // le temps de regarder, et c'est TOUJOURS la reponse a « mais pourquoi il ne
+  // bouge pas ? ».
+  // Les cases autour du roi, une par une. En PHRASE, huit cases donnaient une
+  // tirade de six lignes que personne ne lit ; en GRILLE de pastilles, chacune
+  // se lit d'un coup d'oeil et s'allume sur l'echiquier quand on la touche.
+  // C'est le point que personne ne prend le temps de regarder, et c'est
+  // toujours la reponse a « mais pourquoi il ne bouge pas ? ».
+  function flightPoint(an, iLose, K) {
+    if (!an.flight.length) return null;
+    const mineWins = !iLose;
+    const own = an.flight.filter(f => f.state === 'own').length;
+    const free = an.flight.filter(f => f.state === 'free').length;
+    const short = (p) => (PC_SHORT[p.t] || '') + p.sq;
+    const cell = (f) => {
+      if (f.state === 'own') {
+        return `<button type="button" class="cg-fsq own" data-sq="${f.sq}"><b>${f.sq}</b>`
+          + `<small>${pcPoss(f.t, iLose)}</small></button>`;
+      }
+      if (f.state === 'free') {
+        return `<button type="button" class="cg-fsq free" data-sq="${f.sq}"><b>${f.sq}</b><small>libre</small></button>`;
+      }
+      const who = f.by.slice(0, 2).map(short).join(' ') + (f.by.length > 2 ? ' +' + (f.by.length - 2) : '');
+      return `<button type="button" class="cg-fsq held" data-sq="${f.sq}"><b>${f.sq}</b>`
+        + `<small>${f.cap ? 'défendue · ' : ''}${who}</small></button>`;
+    };
+    let h = `<b>Les ${an.flight.length} cases autour de ${K}</b>`;
+    if (!free) h += an.kind === 'stalemate' ? ' — aucune où aller.' : " — aucune n'est libre.";
+    else h += ' :';
+    if (own && own === an.flight.length) h += ` Ce sont ${iLose ? 'tes propres pièces' : 'ses propres pièces'} qui l'étouffent.`;
+    h += `<span class="cg-fgrid">${an.flight.map(cell).join('')}</span>`;
+    if (free) h += `<small class="nb">Une case marquée « libre » reste interdite : y aller laisserait le roi en échec sur la même ligne.</small>`;
+    return { ic: '🚪', h, arrows: 'flight' };
+  }
+
   // ═════════════════════════ Fin de partie ═════════════════════════
   function outcome(reason) {
-    if (reason === 'resign') return { r: 'loss', txt: '🏳 Abandon', sub: 'Tu as rendu la partie.', pgn: mySide === 'w' ? '0-1' : '1-0' };
+    if (reason === 'resign') return { r: 'loss', ic: '🏳', short: 'Abandon', txt: '🏳 Abandon', sub: 'Tu as rendu la partie.', pgn: mySide === 'w' ? '0-1' : '1-0' };
     let inMate = false, drawn = false;
     try { inMate = game.in_checkmate(); drawn = game.in_draw() || game.in_stalemate(); } catch (_) {}
     if (inMate) {
       const loser = sideToMove();           // le camp au trait est mate
       return loser === mySide
-        ? { r: 'loss', txt: '💀 Échec et mat contre toi', sub: 'Il reste la position à comprendre : le bilan dit où ça a basculé.', pgn: mySide === 'w' ? '0-1' : '1-0' }
-        : { r: 'win', txt: '🏆 Victoire — échec et mat', sub: 'Partie menée au bout.', pgn: mySide === 'w' ? '1-0' : '0-1' };
+        ? { r: 'loss', ic: '💀', short: 'Échec et mat contre toi', txt: '💀 Échec et mat contre toi', sub: 'La position finale est disséquée case par case sur l\'échiquier — reviens-y autant que tu veux.', pgn: mySide === 'w' ? '0-1' : '1-0' }
+        : { r: 'win', ic: '🏆', short: 'Victoire — échec et mat', txt: '🏆 Victoire — échec et mat', sub: 'Partie menée au bout.', pgn: mySide === 'w' ? '1-0' : '0-1' };
     }
-    if (drawn) return { r: 'draw', txt: '🤝 Partie nulle', sub: 'Pat, répétition ou matériel insuffisant.', pgn: '1/2-1/2' };
-    return { r: 'draw', txt: 'Partie arrêtée', sub: '', pgn: '*' };
+    if (drawn) {
+      let why = 'Pat, répétition ou matériel insuffisant.';
+      try {
+        if (game.in_stalemate()) why = 'Pat : le camp au trait n\'a plus aucun coup légal, sans être en échec.';
+        else if (game.insufficient_material()) why = 'Matériel insuffisant : plus personne ne peut mater.';
+        else if (game.in_threefold_repetition()) why = 'Triple répétition de la position.';
+        else why = 'Règle des cinquante coups : ni prise ni coup de pion depuis 50 coups.';
+      } catch (_) {}
+      return { r: 'draw', ic: '🤝', short: 'Partie nulle', txt: '🤝 Partie nulle', sub: why, pgn: '1/2-1/2' };
+    }
+    return { r: 'draw', ic: '🏁', short: 'Partie arrêtée', txt: '🏁 Partie arrêtée', sub: '', pgn: '*' };
   }
 
+  // Le genre de nulle, lu sur la PARTIE (pas sur la FEN) : la triple repetition
+  // et les cinquante coups demandent l'historique.
+  function drawKind() {
+    try {
+      if (game.in_checkmate() || !game.in_draw()) return null;
+      if (game.in_stalemate()) return 'stalemate';
+      if (game.insufficient_material()) return 'material';
+      if (game.in_threefold_repetition()) return 'repetition';
+      return 'fifty';
+    } catch (_) { return null; }
+  }
+
+  // La partie est finie : on ENREGISTRE, et on RESTE sur l'echiquier.
+  //
+  // C'est le changement de fond de cette version. Avant, `finish()` enchainait
+  // `renderEnd()` puis `view('end')` : le mat effacait l'echiquier avant meme
+  // qu'on l'ait vu. Desormais la fin se vit en deux temps, et le second ne part
+  // JAMAIS tout seul :
+  //   1. l'echiquier de fin - position finale, anatomie du mat, navigation
+  //      libre dans toute la partie, aucun compte a rebours ;
+  //   2. le bilan, sur un bouton, et on peut revenir a l'echiquier depuis le
+  //      bilan (chaque moment cite y renvoie).
   function finish(reason) {
-    if (saved) { view('end'); return; }
+    if (saved) { enterEndBoard(); return; }
     saved = true;
     token++;
     busy = false;
     const out = outcome(reason);
+    let an = null;
+    try { an = endAnatomy(curFen(), reason, drawKind()); } catch (_) { an = null; }
+    let lastMove = null;
+    try {
+      const h = game.history({ verbose: true });
+      const m = h[h.length - 1];
+      if (m) lastMove = { from: m.from, to: m.to };
+    } catch (_) {}
+    const rep = gameReport(moveLog);
     const rec = {
       id: 'cg' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       at: Date.now(), device: deviceLabel(),
       elo: prm.elo, aide: cfg.aide, side: mySide,
       book: book ? book.name : null, bookMode: book ? cfg.bookMode : null,
+      bookDepth: book ? bookPly : 0, bookLeft: bookOut || null,
       result: out.r, moves: stats.moves, best: stats.best, slips: stats.slips, hints: stats.hints,
+      // Les deux agregats qui servent a se comparer d'une partie a l'autre sont
+      // ranges A PLAT : le journal detaille, lui, finit par etre elague.
+      acc: rep.accuracy, acpl: rep.acpl,
+      end: an ? an.kind : null, reason: reason || null,
       pgn: buildPgn(out.pgn), track: track.slice(), mistakes: stats.mistakes.slice(0, 12),
+      log: moveLog.map(e => ({
+        n: e.n, san: e.san, mine: !!e.mine, k: e.k || null,
+        ev: e.ev == null ? null : Math.round(e.ev),
+        wpl: e.wpl == null ? null : +e.wpl.toFixed(3),
+        cp: e.cp == null ? null : Math.round(e.cp),
+        ph: e.ph || null, bs: e.bs || null,
+        eb: e.eb == null ? null : Math.round(e.eb), ea: e.ea == null ? null : Math.round(e.ea),
+      })),
     };
     const st = load();
     st.games.push(rec);
     save(st);
-    renderEnd(rec, out);
+    endInfo = { rec, out, reason: reason || 'board', an, lastMove, level: 0, seen: false };
+    enterEndBoard();
+  }
+
+  // ── L'echiquier de fin ───────────────────────────────────────────────────
+  function enterEndBoard() {
+    if (!endInfo) { view('end'); return; }
+    stopTail();
+    endInfo.seen = false;
+    view('game');
+    reviewPly = null;
+    BoardRenderer.setFlipped(mySide === 'b');
+    const shown = boardSvg && boardSvg.__bd ? boardSvg.__bd.fen : null;
+    if (shown !== curFen().split(' ')[0] || (boardSvg.__bd && boardSvg.__bd.flip !== BoardRenderer.isFlipped())) {
+      BoardRenderer.render(boardSvg, curFen(), endInfo.lastMove || null);
+    }
+    renderReviewBar();
+    renderMoves();
+    setStatus('');
+    renderOver();
+    // Les fleches attendent la fin du glissement : peintes tout de suite, elles
+    // pointent une case ou la piece n'est pas encore arrivee.
+    setTimeout(() => { if (endInfo) paintEndMarks(); }, ANIM_MS);
+    syncControls();
+  }
+
+  function renderOver() {
+    const el = $('#cg-over');
+    if (!el || !endInfo) return;
+    const rec = endInfo.rec, out = endInfo.out;
+    const cls = rec.result === 'win' ? 'win' : rec.result === 'loss' ? 'loss' : 'draw';
+    const an = endInfo.an || { kind: 'other', flight: [], checkers: [], support: [], takers: [], cut: null };
+    const lastSan = moveLog.length ? moveLog[moveLog.length - 1].san : null;
+    const story = endStory(an, { lastSan, mySide });
+    const sideTxt = mySide === 'w' ? 'tu jouais les Blancs' : 'tu jouais les Noirs';
+    const marks = endInfo.level >= 1 ? '🎯 Masquer les gardiens' : '🎯 Qui tient quoi';
+    el.className = 'cg-over ' + cls;
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="hd"><span class="ic">${out.ic || '🏁'}</span>
+        <div class="tt"><b>${out.short || out.txt}</b>
+          <small>Coach ~${rec.elo} · ${rec.moves} coup${rec.moves > 1 ? 's joués' : ' joué'} · ${sideTxt}</small></div></div>
+      ${story.lead ? `<p class="lead">${story.lead}</p>` : ''}
+      ${story.pts.length ? `<ul class="cg-anat">${story.pts.map(p =>
+        `<li><span class="ic">${p.ic}</span><span class="tx">${p.h}</span></li>`).join('')}</ul>` : ''}
+      <div class="acts">
+        <span class="nav">
+          <button type="button" class="train-btn ghost" data-rev="prev" title="Coup précédent">◀</button>
+          <button type="button" class="train-btn ghost" data-rev="next" title="Coup suivant">▶</button>
+        </span>
+        <button type="button" class="train-btn ghost" data-act="tail">⏪ Revoir la fin au ralenti</button>
+        ${an.flight && an.flight.length ? `<button type="button" class="train-btn ghost" data-act="marks">${marks}</button>` : ''}
+        <button type="button" class="train-btn" data-act="bilan">📊 Voir le bilan ▸</button>
+      </div>
+      <p class="foot">Rien ne presse : remonte la partie coup par coup avec ◀ ▶, ou clique n'importe quel coup
+        dans la liste. Le bilan t'attend, il ne partira pas.</p>`;
+  }
+
+  // Ce que l'echiquier MONTRE de l'anatomie. `level` 0 = l'echec et les cases,
+  // 1 = en plus, une fleche depuis chaque piece qui tient une case.
+  function paintEndMarks() {
+    if (!endInfo || !arrowsSvg) return;
+    if (reviewPly !== null) { BoardRenderer.clearArrows(arrowsSvg); threatArrows = false; return; }
+    const A = endArrows(endInfo.an, endInfo.level || 0);
+    if (A.length) { BoardRenderer.drawArrows(arrowsSvg, A); threatArrows = true; }
+    else { BoardRenderer.clearArrows(arrowsSvg); threatArrows = false; }
+  }
+
+  function onOverClick(e) {
+    const s = e.target.closest('[data-sq]');
+    if (s) { flashSquare(s.dataset.sq); return; }
+    if (e.target.closest('button[data-rev]')) { navRev(e); return; }
+    const b = e.target.closest('button[data-act]');
+    if (!b || !endInfo) return;
+    if (b.dataset.act === 'bilan') return showBilan();
+    if (b.dataset.act === 'tail') return replayTail(6);
+    if (b.dataset.act === 'marks') {
+      endInfo.level = endInfo.level >= 1 ? 0 : 1;
+      if (reviewPly !== null) gotoPly(game.history().length);
+      paintEndMarks();
+      const btn = $('#cg-over [data-act="marks"]');
+      if (btn) btn.textContent = endInfo.level >= 1 ? '🎯 Masquer les gardiens' : '🎯 Qui tient quoi';
+    }
+  }
+
+  // Une case citee dans le texte, allumee sur l'echiquier. On revient d'abord a
+  // la position finale : montrer f7 sur une position d'il y a dix coups ne veut
+  // rien dire.
+  function flashSquare(sq) {
+    if (!endInfo || !arrowsSvg) return;
+    stopTail();
+    if (reviewPly !== null) gotoPly(game.history().length);
+    const A = endArrows(endInfo.an, endInfo.level || 0);
+    A.push({ from: sq, to: sq, color: '#ffffff', opacity: .95, width: 8 });
+    BoardRenderer.drawArrows(arrowsSvg, A);
+    threatArrows = true;
+  }
+
+  // Rejouer les derniers demi-coups AU RALENTI : c'est la demande de fond -
+  // voir le coup arriver, pas le trouver deja pose.
+  function replayTail(n) {
+    if (!game) return;
+    stopTail();
+    const total = game.history().length;
+    if (total < 2) return;
+    let at = Math.max(1, total - (n || 6));
+    tailBusy = true; gotoPly(at); tailBusy = false;
+    const step = () => {
+      at++;
+      tailBusy = true; gotoPly(at); tailBusy = false;
+      if (at >= total) { tailTimer = null; return; }
+      tailTimer = setTimeout(step, 950);
+    };
+    tailTimer = setTimeout(step, 950);
+  }
+  function stopTail() { if (tailTimer) { clearTimeout(tailTimer); tailTimer = null; } }
+
+  function showBilan() {
+    stopTail();
+    if (!endInfo) { view('end'); return; }
+    endInfo.seen = true;
+    const el = $('#cg-over'); if (el) el.hidden = true;
+    renderEnd(endInfo.rec, endInfo.out);
     view('end');
+  }
+
+  // Le chemin du retour : chaque moment cite dans le bilan renvoie ICI, sur
+  // l'echiquier, a la position exacte. Un bilan dont on ne peut pas sortir
+  // n'est qu'un releve de plus.
+  function backToBoard(ply) {
+    if (!endInfo) return;
+    endInfo.seen = false;
+    view('game');
+    const el = $('#cg-over'); if (el) el.hidden = false;
+    if (ply) { gotoPly(ply); }
+    else { reviewPly = null; BoardRenderer.render(boardSvg, curFen(), endInfo.lastMove || null); renderReviewBar(); renderMoves(); paintEndMarks(); syncControls(); }
   }
 
   function buildPgn(result) {
@@ -1510,43 +2070,315 @@ const CoachGame = (() => {
     }
   }
 
+  // ═══════════════ Le bilan : ce que disent VRAIMENT tes coups ═══════════
+  // L'ancien bilan tenait en quatre chiffres (coups, meilleurs, erreurs,
+  // indices) et une courbe. C'est un releve de caisse, pas un bilan : il ne dit
+  // ni a quel point on a joue juste, ni QUAND la partie a bascule, ni si on
+  // progresse. `gameReport` relit le journal des coups - qui porte desormais,
+  // pour chacun de MES coups, la perte en chances de gain, la perte en
+  // centiemes de pion, la phase de jeu et le coup du moteur - et en tire les
+  // agregats. Pure (aucun DOM, aucun etat de module) : testee dans
+  // tools/test_core.cjs.
+  const PHASE_FR = { opening: 'Ouverture', middle: 'Milieu de partie', endgame: 'Finale' };
+  const CPLOSS_CAP = 1000;
+  const CONTESTED_CP = 250;   // au-dela, la position est deja pliee : rien a saluer
+  // Le vocabulaire du decompte, au pluriel quand il le faut. Les libelles de
+  // `MOVE_CLASS` sont ecrits pour UN coup (« Erreur », « Très bien ») : colles
+  // derriere un nombre ils donnaient « 3 erreur ».
+  const MIX_FR = {
+    brilliant: ['coup brillant', 'coups brillants'],
+    great: ['coup excellent', 'coups excellents'],
+    best: ['meilleur coup', 'meilleurs coups'],
+    excellent: ['coup presque parfait', 'coups presque parfaits'],
+    good: ['bon coup', 'bons coups'],
+    book: ['coup de théorie', 'coups de théorie'],
+    forced: ['coup forcé', 'coups forcés'],
+    inaccuracy: ['imprécision', 'imprécisions'],
+    miss: ['occasion manquée', 'occasions manquées'],
+    mistake: ['erreur', 'erreurs'],
+    blunder: ['gaffe', 'gaffes'],
+  };
+  function mixWord(k, n) {
+    const a = MIX_FR[k];
+    if (!a) return typeOf(k).label.toLowerCase();
+    return n > 1 ? a[1] : a[0];
+  }
+
+  function gameReport(log) {
+    const L = Array.isArray(log) ? log : [];
+    const A = (typeof Analyzer !== 'undefined') ? Analyzer : null;
+    const out = { n: 0, accuracy: null, acpl: null, counts: {}, phases: [], turning: null, gems: [] };
+    const mine = [];
+    for (let i = 0; i < L.length; i++) if (L[i] && L[i].mine) mine.push({ i, mi: mine.length, e: L[i] });
+    out.n = mine.length;
+    if (!mine.length) return out;
+    for (const m of mine) if (m.e.k) out.counts[m.e.k] = (out.counts[m.e.k] || 0) + 1;
+
+    const accs = [], plies = [];
+    const ph = { opening: [], middle: [], endgame: [] };
+    let cpSum = 0, cpN = 0;
+    for (const m of mine) {
+      const e = m.e;
+      const slip = e.k === 'mistake' || e.k === 'blunder' || e.k === 'miss';
+      if (typeof e.wpl === 'number' && A && A.winLossToAccuracy) {
+        const a = A.winLossToAccuracy(e.wpl);
+        accs.push(a); plies.push(m.i);
+        (ph[e.ph] || ph.middle).push({ a, slip });
+      }
+      if (typeof e.cp === 'number') { cpSum += Math.min(e.cp, CPLOSS_CAP); cpN++; }
+    }
+    // Ponderation par la volatilite locale, exactement comme l'ecran d'analyse :
+    // rater le seul coup qui tenait la position doit peser plus lourd qu'une
+    // imprecision dans une position deja decidee. Une precision calculee ici
+    // autrement que la-bas serait pire qu'aucune precision du tout.
+    if (accs.length && A && A.blendedAccuracy) {
+      const winSeries = L.map(e => (e && typeof e.ev === 'number' && A.cpToWinPct) ? A.cpToWinPct(e.ev) : 0.5);
+      const w = A.volatilityWeights ? A.volatilityWeights(winSeries, plies) : null;
+      out.accuracy = Math.round(A.blendedAccuracy(accs, w));
+    }
+    if (cpN) out.acpl = Math.round(cpSum / cpN);
+
+    for (const key of ['opening', 'middle', 'endgame']) {
+      const a = ph[key];
+      if (!a.length) continue;
+      out.phases.push({
+        key, label: PHASE_FR[key], n: a.length,
+        accuracy: Math.round(a.reduce((s, x) => s + x.a, 0) / a.length),
+        errs: a.filter(x => x.slip).length,
+      });
+    }
+
+    // Le moment qui fait basculer : la plus grosse perte en chances de gain.
+    let worst = null;
+    for (const m of mine) {
+      if (typeof m.e.wpl !== 'number' || m.e.wpl < 0.10) continue;
+      if (!worst || m.e.wpl > worst.e.wpl) worst = m;
+    }
+    if (worst) out.turning = {
+      ply: worst.i + 1, mi: worst.mi, n: worst.e.n, san: worst.e.san, best: worst.e.bs || null,
+      wpl: worst.e.wpl, eb: worst.e.eb == null ? null : worst.e.eb, ea: worst.e.ea == null ? null : worst.e.ea, k: worst.e.k,
+    };
+
+    // Ce qu'on a bien fait. On ne retient PAS les coups du debut (theorie
+    // apprise) ni ceux d'une position deja pliee : un « meilleur coup » dans une
+    // position a +9 n'apprend rien. Les plus disputes d'abord.
+    out.gems = mine
+      .filter(m => (m.e.k === 'best' || m.e.k === 'excellent') && m.i >= 8
+        && typeof m.e.ea === 'number' && Math.abs(m.e.ea) <= CONTESTED_CP)
+      .map(m => ({ ply: m.i + 1, mi: m.mi, n: m.e.n, san: m.e.san, d: Math.abs(m.e.ea) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3);
+    return out;
+  }
+
+  // Comment se lit une precision, en une phrase. Les paliers viennent de ses
+  // vraies parties (voir la carte « ton vrai niveau » du Coach), pas d'une
+  // echelle abstraite.
+  function accWord(a) {
+    if (a == null) return '';
+    if (a >= 90) return 'partie quasi sans faute';
+    if (a >= 80) return 'très propre';
+    if (a >= 70) return 'correct, avec des trous';
+    if (a >= 55) return 'des cadeaux réguliers';
+    return 'la partie t\'a échappé';
+  }
+
   function renderEnd(rec, out) {
     const el = $('#cg-end');
+    if (!el) return;
     const cls = rec.result === 'win' ? 'win' : rec.result === 'loss' ? 'loss' : 'draw';
+    const rep = gameReport(rec.log);
+    const an = (endInfo && endInfo.rec && endInfo.rec.id === rec.id) ? endInfo.an : null;
     const sug = suggestNext();
-    el.innerHTML = `
-      <div class="cg-res ${cls}"><div class="t">${out.txt}</div><p class="s">${out.sub}</p></div>
-      <div class="cg-kpis">
-        <div class="cg-kpi ok"><span class="v">${rec.best}</span><span class="l">meilleurs coups</span></div>
-        <div class="cg-kpi"><span class="v">${rec.moves}</span><span class="l">tes coups</span></div>
-        <div class="cg-kpi bad"><span class="v">${rec.slips}</span><span class="l">erreurs / gaffes</span></div>
-        <div class="cg-kpi"><span class="v">${rec.hints}</span><span class="l">indices</span></div>
-      </div>
-      ${sparkHtml(rec.track)}
-      <div class="cg-sep"><span class="t">🗄 Rangée à part</span>
+    el.innerHTML = [
+      `<div class="cg-res ${cls}"><div class="t">${out.txt}</div><p class="s">${out.sub}</p>
+        ${endInfo && endInfo.rec.id === rec.id
+          ? `<button type="button" class="train-btn ghost cg-back" data-goto="0">♟ Retourner à la position finale</button>` : ''}</div>`,
+      kpiBlock(rec, rep),
+      mixBlock(rep),
+      phaseBlock(rep),
+      turningBlock(rep),
+      gemsBlock(rep),
+      sparkHtml(rec.track, rep),
+      bookBlock(rec),
+      trendBlock(rec, rep),
+      takeawayBlock(rec, rep, an),
+      `<div class="cg-sep"><span class="t">🗄 Rangée à part</span>
         Cette partie va dans <b>Tes parties avec le coach</b>. Elle n'entre <b>pas</b> dans ton archive Chess.com :
-        ni dans ta courbe Elo, ni dans « ton vrai niveau », ni dans « tes parties après 2.Ff4 ».</div>
-      ${rec.mistakes.length ? `<button class="cg-sw" id="cg-tosrs" type="button">
+        ni dans ta courbe Elo, ni dans « ton vrai niveau », ni dans « tes parties après 2.Ff4 ».</div>`,
+      rec.mistakes.length ? `<button class="cg-sw" id="cg-tosrs" type="button">
         <span class="bd"><b>Envoyer ${rec.mistakes.length > 1 ? 'ces ' + rec.mistakes.length + ' erreurs' : 'cette erreur'} dans mes exercices</b>
-        — ${rec.mistakes.map(m => 'coup ' + m.moveNo).join(', ')}</span><span class="tg"></span></button>` : ''}
-      ${sug ? `<div class="cg-next"><b>Niveau conseillé : ~${sug.elo}</b> ${sug.why}</div>` : ''}
-      <div class="rp-actions">
-        <button class="train-btn" id="cg-analyse">🔍 Analyser cette partie</button>
+        — ${rec.mistakes.map(m => 'coup ' + m.moveNo).join(', ')}</span><span class="tg"></span></button>` : '',
+      sug ? `<div class="cg-next"><b>Niveau conseillé : ~${sug.elo}</b> ${sug.why}</div>` : '',
+      `<div class="rp-actions">
+        <button class="train-btn ghost" id="cg-analyse">🔍 Analyser cette partie</button>
         <button class="train-btn ghost" id="cg-again">↻ Rejouer</button>
         <button class="train-btn ghost" id="cg-tohist">🗄 L'historique</button>
-      </div>`;
+      </div>`,
+    ].join('');
+
     $('#cg-analyse').onclick = () => {
       close();
       if (typeof App !== 'undefined' && App.loadPgnAndAnalyze) App.loadPgnAndAnalyze(rec.pgn, { ingest: false });
     };
-    $('#cg-again').onclick = () => { view('setup'); };
-    $('#cg-tohist').onclick = () => showHistory();
+    $('#cg-again').onclick = () => { endInfo = null; view('setup'); };
+    $('#cg-tohist').onclick = () => { endInfo = null; showHistory(); };
     const srs = $('#cg-tosrs');
     if (srs) srs.onclick = () => {
       srs.classList.add('on');
       srs.querySelector('.bd').innerHTML = '<b>Envoyé dans tes exercices</b> — tu les retrouveras dans Entraîner.';
       pushMistakesToTraining(rec);
     };
+    if (!el.dataset.bound) {
+      el.dataset.bound = '1';
+      // Tout ce qui porte `data-goto` repart vers l'ECHIQUIER : un bilan sans
+      // chemin de retour vers la position n'est qu'un releve de plus.
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-goto]');
+        if (!b) return;
+        backToBoard(+b.dataset.goto || 0);
+      });
+    }
+  }
+
+  function kpiBlock(rec, rep) {
+    const a = rep.accuracy;
+    const accCell = a == null
+      ? `<div class="cg-kpi"><span class="v">—</span><span class="l">précision</span></div>`
+      : `<div class="cg-kpi ${a >= 80 ? 'ok' : a < 60 ? 'bad' : ''}" title="Moyenne pondérée de tes coups, en chances de gain perdues — le même calcul que l'écran d'analyse.">
+           <span class="v">${a} %</span><span class="l">précision</span></div>`;
+    const short = rep.n < 6;   // trop peu de coups pour qualifier quoi que ce soit
+    return `<div class="cg-kpis">
+        ${accCell}
+        <div class="cg-kpi ok"><span class="v">${rec.best}</span><span class="l">meilleurs coups</span></div>
+        <div class="cg-kpi bad"><span class="v">${rec.slips}</span><span class="l">erreurs / gaffes</span></div>
+        <div class="cg-kpi"><span class="v">${rec.hints}</span><span class="l">indices</span></div>
+      </div>
+      <p class="cg-lede">${rec.moves} coup${rec.moves > 1 ? 's joués' : ' joué'}${!short && a != null ? ` · <b>${accWord(a)}</b>` : ''}${!short && rep.acpl ? ` · tu lâches <b>${rep.acpl}</b> centièmes de pion par coup en moyenne` : ''}.${short ? ` <span class="rp-hint">Trop peu de coups pour en tirer une tendance.</span>` : ''}</p>`;
+  }
+
+  // La repartition de MES coups : une barre + le detail. La colonne de droite le
+  // faisait deja pendant la partie, mais elle est masquee sur telephone - et
+  // c'est justement apres coup qu'on la regarde.
+  function mixBlock(rep) {
+    const order = ['best', 'excellent', 'good', 'book', 'forced', 'inaccuracy', 'miss', 'mistake', 'blunder'];
+    const keys = order.filter(k => rep.counts[k]);
+    const tot = keys.reduce((s, k) => s + rep.counts[k], 0);
+    if (!tot) return '';
+    const bar = keys.map(k => `<i class="${k}" style="width:${(rep.counts[k] / tot * 100).toFixed(1)}%" title="${typeOf(k).label}"></i>`).join('');
+    const badges = keys.map(k => `<span class="eval-badge ${k}">${typeOf(k).mark} ${rep.counts[k]} ${mixWord(k, rep.counts[k])}</span>`).join('');
+    return `<div class="cg-card"><div class="h">${tot > 1 ? `Tes ${tot} coups, notés un par un` : 'Ton seul coup'}</div>
+      <div class="cg-bar">${bar}</div><div class="cg-tally2">${badges}</div></div>`;
+  }
+
+  function phaseBlock(rep) {
+    if (rep.phases.length < 2) return '';
+    const rows = rep.phases.map(p => `<div class="cg-phrow">
+        <span class="n">${p.label}</span>
+        <span class="tr"><i style="width:${Math.max(2, p.accuracy)}%"></i></span>
+        <span class="v">${p.accuracy} %</span>
+        <span class="e${p.errs ? ' bad' : ''}">${p.errs ? p.errs + ' err.' : '—'}</span>
+      </div>`).join('');
+    const worst = rep.phases.slice().sort((a, b) => a.accuracy - b.accuracy)[0];
+    const best = rep.phases.slice().sort((a, b) => b.accuracy - a.accuracy)[0];
+    return `<div class="cg-card"><div class="h">Où ça tient, où ça casse</div>${rows}
+      <p class="sub">Dans cette partie, ton point fort est <b>${best.label.toLowerCase()}</b> (${best.accuracy} %)
+        et ça lâche <b>${worst.label === 'Ouverture' ? 'dès l\'ouverture' : worst.label === 'Finale' ? 'en finale' : 'au milieu de partie'}</b>
+        (${worst.accuracy} % sur ${worst.n} coup${worst.n > 1 ? 's' : ''}).</p></div>`;
+  }
+
+  function turningBlock(rep) {
+    const t = rep.turning;
+    if (!t) return '';
+    const pts = Math.round(t.wpl * 100);
+    const T = typeOf(t.k || 'mistake');
+    return `<div class="cg-card turn"><div class="h">⚡ Le moment où la partie a basculé</div>
+      <p class="l">Coup <b>${t.n}</b>, tu joues <b>${t.san}</b> <span class="eval-badge ${t.k}">${T.mark} ${T.label}</span> :
+        <b>${pts} points</b> de chances de gain partent d'un seul coup${t.eb != null && t.ea != null ? ` (de <b>${fmtMe(t.eb)}</b> à <b>${fmtMe(t.ea)}</b>, ton point de vue)` : ''}.</p>
+      ${t.best ? `<p class="l">Le moteur voulait <b>${t.best}</b>.</p>` : ''}
+      <button type="button" class="train-btn ghost" data-goto="${Math.max(1, t.ply - 1)}">⟲ Revoir la position juste avant ce coup</button></div>`;
+  }
+
+  function gemsBlock(rep) {
+    if (!rep.gems.length) return '';
+    const chips = rep.gems.map(g => `<button type="button" class="cg-gem" data-goto="${g.ply}">coup ${g.n} · <b>${g.san}</b></button>`).join('');
+    return `<div class="cg-card gems"><div class="h">✅ Ce que tu as bien fait</div>
+      <p class="sub">Dans ces positions-là, la partie était encore disputée et tu as trouvé le coup du moteur. C'est ça qui se reproduit.</p>
+      <div class="row">${chips}</div></div>`;
+  }
+
+  function bookBlock(rec) {
+    if (!rec.book) return '';
+    const n = rec.bookDepth || 0;
+    const who = rec.bookLeft === 'me' ? `c'est <b>toi</b> qui es sorti de la ligne`
+      : rec.bookLeft === 'coach' ? `c'est <b>le coach</b> qui a dévié (tu l'avais demandé)`
+      : `la ligne est allée jusqu'au bout`;
+    return `<div class="cg-card"><div class="h">📖 L'ouverture que tu travaillais</div>
+      <p class="l"><b>${rec.book}</b> — ${Math.floor(n / 2)} coup${n >= 4 ? 's' : ''} de théorie tenus, puis ${who}.</p>
+      <p class="sub">Ce qui compte n'est pas d'aller loin dans le livre, mais de savoir quoi faire <b>au coup d'après</b>.</p></div>`;
+  }
+
+  function trendBlock(rec, rep) {
+    const prev = load().games.filter(g => g && g.id !== rec.id && g.elo === rec.elo);
+    if (prev.length < 2) return '';
+    const withAcc = prev.filter(g => typeof g.acc === 'number').slice(-5);
+    const n = prev.length;
+    const w = prev.filter(g => g.result === 'win').length;
+    const d = prev.filter(g => g.result === 'draw').length;
+    const avgSlip = prev.reduce((s, g) => s + (g.slips || 0), 0) / n;
+    const bits = [];
+    if (withAcc.length >= 2 && rep.accuracy != null) {
+      const m = Math.round(withAcc.reduce((s, g) => s + g.acc, 0) / withAcc.length);
+      const dlt = rep.accuracy - m;
+      bits.push(`Précision : <b>${rep.accuracy} %</b> contre <b>${m} %</b> de moyenne sur tes ${withAcc.length} dernières parties à ce niveau `
+        + `<span class="${dlt >= 0 ? 'up' : 'down'}">${dlt >= 0 ? '▲ +' : '▼ '}${Math.abs(dlt)}</span>.`);
+    }
+    const ds = rec.slips - avgSlip;
+    bits.push(`Erreurs et gaffes : <b>${rec.slips}</b> contre <b>${avgSlip.toFixed(1)}</b> de moyenne `
+      + `<span class="${ds <= 0 ? 'up' : 'down'}">${ds <= 0 ? '▲' : '▼'} ${Math.abs(ds).toFixed(1)}</span>.`);
+    bits.push(`Ton bilan à ~${rec.elo} avant celle-ci : <b>${w}V / ${d}N / ${n - w - d}D</b>.`);
+    return `<div class="cg-card"><div class="h">Par rapport à tes autres parties à ~${rec.elo}</div>
+      ${bits.map(b => `<p class="l">${b}</p>`).join('')}</div>`;
+  }
+
+  // Deux ou trois phrases, toutes tirees des chiffres de CETTE partie. Aucune
+  // morale, aucun « sois vigilant » : ce qui s'est passe, et le reflexe qui
+  // l'evite la prochaine fois.
+  function takeawayBlock(rec, rep, an) {
+    const t = [];
+    if (an && an.kind === 'mate' && an.loser === rec.side) {
+      const own = an.flight.filter(f => f.state === 'own').length;
+      t.push(own >= 2
+        ? `Tu t'es fait mater avec <b>${own} de tes propres pièces</b> collées à ton roi. Quand le roi est étouffé, ouvrir une case d'air (un pion qui avance) vaut souvent mieux qu'un coup d'attaque.`
+        : `Quand une pièce adverse se pose <b>à côté de ton roi</b>, le premier réflexe n'est pas de chercher une parade : c'est de compter les cases qui restent au roi. S'il en reste zéro, il faut agir un coup <b>plus tôt</b>.`);
+    } else if (an && an.kind === 'mate') {
+      t.push(`Tu as conclu par un mat : c'est la partie du jeu que la plupart des joueurs de ce niveau ratent. Le schéma de ce mat est à reconnaître, il reviendra.`);
+    }
+    if (an && an.kind === 'stalemate') {
+      t.push(`Le pat n'arrive jamais par hasard : avant de donner un échec ou de bloquer une case, vérifie qu'il reste <b>un coup légal</b> à l'adversaire.`);
+    }
+    if (rep.phases.length > 1) {
+      const worst = rep.phases.slice().sort((a, b) => a.accuracy - b.accuracy)[0];
+      if (worst.accuracy < 70) {
+        t.push(worst.key === 'opening'
+          ? `Ça casse <b>dès l'ouverture</b> (${worst.accuracy} %). Rejouer la même ligne avec « ouverture imposée » deux ou trois fois coûte dix minutes et se voit tout de suite.`
+          : worst.key === 'endgame'
+            ? `Ça casse <b>en finale</b> (${worst.accuracy} %). C'est la phase où le coup suivant se calcule vraiment, et où le mode « mats et finales » est le plus rentable.`
+            : `Ça casse <b>au milieu de partie</b> (${worst.accuracy} %), là où il y a le plus de pièces qui se touchent. C'est un problème de captures non vues, pas de plan.`);
+      }
+    }
+    if ((rep.counts.blunder || 0) >= 2) {
+      t.push(`<b>${rep.counts.blunder} gaffes</b> dans la même partie : le coût moyen d'une gaffe est plus élevé que tout ce que rapporte un bon plan. Les envoyer dans tes exercices (bouton ci-dessous) est ce qui rapporte le plus.`);
+    }
+    if (rec.hints >= 3) {
+      t.push(`Tu as pris <b>${rec.hints} indices</b>. À garder tant que la position te bloque, mais la partie suivante mérite un essai <b>sans</b> : c'est le seul moyen de savoir ce que tu trouves tout seul.`);
+    }
+    if (!t.length && rep.n >= 8 && rep.accuracy != null && rep.accuracy >= 80) {
+      t.push(`Rien à corriger de gros : <b>${rep.accuracy} %</b> de précision, les erreurs restent des imprécisions. C'est le moment de monter d'un cran de niveau.`);
+    }
+    if (!t.length) return '';
+    return `<div class="cg-card keep"><div class="h">🎯 Ce qu'il faut retenir</div>
+      ${t.slice(0, 3).map(x => `<p class="l">${x}</p>`).join('')}</div>`;
   }
 
   // La seule passerelle vers l'entrainement, et elle est EXPLICITE (un bouton).
@@ -1585,19 +2417,36 @@ const CoachGame = (() => {
     return null;
   }
 
-  function sparkHtml(tr) {
+  // La courbe de la partie. Deux ajouts par rapport a la version d'avant : la
+  // zone au-dessus de zero est REMPLIE (on voit d'un coup d'oeil combien de
+  // temps on a ete devant), et le coup qui a fait basculer la partie porte un
+  // point rouge - une courbe qui descend sans dire OU ne sert a rien.
+  function sparkHtml(tr, rep) {
     const pts = (tr || []).filter(v => typeof v === 'number');
     if (pts.length < 3) return '';
-    const W = 320, H = 46;
+    const W = 320, H = 54;
     const hi = Math.max(...pts, 100), lo = Math.min(...pts, -100);
     const x = (i) => (i / (pts.length - 1)) * W;
     const y = (v) => H - 3 - ((v - lo) / ((hi - lo) || 1)) * (H - 8);
+    const y0 = y(0);
     const poly = pts.map((v, i) => x(i) + ',' + y(v)).join(' ');
-    return `<div class="cg-spark"><div class="h">Ton avantage, coup par coup (ton point de vue)</div>`
+    const area = `M0,${y0} L` + pts.map((v, i) => x(i) + ',' + y(v)).join(' L') + ` L${W},${y0} Z`;
+    const ahead = pts.filter(v => v > 30).length;
+    const mi = rep && rep.turning && typeof rep.turning.mi === 'number' ? rep.turning.mi : -1;
+    const dot = (mi >= 0 && mi < pts.length)
+      ? `<circle cx="${x(mi).toFixed(1)}" cy="${y(pts[mi]).toFixed(1)}" r="3.4" fill="#e05252" stroke="#1a1a2e" stroke-width="1.2"/>` : '';
+    return `<div class="cg-spark"><div class="h">Ton avantage, coup par coup (ton point de vue)`
+      + `${mi >= 0 ? ` · <span class="dotlab">le coup ${rep.turning.n}</span>` : ''}</div>`
       + `<svg viewBox="0 0 ${W} ${H}">`
-      + `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="rgba(255,255,255,.14)" stroke-dasharray="3 3"/>`
+      + `<defs><clipPath id="cg-spk-up"><rect x="0" y="0" width="${W}" height="${y0.toFixed(1)}"/></clipPath>`
+      + `<clipPath id="cg-spk-dn"><rect x="0" y="${y0.toFixed(1)}" width="${W}" height="${(H - y0).toFixed(1)}"/></clipPath></defs>`
+      + `<path d="${area}" fill="rgba(74,222,128,.22)" clip-path="url(#cg-spk-up)"/>`
+      + `<path d="${area}" fill="rgba(248,113,113,.20)" clip-path="url(#cg-spk-dn)"/>`
+      + `<line x1="0" y1="${y0}" x2="${W}" y2="${y0}" stroke="rgba(255,255,255,.22)" stroke-dasharray="3 3"/>`
       + `<polyline points="${poly}" fill="none" stroke="#e2b857" stroke-width="1.8"/>`
-      + `</svg></div>`;
+      + dot
+      + `</svg>`
+      + `<p class="sub">Tu as été devant sur <b>${ahead}</b> de tes ${pts.length} coups.</p></div>`;
   }
 
   // ═════════════════════════ Historique separe ═════════════════════════
@@ -1628,8 +2477,9 @@ const CoachGame = (() => {
       const RL = g.result === 'win' ? 'V' : g.result === 'loss' ? 'D' : 'N';
       const tags = [g.book ? '📖 ' + g.book : null, g.aide === 'libre' ? 'libre' : 'assisté', 'niv. ~' + g.elo,
         (g.device === 'Android' || g.device === 'iOS') ? '📱' : null].filter(Boolean).join(' · ');
+      const acc = typeof g.acc === 'number' ? `${g.acc} % · ` : '';
       return `<div class="cg-hrow" data-id="${g.id}"><span class="d">${day}</span><span class="r ${R}">${RL}</span>`
-        + `<span class="m">${tags}</span><span class="g">${g.slips} err.</span>`
+        + `<span class="m">${tags}</span><span class="g">${acc}${g.slips} err.</span>`
         + `<button type="button" class="cg-del" data-act="ask" data-id="${g.id}" title="Retirer cette partie de l'historique">🗑</button></div>`;
     }).join('');
 
@@ -1754,7 +2604,8 @@ const CoachGame = (() => {
     fr2.readAsText(file);
   }
 
-  return { open, showHistory, close, inProgress, paramsFor, pickIndex, effSpread, winLoss, lineLoss, LADDER };
+  return { open, showHistory, close, inProgress, paramsFor, pickIndex, effSpread, winLoss, lineLoss,
+    endAnatomy, endArrows, gameReport, betweenSqs, LADDER };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CoachGame;

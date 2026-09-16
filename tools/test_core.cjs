@@ -424,6 +424,163 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   BoardRenderer.setSpeed('normal');
 }
 
+// ────────── anatomie de la position finale (js/coachgame.js) ──────────────
+// Ce que ces tests protegent : l'ecran de fin de partie n'affiche plus un
+// verdict, il EXPLIQUE la position finale. Une phrase fausse y est pire que pas
+// de phrase du tout - « le roi peut aller en g8 » sous un mat du couloir ferait
+// douter de tout le reste. Le piege principal est connu et se voit ici : les
+// cases de fuite doivent se juger sur un plateau ou le ROI MATE A ETE RETIRE,
+// sinon le roi fait ecran a la tour qui le mate et la case derriere lui passe
+// pour libre.
+{
+  const G = 'FIN DE PARTIE';
+  const A = CoachGame.endAnatomy;
+  const st = (an, sq) => { const f = an.flight.find(x => x.sq === sq); return f ? f.state : 'absente'; };
+
+  // ── Mat du couloir : Tour a8, roi noir g8, ses trois pions devant lui. ──
+  const couloir = 'R5k1/5ppp/8/8/8/8/8/6K1 b - - 0 1';
+  {
+    const an = A(couloir);
+    check(G, 'couloir : c est bien un mat', an.kind, 'mate');
+    check(G, 'couloir : le roi mate est trouve', an.king, 'g8');
+    check(G, 'couloir : la tour a8 donne l echec', an.checkers.map(c => c.sq + c.t), ['a8r']);
+    // LE test qui compte : sans le retrait du roi, g8->f8 passerait pour libre.
+    check(G, 'couloir : f8 est tenue par la tour (a travers le roi)', st(an, 'f8'), 'held');
+    check(G, 'couloir : f7 g7 h7 sont bouchees par ses propres pions',
+      [st(an, 'f7'), st(an, 'g7'), st(an, 'h7')], ['own', 'own', 'own']);
+    // h8 est DERRIERE le roi sur la meme rangee : c est elle qui passait pour libre.
+    check(G, 'couloir : h8, derriere le roi, est tenue elle aussi', st(an, 'h8'), 'held');
+    check(G, 'couloir : aucune piece ne peut prendre la tour', an.takers.length, 0);
+    check(G, 'couloir : la ligne a8-g8 peut se decrire', an.cut && an.cut.path, ['b8', 'c8', 'd8', 'e8', 'f8']);
+  }
+
+  // ── Mat de l epaulette / soutien : la dame colle au roi, le fou la garde. ──
+  // Dxh7# type coup du Berger : la dame en f7 soutenue par le fou c4.
+  const berger = 'r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4';
+  {
+    const an = A(berger);
+    check(G, 'berger : mat', an.kind, 'mate');
+    check(G, 'berger : la dame f7 mate', an.checkers.map(c => c.sq + c.t), ['f7q']);
+    check(G, 'berger : le fou c4 la protege', an.support.map(s => s.sq + s.t), ['c4b']);
+    // Le roi e8 ne peut pas prendre en f7 : la case est defendue.
+    check(G, 'berger : f7 est defendue (le roi ne peut pas croquer)', st(an, 'f7'), 'held');
+    check(G, 'berger : e7 est tenue par la dame', st(an, 'e7'), 'held');
+    check(G, 'berger : d8 est occupee par sa propre dame', st(an, 'd8'), 'own');
+    // La dame est COLLEE au roi : il n y a rien a interposer.
+    check(G, 'berger : la dame est adjacente, aucune ligne a couper',
+      an.cut ? an.cut.path.length : 0, 0);
+  }
+
+  // ── Mat etouffe : le roi est enferme par ses propres pieces, cavalier en f7.
+  const etouffe = '6rk/5Npp/8/8/8/8/8/6K1 b - - 0 1';
+  {
+    const an = A(etouffe);
+    check(G, 'etouffe : mat', an.kind, 'mate');
+    check(G, 'etouffe : le cavalier donne l echec', an.checkers.map(c => c.t), ['n']);
+    check(G, 'etouffe : un cavalier ne se coupe pas', an.cut, null);
+    check(G, 'etouffe : les trois cases sont bouchees par ses propres pieces',
+      an.flight.filter(f => f.state === 'own').map(f => f.sq).sort(), ['g7', 'g8', 'h7']);
+  }
+
+  // ── Pat : roi noir h8, dame blanche g6, roi blanc f6. Pas d echec, pas de coup.
+  const pat = '7k/8/5KQ1/8/8/8/8/8 b - - 0 1';
+  {
+    const an = A(pat);
+    check(G, 'pat : reconnu comme pat, pas comme mat', an.kind, 'stalemate');
+    check(G, 'pat : personne ne donne d echec', an.checkers.length, 0);
+    check(G, 'pat : h7 et g8 sont tenues par la dame',
+      [st(an, 'h7'), st(an, 'g8')], ['held', 'held']);
+  }
+
+  // ── Materiel insuffisant et abandon : pas de mat a disseque, mais le genre
+  //    doit etre nomme - c est lui qui choisit la phrase affichee.
+  check(G, 'roi contre roi : materiel insuffisant', A('8/8/4k3/8/8/4K3/8/8 w - - 0 1').kind, 'material');
+  check(G, 'abandon : aucune analyse de position', A(couloir, 'resign').kind, 'resign');
+  // Une FEN seule ne PEUT PAS dire « triple repetition » ni « cinquante coups » :
+  // ces deux nulles demandent l historique. L appelant tient la vraie partie et
+  // passe le genre ; sans lui, le panneau de fin n avait rien a dire.
+  {
+    const mid = 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 4 3';
+    check(G, 'repetition : le genre vient de la partie, pas de la FEN', A(mid, null, 'repetition').kind, 'repetition');
+    check(G, 'cinquante coups : idem', A(mid, null, 'fifty').kind, 'fifty');
+    check(G, 'sans le genre, une position jouable reste muette', A(mid).kind, 'other');
+    // Un mat reste un mat : le genre passe par l appelant ne doit rien ecraser.
+    check(G, 'le genre de nulle n ecrase jamais un mat', A(couloir, null, 'repetition').kind, 'mate');
+  }
+  check(G, 'position normale : rien a raconter', A('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').kind, 'other');
+
+  // ── Les cases entre deux cases, base de « couper la ligne ». ──
+  check(G, 'entre a1 et a4', CoachGame.betweenSqs('a1', 'a4'), ['a2', 'a3']);
+  check(G, 'entre h1 et e4 (diagonale)', CoachGame.betweenSqs('h1', 'e4'), ['g2', 'f3']);
+  check(G, 'entre b1 et c3 : non alignees', CoachGame.betweenSqs('b1', 'c3'), []);
+  check(G, 'cases voisines : rien entre elles', CoachGame.betweenSqs('e4', 'e5'), []);
+
+  // ── Les fleches dessinees : l echec en rouge, une marque par case de fuite. ──
+  {
+    const an = A(couloir);
+    const a0 = CoachGame.endArrows(an, 0);
+    check(G, 'fleches : une par echec + une par case autour du roi',
+      a0.length, an.checkers.length + an.flight.length);
+    check(G, 'fleches : l echec part de la piece vers le roi',
+      a0[0].from + a0[0].to, 'a8' + an.king);
+    const a1 = CoachGame.endArrows(an, 1);
+    check(G, 'niveau 1 : il s ajoute des fleches, jamais moins', a1.length > a0.length, true);
+  }
+}
+
+// ────────── le bilan chiffre du mode entraineur (js/coachgame.js) ──────────
+// `gameReport` relit le journal des coups. Deux choses a ne pas casser : seuls
+// MES coups comptent (ceux du coach sont dans le meme journal), et la precision
+// se calcule avec la meme formule que l ecran d analyse - une precision maison
+// serait pire que pas de precision du tout, puisqu elle ne se comparerait a
+// rien dans l app.
+{
+  const G = 'BILAN COACH';
+  const R = CoachGame.gameReport;
+
+  const log = [
+    { n: 1, san: 'e4', mine: true, k: 'book', wpl: 0.00, cp: 0, ph: 'opening', ev: 20, ea: 20, eb: 20, bs: 'e4' },
+    { n: 1, san: 'e5', mine: false, k: 'book', ev: 15 },
+    { n: 2, san: 'Cf3', mine: true, k: 'best', wpl: 0.01, cp: 5, ph: 'opening', ev: 25, eb: 15, ea: 25, bs: 'Cf3' },
+    { n: 2, san: 'Cc6', mine: false, k: null, ev: 20 },
+    { n: 3, san: 'Fc4', mine: true, k: 'good', wpl: 0.03, cp: 20, ph: 'middle', ev: 10, eb: 20, ea: 10, bs: 'Fb5' },
+    { n: 3, san: 'Cf6', mine: false, k: null, ev: 5 },
+    { n: 4, san: 'Cg5', mine: true, k: 'blunder', wpl: 0.34, cp: 420, ph: 'middle', ev: -400, eb: 5, ea: -400, bs: 'd3' },
+    { n: 4, san: 'd5', mine: false, k: 'best', ev: -410 },
+    { n: 5, san: 'exd5', mine: true, k: 'mistake', wpl: 0.12, cp: 150, ph: 'endgame', ev: -560, eb: -400, ea: -560, bs: 'Fxf7+' },
+  ];
+  const r = R(log);
+
+  check(G, 'seuls MES coups sont comptes', r.n, 5);
+  check(G, 'le decompte par classe suit le journal',
+    [r.counts.book, r.counts.best, r.counts.good, r.counts.blunder, r.counts.mistake], [1, 1, 1, 1, 1]);
+  check(G, 'la precision est calculee', typeof r.accuracy, 'number');
+  check(G, 'une partie avec une grosse gaffe ne sort pas une precision de champion',
+    r.accuracy < 90, true);
+  check(G, 'l acpl est la moyenne des pertes en centiemes', r.acpl, Math.round((0 + 5 + 20 + 420 + 150) / 5));
+  check(G, 'les trois phases sont separees', r.phases.map(p => p.key + ':' + p.n),
+    ['opening:2', 'middle:2', 'endgame:1']);
+  check(G, 'le moment qui bascule est la PLUS grosse perte, pas la premiere',
+    r.turning && r.turning.san, 'Cg5');
+  check(G, 'le moment qui bascule porte le coup du moteur', r.turning && r.turning.best, 'd3');
+  check(G, 'le moment qui bascule sait ou il est dans la courbe', r.turning && r.turning.mi, 3);
+  // Un coup qui laisse un mat vaut ~30 000 centiemes de pion. Sans plafond, la
+  // moyenne affichait « tu laches 3 395 centiemes par coup », chiffre absurde
+  // qui decredibilise tout le bilan autour. Meme plafond que analysis.js.
+  {
+    const mate = log.concat([{ n: 6, san: 'Rc3', mine: true, k: 'excellent', wpl: 0.01, cp: 28882, ph: 'endgame', ev: -900 }]);
+    check(G, 'une perte de score de mat est plafonnee dans la moyenne', R(mate).acpl <= 1000, true);
+  }
+  check(G, 'un journal vide ne casse rien', R([]).n, 0);
+  check(G, 'un journal absent ne casse rien', R(null).accuracy, null);
+
+  // Une partie propre doit sortir une precision haute : sinon le chiffre ne
+  // discrimine rien et n a aucune valeur pedagogique.
+  const clean = [];
+  for (let i = 0; i < 20; i++) clean.push({ n: i + 1, san: 'a' + i, mine: i % 2 === 0, k: 'best', wpl: 0.004, cp: 4, ph: 'middle', ev: 10 });
+  check(G, 'une partie sans faute sort une precision elevee', R(clean).accuracy >= 90, true);
+}
+
 // ─────────────────────────── rapport ────────────────────────────────────────
 console.log('');
 if (fail) {

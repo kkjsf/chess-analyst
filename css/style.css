@@ -4042,7 +4042,10 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .routine-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
 .routine-ring svg { width: 52px; height: 52px; }
 .routine-ring .rr-track { fill: none; stroke: rgba(255,255,255,.09); stroke-width: 5; }
-.routine-ring .rr-fill { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
+/* dasharray/offset par defaut = anneau VIDE : sans ca, tant que renderRoutine
+   n'a pas tourne, le cercle est trace en entier et l'accueil s'ouvre sur une
+   routine qui a l'air terminee a 100 %. */
+.routine-ring .rr-fill { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 150.8; stroke-dashoffset: 150.8; transition: stroke-dashoffset .4s ease; }
 .routine-ring .rr-num { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
 .routine-head-txt { display: flex; flex-direction: column; }
 .routine-head-txt .routine-title { font-size: 15.5px; font-weight: 800; }
@@ -4094,6 +4097,43 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .hs-demo { display: flex; align-items: center; gap: 12px; margin: 10px 2px 0; }
 .hs-demo svg { width: 96px; height: 96px; border-radius: 6px; flex: none; }
 .hs-demo-txt { font-size: 12px; color: var(--dim-2); line-height: 1.45; }
+
+/* ── Premier rendu (html.booting) ───────────────────────────────────────────
+   L'accueil peignait VIDE - pas de « Reprendre », pas de « Parties récentes »,
+   une routine sans ses lignes - puis se remplissait d'un coup quand les ~970 Ko
+   de scripts avaient fini de charger. Le saut de ~600 px se lisait comme un
+   rechargement de la page. Ces règles donnent au PREMIER rendu la forme finale.
+   Elles ne visent que les conteneurs ENCORE vides : elles s'effacent d'elles-
+   mêmes dès que le contenu arrive, et init() retire `booting` à la fin. */
+@keyframes boot-pulse { 0%, 100% { opacity: .5; } 50% { opacity: .85; } }
+
+/* 6 lignes de routine : 52 px de ligne + 8 px d'écart (voir .routine-list). */
+html.booting #routine-list:empty {
+  min-height: 352px;
+  background: repeating-linear-gradient(var(--bg-2) 0 52px, transparent 52px 60px);
+  animation: boot-pulse 1.1s ease-in-out infinite;
+}
+html.booting .rr-num { visibility: hidden; }
+
+/* « Reprendre » et « Parties récentes » n'existent que si des parties sont en
+   mémoire : le script d'amorce le sait (classe has-games, nombre exact dans
+   --boot-recent) sans rien parser. */
+html.booting.has-games #resume-section[hidden],
+html.booting.has-games #recent-section[hidden] { display: block; }
+html.booting #resume-board-svg { background: var(--bg-2); }
+html.booting #resume-title:empty,
+html.booting #resume-meta:empty {
+  display: block; border-radius: 6px; background: var(--bg-2);
+  animation: boot-pulse 1.1s ease-in-out infinite;
+}
+html.booting #resume-title:empty { height: 15px; width: 55%; }
+html.booting #resume-meta:empty { height: 12px; width: 35%; margin-top: 9px; }
+/* 5 parties au plus dans la liste (voir loadRecent) : ligne 48 px + 8 px. */
+html.booting #recent-list:empty {
+  min-height: calc(var(--boot-recent, 3) * 56px);
+  background: repeating-linear-gradient(var(--bg-2) 0 48px, transparent 48px 56px);
+  animation: boot-pulse 1.1s ease-in-out infinite;
+}
 
 /* ── Tabbar : look modernisé (mobile) ── */
 .tabbar { background: var(--bg-2); border-top: 1px solid var(--line-str); }
@@ -4152,8 +4192,12 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
   .routine-card { grid-area: routine; align-self: start; }
   .recent-section { grid-area: recent; align-self: start; }
   .home-quick { grid-area: quick; align-self: start; }
-  /* Nouvel utilisateur (aucune partie enregistrée) : colonne unique centrée */
-  .home-main:not(:has(#recent-section:not([hidden]))) {
+  /* Nouvel utilisateur (aucune partie enregistrée) : colonne unique centrée.
+     Pendant l'amorce, « Parties récentes » porte encore son attribut hidden
+     alors que le script d'amorce sait deja qu'il y a des parties (has-games) :
+     sans la garde, le premier rendu partait en colonne unique puis basculait
+     en tableau de bord 2 colonnes - exactement le saut qu'on veut supprimer. */
+  html:not(.has-games) .home-main:not(:has(#recent-section:not([hidden]))) {
     display: flex; flex-direction: column; align-items: stretch; max-width: 640px; margin: 0 auto;
   }
   /* Le hero garde une hauteur de champ confortable sur large écran */
@@ -5122,6 +5166,8 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
   .cg-evalbar { display: block; }
   .cg-boardwrap { max-width: min(var(--ex-board), calc(100% - 30px)); margin-left: 26px; }
   .cg-pbar { max-width: min(var(--ex-board), calc(100% - 30px)); margin-left: 26px; }
+  /* Le panneau de fin suit le plateau, decale comme lui par la barre d'avantage. */
+  .cg-over { max-width: min(var(--ex-board), calc(100% - 30px)); margin-left: 26px; margin-right: 0; }
 }
 
 /* Retirer une partie de l'historique du mode entraineur (deux temps). */
@@ -5135,6 +5181,125 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .cg-del.no { color: var(--text-dim); }
 .cg-hrow.asking { background: rgba(248,113,113,.08); gap: 6px; }
 .cg-hrow.asking .m { color: #ffb4b4; }
+
+/* ── Fin de partie : le panneau qui reste SOUS l'echiquier ────────────────
+   La partie ne bascule plus sur le bilan toute seule. Ce panneau s'ouvre sous
+   le plateau, explique la position finale case par case, et laisse la
+   navigation coup par coup entierement disponible. Le bilan est un bouton. */
+.cg-over {
+  max-width: min(var(--ex-board), 100%); margin: 10px auto 0; text-align: left;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 13px;
+}
+.cg-over.win { background: linear-gradient(180deg, rgba(74,222,128,.12), rgba(74,222,128,.03)); border-color: rgba(74,222,128,.28); }
+.cg-over.loss { background: linear-gradient(180deg, rgba(248,113,113,.11), rgba(248,113,113,.03)); border-color: rgba(248,113,113,.26); }
+.cg-over.draw { background: linear-gradient(180deg, rgba(91,143,185,.12), rgba(91,143,185,.03)); border-color: rgba(91,143,185,.28); }
+.cg-over .hd { display: flex; align-items: center; gap: 10px; }
+.cg-over .hd .ic { font-size: 22px; line-height: 1; flex: 0 0 auto; }
+.cg-over .hd .tt b { display: block; font-size: 15.5px; font-weight: 700; line-height: 1.25; }
+.cg-over .hd .tt small { display: block; font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.cg-over .lead { font-size: 12.5px; line-height: 1.6; color: var(--text-dim); margin: 9px 0 0; }
+.cg-over .lead b { color: var(--text); }
+.cg-over .foot { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); margin: 9px 0 0; }
+.cg-over .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; }
+.cg-over .acts .train-btn { flex: 1 1 auto; min-width: 120px; padding: 9px 11px; font-size: 12.5px; min-height: 38px; }
+.cg-over .acts .nav { display: flex; gap: 6px; flex: 0 0 auto; }
+.cg-over .acts .nav .train-btn { min-width: 44px; flex: 0 0 auto; }
+.cg-over .acts .nav .train-btn:disabled { opacity: .3; }
+.cg-over .acts .train-btn:not(.ghost),
+.cg-review .train-btn:not(.ghost) { background: var(--accent); color: #1a1a2e; font-weight: 700; }
+
+/* L'anatomie du mat : une ligne par question qu'on se pose devant la position. */
+.cg-anat { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.cg-anat li {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+}
+.cg-anat li .ic { flex: 0 0 auto; font-size: 13px; line-height: 1.5; }
+.cg-anat li .tx { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.6; color: var(--text-dim); }
+.cg-anat li .tx b { color: var(--text); }
+/* Une case citee dans le texte s'allume sur l'echiquier quand on la touche :
+   c'est tout l'interet de rester sur le plateau. */
+.cg-sq {
+  display: inline-block; font-variant-numeric: tabular-nums; cursor: pointer;
+  background: rgba(226,184,87,.14); border: 1px solid rgba(226,184,87,.38);
+  border-radius: 6px; padding: 0 4px; color: var(--accent) !important; line-height: 1.5;
+}
+.cg-sq:hover { background: rgba(226,184,87,.28); }
+
+/* Les cases autour du roi mate : une pastille par case, cliquable comme le
+   reste. En phrase, huit cases faisaient six lignes que personne ne lit. */
+.cg-fgrid { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.cg-fsq {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  border: 1px solid var(--line-str); background: rgba(255,255,255,.04);
+  border-radius: 8px; padding: 4px 7px; font: inherit; cursor: pointer; min-height: 34px;
+}
+.cg-fsq b { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1.2; }
+.cg-fsq small { font-size: 9.5px; color: var(--text-dim); line-height: 1.2; white-space: nowrap; }
+.cg-fsq.held { border-color: rgba(224,82,82,.45); background: rgba(224,82,82,.1); }
+.cg-fsq.held b { color: #ffb4b4; }
+.cg-fsq.own { border-color: rgba(226,184,87,.45); background: rgba(226,184,87,.1); }
+.cg-fsq.own b { color: var(--accent); }
+.cg-fsq.free { border-color: rgba(86,184,134,.45); background: rgba(86,184,134,.1); }
+.cg-fsq.free b { color: var(--success); }
+.cg-fsq:hover { filter: brightness(1.35); }
+.cg-anat .nb { display: block; font-size: 10.5px; color: var(--text-dim); margin-top: 7px; line-height: 1.45; }
+
+/* ── Le bilan etoffe ──────────────────────────────────────────────────── */
+.cg-res .cg-back { margin-top: 9px; padding: 7px 11px; font-size: 12px; min-height: 34px; }
+.cg-lede { font-size: 12px; color: var(--text-dim); line-height: 1.55; margin: 8px 2px 0; }
+.cg-lede b { color: var(--text); }
+.cg-card { margin-top: 11px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 11px; }
+.cg-card > .h { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; }
+.cg-card .l { font-size: 12.5px; line-height: 1.6; color: var(--text-dim); margin: 6px 0 0; }
+.cg-card .l:first-of-type { margin-top: 0; }
+.cg-card .l b { color: var(--text); }
+.cg-card .sub { font-size: 11.5px; line-height: 1.5; color: var(--text-dim); margin: 8px 0 0; }
+.cg-card .sub b { color: var(--text); }
+.cg-card .up { color: var(--success); font-weight: 700; }
+.cg-card .down { color: var(--danger); font-weight: 700; }
+.cg-card.turn { border-color: rgba(226,184,87,.32); background: rgba(226,184,87,.06); }
+.cg-card.gems { border-color: rgba(74,222,128,.26); background: rgba(74,222,128,.05); }
+.cg-card.keep { border-color: rgba(91,143,185,.3); background: rgba(91,143,185,.07); }
+.cg-card .train-btn { margin-top: 9px; padding: 7px 11px; font-size: 12px; min-height: 34px; }
+.cg-card .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cg-gem {
+  border: 1px solid rgba(74,222,128,.35); background: rgba(74,222,128,.09); color: var(--text-dim);
+  font: inherit; font-size: 12px; padding: 5px 9px; border-radius: 9px; cursor: pointer; min-height: 30px;
+}
+.cg-gem b { color: var(--success); }
+.cg-gem:hover { background: rgba(74,222,128,.17); }
+
+/* La barre de repartition des coups : memes couleurs que les cases du journal. */
+.cg-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: #20263f; }
+.cg-bar i { display: block; height: 100%; }
+.cg-bar i.best, .cg-bar i.excellent { background: #4ade80; }
+.cg-bar i.excellent { background: #86d99a; }
+.cg-bar i.good { background: #c2d69a; }
+.cg-bar i.book { background: #d4b177; }
+.cg-bar i.forced { background: #4a4a5e; }
+.cg-bar i.inaccuracy { background: var(--warning); }
+.cg-bar i.mistake { background: #f0a050; }
+.cg-bar i.miss, .cg-bar i.blunder { background: var(--danger); }
+.cg-tally2 { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
+.cg-tally2 .eval-badge { margin-left: 0; }
+
+/* Precision par phase : la ligne qui dit OU la partie casse. */
+.cg-phrow { display: grid; grid-template-columns: 96px 1fr 42px 52px; gap: 7px; align-items: center; padding: 4px 0; font-size: 12px; }
+.cg-phrow .n { color: var(--text); }
+.cg-phrow .tr { height: 7px; border-radius: 4px; background: #20263f; overflow: hidden; }
+.cg-phrow .tr i { display: block; height: 100%; background: linear-gradient(90deg, #5b8fb9, #4ade80); }
+.cg-phrow .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+.cg-phrow .e { text-align: right; font-size: 11px; color: var(--text-dim); }
+.cg-phrow .e.bad { color: var(--danger); }
+.cg-spark .dotlab { color: #ffb4b4; }
+.cg-spark .sub { font-size: 11px; color: var(--text-dim); margin: 6px 0 0; }
+.cg-spark .sub b { color: var(--text); }
+
+@media (max-width: 380px) {
+  .cg-phrow { grid-template-columns: 78px 1fr 38px 44px; font-size: 11.5px; }
+  .cg-over .acts .train-btn { min-width: 100%; }
+}
 
 /* Bandeau du mode revue (on regarde un coup passe). */
 .cg-review {

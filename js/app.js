@@ -91,6 +91,9 @@ const App = (() => {
     initSettings();
     pruneRoutineKeys();
     refreshHome();
+    // L'accueil est rempli : on rend la main au CSS normal (voir le script
+    // d'amorce dans index.html et le bloc « Premier rendu » du style).
+    document.documentElement.classList.remove('booting', 'has-games');
   }
 
   // Vitesse de l'animation des pieces, avec un apercu qui rejoue un coup a

@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v261**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v271**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -19,7 +19,7 @@
   resout `stockfish.wasm` relativement au worker).
 - `sw.js`, `manifest.json` - PWA.
 - `coach-data.json` - contenu de coaching généré (~680 KB). Certains items de correctness ne se reflètent qu'après une RE-RUN complète du coach.
-- `tools/test_core.cjs` - 39 tests unitaires du coeur logique (`node tools/test_core.cjs`,
+- `tools/test_core.cjs` - 143 tests unitaires du coeur logique (`node tools/test_core.cjs`,
   ou `npm test` dans `tools/`). Tourne aussi en CI avant l'analyse serveur.
 - `tools/` - scripts utilitaires. Chaîne de contenu des leçons (v184) : `mine_lichess.cjs`
   (streame `lichess_db_puzzle.csv.zst`, gitignoré, → pool JSONL) → `pick_lichess.cjs` (choisit les
@@ -170,6 +170,86 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v270-v271 - L'ACCUEIL NE SE PEINT PLUS DEUX FOIS.** Plainte : « quand on arrive sur la page
+  d'accueil, y'a un premier ecran pendant 1 seconde et ca recharge sur le vrai ecran ». Ce n'etait
+  pas un rechargement (le seul `location.reload()` de l'app est celui du service worker, et il ne
+  part que sur une VRAIE mise a jour) mais un **premier rendu qui n'avait pas la bonne forme** :
+  le corps de la page se peint bien avant que les ~970 Ko de scripts n'aient fini de charger, donc
+  l'accueil s'affichait sans « Reprendre », sans « Parties recentes », avec une routine **vide**
+  et un anneau de progression **dore plein** (le `stroke-dasharray` n'etant pose que par
+  `renderRoutine`), puis tout arrivait d'un coup. Mesure a 375 px avec 3 parties en memoire :
+  **premier rendu 1 395 px, ecran final 2 111 px, soit 716 px de saut** ; sur desktop la page
+  partait en plus en **colonne unique** avant de basculer en tableau de bord 2 colonnes (la regle
+  « nouvel utilisateur » teste `#recent-section[hidden]`, encore vrai a ce moment-la).
+  Correctif en trois morceaux : (1) un **script d'amorce** dans le `<head>` pose `html.booting` et
+  lit, **sans JSON.parse** (une simple regexp sur `"savedAt":`), combien de parties sont en memoire
+  -> classe `has-games` + variable `--boot-recent` ; (2) un bloc CSS « Premier rendu » qui reserve
+  la place exacte et dessine des **placeholders** - 6 lignes de routine, la carte Reprendre, N
+  lignes de parties recentes - en ne visant que les conteneurs **`:empty`**, donc les regles
+  s'effacent d'elles-memes des que le contenu arrive ; (3) `init()` retire `booting` et `has-games`
+  a la fin (filet sur `load` si un script n'arrive jamais). Plus le `stroke-dasharray` par defaut
+  de `.rr-fill`, pour que l'anneau soit **vide** tant que rien ne l'a calcule. Apres : **2 091 ->
+  2 111 px, 20 px de saut**. Piege a retenir : `[hidden]` reste sur la section tant que JS n'a pas
+  tourne, donc toute regle de mise en page qui teste `:has(#recent-section:not([hidden]))` doit
+  etre gardee par `html:not(.has-games)`, sinon le correctif deplace le saut au lieu de le
+  supprimer.
+- **v262-v269 - LA FIN DE PARTIE SE VIT SUR L'ECHIQUIER, ET LE BILAN DIT ENFIN QUELQUE CHOSE**
+  (mode « Jouer avec le coach », `js/coachgame.js`). Demande : « etoffe le bilan des parties apres
+  coach, et surtout apres un echec et mat / nul etc, ne va pas direct sur le bilan, laisse moi
+  comprendre sur l'echiquier ce qu'il s'est passe avec le dernier coup (et laisse moi explorer
+  autant que je veux avant d'aller au bilan) ». Verifie en local sur 6 vraies parties matees
+  (mat par le coach, abandon, desktop + 375 px), `test_core` **143/143**,
+  `verify_openings` 121/121, `validate_final` 6/6.
+  - **`finish()` ne bascule plus sur le bilan.** Il ENREGISTRE la partie puis appelle
+    `enterEndBoard()` : on reste sur l'ecran de partie, position finale affichee, anatomie du mat
+    dessous, navigation coup par coup entiere, et le bilan sur un bouton. `endInfo`
+    (`{rec, out, an, lastMove, level, seen}`) est l'etat « partie finie mais pas rangee » : tant
+    qu'il existe, les boutons de jeu (annuler / abandonner / indice / aide) sont masques et la
+    navigation reste ouverte. Fermer puis rouvrir l'ecran revient EXACTEMENT ou on etait
+    (echiquier si `seen` est faux, bilan sinon).
+  - **`endAnatomy(fen, reason)` - la position finale decrite case par case** (pure, testee).
+    Qui donne l'echec, qui protege la piece qui mate, l'etat de chacune des 8 cases autour du roi
+    (`own` / `held` / `free`), qui pourrait prendre la piece qui mate, et quelles cases il faudrait
+    boucher pour couper la ligne. **LE PIEGE, a ne jamais defaire : les cases de fuite se jugent
+    sur un plateau ou le ROI MATE A ETE RETIRE** (`boardNoKing`), sinon le roi fait lui-meme ecran
+    a la tour qui le cloue et la case DERRIERE lui passe pour libre - c'est le mat du couloir, le
+    plus frequent de tous, et le test `FIN DE PARTIE / couloir : h8, derriere le roi, est tenue
+    elle aussi` existe pour ca. « Pourquoi je ne peux pas prendre / m'interposer » se repond en
+    JOUANT le coup sur un plateau de travail (`stillCheckAfter`) : si le roi reste attaque, c'est
+    un clouage ou un echec double, et on le dit. `pawnPushTo` complete `attackersOf`, qui ne voit
+    pas un pion qui avance (il ne prend pas devant lui).
+  - **Sur l'echiquier** : fleche rouge de chaque piece qui mate vers le roi, un anneau par case de
+    fuite (rouge tenue / ambre bouchee par soi / vert libre), et un niveau 1 « Qui tient quoi »
+    qui ajoute une fleche depuis chaque gardien. Les cases citees dans le texte sont des
+    PASTILLES cliquables qui s'allument sur le plateau. `⏪ Revoir la fin au ralenti` rejoue les
+    6 derniers demi-coups a 950 ms ; toute navigation VOULUE l'arrete (`tailBusy` distingue les
+    deux). Revenir sur la position finale rallume l'anatomie, la quitter l'efface.
+  - **`enterEndBoard()` ne redessine pas un plateau deja a la bonne position** : le coup qui mate
+    vient d'etre anime par `renderAnimated`, et un `render()` sec dans la meme frame reconstruit
+    l'innerHTML et COUPE l'animation - exactement le moment qu'on cherche a faire voir. Les
+    fleches attendent `ANIM_MS` pour ne pas pointer une case ou la piece n'est pas encore arrivee.
+  - **Le bilan** passe de 4 chiffres + une courbe a : **precision** (meme formule que l'ecran
+    d'analyse - `blendedAccuracy` + `volatilityWeights`, desormais exportes par `analysis.js`),
+    ACPL, repartition des coups en barre + pastilles, **precision par phase** (ou ca tient, ou ca
+    casse), **le moment ou la partie a bascule** (la plus grosse perte en chances de gain, avec le
+    coup du moteur), **ce que tu as bien fait**, la courbe avec zone remplie et le point de
+    bascule marque, l'ouverture travaillee, la **comparaison aux parties precedentes au meme
+    niveau**, et 3 phrases « ce qu'il faut retenir ». Chaque moment cite renvoie a l'ECHIQUIER
+    (`data-goto` -> `backToBoard(ply)`) : un bilan sans chemin de retour n'est qu'un releve.
+  - **Ce qui alimente tout ca** : `judgeThenReply` note desormais sur chaque coup a moi `wpl`,
+    `cp`, `eb`/`ea`, `bs` (le coup du moteur) et `ph` (la phase) - zero recherche moteur en plus,
+    tout etait deja calcule. `gameReport(log)` (pure, testee) en tire les agregats ; `acc` et
+    `acpl` sont ranges A PLAT sur la partie, parce que `save()` **elague le journal au-dela des
+    30 dernieres parties** (~6 ko chacun) alors que la comparaison, elle, doit survivre.
+  - **Trois pieges de redaction, tous rencontres pour de vrai** : (a) `.train-btn` nu est CLAIR
+    SUR CLAIR (il n'a pas de fond a lui, cf. la note de `.rp-retry`) - « Voir le bilan » sortait
+    blanc sur blanc ; (b) le genre des pieces (`PC_FEM` : seules la dame et la tour sont
+    feminines) sans quoi « son fou c2 » etait suivi de « elle est protegee » ; (c) une perte en
+    centiemes doit etre PLAFONNEE a 1000 avant toute moyenne, sinon un coup qui laisse un mat
+    (~30 000) donne « tu laches 3 395 centiemes de pion par coup ». Et trois garde-fous de
+    contenu : sous 6 coups on donne les chiffres SANS les commenter, « ce que tu as bien fait » ne
+    salue que les positions reellement disputees (|eval| <= 250), et huit cases de fuite en
+    PHRASE font six lignes que personne ne lit - d'ou la grille de pastilles.
 - **v260-v261 - LES 14 CONSTATS DE LA REVUE, TOUS CORRIGES.** Verifie en local sur la v261, zero
   erreur console, `test_core` 94/94, `verify_openings` 121/121, `validate_final` 6/6,
   `verify_lessons mates` **0 FAIL** (contre 12 avant).
