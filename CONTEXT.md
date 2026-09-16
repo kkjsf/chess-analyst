@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v271**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v275**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,44 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v272-v275 - LE GRAPHIQUE D'EVOLUTION ELO, LISIBLE ET MANIPULABLE.** Plainte : chevauchements,
+  pas de jalons de date, pas assez clair ni interactif. Les chevauchements etaient reels et
+  mesurables : `getBBox()` sur les textes du plein ecran donnait **4 collisions** sur la vue
+  rapide (« niveau reel ~341 » sur le « 347 » final, « calibrage (Elo provisoire) » a la fois sur
+  la graduation 800 et sur le 760 de depart, et 800 sur 760). Corriges a la racine, pas cas par
+  cas :
+  - **Un placeur d'annotations** (`makePlacer` / `labelBox` / `boxesHit`) : chaque legende reserve
+    sa boite et se decale jusqu'a trouver une place libre, donc **aucune forme de donnees ne peut
+    ramener le chevauchement**. Verifie a 0 collision sur les deux cadences, tendance activee et
+    desactivee.
+  - **Les valeurs sortent du trace.** Depart / Apres calibrage / Plancher / Actuel / delta
+    passent dans un **bandeau de vignettes** au-dessus du graphique (`ratingStats`), ce qui
+    supprime 3 des 4 collisions d'un coup - et chaque vignette est un **bouton qui amene le
+    curseur sur la partie concernee**.
+  - **La legende « niveau reel » se place ou la courbe est la plus loin** de la ligne moyenne
+    (`meanCaptionSpot` balaie les fenetres de la largeur du texte et choisit le meilleur ecart,
+    du bon cote de la ligne), et « calibrage » est **accrochee a sa zone par une accolade** -
+    la zone ne fait que 8 parties de large, une legende flottante ne disait pas de quel bout de
+    courbe elle parlait. Les deux sont posees sur une plaque semi-opaque.
+  - **Jalons de date.** L'axe des x reste **un pas = une partie** (c'est la partie qui bouge
+    l'Elo), donc le temps y est irregulier : `monthBlocks` regroupe les parties consecutives d'un
+    meme mois et l'axe affiche un **separateur + le mois + son nombre de parties** (mai 14 /
+    juin 16 / juil. 29 / aout 25 / sept. 6) au lieu des deux dates isolees d'avant. La vignette
+    de l'ecran Statistiques recoit les memes separateurs de mois, en miniature.
+  - **Courbe de tendance** (moyenne glissante 10 parties, bleu, sous la courbe brute), activable
+    depuis un bouton. C'est elle qui rend la progression visible a l'oeil.
+  - **Curseur.** Survol souris, balayage tactile (`touchmove` non passif), et **fleches / Debut /
+    Fin au clavier** : reticule + anneau sur le point, infobulle (date complete, Elo et delta vs
+    la partie precedente, resultat, adversaire et son Elo, precision, gaffes, numero de partie,
+    mention « calibrage ») et, au clic, une **ligne epinglee sous le graphique avec le bouton
+    « Voir l'analyse »** (`openRecent`, meme chemin que les parties recentes). Echap depingle,
+    un 2e Echap ferme la fenetre.
+  - **Pieges rencontres :** l'infobulle etait placee par `transform: translate(%)` + un seuil en
+    pourcentage, ce qui la faisait **deborder de 26 px a 375 px de large** - elle est maintenant
+    positionnee a partir de sa taille MESUREE (`offsetWidth/Height`) et bornee a la boite ; sous
+    480 px elle se **gare dans le coin oppose au doigt** au lieu de couvrir la courbe ; et la
+    conversion pixel -> coordonnee SVG passe par `getScreenCTM()`, car `max-height: 66vh` peut
+    mettre le SVG en boite a lettres et fausser tout calcul en pourcentage.
 - **v270-v271 - L'ACCUEIL NE SE PEINT PLUS DEUX FOIS.** Plainte : « quand on arrive sur la page
   d'accueil, y'a un premier ecran pendant 1 seconde et ca recharge sur le vrai ecran ». Ce n'etait
   pas un rechargement (le seul `location.reload()` de l'app est celui du service worker, et il ne

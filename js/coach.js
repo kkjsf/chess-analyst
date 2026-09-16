@@ -1385,6 +1385,11 @@ const Coach = (() => {
     // (760 → 392 en huit parties). Hors fenêtre le vrai chiffre est -36 en rapide
     // et +153 en journalier. C'est le nombre le plus gros de l'écran, il ne peut
     // pas être le seul à ignorer une correction que l'app calcule déjà.
+    // Month boundaries, so even the thumbnail says WHEN and not just "before/after".
+    const months = monthBlocks(pts).map((b, i) => i
+      ? `<line x1="${x(b.from - 0.5).toFixed(1)}" y1="0" x2="${x(b.from - 0.5).toFixed(1)}" y2="${H}" stroke="rgba(255,255,255,.13)" stroke-width="1"/>`
+      + `<text x="${(x(b.from - 0.5) + 3).toFixed(1)}" y="${H - 3}" fill="#6d7688" font-size="8">${b.label}</text>`
+      : '').join('');
     const info = calibInfo(pts);
     const useCal = info.showCal && ratings.length > info.calN + 2;
     const base = useCal ? ratings[info.calN] : first;
@@ -1398,58 +1403,336 @@ const Coach = (() => {
         <b class="${delta >= 0 ? 'up' : 'down'}">${last} ${delta >= 0 ? '▲ +' + delta : '▼ ' + delta}</b></div>
       <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg">
         ${useCal ? `<rect x="${pad}" y="0" width="${(x(info.calN) - pad).toFixed(1)}" height="${H}" fill="#ffffff" opacity="0.05"/>` : ''}
+        ${months}
         <path d="${path}" fill="none" stroke="#e2b857" stroke-width="2"/>
         ${dots}
       </svg>
       ${note ? `<div class="coach-rating-note">${note}</div>` : ''}</div>`;
   }
 
+  // ── Annotation placement ───────────────────────────────────────────────
+  // The fullscreen chart used to paint its labels blind, so on the rapide pool
+  // « niveau réel ~341 » sat on top of the final « 347 », et « calibrage (Elo
+  // provisoire) » sat on both the 800 gridline and the starting 760. Every
+  // annotation now goes through a placer that nudges it until its box is free,
+  // so no shape of data can bring the overlap back.
+  function labelBox(text, x, y, anchor, size) {
+    const w = String(text).length * size * 0.56;
+    const left = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
+    return { x: left, y: y - size, w, h: size + 3 };
+  }
+  function boxesHit(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+  function makePlacer() {
+    const taken = [];
+    return {
+      reserve(box) { taken.push(box); },
+      reserveLabel(text, x, y, anchor, size) { taken.push(labelBox(text, x, y, anchor, size)); },
+      // Walks `dir` (-1 up, +1 down) until the label fits; null if it never does.
+      place(text, x, y, anchor, size, dir, bounds) {
+        for (let k = 0; k < 30; k++) {
+          const ty = y + dir * k * (size + 3);
+          if (bounds && (ty - size < bounds.top || ty > bounds.bottom)) break;
+          const box = labelBox(text, x, ty, anchor, size);
+          if (!taken.some(t => boxesHit(box, t))) { taken.push(box); return ty; }
+        }
+        return null;
+      }
+    };
+  }
+
+  const MONTH_ABBR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const RES_LABEL = { win: 'Victoire', loss: 'Défaite', draw: 'Nulle' };
+  const RES_SHORT = { win: 'V', loss: 'D', draw: 'N' };
+  const TREND_SPAN = 10;
+
+  // The x axis is one step per GAME, because the game is what moves the Elo —
+  // but that makes calendar time irregular along it. Grouping the consecutive
+  // games of a same month gives real date milestones (a separator + the month
+  // + how many games it holds) instead of the two lone dates the axis carried.
+  function monthBlocks(pts) {
+    const out = [];
+    pts.forEach((p, i) => {
+      const d = new Date(p.endTime * 1000);
+      const key = d.getFullYear() + '-' + d.getMonth();
+      const last = out[out.length - 1];
+      if (last && last.key === key) { last.to = i; return; }
+      out.push({ key, label: MONTH_ABBR[d.getMonth()], year: d.getFullYear(), from: i, to: i });
+    });
+    return out;
+  }
+
+  function movingAvg(vals, w) {
+    return vals.map((_, i) => {
+      const from = Math.max(0, i - w + 1);
+      let s = 0;
+      for (let j = from; j <= i; j++) s += vals[j];
+      return s / (i - from + 1);
+    });
+  }
+
+  function fmtFullDate(ts) {
+    return new Date(ts * 1000).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  // A caption on its own plate, so a stray curve behind it never eats it.
+  function caption(text, x, y, anchor, size, fill) {
+    const b = labelBox(text, x, y, anchor, size);
+    return `<rect x="${(b.x - 4).toFixed(1)}" y="${(b.y - 1).toFixed(1)}" width="${(b.w + 8).toFixed(1)}" height="${(b.h + 2).toFixed(1)}" rx="4" fill="rgba(13,20,38,.82)"/>`
+      + `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${fill}" font-size="${size}" text-anchor="${anchor}">${text}</text>`;
+  }
+
+  // The « niveau réel » caption goes where the curve is furthest from the mean
+  // line over the width the caption needs, and on the opposite side of it — a
+  // caption sitting on its own line is exactly where the curve tends to be.
+  function meanCaptionSpot(ratings, mean, x, W, padL, padR, needW) {
+    let best = null;
+    for (let i = 0; i < ratings.length; i++) {
+      const lx = x(i);
+      if (lx < padL + 8 || lx + needW > W - padR) continue;
+      let worst = Infinity, sign = 0;
+      for (let j = i; j < ratings.length && x(j) <= lx + needW; j++) {
+        const d = ratings[j] - mean;
+        if (Math.abs(d) < worst) worst = Math.abs(d);
+        sign += d;
+      }
+      if (!best || worst > best.worst) best = { x: lx, worst, above: sign < 0 };
+    }
+    return best || { x: padL + 8, worst: 0, above: true };
+  }
+
+  // Everything the cursor needs to read the chart back, set by richRatingChart.
+  let richState = null;
+  let richTrend = true;
+
   // Rich fullscreen chart for one pool: calibration zone, real-level band,
-  // dashed mean line, gridlines, one colored dot per game, trough/end labels.
+  // month milestones, trend line, one colored dot per game. Values that used
+  // to float inside the plot (départ / plancher / actuel) now live in the
+  // stat strip above it, where they cannot collide with anything.
   function richRatingChart(active) {
     const pts = active.games;
     const ratings = pts.map(p => p.myRating);
     const info = calibInfo(pts);
-    const W = 900, H = 460, padL = 52, padR = 22, padT = 26, padB = 40;
+    const W = 900, H = 470, padL = 54, padR = 22, padT = 26, padB = 64;
     const dmin = Math.min(...ratings), dmax = Math.max(...ratings);
     const span = Math.max(1, dmax - dmin);
-    const yMin = dmin - span * 0.08 - 4, yMax = dmax + span * 0.08 + 4;
-    const x = i => padL + (W - padL - padR) * i / (pts.length - 1);
+    const yMin = dmin - span * 0.1 - 4, yMax = dmax + span * 0.1 + 4;
+    const x = i => padL + (W - padL - padR) * (pts.length > 1 ? i / (pts.length - 1) : 0.5);
     const y = v => padT + (H - padT - padB) * (1 - (v - yMin) / (yMax - yMin));
+    const bounds = { top: padT + 2, bottom: H - padB - 6 };
+    const P = makePlacer();
+    richState = { pts, x, y, W, H, padL, padR, info };
     let s = '';
+
     // real-level band
     s += `<rect x="${padL}" y="${y(info.bandMax).toFixed(1)}" width="${(W - padL - padR).toFixed(1)}" height="${Math.max(0, y(info.bandMin) - y(info.bandMax)).toFixed(1)}" fill="rgba(226,184,87,.07)"/>`;
-    // dashed mean line
-    s += `<line x1="${padL}" y1="${y(info.mean).toFixed(1)}" x2="${W - padR}" y2="${y(info.mean).toFixed(1)}" stroke="rgba(226,184,87,.45)" stroke-width="1" stroke-dasharray="4 4"/>`;
-    s += `<text x="${W - padR}" y="${(y(info.mean) - 5).toFixed(1)}" fill="#c9982e" font-size="12" text-anchor="end">niveau réel ~${info.mean}</text>`;
+
     // calibration zone (provisional Elo)
     if (info.showCal) {
       s += `<rect x="${x(0).toFixed(1)}" y="${padT}" width="${(x(info.calN - 1) - x(0)).toFixed(1)}" height="${H - padT - padB}" fill="rgba(255,255,255,.045)"/>`;
-      s += `<text x="${((x(0) + x(info.calN - 1)) / 2).toFixed(1)}" y="${padT + 13}" fill="#8892a4" font-size="12" text-anchor="middle">calibrage (Elo provisoire)</text>`;
+      s += `<line x1="${x(info.calN - 1).toFixed(1)}" y1="${padT}" x2="${x(info.calN - 1).toFixed(1)}" y2="${H - padB}" stroke="rgba(255,255,255,.18)" stroke-dasharray="3 3"/>`;
     }
-    // gridlines + rating labels
+
+    // gridlines + rating labels, reserved first: the gutter owns that column
     const step = span > 260 ? 100 : span > 130 ? 50 : 25;
     for (let g = Math.ceil(yMin / step) * step; g <= yMax; g += step) {
       s += `<line x1="${padL}" y1="${y(g).toFixed(1)}" x2="${W - padR}" y2="${y(g).toFixed(1)}" stroke="rgba(255,255,255,.06)"/>`;
       s += `<text x="${padL - 8}" y="${(y(g) + 4).toFixed(1)}" fill="#8892a4" font-size="12" text-anchor="end">${g}</text>`;
+      P.reserveLabel(g, padL - 8, y(g) + 4, 'end', 12);
     }
-    // line
-    const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.myRating).toFixed(1)}`).join(' ');
-    s += `<path d="${path}" fill="none" stroke="#e2b857" stroke-width="2.5" stroke-linejoin="round"/>`;
-    // one colored dot per game
-    pts.forEach((p, i) => {
-      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="4.5" fill="${resColor(p)}" stroke="#16213e" stroke-width="1.5"/>`;
+
+    // month milestones, in their own lane under the plot
+    const blocks = monthBlocks(pts);
+    const axisY = H - padB + 17, countY = H - padB + 32;
+    P.reserve({ x: 0, y: H - padB + 2, w: W, h: padB });
+    blocks.forEach((b, bi) => {
+      if (bi) {
+        const bx = x(Math.max(0, b.from - 0.5));
+        s += `<line x1="${bx.toFixed(1)}" y1="${padT}" x2="${bx.toFixed(1)}" y2="${(H - padB + 6).toFixed(1)}" stroke="rgba(255,255,255,.10)"/>`;
+      }
+      const cx = (x(b.from) + x(b.to)) / 2;
+      s += `<text x="${cx.toFixed(1)}" y="${axisY}" fill="#aab3c2" font-size="12" font-weight="600" text-anchor="middle">${b.label}</text>`;
+      if (x(b.to) - x(b.from) > 46)
+        s += `<text x="${cx.toFixed(1)}" y="${countY}" fill="#8892a4" font-size="10.5" text-anchor="middle">${b.to - b.from + 1} parties</text>`;
     });
-    // start / trough / end labels
-    const firstR = ratings[0], lastR = ratings[ratings.length - 1], troughI = ratings.indexOf(dmin);
-    s += `<text x="${x(0).toFixed(1)}" y="${(y(firstR) - 10).toFixed(1)}" fill="${resColor(pts[0])}" font-size="13" font-weight="700" text-anchor="middle">${firstR}</text>`;
-    if (troughI > 1 && troughI < pts.length - 1)
-      s += `<text x="${x(troughI).toFixed(1)}" y="${(y(dmin) + 18).toFixed(1)}" fill="#f87171" font-size="13" font-weight="700" text-anchor="middle">${dmin}</text>`;
-    s += `<text x="${x(pts.length - 1).toFixed(1)}" y="${(y(lastR) - 10).toFixed(1)}" fill="${resColor(pts[pts.length - 1])}" font-size="13" font-weight="700" text-anchor="end">${lastR}</text>`;
-    // date axis (first & last)
-    s += `<text x="${x(0).toFixed(1)}" y="${H - 12}" fill="#8892a4" font-size="11" text-anchor="start">${fmtDate(pts[0].endTime)}</text>`;
-    s += `<text x="${x(pts.length - 1).toFixed(1)}" y="${H - 12}" fill="#8892a4" font-size="11" text-anchor="end">${fmtDate(pts[pts.length - 1].endTime)}</text>`;
-    return `<svg viewBox="0 0 ${W} ${H}" class="rating-modal-svg" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
+    s += `<text x="${padL}" y="${H - 8}" fill="#6d7688" font-size="10.5" text-anchor="start">1 pas = 1 partie · ${pts.length} parties</text>`;
+    s += `<text x="${(W - padR).toFixed(1)}" y="${H - 8}" fill="#6d7688" font-size="10.5" text-anchor="end">${fmtDate(pts[0].endTime)} → ${fmtDate(pts[pts.length - 1].endTime)}</text>`;
+
+    // trend line (moving average) under the raw line
+    if (richTrend && pts.length >= TREND_SPAN) {
+      const ma = movingAvg(ratings, TREND_SPAN);
+      s += `<path d="${ma.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="#6fb4ff" stroke-width="3" stroke-opacity=".55" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+
+    // raw line + one colored dot per game
+    s += `<path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.myRating).toFixed(1)}`).join(' ')}" fill="none" stroke="#e2b857" stroke-width="2.5" stroke-linejoin="round"/>`;
+    const dotR = pts.length > 60 ? 3.6 : 4.5;
+    pts.forEach((p, i) => {
+      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="${dotR}" fill="${resColor(p)}" stroke="#16213e" stroke-width="1.5"/>`;
+    });
+
+    // dashed mean line, labelled on the left where the end of the curve can't reach it
+    s += `<line x1="${padL}" y1="${y(info.mean).toFixed(1)}" x2="${W - padR}" y2="${y(info.mean).toFixed(1)}" stroke="rgba(226,184,87,.45)" stroke-width="1" stroke-dasharray="4 4"/>`;
+    const meanTxt = `niveau réel ~${info.mean}`;
+    const spot = meanCaptionSpot(ratings, info.mean, x, W, padL, padR, labelBox(meanTxt, 0, 0, 'start', 12).w + 14);
+    const meanY = P.place(meanTxt, spot.x, y(info.mean) + (spot.above ? -7 : 16), 'start', 12, spot.above ? -1 : 1, bounds);
+    if (meanY !== null) s += caption(meanTxt, spot.x, meanY, 'start', 12, '#c9982e');
+
+    // calibration caption, hung under its zone and bracketed to it: the zone is
+    // only a handful of games wide, so a floating caption would not say WHICH
+    // stretch it is talking about.
+    if (info.showCal) {
+      const calTxt = 'calibrage (Elo provisoire)';
+      const calX = (x(0) + x(info.calN - 1)) / 2, brY = H - padB - 6;
+      s += `<path d="M${x(0).toFixed(1)} ${brY} L${x(0).toFixed(1)} ${brY - 5} L${x(info.calN - 1).toFixed(1)} ${brY - 5} L${x(info.calN - 1).toFixed(1)} ${brY}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1"/>`;
+      P.reserve({ x: x(0) - 2, y: brY - 7, w: x(info.calN - 1) - x(0) + 4, h: 9 });
+      const calY = P.place(calTxt, calX, brY - 11, 'middle', 12, -1, bounds);
+      if (calY !== null) s += caption(calTxt, calX, calY, 'middle', 12, '#9aa4b4');
+    }
+
+    // the cursor: a crosshair driven by the pointer, a swipe or the arrow keys
+    s += `<g class="rc-cursor" opacity="0" pointer-events="none">
+      <line x1="0" y1="${padT}" x2="0" y2="${H - padB}" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="3 3"/>
+      <circle cx="0" cy="0" r="8" fill="none" stroke="#fff" stroke-width="2"/>
+    </g>`;
+
+    return `<svg viewBox="0 0 ${W} ${H}" class="rating-modal-svg" tabindex="0" role="img"
+      aria-label="Évolution Elo ${esc(tcLabel(active.tc))}, ${pts.length} parties, flèches gauche et droite pour parcourir" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
+  }
+
+  // Facts that used to float inside the plot. As buttons they double as jumps:
+  // clicking « Plancher » puts the cursor on the game that made it.
+  function ratingStats(active) {
+    const pts = active.games, ratings = pts.map(p => p.myRating);
+    const info = calibInfo(pts);
+    const lastI = pts.length - 1, troughI = ratings.indexOf(Math.min(...ratings));
+    const useCal = info.showCal && ratings.length > info.calN + 2;
+    const baseI = useCal ? info.calN : 0;
+    const delta = ratings[lastI] - ratings[baseI];
+    const cell = (lbl, i, cls) =>
+      `<button class="rating-stat" data-i="${i}"><span>${lbl}</span><b class="${cls || ''}">${ratings[i]}</b><small>${fmtDate(pts[i].endTime)}</small></button>`;
+    return `<div class="rating-stats">
+      ${cell('Départ', 0, '')}
+      ${useCal ? cell('Après calibrage', info.calN, '') : ''}
+      ${cell('Plancher', troughI, 'low')}
+      ${cell('Actuel', lastI, '')}
+      <div class="rating-stat rating-stat-delta"><span>${useCal ? 'Depuis le calibrage' : 'Sur la période'}</span>
+        <b class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '+' + delta : delta}</b><small>${pts.length} parties</small></div>
+    </div>`;
+  }
+
+  function richTipHtml(g, i, pts) {
+    const prev = i ? pts[i - 1].myRating : null;
+    const d = prev === null ? null : g.myRating - prev;
+    const a = g.analysis || {};
+    const bl = a.blunders || 0;
+    const inCal = richState && richState.info.showCal && i < richState.info.calN;
+    return `<b>${fmtFullDate(g.endTime)}</b>
+      <div class="rt-elo"><span>${g.myRating}</span>${d === null ? '' : `<i class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' + d : d}</i>`}</div>
+      <div class="rt-res ${g.result || 'draw'}">${RES_LABEL[g.result] || 'Partie'}</div>
+      <div class="rt-opp">vs ${esc(g.oppName)}${g.oppRating ? ' (' + g.oppRating + ')' : ''}</div>
+      ${a.accuracy != null ? `<div class="rt-acc">précision ${a.accuracy}%${bl ? ' · ' + bl + ' gaffe' + (bl > 1 ? 's' : '') : ''}</div>` : ''}
+      <div class="rt-hint">partie n°${i + 1}${inCal ? ' · calibrage' : ''} · clic pour épingler</div>`;
+  }
+
+  function richPickHtml(g) {
+    const a = g.analysis || {};
+    const rich = !!(g.report && g.report.analysis);
+    return `<span class="rating-pick-res ${g.result || 'draw'}">${RES_SHORT[g.result] || '·'}</span>
+      <span class="rating-pick-txt"><b>${fmtDate(g.endTime)}</b> · vs ${esc(g.oppName)}${g.oppRating ? ' (' + g.oppRating + ')' : ''} · Elo <b>${g.myRating}</b>${a.accuracy != null ? ' · précision ' + a.accuracy + '%' : ''}</span>
+      <button class="rating-pick-btn" data-uuid="${esc(g.uuid)}" data-mode="${rich ? 'open' : 'engine'}">${rich ? '📊 Voir l&rsquo;analyse' : '⚙ Analyser'}</button>`;
+  }
+
+  // Wires the cursor: pointer, touch drag, arrow keys, and the stat jumps.
+  function bindRichChart(root) {
+    const svg = root.querySelector('.rating-modal-svg');
+    const tip = root.querySelector('.rating-tip');
+    const pick = root.querySelector('.rating-pick');
+    const wrap = root.querySelector('.rating-chart-wrap');
+    if (!svg || !richState) return;
+    const st = richState, n = st.pts.length;
+    const cursor = svg.querySelector('.rc-cursor');
+    const cline = cursor.querySelector('line'), cdot = cursor.querySelector('circle');
+    let sel = -1, pinned = -1;
+
+    const toSvgX = clientX => {
+      const m = svg.getScreenCTM();
+      if (!m) return st.padL;
+      const p = svg.createSVGPoint(); p.x = clientX; p.y = 0;
+      return p.matrixTransform(m.inverse()).x;
+    };
+    const toScreen = (sx, sy) => {
+      const m = svg.getScreenCTM();
+      if (!m) return { x: 0, y: 0 };
+      const p = svg.createSVGPoint(); p.x = sx; p.y = sy;
+      return p.matrixTransform(m);
+    };
+    const idxAt = clientX => {
+      const inner = st.W - st.padL - st.padR;
+      return Math.max(0, Math.min(n - 1, Math.round((toSvgX(clientX) - st.padL) / inner * (n - 1))));
+    };
+
+    const moveCursor = (i, op) => {
+      const g = st.pts[i], cx = st.x(i), cy = st.y(g.myRating);
+      cline.setAttribute('x1', cx); cline.setAttribute('x2', cx);
+      cdot.setAttribute('cx', cx); cdot.setAttribute('cy', cy);
+      cdot.setAttribute('stroke', resColor(g));
+      cursor.setAttribute('opacity', op);
+      return { cx, cy, g };
+    };
+    const show = (i, pin) => {
+      i = Math.max(0, Math.min(n - 1, i));
+      sel = i;
+      const { cx, cy, g } = moveCursor(i, '1');
+      tip.hidden = false;
+      tip.innerHTML = richTipHtml(g, i, st.pts);
+      // Clamp to the chart box from the MEASURED size: a fixed side + a
+      // percentage threshold let the box hang off the edge on a phone.
+      const wr = wrap.getBoundingClientRect(), pt = toScreen(cx, cy);
+      const tw = tip.offsetWidth, th = tip.offsetHeight, px = pt.x - wr.left, py = pt.y - wr.top;
+      if (wr.width < 480) {
+        // On a phone the box is nearly as wide as the chart: park it in the top
+        // corner away from the finger instead of letting it sit on the curve.
+        tip.style.left = (px > wr.width / 2 ? 4 : Math.max(4, wr.width - tw - 4)) + 'px';
+        tip.style.top = '4px';
+      } else {
+        let L = px + 14;
+        if (L + tw > wr.width - 4) L = px - 14 - tw;
+        tip.style.left = Math.max(4, Math.min(L, wr.width - tw - 4)) + 'px';
+        tip.style.top = Math.max(4, Math.min(py - th / 2, wr.height - th - 4)) + 'px';
+      }
+      if (pin) {
+        pinned = i;
+        pick.hidden = false;
+        pick.innerHTML = richPickHtml(g);
+        const b = pick.querySelector('.rating-pick-btn');
+        if (b) b.addEventListener('click', () => {
+          const u = b.dataset.uuid, m = b.dataset.mode;
+          closeRatingModal(); openRecent(u, m);
+        });
+      }
+    };
+    const rest = () => {
+      tip.hidden = true;
+      if (pinned >= 0) { moveCursor(pinned, '.85'); sel = pinned; }
+      else { cursor.setAttribute('opacity', '0'); sel = -1; }
+    };
+
+    svg.addEventListener('mousemove', e => show(idxAt(e.clientX), false));
+    svg.addEventListener('mouseleave', rest);
+    svg.addEventListener('click', e => show(idxAt(e.clientX), true));
+    svg.addEventListener('touchstart', e => show(idxAt(e.touches[0].clientX), true), { passive: true });
+    svg.addEventListener('touchmove', e => { e.preventDefault(); show(idxAt(e.touches[0].clientX), true); }, { passive: false });
+    svg.addEventListener('keydown', e => {
+      const k = e.key;
+      if (k === 'ArrowRight' || k === 'ArrowLeft') { e.preventDefault(); show((sel < 0 ? n - 1 : sel) + (k === 'ArrowRight' ? 1 : -1), true); }
+      else if (k === 'Home') { e.preventDefault(); show(0, true); }
+      else if (k === 'End') { e.preventDefault(); show(n - 1, true); }
+      else if (k === 'Escape' && (sel >= 0 || pinned >= 0)) { e.stopPropagation(); pinned = -1; pick.hidden = true; rest(); }
+    });
+    root.querySelectorAll('.rating-stat[data-i]').forEach(b =>
+      b.addEventListener('click', () => { show(+b.dataset.i, true); svg.focus(); }));
   }
 
   function ratingModalInner(series, active) {
@@ -1462,11 +1745,19 @@ const Coach = (() => {
       ? `La descente du début (zone grisée) n'est pas un effondrement : c'est ton <b>Elo provisoire</b> qui se calibre sur tes ~${info.calN} premières parties. Chess.com te place haut, puis corrige par paliers. Ton vrai niveau se lit sur le reste : moyenne <b class="gold">~${info.mean}</b>, dans une bande ${info.bandMin}-${info.bandMax}.`
       : `Ton Elo ${tcLabel(active.tc)} oscille autour de <b class="gold">${info.mean}</b> (bande ${info.bandMin}-${info.bandMax}). Chaque point est une partie, coloré selon son résultat.`;
     return `${chips}
-      <div class="rating-modal-chart">${richRatingChart(active)}</div>
+      ${ratingStats(active)}
+      <div class="rating-modal-tools">
+        <button class="rating-tool${richTrend ? ' active' : ''}" data-tool="trend" aria-pressed="${richTrend}">📉 Tendance (${TREND_SPAN} parties)</button>
+        <span class="rating-modal-tip">Survole ou balaie la courbe · ← → au clavier</span>
+      </div>
+      <div class="rating-chart-wrap">${richRatingChart(active)}<div class="rating-tip" hidden></div></div>
+      <div class="rating-pick" hidden></div>
       <div class="rating-modal-legend">
         <span><i style="background:#4ade80"></i>Victoire</span>
         <span><i style="background:#f87171"></i>Défaite</span>
         <span><i style="background:#e2b857"></i>Nulle</span>
+        <span><i class="bar" style="background:#6fb4ff"></i>Tendance ${TREND_SPAN} parties</span>
+        <span><i class="bar" style="background:rgba(226,184,87,.4)"></i>Bande du niveau réel</span>
       </div>
       <p class="rating-modal-note">${note}</p>`;
   }
@@ -1499,13 +1790,15 @@ const Coach = (() => {
     document.body.appendChild(el);
     ratingModalEl = el;
     const body = el.querySelector('.rating-modal-body');
-    const bindChips = () => el.querySelectorAll('.rating-modal-chip').forEach(b =>
-      b.addEventListener('click', () => {
-        active = series.find(s => s.tc === b.dataset.tc) || active;
-        body.innerHTML = ratingModalInner(series, active);
-        bindChips();
-      }));
-    bindChips();
+    const redraw = () => { body.innerHTML = ratingModalInner(series, active); bindBody(); };
+    const bindBody = () => {
+      el.querySelectorAll('.rating-modal-chip').forEach(b =>
+        b.addEventListener('click', () => { active = series.find(s => s.tc === b.dataset.tc) || active; redraw(); }));
+      el.querySelectorAll('.rating-tool[data-tool="trend"]').forEach(b =>
+        b.addEventListener('click', () => { richTrend = !richTrend; redraw(); }));
+      bindRichChart(body);
+    };
+    bindBody();
     el.querySelector('.rating-modal-close').addEventListener('click', closeRatingModal);
     el.addEventListener('click', e => { if (e.target === el) closeRatingModal(); });
     document.addEventListener('keydown', onRatingKey);
