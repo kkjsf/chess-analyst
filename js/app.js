@@ -4031,6 +4031,10 @@ const App = (() => {
 
   function loadRecent() {
     bindHome();
+    // « Ton niveau » : Elo, chiffres de la période, courbe. Vit dans js/coach.js
+    // (mêmes puces de période et même plein écran que le bilan) et se sert de
+    // l'archive locale, pas des parties collées ici.
+    if (typeof Coach !== 'undefined' && Coach.homeLevel) Coach.homeLevel($('#home-level'));
     const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     const section = $('#recent-section');
     const list = $('#recent-list');
@@ -4093,6 +4097,7 @@ const App = (() => {
 
   function refreshHome() {
     renderRoutine();
+    renderGreeting();
     if (typeof Training === 'undefined') return;
     const due = Training.dueCount();
     const qb = $('#quick-train-badge');
@@ -4101,6 +4106,24 @@ const App = (() => {
     if (!badge) return;
     badge.hidden = !(due > 0);
     badge.textContent = due > 99 ? '99+' : String(due);
+  }
+
+  // La barre d'accueil affichait « Bonjour / Prêt à progresser ? » à toute heure
+  // et dans tous les cas : deux lignes qui n'apprenaient rien à personne. Elle
+  // annonce maintenant la date et ce qui attend vraiment aujourd'hui.
+  function renderGreeting() {
+    const hi = $('#hb-hi'), title = $('#hb-title');
+    if (!hi || !title) return;
+    const now = new Date(), h = now.getHours();
+    const hello = h < 5 ? 'Bonne nuit' : h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
+    hi.textContent = `${hello} · ${now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+    const due = (typeof Training !== 'undefined' && Training.dueCount) ? Training.dueCount() : 0;
+    const state = routineState();
+    const left = ROUTINE_ITEMS.filter(it => !state[it.key]).length;
+    if (due > 0) title.innerHTML = `<b>${due}</b> exercice${due > 1 ? 's' : ''} t'attend${due > 1 ? 'ent' : ''}`;
+    else if (!left) title.textContent = 'Routine du jour terminée 🎉';
+    else if (left < ROUTINE_ITEMS.length) title.innerHTML = `Routine : encore <b>${left}</b> ligne${left > 1 ? 's' : ''}`;
+    else title.textContent = 'Prêt à progresser ?';
   }
 
   // ── "Ma routine du jour" — a daily checklist that materialises the coaching

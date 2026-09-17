@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '281';
+window.APP_VERSION = '282';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -41,9 +41,18 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       r.classList.add('has-games');
       r.style.setProperty('--boot-recent', Math.min(n.length, 5));
     }
+    // La carte « Ton niveau » lit l'archive IndexedDB, donc forcement APRES le
+    // premier rendu. Sa hauteur exacte est relue a chaque rendu et rangee ici
+    // (voir renderHomeLevel), ce qui permet de lui reserver sa place des la
+    // premiere peinture au lieu de pousser tout l'accueil vers le bas.
+    var lh = parseInt(localStorage.getItem('ca_home_level_h') || '0', 10);
+    if (lh > 0) {
+      r.classList.add('has-level');
+      r.style.setProperty('--boot-level', Math.min(lh, 520) + 'px');
+    }
   } catch (_) {}
   // Filet : si un script n'arrive jamais, DOMContentLoaded (donc init) non plus.
-  window.addEventListener('load', function () { r.classList.remove('booting', 'has-games'); });
+  window.addEventListener('load', function () { r.classList.remove('booting', 'has-games', 'has-level'); });
 })();
 </script>
 <script>
@@ -391,13 +400,31 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       <div class="hb-mark">♟</div>
       <div class="hb-txt">
         <span class="hb-hi" id="hb-hi">Bonjour</span>
-        <span class="hb-title">Prêt à progresser&nbsp;?</span>
+        <span class="hb-title" id="hb-title">Prêt à progresser&nbsp;?</span>
       </div>
     </div>
     <span class="routine-streak home-streak" id="routine-streak" hidden></span>
   </header>
 
   <div class="home-main">
+
+    <!-- Ton niveau : Elo, chiffres de la période, courbe. Rempli par
+         Coach.homeLevel() depuis l'archive locale ; reste masqué tant qu'aucune
+         partie n'est analysée. -->
+    <section class="home-level" id="home-level" hidden></section>
+
+    <!-- Reprendre : dernière partie -->
+    <section class="resume-section" id="resume-section" hidden>
+      <div class="home-sec-label">Reprendre</div>
+      <button class="resume-card" id="resume-card" type="button">
+        <div class="resume-board"><svg id="resume-board-svg" viewBox="0 0 360 360"></svg></div>
+        <div class="resume-body">
+          <div class="resume-title" id="resume-title"></div>
+          <div class="resume-meta" id="resume-meta"></div>
+        </div>
+        <span class="resume-go">›</span>
+      </button>
+    </section>
 
     <!-- Hero: Analyser -->
     <section class="home-hero import-zone" id="drop-zone">
@@ -415,21 +442,9 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
         <div class="progress-text" id="progress-text" role="status" aria-live="polite">Chargement...</div>
       </div>
       <div id="import-error" class="import-error" hidden></div>
-    </section>
-
-    <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> - tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> dans la barre du bas, ou ouvre les <b>Mats</b> dans <b>Apprendre</b>.</p>
-
-    <!-- Reprendre : dernière partie -->
-    <section class="resume-section" id="resume-section" hidden>
-      <div class="home-sec-label">Reprendre</div>
-      <button class="resume-card" id="resume-card" type="button">
-        <div class="resume-board"><svg id="resume-board-svg" viewBox="0 0 360 360"></svg></div>
-        <div class="resume-body">
-          <div class="resume-title" id="resume-title"></div>
-          <div class="resume-meta" id="resume-meta"></div>
-        </div>
-        <span class="resume-go">›</span>
-      </button>
+      <!-- Le mot d'accueil du nouveau venu vit DANS la zone qu'il décrit : en
+           frère du hero, il devenait une case orpheline de la grille desktop. -->
+      <p class="home-hint" id="home-hint" hidden>👋 Nouveau ici ? Ouvre une de tes parties sur <b>Chess.com</b>, copie le lien, colle-le ci-dessus puis touche <b>Analyser</b> - tu verras aussitôt tes coups à revoir. Pas de partie sous la main ? Touche <b>Entraîner</b> dans la barre du bas, ou ouvre les <b>Mats</b> dans <b>Apprendre</b>.</p>
     </section>
 
     <!-- Routine du jour -->
@@ -455,7 +470,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
     <section class="home-quick">
       <div class="home-sec-label">Accès rapides</div>
       <div class="quick-grid">
-        <button class="qtile accent" data-nav="entrainer" type="button">
+        <button class="qtile accent qtile-wide" data-nav="entrainer" type="button">
           <span class="qtile-badge" id="quick-train-badge" hidden></span>
           <span class="qtile-ic">🎯</span>
           <span class="qtile-tt">Entraîner</span>
@@ -490,9 +505,10 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
       <div id="recent-list"></div>
     </section>
 
-    <!-- Réglages -->
-    <section class="home-settings">
-      <div class="home-sec-label">Réglages</div>
+    <!-- Réglages : repliés. Un réglage qu'on touche une fois n'a pas à occuper
+         un écran entier sous les parties récentes. -->
+    <details class="home-settings">
+      <summary class="home-sec-label">Réglages <span class="hs-chev" aria-hidden="true">›</span></summary>
       <div class="hs-row">
         <div class="hs-txt">
           <span class="hs-title">Animation des pièces</span>
@@ -510,7 +526,7 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
         <svg id="anim-demo" viewBox="0 0 360 360" aria-hidden="true"></svg>
         <span class="hs-demo-txt">Aperçu : le cavalier rejoue son coup à chaque changement.</span>
       </div>
-    </section>
+    </details>
 
   </div><!-- /home-main -->
 </div>

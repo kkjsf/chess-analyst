@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v281**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v282**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,54 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v282 - L'ACCUEIL DIT OU TU EN ES.** Sa demande : « l'ecran d'accueil est un peu vide /
+    terne, propose un meilleur UI, et embarque des cet ecran la stat sur le graphique d'ELO, avec
+    lien vers stats detaillees. Adapte desktop et mobile ».
+    - **Ce qui manquait.** L'accueil s'ouvrait sur une grande zone de texte vide (« Colle ton
+      PGN ») et ne portait **aucun chiffre** : ni Elo, ni precision, ni tendance. Tout cela
+      existait, a deux ecrans de la, dans le bilan.
+    - **Nouvelle carte « Ton niveau »** (`homeLevelInner` dans `js/coach.js`, section
+      `#home-level`) : Elo du moment + delta (le delta CORRIGE, hors classement provisoire, via le
+      nouveau `ratingDelta` partage avec la vignette du bilan), quatre chiffres (precision
+      moyenne, gaffes/100 coups, % de victoires, parties analysees) chacun avec l'ecart entre la
+      **seconde et la premiere moitie** de la periode, la vignette Elo **reutilisee telle quelle**
+      (memes puces de periode, meme plein ecran au clic) et un bouton « Statistiques detaillees ».
+    - **Une seule fenetre temporelle pour toute la carte.** Changer « 1 mois » en « 3 mois »
+      deplace la courbe ET les quatre chiffres : ils sont comptes sur les memes parties. La
+      periode choisie dans le plein ecran redescend sur la carte (`refreshRatingBlocks` redessine
+      l'accueil EN ENTIER, pas seulement le graphe - sinon les chiffres decrivent une autre
+      periode que la courbe au-dessus).
+    - **La courbe se dessine a la taille MESUREE de son emplacement** (rendu en deux temps :
+      HTML d'abord, `block.clientWidth` ensuite, puis `ratingChartInner(an, geo)`). Sans ca, la
+      meme vignette de repere `320x96` etiree a 594 px grossissait tout d'un facteur 1,9 : des
+      noms de mois a 17 px sous une courbe de 2. Mesures apres : 311/311 sur telephone, 568/568
+      sur tablette, 594/594 sur le tableau de bord, 608/608 dans la colonne unique de 640 px.
+      **La bascule 1 colonne / 2 colonnes de la carte se fait en `@container` sur la largeur de
+      LA CARTE, pas de la fenetre** : sur grand ecran sans partie enregistree l'accueil reste en
+      une colonne de 640 px, et y decouper la carte en deux ramenait la courbe a 200 px.
+    - **Telephone : les 4 chiffres sur UNE ligne** (68 px au lieu de 160 en 2x2), libelles en
+      forme courte via `data-short` + `::after` (la forme longue reste dans le DOM). Carte
+      complete : **381 px** de haut, aucun debordement horizontal. La ligne « sur le dernier mois
+      - hors classement provisoire » s'ecrit sous les deux colonnes de l'entete (coincee sous
+      l'Elo, a cote du bouton, elle tombait sur trois lignes). La puce active est **amenee dans le
+      champ** au rendu, sinon la barre defilante s'ouvre sur une selection invisible.
+    - **Le reste de l'accueil :** ordre revu (niveau -> reprendre -> analyser -> routine -> acces
+      rapides -> recentes -> reglages), grille desktop reecrite (`level` en pleine largeur,
+      `routine` sur deux rangees), **reglages replies** dans un `<details>` (35 px au lieu de
+      268), tuile **Entrainer en pleine ligne** (5 tuiles sur 2 colonnes laissaient la derniere
+      seule), et la barre d'accueil annonce la date et ce qui attend : « Bon apres-midi - jeudi
+      17 septembre / **15 exercices t'attendent** » au lieu de « Bonjour / Pret a progresser ? ».
+    - **Le premier rendu ne saute pas.** La carte vient d'IndexedDB (asynchrone par nature) :
+      `renderHomeLevel` range sa hauteur reelle dans `ca_home_level_h` et le script d'amorce
+      d'`index.html` reserve exactement cette place (mesure : reserve 383 px, rendu 383 px).
+      Meme principe que `--boot-recent` en v271.
+    - **Navigateur vierge :** `Coach.ensureLocal()` (nouveau, l'archive locale SANS le bilan
+      serveur de 1,4 Mo) sert le cas courant ; le telechargement hoste n'est declenche que si la
+      base est vide, et la carte se redessine quand il arrive.
+    - Piege : le bouton « Statistiques detaillees » appelle **`Coach.show`** et non la fonction
+      interne `show` - app.js enveloppe la METHODE publique pour allumer l'onglet de la barre du
+      bas, et l'appel direct court-circuitait cet habillage (ecran change, onglet reste sur
+      « Analyser »).
   - **v281 - chaque puce porte son nombre de parties.** Sa question : « y'a pas une confusion /
     donnees similaires derriere 15 jours et 1 mois sur les parties rapides ? j'ai le meme
     graphique ». Verifie sur l'archive : **ce n'est pas un bug**, il n'a joue **aucune partie

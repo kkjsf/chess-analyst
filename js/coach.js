@@ -28,6 +28,7 @@ const Coach = (() => {
   let hostedInfo = null;
   let syncedOnce = false; // feed the SRS deck once per session, or when data changes
   let dataPromise = null; // Coach.ensureData() : chargement partagé, une seule fois
+  let localPromise = null; // Coach.ensureLocal() : l'archive locale seule (sans le bilan serveur)
   let hostedOnce = false; // le bilan serveur (1,4 Mo) n'est tiré qu'une fois par session
   // Sections repliables du bilan : « Résultats » ouvert d'office, le reste replié
   // tant que l'utilisateur ne l'a pas ouvert lui-même. Voir group().
@@ -158,7 +159,7 @@ const Coach = (() => {
     let wiped = false;
     if (owner && owner !== user) {
       await clearStore();
-      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null; hostedOnce = false;
+      games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null; localPromise = null; hostedOnce = false;
       wiped = true;
     }
     await setMeta('owner', user);
@@ -463,6 +464,18 @@ const Coach = (() => {
     return added;
   }
 
+  // Le lot affiché : la cadence active, avec le rapide (10 min) par défaut —
+  // la cadence autour de laquelle tout le coaching est construit — et repli sur
+  // « Toutes » quand le compte n'en a pas. Partagé par le bilan et par la carte
+  // « Ton niveau » de l'accueil : les deux écrans doivent parler du même lot.
+  function pickPool(anAll) {
+    if (!filterDefaulted) {
+      filterDefaulted = true;
+      if (anAll.some(g => (g.timeClass || 'autre') === 'rapid')) filterTc = 'rapid';
+    }
+    return filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
+  }
+
   // ─────────────── Dashboard rendering ───────────────
   function render() {
     renderSyncBar();
@@ -476,13 +489,7 @@ const Coach = (() => {
       body.innerHTML = `<div class="coach-empty">${games.length} parties synchronisées. Lance l'analyse complète pour générer ton bilan.</div>`;
       return;
     }
-    // Open on the 10-min (rapid) pool by default — the cadence the coaching is
-    // built around — falling back to "Toutes" when the account has none.
-    if (!filterDefaulted) {
-      filterDefaulted = true;
-      if (anAll.some(g => (g.timeClass || 'autre') === 'rapid')) filterTc = 'rapid';
-    }
-    const an = filterTc === 'all' ? anAll : anAll.filter(g => (g.timeClass || 'autre') === filterTc);
+    const an = pickPool(anAll);
     curAn = an;
     // Streaks are match-result records, so they must span EVERY game of the
     // cadence (analysed or not) — the analysed subset drops games and would
@@ -629,7 +636,7 @@ const Coach = (() => {
         // Switching accounts mid-session: wipe the previous account's games so
         // the two never mix, then pull the new account's games.
         await clearStore();
-        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null; hostedOnce = false;
+        games = []; countryCache = {}; syncedOnce = false; hostedInfo = null; dataPromise = null; localPromise = null; hostedOnce = false;
         await setMeta('owner', next);
         render();
         onRefresh();
@@ -1457,10 +1464,29 @@ const Coach = (() => {
   // Inline sparkline (one pool), one colored dot per game, click → fullscreen.
   // Le bloc porte aussi les puces de période : elles vivent HORS de la zone
   // cliquable, sinon choisir « 15 j » ouvrirait le plein écran.
+  // « Dernier Elo, base, delta » : la vignette du bilan ET la carte d'accueil
+  // disent le meme chiffre parce qu'elles le calculent ici. La base exclut le
+  // classement provisoire (les 8 premieres parties d'une cadence sont un
+  // placement : 760 -> 392), sinon le plus gros nombre de l'ecran est le seul a
+  // ignorer une correction que l'app sait deja faire.
+  function ratingDelta(pts, info) {
+    const ratings = pts.map(p => p.myRating);
+    const useCal = info.showCal && ratings.length > info.calN + 2;
+    const base = useCal ? ratings[info.calN] : ratings[0];
+    const last = ratings[ratings.length - 1];
+    return { ratings, useCal, base, last, delta: last - base,
+             floor: Math.min(...(useCal ? ratings.slice(info.calN) : ratings)) };
+  }
+
   function ratingChart(an) {
     return primarySeries(an) ? `<div class="coach-rating-block">${ratingChartInner(an)}</div>` : '';
   }
-  function ratingChartInner(an) {
+  // `geo` = la taille REELLE du dessin en pixels. Le repere du SVG est celui-la,
+  // donc une police de 9 s'affiche a 9 px. Sans ca, la meme vignette etiree de
+  // 320 a 700 px (la carte d'accueil sur un ecran large) grossissait tout d'un
+  // facteur 2,2 : des noms de mois de 20 px sous une courbe de 2 px. C'est le
+  // meme piege que le plein ecran (voir chartGeom).
+  function ratingChartInner(an, geo) {
     const ps = primarySeries(an);
     if (!ps) return '';
     const win = windowSeries(ps.active);
@@ -1473,7 +1499,10 @@ const Coach = (() => {
     }
     // Une bande de 12 px est réservée en bas pour les mois : ils étaient écrits
     // PAR-DESSUS la courbe, donc illisibles dès que la fin de série plongeait.
-    const W = 320, H = 96, pad = 6, lane = 12;
+    const W = (geo && geo.W) || 320, H = (geo && geo.H) || 96, pad = 6;
+    // Le repere vaut des pixels : la police des mois suit donc la largeur reelle
+    // du dessin, et la bande du bas est taillee pour elle.
+    const fs = W > 420 ? 11 : 9, lane = fs + 3;
     const ratings = pts.map(p => p.myRating);
     const min = Math.min(...ratings), max = Math.max(...ratings);
     const range = Math.max(1, max - min);
@@ -1483,33 +1512,24 @@ const Coach = (() => {
     const dotR = Math.max(1.3, Math.min(2.8, gap * 0.5));
     const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.myRating).toFixed(1)}`).join(' ');
     const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="${dotR.toFixed(1)}" fill="${resColor(p)}"/>`).join('');
-    const last = ratings[ratings.length - 1], first = ratings[0];
-    // Le delta AFFICHÉ exclut le classement provisoire. `calibInfo` savait déjà le
-    // faire et ne servait qu'au plein écran, si bien que la vignette montrait
-    // « 356 ▼ -404 » : elle soustrayait simplement la dernière valeur de la
-    // première, or les 8 premières parties d'une cadence sont un placement
-    // (760 → 392 en huit parties). Hors fenêtre le vrai chiffre est -36 en rapide
-    // et +153 en journalier. C'est le nombre le plus gros de l'écran, il ne peut
-    // pas être le seul à ignorer une correction que l'app calcule déjà.
+    const last = ratings[ratings.length - 1];
     // Month boundaries, so even the thumbnail says WHEN and not just "before/after".
     // Un mois trop etroit n'est PAS etiquete : sur 15 jours de fenetre, deux
     // libelles a 20 px l'un de l'autre se chevauchent et ne disent plus rien.
     const blocks = monthBlocks(pts);
     const months = blocks.map((b, i) => {
       const bx = x(Math.max(0, b.from - 0.5));
-      const wide = x(b.to) - x(b.from) > 26 || blocks.length === 1;
+      const wide = x(b.to) - x(b.from) > b.label.length * fs * 0.62 || blocks.length === 1;
       let out = i ? `<line x1="${bx.toFixed(1)}" y1="0" x2="${bx.toFixed(1)}" y2="${H - lane}" stroke="rgba(255,255,255,.13)" stroke-width="1"/>` : '';
       if (wide) {
-        const tx = Math.min(bx + 3, W - 2 - b.label.length * 5);
-        out += `<text x="${tx.toFixed(1)}" y="${H - 2}" fill="#7d8698" font-size="9">${b.label}</text>`;
+        const tx = Math.min(bx + 3, W - 2 - b.label.length * fs * 0.56);
+        out += `<text x="${tx.toFixed(1)}" y="${H - 2}" fill="#7d8698" font-size="${fs}">${b.label}</text>`;
       }
       return out;
     }).join('');
     const info = calibInfo(pts, win.offset, win.all);
-    const useCal = info.showCal && ratings.length > info.calN + 2;
-    const base = useCal ? ratings[info.calN] : first;
-    const delta = last - base;
-    const floor = Math.min(...(useCal ? ratings.slice(info.calN) : ratings));
+    const d = ratingDelta(pts, info);
+    const useCal = d.useCal, delta = d.delta, floor = d.floor;
     // La periode DEMANDEE et la periode COUVERTE sont deux choses differentes :
     // sur « le dernier mois » avec 21 jours sans jouer, la courbe ne part pas du
     // 18 aout mais du 4 septembre, et sans le dire elle ressemble a celle de
@@ -1519,10 +1539,10 @@ const Coach = (() => {
     return chips + `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
       <div class="coach-rating-head"><span class="coach-rating-ttl">Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶<i> plein écran</i></span></span>
         <b class="${delta >= 0 ? 'up' : 'down'}">${last} ${delta >= 0 ? '▲ +' + delta : '▼ ' + delta}</b></div>
-      <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg">
+      <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg" style="aspect-ratio:${W} / ${H}">
         ${useCal ? `<rect x="${pad}" y="0" width="${(x(info.calN) - pad).toFixed(1)}" height="${H - lane}" fill="#ffffff" opacity="0.05"/>` : ''}
         ${months}
-        <path d="${path}" fill="none" stroke="#e2b857" stroke-width="2"/>
+        <path d="${path}" fill="none" stroke="#e2b857" stroke-width="${W > 420 ? 2.4 : 2}"/>
         ${dots}
       </svg>
       <div class="coach-rating-note">${note}</div></div>`;
@@ -2036,15 +2056,166 @@ const Coach = (() => {
     });
   }
   function bindRatingChart() {
-    document.querySelectorAll('.coach-rating-block').forEach(wireRatingBlock);
+    document.querySelectorAll('#coach-dashboard .coach-rating-block').forEach(wireRatingBlock);
   }
   // La fenêtre choisie dans le plein écran vaut aussi pour la vignette : sans
   // ça, fermer le plein écran laissait la carte sur l'ancienne période.
   function refreshRatingBlocks() {
-    document.querySelectorAll('.coach-rating-block').forEach(block => {
+    document.querySelectorAll('#coach-dashboard .coach-rating-block').forEach(block => {
       block.innerHTML = ratingChartInner(curAn);
       wireRatingBlock(block);
     });
+    // L'accueil se redessine EN ENTIER : ses chiffres (précision, gaffes,
+    // victoires) sont comptés sur la fenêtre choisie, donc remplacer le seul
+    // graphe les laisserait décrire une autre période que la courbe au-dessus.
+    const home = document.getElementById('home-level');
+    if (home && home.dataset.ready) renderHomeLevel(home);
+  }
+
+  // ══ Accueil : la carte « Ton niveau » ═══════════════════════════════════
+  // L'accueil ne disait NULLE PART où en est le joueur : ni son Elo, ni sa
+  // précision, ni s'il monte ou descend. Tout cela existait, à deux écrans de
+  // là, dans le bilan. La carte reprend telle quelle la vignette Elo du bilan
+  // (mêmes puces de période, même plein écran) et l'entoure des chiffres de la
+  // MÊME fenêtre : changer « 1 mois » en « 3 mois » doit déplacer la courbe et
+  // les quatre chiffres ensemble, sinon ils racontent deux périodes.
+  const LVL_KPIS = [
+    { label: 'précision moyenne', short: 'précision', up: true, eps: 1, fmt: v => Math.round(v) + ' %',
+      val: p => avg(p.map(g => g.analysis.accuracy || 0)) },
+    { label: 'gaffes / 100 coups', short: 'gaffes/100', up: false, eps: 0.15, fmt: v => v.toFixed(1),
+      val: p => { let b = 0, m = 0; p.forEach(g => { b += g.analysis.blunders || 0; m += g.analysis.moveCount || 0; }); return m ? b / m * 100 : 0; } },
+    { label: 'de victoires', short: 'victoires', up: true, eps: 4, fmt: v => Math.round(v) + ' %',
+      val: p => pct(p.filter(g => g.result === 'win').length, p.length) }
+  ];
+  // Une valeur seule ne dit pas si ça va dans le bon sens : chaque chiffre porte
+  // l'écart entre la seconde et la première moitié de la fenêtre. Sous 8 parties
+  // la comparaison ne veut rien dire, et sous le seuil `eps` c'est du bruit.
+  function kpiTile(m, pool) {
+    let chip = '';
+    if (pool.length >= 8) {
+      const half = Math.floor(pool.length / 2);
+      const d = m.val(pool.slice(half)) - m.val(pool.slice(0, half));
+      if (Math.abs(d) >= m.eps) {
+        const good = m.up ? d > 0 : d < 0;
+        chip = `<i class="lvl-trend ${good ? 'good' : 'bad'}" title="Seconde moitié de la période comparée à la première">${d > 0 ? '▲' : '▼'} ${m.fmt(Math.abs(d))}</i>`;
+      }
+    }
+    return `<div class="lvl-kpi"><b>${m.fmt(m.val(pool))}</b>${chip}<span class="lvl-kpi-l" data-short="${esc(m.short)}">${m.label}</span></div>`;
+  }
+
+  function homeLevelInner() {
+    const anAll = analyzed();
+    if (!anAll.length) return '';
+    const an = pickPool(anAll);
+    curAn = an;
+    const ps = primarySeries(an);
+    if (!ps) return '';
+    const win = windowSeries(ps.active);
+    // Fenêtre vide (il n'a rien joué dans ces 15 jours) : les chiffres repassent
+    // sur tout l'historique et le DISENT. Le graphe, lui, garde son message
+    // « aucune partie sur cette période » : c'est lui qui explique le vide.
+    const windowed = win.games.length >= 2;
+    const pool = windowed ? win.games : ps.active.games;
+    const info = calibInfo(pool, windowed ? win.offset : 0, ps.active.games);
+    const d = ratingDelta(pool, info);
+    const scope = windowed ? periodLabel() : "tout l'historique";
+    return `<div class="home-sec-label">Ton niveau</div>
+      <div class="lvl-card">
+        <div class="lvl-head">
+          <div class="lvl-elo">
+            <span class="lvl-elo-lbl">${tcLabel(ps.active.tc)} · Elo actuel</span>
+            <span class="lvl-elo-row"><b class="lvl-elo-n">${d.last}</b>
+              <span class="lvl-delta ${d.delta >= 0 ? 'up' : 'down'}">${d.delta >= 0 ? '▲ +' : '▼ '}${d.delta}</span></span>
+          </div>
+          <button class="lvl-more" type="button">Statistiques détaillées <span aria-hidden="true">›</span></button>
+          <span class="lvl-elo-sub">sur ${esc(scope)}${d.useCal ? ' · hors classement provisoire' : ''}</span>
+        </div>
+        <div class="lvl-kpis">
+          ${LVL_KPIS.map(m => kpiTile(m, pool)).join('')}
+          <div class="lvl-kpi"><b>${pool.length}</b><span class="lvl-kpi-l" data-short="parties">parties analysées</span></div>
+        </div>
+        <div class="coach-rating-block"></div>
+      </div>`;
+  }
+
+  // La courbe est dessinee a la taille MESUREE de son emplacement, jamais a une
+  // taille devinee : selon la largeur de la carte, le CSS la met en colonne de
+  // droite ou en pleine largeur, et un repere calcule de travers redonne des
+  // textes de 4 px (ou de 20). D'ou le rendu en deux temps de renderHomeLevel.
+  function homeChartGeo(slotW) {
+    const W = Math.max(260, Math.round(slotW || 320));
+    return { W, H: Math.round(W * (W > 420 ? 0.29 : 0.3)) };
+  }
+
+  const LEVEL_H_KEY = 'ca_home_level_h';
+  let homeResize = null;
+  function renderHomeLevel(el) {
+    const html = homeLevelInner();
+    el.innerHTML = html;
+    el.hidden = !html;
+    if (!html) { delete el.dataset.ready; try { localStorage.removeItem(LEVEL_H_KEY); } catch (_) {} return; }
+    el.dataset.ready = '1';
+    // Second temps : l'emplacement de la courbe existe maintenant, on le mesure
+    // et on dessine dedans a 1 unite = 1 pixel.
+    const block = el.querySelector('.coach-rating-block');
+    if (block) block.innerHTML = ratingChartInner(curAn, homeChartGeo(block.clientWidth));
+    el.querySelectorAll('.coach-pchip[data-period]').forEach(b =>
+      b.addEventListener('click', () => {
+        setRatingPeriod({ key: b.dataset.period, from: ratingPeriod.from, to: ratingPeriod.to });
+        renderHomeLevel(el);
+      }));
+    el.querySelectorAll('.coach-rating[data-tc]').forEach(node => {
+      const open = () => openRatingModal(node.dataset.tc);
+      node.addEventListener('click', open);
+      node.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+    // On passe par Coach.show et non par `show` : app.js enveloppe la METHODE
+    // publique pour allumer l'onglet « Statistiques » de la barre du bas, et
+    // appeler la fonction interne court-circuite cet habillage.
+    const more = el.querySelector('.lvl-more');
+    if (more) more.addEventListener('click', () =>
+      (typeof Coach !== 'undefined' && Coach.show ? Coach.show() : show()));
+    // Les puces défilent horizontalement sur téléphone : celle qui est active
+    // doit être visible, sinon la carte s'ouvre sur une barre qui a l'air de ne
+    // rien avoir de sélectionné.
+    const act = el.querySelector('.coach-pchip.active');
+    if (act && act.parentElement) act.parentElement.scrollLeft = Math.max(0, act.offsetLeft - 40);
+    if (!homeResize) {
+      // La courbe est dessinée à la taille de sa colonne : tourner le téléphone
+      // ou redimensionner la fenêtre doit la redessiner, sinon on garde un
+      // repère calibré pour l'autre format.
+      let t = null, lastW = el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 0;
+      homeResize = () => {
+        clearTimeout(t);
+        t = setTimeout(() => {
+          const node = document.getElementById('home-level');
+          if (!node || !node.dataset.ready) return;
+          const w = node.clientWidth || (node.parentElement && node.parentElement.clientWidth) || 0;
+          if (Math.abs(w - lastW) < 12) return;
+          lastW = w;
+          renderHomeLevel(node);
+        }, 180);
+      };
+      window.addEventListener('resize', homeResize);
+    }
+    // La hauteur réelle est relue à chaque rendu : le prochain démarrage réserve
+    // exactement cette place (voir le script d'amorce d'index.html), sinon la
+    // carte pousse tout l'accueil vers le bas une seconde après l'ouverture.
+    const h = Math.round(el.getBoundingClientRect().height);
+    if (h > 120) { try { localStorage.setItem(LEVEL_H_KEY, String(h)); } catch (_) {} }
+  }
+
+  // Appelée par l'accueil. L'archive LOCALE suffit et arrive vite ; le bilan
+  // serveur (1,4 Mo) n'est tiré que si la base est vide — le premier écran d'un
+  // navigateur vierge — et la carte se redessine quand il arrive.
+  async function homeLevel(el) {
+    if (!el) return;
+    await ensureLocal();
+    renderHomeLevel(el);
+    if (!analyzed().length && !hostedOnce) {
+      try { await ensureData(); } catch (_) {}
+      renderHomeLevel(el);
+    }
   }
 
   function tcLabel(k) {
@@ -3350,6 +3521,22 @@ const Coach = (() => {
   function ensureData() {
     if (dataPromise) return dataPromise;
     dataPromise = (async () => {
+      await ensureLocal();
+      try { await loadHosted(); } catch (_) {}
+      hostedOnce = true;
+      return games.length;
+    })();
+    return dataPromise;
+  }
+
+  // Les parties DEJA en base, sans le bilan serveur (1,4 Mo). La carte « Ton
+  // niveau » de l'accueil s'ouvre dessus : elle doit etre prete avant que la
+  // page ait fini de se peindre, et l'archive locale contient deja tout ce
+  // qu'il lui faut. Le telechargement hoste ne sert plus qu'au premier ecran
+  // d'un navigateur vierge (voir homeLevel).
+  function ensureLocal() {
+    if (localPromise) return localPromise;
+    localPromise = (async () => {
       if (!db) {
         try {
           db = await openDB();
@@ -3358,11 +3545,9 @@ const Coach = (() => {
           countryCache = (await getMeta('oppCountry')) || {};
         } catch (_) { games = []; }
       }
-      try { await loadHosted(); } catch (_) {}
-      hostedOnce = true;
       return games.length;
     })();
-    return dataPromise;
+    return localPromise;
   }
 
   // ─────────────── Entry ───────────────
@@ -3372,14 +3557,7 @@ const Coach = (() => {
     window.scrollTo(0, 0);
     const body = $('#coach-dashboard');
     if (body && !body.dataset.ready) body.innerHTML = skeleton();
-    if (!db) {
-      try {
-        db = await openDB();
-        await ensureOwner(); // clears the DB if the analysed account changed
-        games = await getAll();
-        countryCache = (await getMeta('oppCountry')) || {};
-      } catch (_) { games = []; }
-    }
+    await ensureLocal(); // ouvre la base, verifie le proprietaire, charge les parties
     // Yield one frame so the screen transition + skeleton paint before the
     // (still synchronous) classification pass blocks the main thread.
     await raf();
@@ -3541,5 +3719,5 @@ const Coach = (() => {
     return out;
   }
 
-  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, lineStats, myRatings };
+  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, ensureLocal, homeLevel, lineStats, myRatings };
 })();
