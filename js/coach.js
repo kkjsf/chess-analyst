@@ -2148,61 +2148,94 @@ const Coach = (() => {
   }
 
   const LEVEL_H_KEY = 'ca_home_level_h';
-  let homeResize = null;
+  let homeWatch = null;
   function renderHomeLevel(el) {
     const html = homeLevelInner();
     el.innerHTML = html;
     el.hidden = !html;
     if (!html) { delete el.dataset.ready; try { localStorage.removeItem(LEVEL_H_KEY); } catch (_) {} return; }
     el.dataset.ready = '1';
-    // Second temps : l'emplacement de la courbe existe maintenant, on le mesure
-    // et on dessine dedans a 1 unite = 1 pixel.
-    const block = el.querySelector('.coach-rating-block');
-    if (block) block.innerHTML = ratingChartInner(curAn, homeChartGeo(block.clientWidth));
-    el.querySelectorAll('.coach-pchip[data-period]').forEach(b =>
-      b.addEventListener('click', () => {
-        setRatingPeriod({ key: b.dataset.period, from: ratingPeriod.from, to: ratingPeriod.to });
-        renderHomeLevel(el);
-      }));
-    el.querySelectorAll('.coach-rating[data-tc]').forEach(node => {
-      const open = () => openRatingModal(node.dataset.tc);
-      node.addEventListener('click', open);
-      node.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-    });
+    drawHomeChart(el);
     // On passe par Coach.show et non par `show` : app.js enveloppe la METHODE
     // publique pour allumer l'onglet « Statistiques » de la barre du bas, et
     // appeler la fonction interne court-circuite cet habillage.
     const more = el.querySelector('.lvl-more');
     if (more) more.addEventListener('click', () =>
       (typeof Coach !== 'undefined' && Coach.show ? Coach.show() : show()));
-    // Les puces défilent horizontalement sur téléphone : celle qui est active
-    // doit être visible, sinon la carte s'ouvre sur une barre qui a l'air de ne
-    // rien avoir de sélectionné.
-    const act = el.querySelector('.coach-pchip.active');
-    if (act && act.parentElement) act.parentElement.scrollLeft = Math.max(0, act.offsetLeft - 40);
-    if (!homeResize) {
-      // La courbe est dessinée à la taille de sa colonne : tourner le téléphone
-      // ou redimensionner la fenêtre doit la redessiner, sinon on garde un
-      // repère calibré pour l'autre format.
-      let t = null, lastW = el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 0;
-      homeResize = () => {
-        clearTimeout(t);
-        t = setTimeout(() => {
-          const node = document.getElementById('home-level');
-          if (!node || !node.dataset.ready) return;
-          const w = node.clientWidth || (node.parentElement && node.parentElement.clientWidth) || 0;
-          if (Math.abs(w - lastW) < 12) return;
-          lastW = w;
-          renderHomeLevel(node);
-        }, 180);
-      };
-      window.addEventListener('resize', homeResize);
-    }
     // La hauteur réelle est relue à chaque rendu : le prochain démarrage réserve
     // exactement cette place (voir le script d'amorce d'index.html), sinon la
     // carte pousse tout l'accueil vers le bas une seconde après l'ouverture.
     const h = Math.round(el.getBoundingClientRect().height);
     if (h > 120) { try { localStorage.setItem(LEVEL_H_KEY, String(h)); } catch (_) {} }
+  }
+
+  // Second temps du rendu : l'emplacement de la courbe existe, on le MESURE et
+  // on dessine dedans a 1 unite = 1 pixel. La largeur dessinee est notee sur le
+  // bloc, et un ResizeObserver redessine des qu'elle ne correspond plus.
+  //
+  // Le cas qui a impose l'observateur : une mise en page de largeur ZERO au
+  // moment du rendu (onglet d'arriere-plan, volet masque, ancetre display:none).
+  // La mesure tombait a 0, le repli 320 s'installait, et plus rien ne le
+  // corrigeait - l'evenement `resize` de la fenetre ne se declenche pas quand
+  // c'est la mise en page interne qui reprend vie.
+  function drawHomeChart(el) {
+    const block = el.querySelector('.coach-rating-block');
+    if (!block) return;
+    const w = block.clientWidth;
+    block.innerHTML = ratingChartInner(curAn, homeChartGeo(w));
+    block.dataset.drawn = String(w || 0);
+    // Les puces de periode sont DANS ce bloc (ratingChartInner les emet) : les
+    // cabler ailleurs qu'ici les laisserait mortes des le premier redessin
+    // (rotation du telephone, onglet revele). Une puce rejoue la carte ENTIERE,
+    // parce que les quatre chiffres sont comptes sur la periode choisie.
+    block.querySelectorAll('.coach-pchip[data-period]').forEach(b =>
+      b.addEventListener('click', () => {
+        setRatingPeriod({ key: b.dataset.period, from: ratingPeriod.from, to: ratingPeriod.to });
+        renderHomeLevel(el);
+      }));
+    block.querySelectorAll('.coach-rating[data-tc]').forEach(node => {
+      const open = () => openRatingModal(node.dataset.tc);
+      node.addEventListener('click', open);
+      node.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+    // Les puces défilent horizontalement sur téléphone : celle qui est active
+    // doit être visible, sinon la carte s'ouvre sur une barre qui a l'air de ne
+    // rien avoir de sélectionné.
+    const act = el.querySelector('.coach-pchip.active');
+    if (act && act.parentElement) act.parentElement.scrollLeft = Math.max(0, act.offsetLeft - 40);
+    armHomeChartWatch(block);
+  }
+
+  // Redessine la courbe des que la largeur reelle de son emplacement ne
+  // correspond plus a celle avec laquelle elle a ete tracee.
+  //
+  // DEUX declencheurs, parce qu'aucun des deux ne couvre l'autre :
+  // - `resize` de la fenetre : c'est une tache ordinaire, donc elle arrive MEME
+  //   quand le rendu de la page est en pause (onglet d'arriere-plan, volet
+  //   masque). C'est le cas de la rotation du telephone.
+  // - un `ResizeObserver` : ses rappels sont livres AVEC le rendu, donc jamais
+  //   pendant une pause - mais il est le seul a voir une mise en page qui
+  //   repart de ZERO (onglet ouvert en arriere-plan : la mesure valait 0, le
+  //   repli 320 s'installait, et aucun `resize` ne venait jamais le corriger).
+  // La visibilite ferme le dernier trou : un onglet revele sans changer de
+  // taille ne declenche ni l'un ni l'autre.
+  function recheckHomeChart() {
+    const node = document.getElementById('home-level');
+    if (!node || !node.dataset.ready || node.hidden) return;
+    const b = node.querySelector('.coach-rating-block');
+    if (!b || !b.clientWidth) return;
+    if (Math.abs(b.clientWidth - (+b.dataset.drawn || 0)) < 12) return;
+    drawHomeChart(node);
+  }
+  function armHomeChartWatch(block) {
+    if (!homeWatch) {
+      let t = null;
+      const soon = () => { clearTimeout(t); t = setTimeout(recheckHomeChart, 180); };
+      window.addEventListener('resize', soon);
+      document.addEventListener('visibilitychange', soon);
+      homeWatch = { soon, ro: typeof ResizeObserver !== 'undefined' ? new ResizeObserver(soon) : null };
+    }
+    if (homeWatch.ro) { try { homeWatch.ro.disconnect(); homeWatch.ro.observe(block); } catch (_) {} }
   }
 
   // Appelée par l'accueil. L'archive LOCALE suffit et arrive vite ; le bilan

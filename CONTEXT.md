@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v282**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v283**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,30 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v283 - la courbe de l'accueil se remesure toute seule.** Trouve en verifiant la v282 EN
+    LIGNE : la carte s'etait dessinee alors que la mise en page valait ZERO (onglet ouvert en
+    arriere-plan / volet masque), donc `block.clientWidth` = 0, repli sur le repere `320x96` -
+    et plus rien ne le corrigeait quand la mise en page reprenait vie. Resultat : un `viewBox`
+    de 320 etire a 608 px, tous les textes a 1,9x.
+    - `drawHomeChart(el)` isole le second temps du rendu (mesurer, dessiner, recabler) et note
+      la largeur dessinee sur le bloc (`data-drawn`). `recheckHomeChart()` redessine des que la
+      largeur reelle s'en ecarte de plus de 12 px.
+    - **Trois declencheurs, parce qu'aucun ne couvre les autres** : `resize` de la fenetre (la
+      rotation du telephone), un `ResizeObserver` sur le bloc (le SEUL a voir une mise en page
+      qui repart de zero - aucun `resize` n'arrive dans ce cas), et `visibilitychange` (un
+      onglet revele sans changement de taille ne declenche ni l'un ni l'autre). Nota : les
+      rappels du `ResizeObserver` ET l'evenement `resize` sont livres avec le rendu, donc aucun
+      des deux n'arrive tant que la page n'est pas peinte - c'est bien au RETOUR de la
+      visibilite que la correction se fait.
+    - **Regression attrapee au passage, et c'est la vraie lecon :** les puces de periode sont
+      EMISES PAR `ratingChartInner`, donc elles vivent dans le bloc redessine. Cablees depuis
+      `renderHomeLevel`, elles devenaient **mortes des le premier redessin** (rotation, onglet
+      revele) - et un test qui verifie la PRESENCE de la puce (`!!querySelector`) passe quand
+      meme. Il fallait verifier l'EFFET du clic (periode memorisee + chiffres recomptes). Le
+      cablage des puces vit desormais dans `drawHomeChart`, avec celui du plein ecran.
+    Recette : redessin force -> clic de puce -> periode `90d` memorisee, « sur les 3 derniers
+    mois », 79 parties ; plein ecran ouvert apres redessin, periode changee dedans, retour sur
+    la carte a 89 parties ; `test_core` 143/143.
   - **v282 - L'ACCUEIL DIT OU TU EN ES.** Sa demande : « l'ecran d'accueil est un peu vide /
     terne, propose un meilleur UI, et embarque des cet ecran la stat sur le graphique d'ELO, avec
     lien vers stats detaillees. Adapte desktop et mobile ».
