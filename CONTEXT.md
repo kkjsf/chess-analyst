@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v280**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v281**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,19 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v281 - chaque puce porte son nombre de parties.** Sa question : « y'a pas une confusion /
+    donnees similaires derriere 15 jours et 1 mois sur les parties rapides ? j'ai le meme
+    graphique ». Verifie sur l'archive : **ce n'est pas un bug**, il n'a joue **aucune partie
+    rapide entre le 14 aout et le 4 septembre** (21 jours), donc les fenetres 15 j (depuis le
+    2 sept.) et 1 mois (depuis le 18 aout) contiennent les **memes 31 parties**. Mais l'interface
+    ne le disait pas, et deux filtres differents qui donnent le meme dessin se lisent comme une
+    panne. Correction : chaque puce affiche son compte (**15 j 31 / 1 mois 31 / 3 mois 79 /
+    6 mois 89 / Tout 89**), grisee a 0, et la note sous la courbe donne la periode **reellement
+    couverte** en plus de celle demandee : « 31 parties - le dernier mois (04 sept. -> 15 sept.) ».
+    `countIn(games, boundsFor(p))` fait le compte, `boundsFor` sortant de `periodBounds` pour
+    pouvoir evaluer une periode AUTRE que l'active. Regle generale : **un filtre temporel doit
+    toujours montrer combien de donnees il retient**, sinon deux fenetres qui coincident passent
+    pour un bug.
 - **v276-v280 - L'EVOLUTION ELO SUR TELEPHONE, ET UNE FENETRE DE DATES.** Deux demandes : le
   graphique « pas terrible sur mobile », et pouvoir filtrer sur une plage de dates.
   - **Le probleme etait mesurable.** Le plein ecran dessinait dans un repere fixe `900x470` qui
