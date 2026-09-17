@@ -1353,12 +1353,16 @@ const Coach = (() => {
     const t = new Date(s + (endOfDay ? 'T23:59:59' : 'T00:00:00')).getTime();
     return isNaN(t) ? null : Math.floor(t / 1000);
   }
-  function periodBounds() {
-    const p = ratingPeriod;
+  function boundsFor(p) {
     if (p.key === 'custom') return { from: dayStamp(p.from, false), to: dayStamp(p.to, true) };
     const def = RATING_PERIODS.find(d => d.key === p.key);
     if (!def || !def.days) return { from: null, to: null };
     return { from: Math.floor(Date.now() / 1000) - def.days * 86400, to: null };
+  }
+  function periodBounds() { return boundsFor(ratingPeriod); }
+  function countIn(games, b) {
+    return games.filter(g =>
+      (b.from == null || g.endTime >= b.from) && (b.to == null || g.endTime <= b.to)).length;
   }
   function longDate(s) {
     return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -1388,12 +1392,19 @@ const Coach = (() => {
     while (b > a && to != null && all[b - 1].endTime > to) b--;
     return { tc: s.tc, all, games: all.slice(a, b), offset: a, windowed: true };
   }
-  function periodChips(cls) {
+  // Chaque puce porte SON nombre de parties. Sans ce compte, deux fenetres qui
+  // tombent sur le meme paquet (ici 15 j et 1 mois : 21 jours sans jouer entre
+  // le 14 aout et le 4 septembre) donnent le meme dessin sans rien dire, et ca
+  // se lit comme un bug du filtre.
+  function periodChips(cls, games) {
     const act = ratingPeriod.key;
+    const chip = (key, label, n) =>
+      `<button class="${cls}${act === key ? ' active' : ''}${n === 0 ? ' empty' : ''}" data-period="${key}">`
+      + `${label}${n == null ? '' : ` <b>${n}</b>`}</button>`;
     const chips = RATING_PERIODS.map(p =>
-      `<button class="${cls}${act === p.key ? ' active' : ''}" data-period="${p.key}">${p.label}</button>`).join('');
+      chip(p.key, p.label, games ? countIn(games, boundsFor(p)) : null)).join('');
     return act === 'custom'
-      ? chips + `<button class="${cls} active" data-period="custom">📅 ${esc(periodLabel())}</button>`
+      ? chips + chip('custom', '📅 ' + esc(periodLabel()), games ? countIn(games, periodBounds()) : null)
       : chips;
   }
 
@@ -1454,7 +1465,7 @@ const Coach = (() => {
     if (!ps) return '';
     const win = windowSeries(ps.active);
     const pts = win.games;
-    const chips = `<div class="coach-rating-periods" role="group" aria-label="Période">${periodChips('coach-pchip')}</div>`;
+    const chips = `<div class="coach-rating-periods" role="group" aria-label="Période">${periodChips('coach-pchip', ps.active.games)}</div>`;
     if (pts.length < 2) {
       const full = ps.active.games, lastTs = full[full.length - 1].endTime;
       return chips + `<div class="coach-rating-empty">Aucune partie ${esc(tcLabel(ps.active.tc))} sur ${esc(periodLabel())}.
@@ -1499,7 +1510,11 @@ const Coach = (() => {
     const base = useCal ? ratings[info.calN] : first;
     const delta = last - base;
     const floor = Math.min(...(useCal ? ratings.slice(info.calN) : ratings));
-    const note = `${pts.length} parties · ${esc(periodLabel())}`
+    // La periode DEMANDEE et la periode COUVERTE sont deux choses differentes :
+    // sur « le dernier mois » avec 21 jours sans jouer, la courbe ne part pas du
+    // 18 aout mais du 4 septembre, et sans le dire elle ressemble a celle de
+    // « 15 j ».
+    const note = `${pts.length} parties · ${esc(periodLabel())} (${fmtDate(pts[0].endTime)} → ${fmtDate(pts[pts.length - 1].endTime)})`
       + (useCal ? ` · hors classement provisoire · plancher ${floor} (${last - floor >= 0 ? '+' : ''}${last - floor})` : '');
     return chips + `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
       <div class="coach-rating-head"><span class="coach-rating-ttl">Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶<i> plein écran</i></span></span>
@@ -1891,7 +1906,7 @@ const Coach = (() => {
     const iso = ts => new Date(ts * 1000).toISOString().slice(0, 10);
     const first = iso(full[0].endTime), last = iso(full[full.length - 1].endTime);
     return `<div class="rating-period">
-      <div class="rating-period-chips" role="group" aria-label="Période">${periodChips('rating-pchip')}</div>
+      <div class="rating-period-chips" role="group" aria-label="Période">${periodChips('rating-pchip', full)}</div>
       <div class="rating-period-custom">
         <label>du <input type="date" class="rp-from" value="${ratingPeriod.from || first}" min="${first}" max="${last}"></label>
         <label>au <input type="date" class="rp-to" value="${ratingPeriod.to || last}" min="${first}" max="${last}"></label>
