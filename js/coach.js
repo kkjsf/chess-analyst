@@ -1326,6 +1326,77 @@ const Coach = (() => {
   const RES_COLOR = { win: '#4ade80', loss: '#f87171', draw: '#e2b857' };
   const resColor = g => RES_COLOR[g.result] || '#e2b857';
 
+  // ── Fenêtre temporelle ─────────────────────────────────────────────────
+  // Un pool de cadence court sur des mois : 118 parties dans les 300 px d'un
+  // téléphone font 2,5 px par partie, donc la courbe entière n'est pas lisible
+  // de toute façon. Choisir une fenêtre est autant un filtre qu'un réglage de
+  // lisibilité, et la fenêtre vaut pour la vignette ET pour le plein écran.
+  const PERIOD_KEY = 'ca_rating_period';
+  const RATING_PERIODS = [
+    { key: '15d', label: '15 j', days: 15, long: 'les 15 derniers jours' },
+    { key: '30d', label: '1 mois', days: 30, long: 'le dernier mois' },
+    { key: '90d', label: '3 mois', days: 90, long: 'les 3 derniers mois' },
+    { key: '180d', label: '6 mois', days: 180, long: 'les 6 derniers mois' },
+    { key: 'all', label: 'Tout', days: null, long: "tout l'historique" }
+  ];
+  let ratingPeriod = { key: 'all', from: '', to: '' };
+  try {
+    const savedPeriod = JSON.parse(localStorage.getItem(PERIOD_KEY) || 'null');
+    if (savedPeriod && savedPeriod.key) ratingPeriod = savedPeriod;
+  } catch (_) {}
+  function setRatingPeriod(p) {
+    ratingPeriod = { key: p.key, from: p.from || '', to: p.to || '' };
+    try { localStorage.setItem(PERIOD_KEY, JSON.stringify(ratingPeriod)); } catch (_) {}
+  }
+  function dayStamp(s, endOfDay) {
+    if (!s) return null;
+    const t = new Date(s + (endOfDay ? 'T23:59:59' : 'T00:00:00')).getTime();
+    return isNaN(t) ? null : Math.floor(t / 1000);
+  }
+  function periodBounds() {
+    const p = ratingPeriod;
+    if (p.key === 'custom') return { from: dayStamp(p.from, false), to: dayStamp(p.to, true) };
+    const def = RATING_PERIODS.find(d => d.key === p.key);
+    if (!def || !def.days) return { from: null, to: null };
+    return { from: Math.floor(Date.now() / 1000) - def.days * 86400, to: null };
+  }
+  function longDate(s) {
+    return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function periodLabel() {
+    const p = ratingPeriod;
+    if (p.key === 'custom') {
+      const a = p.from ? longDate(p.from) : null, b = p.to ? longDate(p.to) : null;
+      // Formulé pour s'enchaîner après « sur … » comme après « 31 parties · … ».
+      if (a && b) return `la période du ${a} au ${b}`;
+      if (a) return `la période depuis le ${a}`;
+      if (b) return `la période jusqu'au ${b}`;
+      return "tout l'historique";
+    }
+    const def = RATING_PERIODS.find(x => x.key === p.key);
+    return def ? def.long : "tout l'historique";
+  }
+  // Découpe un pool sur la fenêtre choisie. `offset` garde le rang du premier
+  // point visible DANS le pool complet : c'est ce qui permet de savoir si la
+  // fenêtre contient encore les parties de calibrage (elles sont au début du
+  // pool, pas au début de la fenêtre).
+  function windowSeries(s) {
+    const all = s.games, { from, to } = periodBounds();
+    if (from == null && to == null) return { tc: s.tc, all, games: all, offset: 0, windowed: false };
+    let a = 0, b = all.length;
+    while (a < b && from != null && all[a].endTime < from) a++;
+    while (b > a && to != null && all[b - 1].endTime > to) b--;
+    return { tc: s.tc, all, games: all.slice(a, b), offset: a, windowed: true };
+  }
+  function periodChips(cls) {
+    const act = ratingPeriod.key;
+    const chips = RATING_PERIODS.map(p =>
+      `<button class="${cls}${act === p.key ? ' active' : ''}" data-period="${p.key}">${p.label}</button>`).join('');
+    return act === 'custom'
+      ? chips + `<button class="${cls} active" data-period="custom">📅 ${esc(periodLabel())}</button>`
+      : chips;
+  }
+
   function ratingSeries(an) {
     const byTc = {};
     an.forEach(g => {
@@ -1340,16 +1411,24 @@ const Coach = (() => {
   }
 
   // Provisional-Elo window + the "real level" band read from the settled games.
-  function calibInfo(games) {
-    const r = games.map(g => g.myRating);
-    const n = r.length;
-    const calN = Math.min(8, Math.max(3, Math.round(n * 0.3)));
-    const stable = r.slice(calN);
-    const bandMin = Math.min(...stable), bandMax = Math.max(...stable);
-    const mean = Math.round(avg(stable));
+  // Le calibrage se compte TOUJOURS sur le pool complet (ce sont les premières
+  // parties de la cadence) : avec une fenêtre sur les 15 derniers jours, les
+  // huit premières parties visibles ne sont pas un placement, et les grimer en
+  // « Elo provisoire » ferait mentir la zone grisée comme le delta affiché.
+  function calibInfo(games, offset, all) {
+    all = all || games; offset = offset || 0;
+    const full = all.map(g => g.myRating), n = full.length;
+    const calAll = Math.min(8, Math.max(3, Math.round(n * 0.3)));
+    const tail = full.slice(calAll);
     // Only call it "calibrage" when the start clearly sits outside the band.
-    const showCal = n >= 8 && (r[0] > bandMax + 20 || r[0] < bandMin - 20);
-    return { calN, bandMin, bandMax, mean, showCal };
+    const provisional = n >= 8 && tail.length > 0 &&
+      (full[0] > Math.max(...tail) + 20 || full[0] < Math.min(...tail) - 20);
+    const calN = Math.max(0, Math.min(games.length, calAll - offset));
+    const showCal = provisional && calN >= 2;
+    const r = games.map(g => g.myRating);
+    const stable = showCal ? r.slice(calN) : r;
+    const src = stable.length >= 3 ? stable : r;
+    return { calN, bandMin: Math.min(...src), bandMax: Math.max(...src), mean: Math.round(avg(src)), showCal };
   }
 
   // Pick the pool to preview inline: the active cadence filter if it's a single
@@ -1365,18 +1444,34 @@ const Coach = (() => {
   }
 
   // Inline sparkline (one pool), one colored dot per game, click → fullscreen.
+  // Le bloc porte aussi les puces de période : elles vivent HORS de la zone
+  // cliquable, sinon choisir « 15 j » ouvrirait le plein écran.
   function ratingChart(an) {
+    return primarySeries(an) ? `<div class="coach-rating-block">${ratingChartInner(an)}</div>` : '';
+  }
+  function ratingChartInner(an) {
     const ps = primarySeries(an);
     if (!ps) return '';
-    const pts = ps.active.games;
-    const W = 320, H = 90, pad = 6;
+    const win = windowSeries(ps.active);
+    const pts = win.games;
+    const chips = `<div class="coach-rating-periods" role="group" aria-label="Période">${periodChips('coach-pchip')}</div>`;
+    if (pts.length < 2) {
+      const full = ps.active.games, lastTs = full[full.length - 1].endTime;
+      return chips + `<div class="coach-rating-empty">Aucune partie ${esc(tcLabel(ps.active.tc))} sur ${esc(periodLabel())}.
+        <small>Dernière le ${fmtDate(lastTs)} · ${full.length} parties en tout</small></div>`;
+    }
+    // Une bande de 12 px est réservée en bas pour les mois : ils étaient écrits
+    // PAR-DESSUS la courbe, donc illisibles dès que la fin de série plongeait.
+    const W = 320, H = 96, pad = 6, lane = 12;
     const ratings = pts.map(p => p.myRating);
     const min = Math.min(...ratings), max = Math.max(...ratings);
     const range = Math.max(1, max - min);
     const x = (i) => pad + (i / (pts.length - 1)) * (W - 2 * pad);
-    const y = (r) => H - pad - ((r - min) / range) * (H - 2 * pad);
+    const y = (r) => H - pad - lane - ((r - min) / range) * (H - 2 * pad - lane);
+    const gap = (W - 2 * pad) / Math.max(1, pts.length - 1);
+    const dotR = Math.max(1.3, Math.min(2.8, gap * 0.5));
     const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.myRating).toFixed(1)}`).join(' ');
-    const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="2.4" fill="${resColor(p)}"/>`).join('');
+    const dots = pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="${dotR.toFixed(1)}" fill="${resColor(p)}"/>`).join('');
     const last = ratings[ratings.length - 1], first = ratings[0];
     // Le delta AFFICHÉ exclut le classement provisoire. `calibInfo` savait déjà le
     // faire et ne servait qu'au plein écran, si bien que la vignette montrait
@@ -1386,28 +1481,36 @@ const Coach = (() => {
     // et +153 en journalier. C'est le nombre le plus gros de l'écran, il ne peut
     // pas être le seul à ignorer une correction que l'app calcule déjà.
     // Month boundaries, so even the thumbnail says WHEN and not just "before/after".
-    const months = monthBlocks(pts).map((b, i) => i
-      ? `<line x1="${x(b.from - 0.5).toFixed(1)}" y1="0" x2="${x(b.from - 0.5).toFixed(1)}" y2="${H}" stroke="rgba(255,255,255,.13)" stroke-width="1"/>`
-      + `<text x="${(x(b.from - 0.5) + 3).toFixed(1)}" y="${H - 3}" fill="#6d7688" font-size="8">${b.label}</text>`
-      : '').join('');
-    const info = calibInfo(pts);
+    // Un mois trop etroit n'est PAS etiquete : sur 15 jours de fenetre, deux
+    // libelles a 20 px l'un de l'autre se chevauchent et ne disent plus rien.
+    const blocks = monthBlocks(pts);
+    const months = blocks.map((b, i) => {
+      const bx = x(Math.max(0, b.from - 0.5));
+      const wide = x(b.to) - x(b.from) > 26 || blocks.length === 1;
+      let out = i ? `<line x1="${bx.toFixed(1)}" y1="0" x2="${bx.toFixed(1)}" y2="${H - lane}" stroke="rgba(255,255,255,.13)" stroke-width="1"/>` : '';
+      if (wide) {
+        const tx = Math.min(bx + 3, W - 2 - b.label.length * 5);
+        out += `<text x="${tx.toFixed(1)}" y="${H - 2}" fill="#7d8698" font-size="9">${b.label}</text>`;
+      }
+      return out;
+    }).join('');
+    const info = calibInfo(pts, win.offset, win.all);
     const useCal = info.showCal && ratings.length > info.calN + 2;
     const base = useCal ? ratings[info.calN] : first;
     const delta = last - base;
     const floor = Math.min(...(useCal ? ratings.slice(info.calN) : ratings));
-    const note = useCal
-      ? `hors classement provisoire · plancher ${floor} (${last - floor >= 0 ? '+' : ''}${last - floor})`
-      : '';
-    return `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
-      <div class="coach-rating-head"><span>Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶ plein écran</span></span>
+    const note = `${pts.length} parties · ${esc(periodLabel())}`
+      + (useCal ? ` · hors classement provisoire · plancher ${floor} (${last - floor >= 0 ? '+' : ''}${last - floor})` : '');
+    return chips + `<div class="coach-rating" role="button" tabindex="0" data-tc="${esc(ps.active.tc)}" title="Agrandir (plein écran)">
+      <div class="coach-rating-head"><span class="coach-rating-ttl">Évolution Elo · ${tcLabel(ps.active.tc)}<span class="coach-rating-zoom">⛶<i> plein écran</i></span></span>
         <b class="${delta >= 0 ? 'up' : 'down'}">${last} ${delta >= 0 ? '▲ +' + delta : '▼ ' + delta}</b></div>
       <svg viewBox="0 0 ${W} ${H}" class="coach-rating-svg">
-        ${useCal ? `<rect x="${pad}" y="0" width="${(x(info.calN) - pad).toFixed(1)}" height="${H}" fill="#ffffff" opacity="0.05"/>` : ''}
+        ${useCal ? `<rect x="${pad}" y="0" width="${(x(info.calN) - pad).toFixed(1)}" height="${H - lane}" fill="#ffffff" opacity="0.05"/>` : ''}
         ${months}
         <path d="${path}" fill="none" stroke="#e2b857" stroke-width="2"/>
         ${dots}
       </svg>
-      ${note ? `<div class="coach-rating-note">${note}</div>` : ''}</div>`;
+      <div class="coach-rating-note">${note}</div></div>`;
   }
 
   // ── Annotation placement ───────────────────────────────────────────────
@@ -1510,11 +1613,35 @@ const Coach = (() => {
   // month milestones, trend line, one colored dot per game. Values that used
   // to float inside the plot (départ / plancher / actuel) now live in the
   // stat strip above it, where they cannot collide with anything.
+  // Géométrie du grand graphe. Le repère 900x470 se réduisait à 307 px de large
+  // sur un téléphone : un texte de 12 en sortait à 4,1 px (mesuré), illisible,
+  // et c'est exactement ce que le « plein écran » affichait. Sous 700 px on
+  // dessine donc à l'échelle 1 unité = 1 pixel, et les tailles de police
+  // écrites dans le SVG sont enfin les tailles réellement rendues.
+  function chartGeom() {
+    const vw = window.innerWidth || 1024, vh = window.innerHeight || 768;
+    // La HAUTEUR compte autant que la largeur : un téléphone couché fait 812 px
+    // de large mais 375 de haut, et un repère calibré sur la largeur seule s'y
+    // faisait rogner par `max-height` - retour à des textes de 6 px.
+    const narrow = vw < 700;
+    const W = Math.max(250, Math.min(vw - 58, 940));
+    const H = Math.max(190, Math.min(Math.round(vh * (narrow ? 0.44 : 0.56)), Math.round(W * (narrow ? 0.95 : 0.55))));
+    const tight = W < 420, low = H < 300;
+    return {
+      W, H,
+      padL: tight ? 34 : 54, padR: tight ? 10 : 22,
+      padT: low ? 14 : 26, padB: low ? 44 : 64,
+      fs: tight ? 11 : 12, fsSmall: tight ? 9.5 : 10.5,
+      phone: tight
+    };
+  }
+
   function richRatingChart(active) {
     const pts = active.games;
     const ratings = pts.map(p => p.myRating);
-    const info = calibInfo(pts);
-    const W = 900, H = 470, padL = 54, padR = 22, padT = 26, padB = 64;
+    const info = calibInfo(pts, active.offset, active.all);
+    const g = chartGeom();
+    const W = g.W, H = g.H, padL = g.padL, padR = g.padR, padT = g.padT, padB = g.padB;
     const dmin = Math.min(...ratings), dmax = Math.max(...ratings);
     const span = Math.max(1, dmax - dmin);
     const yMin = dmin - span * 0.1 - 4, yMax = dmax + span * 0.1 + 4;
@@ -1522,7 +1649,7 @@ const Coach = (() => {
     const y = v => padT + (H - padT - padB) * (1 - (v - yMin) / (yMax - yMin));
     const bounds = { top: padT + 2, bottom: H - padB - 6 };
     const P = makePlacer();
-    richState = { pts, x, y, W, H, padL, padR, info };
+    richState = { pts, x, y, W, H, padL, padR, info, phone: g.phone };
     let s = '';
 
     // real-level band
@@ -1534,67 +1661,82 @@ const Coach = (() => {
       s += `<line x1="${x(info.calN - 1).toFixed(1)}" y1="${padT}" x2="${x(info.calN - 1).toFixed(1)}" y2="${H - padB}" stroke="rgba(255,255,255,.18)" stroke-dasharray="3 3"/>`;
     }
 
-    // gridlines + rating labels, reserved first: the gutter owns that column
-    const step = span > 260 ? 100 : span > 130 ? 50 : 25;
-    for (let g = Math.ceil(yMin / step) * step; g <= yMax; g += step) {
-      s += `<line x1="${padL}" y1="${y(g).toFixed(1)}" x2="${W - padR}" y2="${y(g).toFixed(1)}" stroke="rgba(255,255,255,.06)"/>`;
-      s += `<text x="${padL - 8}" y="${(y(g) + 4).toFixed(1)}" fill="#8892a4" font-size="12" text-anchor="end">${g}</text>`;
-      P.reserveLabel(g, padL - 8, y(g) + 4, 'end', 12);
+    // gridlines + rating labels, reserved first: the gutter owns that column.
+    // Le pas se choisit sur la PLACE disponible, pas seulement sur l'amplitude :
+    // le même écart de 100 points tient 4 lignes sur 380 px de haut et les
+    // empile sur 210.
+    const innerH = H - padT - padB;
+    const step = [10, 20, 25, 50, 100, 200, 250, 500]
+      .find(v => (v / (yMax - yMin)) * innerH >= (g.phone ? 34 : 26)) || 500;
+    for (let v = Math.ceil(yMin / step) * step; v <= yMax; v += step) {
+      s += `<line x1="${padL}" y1="${y(v).toFixed(1)}" x2="${W - padR}" y2="${y(v).toFixed(1)}" stroke="rgba(255,255,255,.06)"/>`;
+      s += `<text x="${padL - 6}" y="${(y(v) + 4).toFixed(1)}" fill="#8892a4" font-size="${g.fs}" text-anchor="end">${v}</text>`;
+      P.reserveLabel(v, padL - 6, y(v) + 4, 'end', g.fs);
     }
 
     // month milestones, in their own lane under the plot
     const blocks = monthBlocks(pts);
-    const axisY = H - padB + 17, countY = H - padB + 32;
+    const axisY = H - padB + (g.phone ? 15 : 17), countY = H - padB + (g.phone ? 27 : 32);
     P.reserve({ x: 0, y: H - padB + 2, w: W, h: padB });
     blocks.forEach((b, bi) => {
       if (bi) {
         const bx = x(Math.max(0, b.from - 0.5));
         s += `<line x1="${bx.toFixed(1)}" y1="${padT}" x2="${bx.toFixed(1)}" y2="${(H - padB + 6).toFixed(1)}" stroke="rgba(255,255,255,.10)"/>`;
       }
-      const cx = (x(b.from) + x(b.to)) / 2;
-      s += `<text x="${cx.toFixed(1)}" y="${axisY}" fill="#aab3c2" font-size="12" font-weight="600" text-anchor="middle">${b.label}</text>`;
-      if (x(b.to) - x(b.from) > 46)
-        s += `<text x="${cx.toFixed(1)}" y="${countY}" fill="#8892a4" font-size="10.5" text-anchor="middle">${b.to - b.from + 1} parties</text>`;
+      const cx = (x(b.from) + x(b.to)) / 2, wide = x(b.to) - x(b.from);
+      if (wide > 22 || blocks.length === 1)
+        s += `<text x="${cx.toFixed(1)}" y="${axisY}" fill="#aab3c2" font-size="${g.fs}" font-weight="600" text-anchor="middle">${b.label}</text>`;
+      // Pas de compte par mois sur téléphone : la voie sous le graphe n'a
+      // qu'une ligne de place, et il se posait sur la plage de dates.
+      if (!g.phone && wide > 46)
+        s += `<text x="${cx.toFixed(1)}" y="${countY}" fill="#8892a4" font-size="${g.fsSmall}" text-anchor="middle">${b.to - b.from + 1} parties</text>`;
     });
-    s += `<text x="${padL}" y="${H - 8}" fill="#6d7688" font-size="10.5" text-anchor="start">1 pas = 1 partie · ${pts.length} parties</text>`;
-    s += `<text x="${(W - padR).toFixed(1)}" y="${H - 8}" fill="#6d7688" font-size="10.5" text-anchor="end">${fmtDate(pts[0].endTime)} → ${fmtDate(pts[pts.length - 1].endTime)}</text>`;
+    if (!g.phone)
+      s += `<text x="${padL}" y="${H - 8}" fill="#6d7688" font-size="${g.fsSmall}" text-anchor="start">1 pas = 1 partie · ${pts.length} parties</text>`;
+    s += `<text x="${(W - padR).toFixed(1)}" y="${H - (g.phone ? 5 : 8)}" fill="#6d7688" font-size="${g.fsSmall}" text-anchor="end">${fmtDate(pts[0].endTime)} → ${fmtDate(pts[pts.length - 1].endTime)}${g.phone ? ' · ' + pts.length + ' parties' : ''}</text>`;
 
     // trend line (moving average) under the raw line
     if (richTrend && pts.length >= TREND_SPAN) {
       const ma = movingAvg(ratings, TREND_SPAN);
-      s += `<path d="${ma.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="#6fb4ff" stroke-width="3" stroke-opacity=".55" stroke-linecap="round" stroke-linejoin="round"/>`;
+      s += `<path d="${ma.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="#6fb4ff" stroke-width="${g.phone ? 2.4 : 3}" stroke-opacity=".55" stroke-linecap="round" stroke-linejoin="round"/>`;
     }
 
-    // raw line + one colored dot per game
-    s += `<path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.myRating).toFixed(1)}`).join(' ')}" fill="none" stroke="#e2b857" stroke-width="2.5" stroke-linejoin="round"/>`;
-    const dotR = pts.length > 60 ? 3.6 : 4.5;
+    // raw line + one colored dot per game. Le rayon suit l'ESPACE entre deux
+    // parties : 118 points à rayon fixe sur un téléphone font un boudin, et les
+    // couleurs de résultat n'y sont plus lisibles.
+    s += `<path d="${pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.myRating).toFixed(1)}`).join(' ')}" fill="none" stroke="#e2b857" stroke-width="${g.phone ? 2 : 2.5}" stroke-linejoin="round"/>`;
+    const gap = (W - padL - padR) / Math.max(1, pts.length - 1);
+    const dotR = Math.max(g.phone ? 1.5 : 2.4, Math.min(g.phone ? 4 : 4.5, gap * 0.5));
+    const dotStroke = dotR >= 2.4 ? 1.5 : 0;
     pts.forEach((p, i) => {
-      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="${dotR}" fill="${resColor(p)}" stroke="#16213e" stroke-width="1.5"/>`;
+      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(p.myRating).toFixed(1)}" r="${dotR.toFixed(1)}" fill="${resColor(p)}"${dotStroke ? ` stroke="#16213e" stroke-width="${dotStroke}"` : ''}/>`;
     });
 
     // dashed mean line, labelled on the left where the end of the curve can't reach it
     s += `<line x1="${padL}" y1="${y(info.mean).toFixed(1)}" x2="${W - padR}" y2="${y(info.mean).toFixed(1)}" stroke="rgba(226,184,87,.45)" stroke-width="1" stroke-dasharray="4 4"/>`;
     const meanTxt = `niveau réel ~${info.mean}`;
-    const spot = meanCaptionSpot(ratings, info.mean, x, W, padL, padR, labelBox(meanTxt, 0, 0, 'start', 12).w + 14);
-    const meanY = P.place(meanTxt, spot.x, y(info.mean) + (spot.above ? -7 : 16), 'start', 12, spot.above ? -1 : 1, bounds);
-    if (meanY !== null) s += caption(meanTxt, spot.x, meanY, 'start', 12, '#c9982e');
+    const spot = meanCaptionSpot(ratings, info.mean, x, W, padL, padR, labelBox(meanTxt, 0, 0, 'start', g.fs).w + 14);
+    const meanY = P.place(meanTxt, spot.x, y(info.mean) + (spot.above ? -7 : 16), 'start', g.fs, spot.above ? -1 : 1, bounds);
+    if (meanY !== null) s += caption(meanTxt, spot.x, meanY, 'start', g.fs, '#c9982e');
 
     // calibration caption, hung under its zone and bracketed to it: the zone is
     // only a handful of games wide, so a floating caption would not say WHICH
     // stretch it is talking about.
     if (info.showCal) {
-      const calTxt = 'calibrage (Elo provisoire)';
+      // Sur 300 px de large, « calibrage (Elo provisoire) » couvrirait la moitié
+      // du graphe : le mot seul suffit, la note sous le graphe explique le reste.
+      const calTxt = g.phone ? 'calibrage' : 'calibrage (Elo provisoire)';
       const calX = (x(0) + x(info.calN - 1)) / 2, brY = H - padB - 6;
       s += `<path d="M${x(0).toFixed(1)} ${brY} L${x(0).toFixed(1)} ${brY - 5} L${x(info.calN - 1).toFixed(1)} ${brY - 5} L${x(info.calN - 1).toFixed(1)} ${brY}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1"/>`;
       P.reserve({ x: x(0) - 2, y: brY - 7, w: x(info.calN - 1) - x(0) + 4, h: 9 });
-      const calY = P.place(calTxt, calX, brY - 11, 'middle', 12, -1, bounds);
-      if (calY !== null) s += caption(calTxt, calX, calY, 'middle', 12, '#9aa4b4');
+      const calY = P.place(calTxt, calX, brY - 11, 'middle', g.fs, -1, bounds);
+      if (calY !== null) s += caption(calTxt, calX, calY, 'middle', g.fs, '#9aa4b4');
     }
 
     // the cursor: a crosshair driven by the pointer, a swipe or the arrow keys
     s += `<g class="rc-cursor" opacity="0" pointer-events="none">
       <line x1="0" y1="${padT}" x2="0" y2="${H - padB}" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="3 3"/>
-      <circle cx="0" cy="0" r="8" fill="none" stroke="#fff" stroke-width="2"/>
+      <circle cx="0" cy="0" r="${g.phone ? 7 : 8}" fill="none" stroke="#fff" stroke-width="2"/>
     </g>`;
 
     return `<svg viewBox="0 0 ${W} ${H}" class="rating-modal-svg" tabindex="0" role="img"
@@ -1605,7 +1747,7 @@ const Coach = (() => {
   // clicking « Plancher » puts the cursor on the game that made it.
   function ratingStats(active) {
     const pts = active.games, ratings = pts.map(p => p.myRating);
-    const info = calibInfo(pts);
+    const info = calibInfo(pts, active.offset, active.all);
     const lastI = pts.length - 1, troughI = ratings.indexOf(Math.min(...ratings));
     const useCal = info.showCal && ratings.length > info.calN + 2;
     const baseI = useCal ? info.calN : 0;
@@ -1633,7 +1775,7 @@ const Coach = (() => {
       <div class="rt-res ${g.result || 'draw'}">${RES_LABEL[g.result] || 'Partie'}</div>
       <div class="rt-opp">vs ${esc(g.oppName)}${g.oppRating ? ' (' + g.oppRating + ')' : ''}</div>
       ${a.accuracy != null ? `<div class="rt-acc">précision ${a.accuracy}%${bl ? ' · ' + bl + ' gaffe' + (bl > 1 ? 's' : '') : ''}</div>` : ''}
-      <div class="rt-hint">partie n°${i + 1}${inCal ? ' · calibrage' : ''} · clic pour épingler</div>`;
+      <div class="rt-hint">partie n°${i + 1}${inCal ? ' · calibrage' : ''}${richState && richState.phone ? '' : ' · clic pour épingler'}</div>`;
   }
 
   function richPickHtml(g) {
@@ -1652,6 +1794,7 @@ const Coach = (() => {
     const wrap = root.querySelector('.rating-chart-wrap');
     if (!svg || !richState) return;
     const st = richState, n = st.pts.length;
+    const narrow = wrap.classList.contains('narrow');
     const cursor = svg.querySelector('.rc-cursor');
     const cline = cursor.querySelector('line'), cdot = cursor.querySelector('circle');
     let sel = -1, pinned = -1;
@@ -1686,17 +1829,18 @@ const Coach = (() => {
       sel = i;
       const { cx, cy, g } = moveCursor(i, '1');
       tip.hidden = false;
+      tip.classList.remove('rt-idle');
       tip.innerHTML = richTipHtml(g, i, st.pts);
-      // Clamp to the chart box from the MEASURED size: a fixed side + a
-      // percentage threshold let the box hang off the edge on a phone.
-      const wr = wrap.getBoundingClientRect(), pt = toScreen(cx, cy);
-      const tw = tip.offsetWidth, th = tip.offsetHeight, px = pt.x - wr.left, py = pt.y - wr.top;
-      if (wr.width < 480) {
-        // On a phone the box is nearly as wide as the chart: park it in the top
-        // corner away from the finger instead of letting it sit on the curve.
-        tip.style.left = (px > wr.width / 2 ? 4 : Math.max(4, wr.width - tw - 4)) + 'px';
-        tip.style.top = '4px';
-      } else {
+      // Sur téléphone l'infobulle ne SURVOLE plus rien : elle se pose sous le
+      // graphe, en pleine largeur (voir `.narrow` dans la CSS). Garée dans un
+      // coin elle mangeait quand même la courbe, et le doigt est justement posé
+      // là où il faudrait lire.
+      if (narrow) { tip.style.left = ''; tip.style.top = ''; }
+      else {
+        // Clamp to the chart box from the MEASURED size: a fixed side + a
+        // percentage threshold let the box hang off the edge on a phone.
+        const wr = wrap.getBoundingClientRect(), pt = toScreen(cx, cy);
+        const tw = tip.offsetWidth, th = tip.offsetHeight, px = pt.x - wr.left, py = pt.y - wr.top;
         let L = px + 14;
         if (L + tw > wr.width - 4) L = px - 14 - tw;
         tip.style.left = Math.max(4, Math.min(L, wr.width - tw - 4)) + 'px';
@@ -1714,7 +1858,10 @@ const Coach = (() => {
       }
     };
     const rest = () => {
-      tip.hidden = true;
+      // Sur téléphone le bloc reste en place, avec sa consigne : le faire
+      // disparaître décalerait tout ce qui est en dessous à chaque relâchement.
+      if (narrow) { tip.innerHTML = IDLE_TIP; tip.classList.add('rt-idle'); }
+      else tip.hidden = true;
       if (pinned >= 0) { moveCursor(pinned, '.85'); sel = pinned; }
       else { cursor.setAttribute('opacity', '0'); sel = -1; }
     };
@@ -1735,22 +1882,51 @@ const Coach = (() => {
       b.addEventListener('click', () => { show(+b.dataset.i, true); svg.focus(); }));
   }
 
+  const IDLE_TIP = '<div class="rt-hint">Touche la courbe pour lire une partie.</div>';
+
+  // Barre de période : les raccourcis, puis une vraie plage de dates. Les deux
+  // sur la même ligne au-dessus du graphe, donc disponibles à l'identique sur
+  // téléphone et sur ordinateur.
+  function periodBar(full) {
+    const iso = ts => new Date(ts * 1000).toISOString().slice(0, 10);
+    const first = iso(full[0].endTime), last = iso(full[full.length - 1].endTime);
+    return `<div class="rating-period">
+      <div class="rating-period-chips" role="group" aria-label="Période">${periodChips('rating-pchip')}</div>
+      <div class="rating-period-custom">
+        <label>du <input type="date" class="rp-from" value="${ratingPeriod.from || first}" min="${first}" max="${last}"></label>
+        <label>au <input type="date" class="rp-to" value="${ratingPeriod.to || last}" min="${first}" max="${last}"></label>
+        <button class="rp-apply">Appliquer</button>
+      </div>
+    </div>`;
+  }
+
   function ratingModalInner(series, active) {
-    const info = calibInfo(active.games);
+    const win = windowSeries(active);
+    const pts = win.games;
     const chips = series.length > 1
       ? `<div class="rating-modal-chips">` + series.map(s =>
           `<button class="rating-modal-chip${s.tc === active.tc ? ' active' : ''}" data-tc="${esc(s.tc)}">${tcLabel(s.tc)} <b>${s.games.length}</b></button>`).join('') + `</div>`
       : '';
+    const bar = chips + periodBar(active.games);
+    if (pts.length < 2) {
+      richState = null;
+      const full = active.games;
+      return `${bar}<div class="rating-empty">Aucune partie ${esc(tcLabel(active.tc))} sur ${esc(periodLabel())}.
+        <small>Ce pool compte ${full.length} parties, du ${fmtDate(full[0].endTime)} au ${fmtDate(full[full.length - 1].endTime)}</small>
+        <button class="rating-pchip active" data-period="all">Voir tout l'historique</button></div>`;
+    }
+    const info = calibInfo(pts, win.offset, win.all);
+    const phone = chartGeom().phone;
     const note = info.showCal
       ? `La descente du début (zone grisée) n'est pas un effondrement : c'est ton <b>Elo provisoire</b> qui se calibre sur tes ~${info.calN} premières parties. Chess.com te place haut, puis corrige par paliers. Ton vrai niveau se lit sur le reste : moyenne <b class="gold">~${info.mean}</b>, dans une bande ${info.bandMin}-${info.bandMax}.`
-      : `Ton Elo ${tcLabel(active.tc)} oscille autour de <b class="gold">${info.mean}</b> (bande ${info.bandMin}-${info.bandMax}). Chaque point est une partie, coloré selon son résultat.`;
-    return `${chips}
-      ${ratingStats(active)}
+      : `Sur ${esc(periodLabel())}, ton Elo ${tcLabel(active.tc)} oscille autour de <b class="gold">${info.mean}</b> (bande ${info.bandMin}-${info.bandMax}). Chaque point est une partie, coloré selon son résultat.`;
+    return `${bar}
+      ${ratingStats(win)}
       <div class="rating-modal-tools">
         <button class="rating-tool${richTrend ? ' active' : ''}" data-tool="trend" aria-pressed="${richTrend}">📉 Tendance (${TREND_SPAN} parties)</button>
-        <span class="rating-modal-tip">Survole ou balaie la courbe · ← → au clavier</span>
+        <span class="rating-modal-tip">${phone ? 'Balaie la courbe du doigt' : 'Survole ou balaie la courbe · ← → au clavier'}</span>
       </div>
-      <div class="rating-chart-wrap">${richRatingChart(active)}<div class="rating-tip" hidden></div></div>
+      <div class="rating-chart-wrap${phone ? ' narrow' : ''}">${richRatingChart(win)}<div class="rating-tip${phone ? ' rt-idle' : ''}"${phone ? '' : ' hidden'}>${phone ? IDLE_TIP : ''}</div></div>
       <div class="rating-pick" hidden></div>
       <div class="rating-modal-legend">
         <span><i style="background:#4ade80"></i>Victoire</span>
@@ -1762,16 +1938,17 @@ const Coach = (() => {
       <p class="rating-modal-note">${note}</p>`;
   }
 
-  let ratingModalEl = null;
+  let ratingModalEl = null, ratingResize = null;
   function onRatingKey(e) { if (e.key === 'Escape') closeRatingModal(); }
   function closeRatingModal() {
     if (!ratingModalEl) return;
     document.removeEventListener('keydown', onRatingKey);
+    if (ratingResize) { window.removeEventListener('resize', ratingResize); ratingResize = null; }
     try { if (document.fullscreenElement) document.exitFullscreen(); } catch (_) {}
-    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (_) {}
     const el = ratingModalEl; ratingModalEl = null;
     el.classList.remove('visible');
     setTimeout(() => el.remove(), 200);
+    refreshRatingBlocks();
   }
   function openRatingModal(initialTc) {
     const series = ratingSeries(curAn);
@@ -1782,7 +1959,6 @@ const Coach = (() => {
     el.innerHTML = `<div class="rating-modal">
       <div class="rating-modal-head">
         <h3>📈 Évolution Elo</h3>
-        <span class="rating-modal-rotate">↻ Tourne ton téléphone</span>
         <button class="rating-modal-close" aria-label="Fermer">×</button>
       </div>
       <div class="rating-modal-body">${ratingModalInner(series, active)}</div>
@@ -1796,26 +1972,63 @@ const Coach = (() => {
         b.addEventListener('click', () => { active = series.find(s => s.tc === b.dataset.tc) || active; redraw(); }));
       el.querySelectorAll('.rating-tool[data-tool="trend"]').forEach(b =>
         b.addEventListener('click', () => { richTrend = !richTrend; redraw(); }));
+      el.querySelectorAll('[data-period]').forEach(b =>
+        b.addEventListener('click', () => { setRatingPeriod({ key: b.dataset.period }); redraw(); }));
+      const apply = el.querySelector('.rp-apply');
+      if (apply) apply.addEventListener('click', () => {
+        const from = el.querySelector('.rp-from').value, to = el.querySelector('.rp-to').value;
+        setRatingPeriod(from || to ? { key: 'custom', from, to } : { key: 'all' });
+        redraw();
+      });
       bindRichChart(body);
     };
     bindBody();
+    // Le repère du graphe dépend maintenant de la largeur de la fenêtre : il
+    // faut donc le redessiner quand elle change (rotation du téléphone, fenêtre
+    // redimensionnée), sinon on garde un dessin calibré pour l'autre format.
+    let lastW = chartGeom().W, rzT = null;
+    ratingResize = () => {
+      clearTimeout(rzT);
+      rzT = setTimeout(() => {
+        const w = chartGeom().W;
+        if (w !== lastW) { lastW = w; redraw(); }
+      }, 160);
+    };
+    window.addEventListener('resize', ratingResize);
     el.querySelector('.rating-modal-close').addEventListener('click', closeRatingModal);
     el.addEventListener('click', e => { if (e.target === el) closeRatingModal(); });
     document.addEventListener('keydown', onRatingKey);
-    // Best-effort landscape lock on phones (Android/Chrome); no-ops elsewhere.
     requestAnimationFrame(() => {
       el.classList.add('visible');
-      try {
-        const p = el.requestFullscreen && el.requestFullscreen();
-        if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape'); } catch (_) {} }).catch(() => {});
-      } catch (_) {}
+      try { if (el.requestFullscreen) { const p = el.requestFullscreen(); if (p && p.catch) p.catch(() => {}); } } catch (_) {}
     });
   }
-  function bindRatingChart() {
-    document.querySelectorAll('.coach-rating[data-tc]').forEach(el => {
+  // Les puces de période vivent HORS de la zone cliquable, sinon choisir « 15 j »
+  // ouvrirait le plein écran. Le bloc se redessine tout seul, sans repasser par
+  // render() : le tableau de bord entier n'a pas à bouger pour un changement de
+  // fenêtre sur une seule carte.
+  function wireRatingBlock(block) {
+    block.querySelectorAll('.coach-pchip[data-period]').forEach(b =>
+      b.addEventListener('click', () => {
+        setRatingPeriod({ key: b.dataset.period, from: ratingPeriod.from, to: ratingPeriod.to });
+        block.innerHTML = ratingChartInner(curAn);
+        wireRatingBlock(block);
+      }));
+    block.querySelectorAll('.coach-rating[data-tc]').forEach(el => {
       const open = () => openRatingModal(el.dataset.tc);
       el.addEventListener('click', open);
       el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+  }
+  function bindRatingChart() {
+    document.querySelectorAll('.coach-rating-block').forEach(wireRatingBlock);
+  }
+  // La fenêtre choisie dans le plein écran vaut aussi pour la vignette : sans
+  // ça, fermer le plein écran laissait la carte sur l'ancienne période.
+  function refreshRatingBlocks() {
+    document.querySelectorAll('.coach-rating-block').forEach(block => {
+      block.innerHTML = ratingChartInner(curAn);
+      wireRatingBlock(block);
     });
   }
 

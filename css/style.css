@@ -2966,10 +2966,23 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .coach-bar { flex: 1; height: 14px; background: var(--bg); border-radius: 4px; overflow: hidden; display: flex; }
 .coach-bar span { display: block; height: 100%; }
 
-.coach-rating { margin: 8px 0; cursor: pointer; border-radius: 8px; padding: 4px 6px; transition: background .15s; }
+/* Puces de periode : hors de la zone cliquable, sinon choisir « 15 j » ouvrirait
+   le plein ecran. Defilement horizontal sur telephone plutot qu'un retour a la
+   ligne qui ferait grandir la carte. */
+.coach-rating-block { margin: 8px 0 2px; }
+.coach-rating-periods { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 4px; scrollbar-width: none; }
+.coach-rating-periods::-webkit-scrollbar { display: none; }
+.coach-pchip { flex: none; background: var(--bg-elevated); border: 1px solid transparent; color: var(--text-dim);
+  border-radius: 999px; padding: 4px 10px; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
+.coach-pchip.active { border-color: var(--accent-dim); color: var(--accent); }
+.coach-rating-empty { font-size: 12px; color: var(--text-dim); background: var(--bg-elevated);
+  border-radius: 9px; padding: 10px 12px; line-height: 1.5; }
+.coach-rating-empty small { display: block; opacity: .75; margin-top: 2px; }
+.coach-rating { margin: 0 0 8px; cursor: pointer; border-radius: 8px; padding: 4px 6px; transition: background .15s; }
 .coach-rating:hover { background: rgba(226,184,87,.06); }
 .coach-rating:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 1px; }
-.coach-rating-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--text-dim); margin-bottom: 2px; }
+.coach-rating-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); margin-bottom: 2px; }
+.coach-rating-ttl { min-width: 0; }
 .coach-rating-head b.up { color: var(--success); } .coach-rating-head b.down { color: var(--danger); }
 .coach-rating-zoom { color: var(--text-dim); font-size: 11px; opacity: .7; margin-left: 6px; white-space: nowrap; }
 /* Le delta affiche exclut le classement provisoire : cette ligne le dit, sinon
@@ -2978,7 +2991,7 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 /* Rapport fixe + mise a l'echelle uniforme (pas de preserveAspectRatio="none") :
    avec une hauteur figee, la courbe etait etiree des que la colonne depassait
    les 320 px du repere - cercles en ellipses, epaisseurs incoherentes. */
-.coach-rating-svg { width: 100%; height: auto; aspect-ratio: 320 / 90; }
+.coach-rating-svg { width: 100%; height: auto; aspect-ratio: 320 / 96; }
 
 /* Fullscreen Elo "calibration" view */
 .rating-modal-overlay {
@@ -2996,7 +3009,6 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .rating-modal-overlay.visible .rating-modal { transform: scale(1); }
 .rating-modal-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .rating-modal-head h3 { margin: 0; font-size: 17px; color: var(--accent); flex: 1; }
-.rating-modal-rotate { display: none; font-size: 12px; color: var(--warning); }
 .rating-modal-close { background: none; border: none; color: var(--text-dim); font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .rating-modal-close:hover { color: var(--text); }
 .rating-modal-body { padding: 14px 16px 18px; overflow-y: auto; }
@@ -3004,12 +3016,28 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .rating-modal-chip { background: var(--bg-elevated); border: 1px solid transparent; color: var(--text-dim); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
 .rating-modal-chip b { color: var(--text); margin-left: 3px; }
 .rating-modal-chip.active { border-color: var(--accent-dim); color: var(--accent); }
-.rating-modal-svg { width: 100%; height: auto; max-height: 66vh; display: block; }
+.rating-modal-svg { width: 100%; height: auto; max-height: 74vh; display: block; }
 .rating-modal-legend { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); margin-top: 10px; }
 .rating-modal-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .rating-modal-note { color: var(--text-dim); font-size: 13.5px; line-height: 1.55; margin-top: 12px; }
 .rating-modal-note .gold { color: var(--accent); }
 .rating-modal-legend i.bar { width: 16px; height: 3px; border-radius: 2px; }
+
+/* Periode : raccourcis + plage de dates, meme barre sur les deux formats. */
+.rating-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+.rating-period-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rating-pchip { background: var(--bg-elevated); border: 1px solid transparent; color: var(--text-dim);
+  border-radius: 999px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.rating-pchip.active { border-color: var(--accent-dim); color: var(--accent); }
+.rating-period-custom { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); flex-wrap: wrap; }
+.rating-period-custom label { display: flex; align-items: center; gap: 4px; }
+.rating-period-custom input { background: var(--bg); border: 1px solid rgba(255,255,255,.12); color: var(--text);
+  border-radius: 7px; padding: 4px 6px; font: inherit; font-size: 12px; color-scheme: dark; }
+.rp-apply { background: var(--bg-elevated); border: 1px solid var(--accent-dim); color: var(--accent);
+  border-radius: 7px; padding: 4px 11px; font-size: 12px; cursor: pointer; }
+.rating-empty { background: var(--bg-elevated); border-radius: 10px; padding: 14px; font-size: 13px;
+  color: var(--text-dim); line-height: 1.5; }
+.rating-empty small { display: block; opacity: .8; margin: 2px 0 9px; }
 
 /* Stat strip: the numbers that used to float inside the plot (and collide). */
 .rating-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -3056,14 +3084,28 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .rating-pick-btn { flex: none; background: var(--accent-dim); border: none; color: #0d1426; font-weight: 600;
   border-radius: 8px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
 
-@media (orientation: portrait) and (max-width: 768px) {
-  .rating-modal-rotate { display: block; }
-}
-@media (max-width: 640px) {
-  .rating-stat { flex: 1 1 70px; padding: 5px 7px; }
-  .rating-stat b { font-size: 16px; }
-  .rating-tip { font-size: 11px; padding: 6px 9px; }
-  .rating-tip .rt-elo { font-size: 17px; }
+/* Telephone : l'infobulle ne survole plus la courbe, elle se pose dessous en
+   pleine largeur. Elle reste toujours affichee (avec sa consigne au repos) pour
+   que la legende ne saute pas a chaque relachement du doigt. */
+.rating-chart-wrap.narrow .rating-tip { position: static; white-space: normal; margin-top: 8px;
+  box-shadow: none; background: var(--bg-elevated); border-color: rgba(255,255,255,.08); }
+.rating-chart-wrap.narrow .rating-tip.rt-idle { text-align: center; padding: 9px; }
+.rating-chart-wrap.narrow .rating-tip.rt-idle .rt-hint { margin: 0; font-size: 11.5px; }
+.rating-chart-wrap.narrow .rating-modal-svg { touch-action: none; }
+
+@media (max-width: 700px) {
+  .rating-modal-overlay { padding: 8px; }
+  .rating-modal-body { padding: 12px 12px 16px; }
+  .rating-modal-svg { max-height: none; }
+  /* Deux colonnes plutot que quatre vignettes de 70 px cote a cote. */
+  .rating-stats { display: grid; grid-template-columns: 1fr 1fr; }
+  .rating-stat { padding: 6px 9px; }
+  .rating-stat b { font-size: 17px; }
+  .rating-period-custom { width: 100%; }
+  .rating-period-custom label { flex: 1 1 42%; }
+  .rating-period-custom input { width: 100%; min-width: 0; }
+  .rating-modal-legend { gap: 6px 14px; font-size: 11.5px; }
+  .rating-modal-note { font-size: 12.5px; }
   .rating-pick-txt { white-space: normal; }
 }
 

@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v275**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v280**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,44 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+- **v276-v280 - L'EVOLUTION ELO SUR TELEPHONE, ET UNE FENETRE DE DATES.** Deux demandes : le
+  graphique « pas terrible sur mobile », et pouvoir filtrer sur une plage de dates.
+  - **Le probleme etait mesurable.** Le plein ecran dessinait dans un repere fixe `900x470` qui
+    se reduisait a **307 px de large** sur un telephone de 375 : un texte ecrit `font-size="12"`
+    sortait donc a **4,1 px** (mesure : `largeur rendue / largeur du viewBox = 0,342`), et les
+    118 parties tenaient dans 307 px, soit 2,6 px par partie avec des points de rayon 3,6. Le
+    correctif d'avant (« tourne ton telephone » + verrouillage d'orientation) contournait le
+    probleme au lieu de le regler - et il ne marche pas sur iOS.
+  - **Le repere se calcule maintenant sur la place reelle** (`chartGeom`), a l'echelle
+    **1 unite = 1 pixel** : les tailles de police ecrites dans le SVG sont les tailles rendues.
+    Mesures apres : portrait 375 -> repere `317x301`, textes a **11,2 px** ; paysage 812x375 ->
+    `754x210`, textes a **11,2 px** ; desktop 1440 -> `940x504`, textes a **12 px**. Zero
+    collision de texte (`getBBox()`) sur les trois formats et sur chaque fenetre testee.
+  - **Piege a retenir : la hauteur compte autant que la largeur.** Une premiere version ne
+    regardait que `innerWidth` ; un telephone couche (812 de large, 375 de haut) repassait donc
+    en repere desktop, que le `max-height: 66vh` du CSS rognait ensuite - retour a des textes de
+    **6,3 px**. `chartGeom` prend les deux dimensions, et le plafond CSS est passe a 74vh.
+  - **Sur telephone l'infobulle ne survole plus rien** : elle se pose sous le graphe, en pleine
+    largeur (`.rating-chart-wrap.narrow`), et **reste affichee** avec sa consigne au repos, sinon
+    la legende sautait a chaque relachement du doigt. Garee dans un coin (v275) elle mangeait
+    encore la courbe. Aussi : rayon des points proportionnel a l'ecart entre deux parties,
+    graduations espacees d'au moins 34 px, pas de compte de parties par mois (il se posait sur la
+    plage de dates), « calibrage » au lieu de « calibrage (Elo provisoire) ».
+  - **Fenetre temporelle** (`ratingPeriod`, memorisee en `ca_rating_period`) : puces **15 j /
+    1 mois / 3 mois / 6 mois / Tout** sous la vignette ET dans le plein ecran, plus une **vraie
+    plage de dates** (deux `input[type=date]` + Appliquer) dans le plein ecran. Les puces vivent
+    **hors** de la zone cliquable, sinon choisir « 15 j » ouvrirait le plein ecran ; la vignette
+    se redessine seule (`ratingChartInner`), sans repasser par `render()`, et se resynchronise a
+    la fermeture du plein ecran.
+  - **Le calibrage se compte toujours sur le pool COMPLET.** `calibInfo(games, offset, all)` :
+    les 8 premieres parties visibles d'une fenetre de 15 jours ne sont pas un placement, les
+    grimer en « Elo provisoire » ferait mentir la zone grisee comme le delta affiche. Quand la
+    fenetre exclut le calibrage, la vignette « Apres calibrage » disparait et le delta devient
+    « Sur la periode » (verifie : rapide sur 15 j = +33 sur 31 parties, sans mention de
+    provisoire ; tout l'historique = -44 hors provisoire, plancher 266).
+  - Fenetre vide = un message qui dit ce que contient le pool et un bouton « Voir tout
+    l'historique », pas un graphique casse. Rotation de l'ecran = redessin (ecouteur `resize`
+    debounce 160 ms, redessin seulement si la largeur du repere change).
 - **v272-v275 - LE GRAPHIQUE D'EVOLUTION ELO, LISIBLE ET MANIPULABLE.** Plainte : chevauchements,
   pas de jalons de date, pas assez clair ni interactif. Les chevauchements etaient reels et
   mesurables : `getBBox()` sur les textes du plein ecran donnait **4 collisions** sur la vue
