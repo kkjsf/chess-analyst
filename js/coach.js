@@ -405,6 +405,14 @@ const Coach = (() => {
   // qu'à la série Elo.
   function ratedGame(g) { return g.rated !== false; }
   function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && ratedGame(g) && !excludedOpp(g.oppName) && !skipCadence(g.timeClass)); }
+  // Les parties qu'on a DEJA recuperees mais qui ne comptent pas encore dans
+  // les chiffres : memes filtres que `analyzed()`, moins la seule condition
+  // d'analyse. C'est exactement l'ecart entre « ce que j'ai joue » et « ce que
+  // l'ecran affiche », le nombre a montrer a cote du bouton de recuperation.
+  function pendingForStats() {
+    return games.filter(g => !(g.analysis && !g.analysis.error) && ratedGame(g)
+      && !excludedOpp(g.oppName) && !skipCadence(g.timeClass));
+  }
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
   function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
   function fmtDate(ts) { const d = new Date(ts * 1000); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }); }
@@ -2135,7 +2143,94 @@ const Coach = (() => {
           <div class="lvl-kpi"><b>${pool.length}</b><span class="lvl-kpi-l" data-short="parties">parties analysées</span></div>
         </div>
         <div class="coach-rating-block"></div>
+        ${homeSyncFooter()}
       </div>`;
+  }
+
+  // Pied de la carte : ce qui manque aux chiffres, et de quoi le combler.
+  // Sans ce compte, l'ecran affirme « 89 parties analysees » sans jamais dire
+  // que les 4 dernieres jouees n'y sont pas - et il n'y avait aucun moyen de
+  // lancer la recuperation sans ouvrir le bilan.
+  function homeSyncFooter() {
+    const pend = pendingForStats().length;
+    const msg = homeSyncMsg;
+    homeSyncMsg = '';
+    const note = msg || (pend
+      ? `<b>${pend} partie${pend > 1 ? 's' : ''}</b> récupérée${pend > 1 ? 's' : ''} ${pend > 1 ? 'ne sont' : "n'est"} pas encore dans ces chiffres : ${pend > 1 ? 'elles attendent' : 'elle attend'} l'analyse.${lastSyncStamp()}`
+      : `Toutes tes parties récupérées sont dans ces chiffres.${lastSyncStamp()}`);
+    return `<div class="lvl-sync">
+      <p class="lvl-sync-txt">${note}</p>
+      <div class="lvl-sync-actions">
+        <button class="lvl-sync-btn" type="button" data-act="fetch">⟳ Récupérer<span class="lvl-btn-long"> mes dernières parties</span></button>
+        ${pend ? `<button class="lvl-sync-btn alt" type="button" data-act="analyze">Analyser ${pend === 1 ? 'la partie' : 'les ' + pend}<span class="lvl-btn-long"> ici</span></button>` : ''}
+        <button class="lvl-sync-btn stop" type="button" data-act="stop" hidden>Arrêter</button>
+      </div>
+    </div>`;
+  }
+  function lastSyncStamp() {
+    return lastSyncAt ? ` <span class="lvl-sync-when">Dernière récupération : ${esc(fmtIso(lastSyncAt))}.</span>` : '';
+  }
+
+  // Recuperation depuis l'accueil : le bilan serveur d'abord (c'est lui qui
+  // porte les analyses), puis les parties Chess.com des deux derniers mois.
+  async function homeFetch(el) {
+    const note = el.querySelector('.lvl-sync-txt');
+    const btns = [...el.querySelectorAll('.lvl-sync-btn')];
+    btns.forEach(b => { if (b.dataset.act !== 'stop') b.disabled = true; });
+    const say = t => { if (note) note.textContent = t; };
+    say('Récupération en cours…');
+    const before = analyzed().length;
+    let added = 0, failed = false;
+    try {
+      await loadHosted(true); // geste explicite : on court-circuite le cache
+      hostedOnce = true;
+      const r = await sync(say);
+      added = r.added;
+      lastSyncAt = Date.now();
+    } catch (_) { failed = true; }
+    games = await getAll();
+    syncToTraining();
+    const gained = analyzed().length - before;
+    const pend = pendingForStats().length;
+    homeSyncMsg = failed
+      ? `<b class="lvl-sync-ko">Échec de la récupération.</b> Vérifie ta connexion et le pseudo Chess.com (dans le bilan détaillé).`
+      : `<b>${added || 'Aucune'} nouvelle${added > 1 ? 's' : ''} partie${added > 1 ? 's' : ''}</b> récupérée${added > 1 ? 's' : ''}`
+        + (gained > 0 ? ` · ${gained} de plus dans les chiffres` : '')
+        + (pend ? ` · ${pend} en attente d'analyse` : ' · tout est à jour')
+        + '.' + lastSyncStamp();
+    renderHomeLevel(el);
+  }
+
+  // Analyse locale (Stockfish dans le navigateur) des parties en attente. Le
+  // bilan serveur repasse une fois par semaine ; ce bouton sert a ne pas
+  // attendre jusque-la.
+  async function homeAnalyze(el) {
+    const note = el.querySelector('.lvl-sync-txt');
+    const btns = [...el.querySelectorAll('.lvl-sync-btn')];
+    const stopBtn = el.querySelector('.lvl-sync-btn.stop');
+    btns.forEach(b => { if (b.dataset.act !== 'stop') b.disabled = true; });
+    if (stopBtn) stopBtn.hidden = false;
+    const before = analyzed().length;
+    homeStopping = false;
+    let r;
+    try {
+      r = await analyzePending((gi, gtotal, mi, mtotal, g) => {
+        if (!note) return;
+        note.textContent = homeStopping
+          ? `Arrêt demandé — la partie en cours se termine (coup ${mi}/${mtotal})…`
+          : `Analyse ${gi + 1}/${gtotal} · coup ${mi}/${mtotal}${g ? ' · vs ' + g.oppName : ''}`;
+      });
+    } catch (_) { r = null; }
+    if (stopBtn) stopBtn.hidden = true;
+    const gained = analyzed().length - before;
+    homeSyncMsg = !r
+      ? `<b class="lvl-sync-ko">Analyse impossible pour le moment.</b> Réessaie dans un instant.`
+      : r.engineFailed
+        ? `<b class="lvl-sync-ko">Moteur indisponible sur ce navigateur.</b> Le bilan serveur les analysera de son côté.`
+        : `<b>${gained} partie${gained > 1 ? 's' : ''}</b> ajoutée${gained > 1 ? 's' : ''} aux chiffres`
+          + (r.stopped ? ' (analyse interrompue)' : '')
+          + (r.failed ? ` · ${r.failed} en échec` : '') + '.';
+    renderHomeLevel(el);
   }
 
   // La courbe est dessinee a la taille MESUREE de son emplacement, jamais a une
@@ -2148,6 +2243,9 @@ const Coach = (() => {
   }
 
   const LEVEL_H_KEY = 'ca_home_level_h';
+  let lastSyncAt = null;   // horodatage de la derniere recuperation (meta lastSync)
+  let homeSyncMsg = '';    // resultat de la derniere action, affiche au prochain rendu
+  let homeStopping = false; // « Arreter » touche : la partie en cours va quand meme au bout
   let homeWatch = null;
   function renderHomeLevel(el) {
     const html = homeLevelInner();
@@ -2162,6 +2260,18 @@ const Coach = (() => {
     const more = el.querySelector('.lvl-more');
     if (more) more.addEventListener('click', () =>
       (typeof Coach !== 'undefined' && Coach.show ? Coach.show() : show()));
+    el.querySelectorAll('.lvl-sync-btn').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.act === 'fetch') homeFetch(el);
+      else if (b.dataset.act === 'analyze') homeAnalyze(el);
+      else if (b.dataset.act === 'stop') {
+        // `stopFlag` est lu ENTRE deux parties : la partie en cours va au bout
+        // (jusqu'a ~45 s). Sans ce mot, le bouton se grise et la progression
+        // continue, ce qui se lit comme un bouton qui n'a pas marche.
+        stop(); b.disabled = true; homeStopping = true;
+        const n = el.querySelector('.lvl-sync-txt');
+        if (n) n.textContent = 'Arrêt demandé — la partie en cours se termine…';
+      }
+    }));
     // La hauteur réelle est relue à chaque rendu : le prochain démarrage réserve
     // exactement cette place (voir le script d'amorce d'index.html), sinon la
     // carte pousse tout l'accueil vers le bas une seconde après l'ouverture.
@@ -3576,6 +3686,7 @@ const Coach = (() => {
           await ensureOwner();
           games = await getAll();
           countryCache = (await getMeta('oppCountry')) || {};
+          lastSyncAt = await getMeta('lastSync');
         } catch (_) { games = []; }
       }
       return games.length;

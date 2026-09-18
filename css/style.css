@@ -4170,6 +4170,27 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .lvl-trend.good { color: var(--success); }
 .lvl-trend.bad { color: var(--danger); }
 
+/* Pied de carte : l'ecart entre ce qui est joue et ce qui est compte, et les
+   deux gestes qui le comblent (recuperer depuis Chess.com, analyser ici). */
+.lvl-sync {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line);
+}
+.lvl-sync-txt { font-size: 12px; color: var(--text-dim); line-height: 1.45; flex: 1 1 240px; min-width: 0; margin: 0; }
+.lvl-sync-txt b { color: var(--text); }
+.lvl-sync-txt b.lvl-sync-ko { color: var(--danger); }
+.lvl-sync-when { display: block; color: var(--dim-2); font-size: 11px; margin-top: 2px; }
+.lvl-sync-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+.lvl-sync-btn {
+  background: rgba(226,184,87,.14); border: 1px solid rgba(226,184,87,.32); color: var(--accent);
+  font: inherit; font-size: 12.5px; font-weight: 700; padding: 9px 13px; border-radius: 10px;
+  cursor: pointer; white-space: nowrap; min-height: 38px;
+}
+.lvl-sync-btn:hover:not(:disabled) { background: rgba(226,184,87,.22); }
+.lvl-sync-btn:disabled { opacity: .5; cursor: default; }
+.lvl-sync-btn.alt { background: rgba(255,255,255,.06); border-color: var(--line-str); color: var(--text); }
+.lvl-sync-btn.stop { background: rgba(248,113,113,.14); border-color: rgba(248,113,113,.35); color: var(--danger); }
+
 /* La vignette Elo est celle du bilan, réutilisée telle quelle : mêmes puces de
    période, même plein écran. Seul son gros chiffre de droite disparaît ici, il
    répéterait mot pour mot l'Elo affiché en haut de la carte. */
@@ -4189,9 +4210,10 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 @container (min-width: 720px) {
   .lvl-card {
     display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
-    grid-template-areas: "head chart" "kpis chart";
+    grid-template-areas: "head chart" "kpis chart" "sync sync";
     column-gap: 26px; align-items: start; padding: 18px 20px;
   }
+  .lvl-sync { grid-area: sync; }
   .lvl-head {
     grid-area: head; grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "elo" "sub" "more"; justify-items: start; row-gap: 2px;
@@ -4206,6 +4228,12 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 }
 
 @media (max-width: 560px) {
+  /* Les deux gestes tiennent sur UNE ligne : empiles, ils ajoutaient 150 px au
+     haut de l'accueil. Les libelles perdent leur queue (.lvl-btn-long), qui
+     reste dans le DOM pour la lecture d'ecran. */
+  .lvl-sync-actions { width: 100%; flex-wrap: nowrap; }
+  .lvl-sync-btn { flex: 1 1 0; text-align: center; padding: 9px 8px; font-size: 12px; }
+  .lvl-btn-long { display: none; }
   .lvl-kpis { grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 12px 0 2px; }
   .lvl-kpi { padding: 8px 7px; border-radius: 10px; }
   .lvl-kpi b { font-size: 17px; }

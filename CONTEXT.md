@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v283**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v284**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,33 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v284 - recuperer ses dernieres parties depuis l'accueil, et savoir ce qui manque.**
+    Sa demande : « ajoute un bouton pour lancer l'analyse recuperation des dernieres depuis
+    l'ecran d'accueil (et indique combien des dernieres ne sont pas inclues dedans) ».
+    - **Le trou reel, mesure sur son compte :** la carte affichait « 89 parties analysees » sans
+      jamais dire que **10 parties jouees depuis n'y etaient pas** - le bilan serveur ne repasse
+      qu'une fois par semaine - et la seule facon de les recuperer etait d'ouvrir le bilan.
+    - **Pied de carte** (`homeSyncFooter`) : une phrase qui dit l'ecart (« **7 parties**
+      recuperees ne sont pas encore dans ces chiffres : elles attendent l'analyse » + horodatage
+      de la derniere recuperation) et deux gestes - **⟳ Recuperer mes dernieres parties**
+      (`loadHosted(true)` puis `sync()`, avec la progression « Mois 3/5… » ecrite dans la phrase)
+      et **Analyser les N ici** (Stockfish local, progression « Analyse 1/8 - coup 12/51 - vs X »),
+      plus **Arreter**.
+    - **Le compte est celui qui a du sens** : `pendingForStats()` applique EXACTEMENT les filtres
+      d'`analyzed()` (classee, adversaire non exclu, ni bullet ni blitz) moins la seule condition
+      d'analyse. Compter toutes les parties sans analyse aurait annonce des bullets que le bilan
+      n'affiche de toute facon jamais.
+    - **`stopFlag` est lu ENTRE deux parties**, donc « Arreter » laisse finir la partie en cours
+      (jusqu'a ~45 s) : le bouton se grisait pendant que la progression continuait, ce qui se lit
+      comme un bouton casse. La phrase dit maintenant « Arret demande - la partie en cours se
+      termine (coup 12/51)… », et le rappel de progression respecte ce mode (`homeStopping`),
+      sinon le message etait efface au tick suivant.
+    - Telephone : les deux boutons tiennent sur UNE ligne, leurs libelles perdant leur queue
+      (`.lvl-btn-long`, qui reste dans le DOM pour la lecture d'ecran) ; empiles ils ajoutaient
+      150 px en haut de l'accueil.
+    Recette bout en bout sur le compte reel : 10 parties recuperees -> « 10 en attente
+    d'analyse » + bouton « Analyser les 10 ici » -> analyse locale -> 89 puis 92 parties dans les
+    chiffres, Elo 348 -> 347, compteur descendu a 7 ; `test_core` 143/143.
   - **v283 - la courbe de l'accueil se remesure toute seule.** Trouve en verifiant la v282 EN
     LIGNE : la carte s'etait dessinee alors que la mise en page valait ZERO (onglet ouvert en
     arriere-plan / volet masque), donc `block.clientWidth` = 0, repli sur le repere `320x96` -
