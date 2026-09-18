@@ -2476,6 +2476,29 @@ body.guess-open { overflow: hidden; }
 .rp-recap { margin-top: 6px; font-size: 12px; color: var(--text-dim); font-weight: 400; }
 .rp-cta { display: block; width: 100%; margin-top: 10px; }
 
+/* ── « Et si… ? » : la variante jouée et le repère de la vraie partie ── */
+.rp-line {
+  margin: 8px 0 2px; font-size: 13px; line-height: 1.7; text-align: left;
+  color: var(--text-dim); word-break: break-word;
+}
+.rp-ln-lbl {
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--dim-2); font-weight: 700; margin-right: 6px;
+}
+.rp-ln-n { color: var(--dim-2); margin-right: 2px; }
+.rp-line b { font-weight: 600; margin-right: 7px; }
+.rp-ln-me { color: var(--accent); }
+.rp-ln-opp { color: var(--text); }
+.rp-cmp {
+  display: flex; align-items: baseline; gap: 4px 9px; flex-wrap: wrap;
+  margin-top: 7px; padding: 7px 10px; border-radius: 8px;
+  background: var(--bg-card); font-size: 12.5px; color: var(--text-dim);
+}
+.rp-cmp-v { font-weight: 700; color: var(--text); }
+.rp-cmp-up { color: var(--success); }
+.rp-cmp-down { color: var(--danger); }
+.rp-cmp-d b { color: var(--text); }
+
 /* Secondary "vs Stockfish" buttons on the Coach cards (ghost variant). */
 .coach-drill-row { flex-wrap: wrap; }
 .coach-drill-btn.ghost, .coach-tp-btn.ghost {

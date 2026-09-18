@@ -1054,29 +1054,80 @@ const App = (() => {
     updateTimelineCursor(index);
   }
 
-  // « Rejoue cette position » : quand le coup affiché est une de TES erreurs
-  // (gaffe / erreur / coup manqué) et qu'on a la position + le meilleur coup,
-  // proposer de reprendre la main juste avant et de rejouer contre Stockfish.
+  // « Et si… ? » : reprendre la partie a N'IMPORTE QUEL coup et jouer la suite
+  // contre Stockfish, pour voir ce qui se serait passe sans la gaffe.
+  //
+  // Avant, le bouton n'apparaissait que sur TES coups CLASSES en erreur (gaffe
+  // / erreur / coup manque) ET pourvus d'un meilleur coup du moteur. Donc :
+  // impossible de repartir deux coups plus tot - la ou une gaffe se prepare
+  // vraiment -, impossible d'enchainer apres un coup de l'adversaire, et sur
+  // les parties du Coach (analyse des seules erreurs) le bouton disparaissait
+  // presque partout. Ici il est TOUJOURS la, et c'est la position affichee qui
+  // decide du point de reprise.
   function updateReplayCta(index) {
     const bubble = $('#tl-cmt');
     if (!bubble) return;
     let cta = $('#rp-cta');
+    const hide = () => { if (cta) cta.hidden = true; };
+    if (typeof Replay === 'undefined' || !Replay.startWhatIf || !currentAnalysis) return hide();
+
     const r = index > 0 ? currentAnalysis[index - 1] : null;
-    const isMine = r && r.move && currentUser && r.move.color === currentUser;
-    const isError = r && (r.type === 'blunder' || r.type === 'mistake' || r.type === 'miss');
-    const ok = typeof Replay !== 'undefined' && isMine && isError && r.fenBefore && r.bestUci;
-    if (!ok) { if (cta) cta.hidden = true; return; }
+    // Sans en-tete exploitable (PGN d'etude, position chargee seule), on joue
+    // simplement le camp au trait.
+    const me = currentUser || (currentFen().split(' ')[1] === 'w' ? 'w' : 'b');
+    const isMine = !!(r && r.move && r.move.color === me);
+
+    // Sur TON coup on reprend la main JUSTE AVANT : c'est la seule facon de le
+    // jouer autrement. Sur un coup de l'adversaire (ou au depart) on part de la
+    // position affichee - le trait peut alors etre a lui, le moteur ouvrira.
+    const seedFen = isMine ? r.fenBefore : (index === 0 ? START_FEN : r.fen);
+    const seedPly = isMine ? index - 1 : index;
+    if (!seedFen) return hide();
+
+    // Le repere de comparaison : ce que la partie valait APRES le coup
+    // reellement joue depuis cette position. C'est lui qui transforme « ta
+    // variante vaut +0.4 » en « tu t'en sors 3.6 mieux que dans la partie ».
+    const ref = currentAnalysis[seedPly] || null;
+    const refEvalWhite = (ref && typeof ref.eval === 'number') ? ref.eval : null;
+    const refSan = ref ? (ref.san || ref.sanFr || '') : '';
+
+    const san = r ? (r.sanFr || r.san || '') : '';
+    // Replay traduit lui-meme en francais : on lui passe le SAN ANGLAIS. Lui
+    // repasser `sanFr` retraduirait le roi (« Rg1 » -> « Tg1 », R = rook).
+    const sanEn = r ? (r.san || r.sanFr || '') : '';
+    const meta = r ? MOVE_CLASS[r.type] : null;
+    const isError = !!(r && (r.type === 'blunder' || r.type === 'mistake' || r.type === 'miss'));
+
     if (!cta) {
       cta = document.createElement('button');
       cta.id = 'rp-cta';
-      cta.className = 'pill pill-gold rp-cta';
       bubble.appendChild(cta);
     }
     cta.hidden = false;
-    cta.textContent = '▶ Rejoue cette position';
-    cta.onclick = () => Replay.start({
-      fenBefore: r.fenBefore, bestUci: r.bestUci, bestSan: r.bestSan,
-      playedSan: r.sanFr || r.san, tip: r.tipFr || '', ply: index - 1,
+    cta.className = 'pill rp-cta ' + (isMine && isError ? 'pill-gold' : 'pill-ghost');
+    cta.textContent = index === 0 ? '▶ Jouer la partie depuis le début'
+      : isMine ? (isError ? `▶ Et si tu n'avais pas joué ${san} ?` : `▶ Rejouer ${san} autrement`)
+      : '▶ Reprendre la partie ici';
+
+    // Le coup affiche AU MOMENT DU CLIC est celui sur lequel on revient : la
+    // fermeture de l'overlay replace l'analyse exactement la, sans animation
+    // (le plateau a change de position entre-temps, un glissement mentirait).
+    const back = index;
+    cta.onclick = () => Replay.startWhatIf({
+      fenBefore: seedFen, mySide: me, ply: seedPly,
+      playedSan: isMine ? sanEn : '',
+      afterSan: !isMine && r ? sanEn : '',
+      typeLabel: isMine && meta ? meta.label : '',
+      // bestSan du modele est DEJA en francais : on ne passe que l'UCI, Replay
+      // le traduit depuis la position de reprise.
+      bestUci: isMine ? (r.bestUci || '') : '',
+      tip: isMine ? (r.tipFr || '') : '',
+      refEvalWhite, refSan,
+      onClose: () => {
+        BoardRenderer.setFlipped(currentUser === 'b');
+        lastRenderIndex = -1;
+        goTo(back);
+      },
     });
   }
 

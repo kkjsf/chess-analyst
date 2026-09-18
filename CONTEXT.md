@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v284**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v285**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,50 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v285 - « Et si… ? » : reprendre la partie analysee a N'IMPORTE quel coup.**
+    Sa demande : « pendant les parties analysees, permets-moi de continuer a jouer a partir de
+    n'importe quel coup, que je puisse evaluer ce qui se serait passe si j'avais pas fait telle
+    ou telle gaffe (et permets facilement de revenir a l'analyse) ».
+    - **Ce qui existait ne repondait qu'au tiers de la question.** `js/replay.js` savait deja
+      rejouer une position contre Stockfish, mais le bouton n'apparaissait que sur **TES** coups
+      **CLASSES** en erreur (gaffe / erreur / coup manque) **ET** pourvus d'un `bestUci`. Donc :
+      impossible de repartir deux coups plus tot - la ou une gaffe se PREPARE -, impossible
+      d'enchainer apres un coup de l'adversaire, et le bouton disparaissait sur les ~80 % de
+      coups restants. Mesure sur une partie de test : 3 points de reprise sur 22 demi-coups.
+    - **Le bouton est desormais TOUJOURS la**, et c'est la position affichee qui decide du point
+      de reprise (`updateReplayCta`, `js/app.js`) : sur **ton** coup on reprend la main **JUSTE
+      AVANT** (seule facon de le jouer autrement, libelle « ▶ Et si tu n'avais pas joue Cxf7 ? »
+      en or sur une erreur, « ▶ Rejouer Cf3 autrement » en fantome sinon) ; sur un coup de
+      **l'adversaire** on part de la position affichee (« ▶ Reprendre la partie ici ») ; au
+      depart, « ▶ Jouer la partie depuis le debut ».
+    - **Le moteur peut OUVRIR la variante.** Les deux modes existants deduisaient le camp joue du
+      trait de la position de depart ; ici l'hote l'impose (`entry.mySide`), donc on peut reprendre
+      sur un trait adverse - cas reel : la position de depart quand tu joues les Noirs. Nouveau
+      `oppOpens()`, et `canUndo()` remplace `hist.length <= 1` : sans ca « Annuler » relancait
+      l'ouverture du moteur en boucle, puisque la pile contenait un coup sans en contenir un de toi.
+    - **Le repere qui repond a la question** (`renderCmp`) : une eval seule dit « ou j'en suis »,
+      pas « est-ce que j'aurais fait mieux ». Le panneau affiche donc l'eval de la variante EN FACE
+      de ce que la partie valait apres le coup reellement joue - « **Nettement mieux** · dans la
+      partie, apres **Cxf7** : **-3.5** · ta variante : **+0.8** ». Le repere vient de
+      `currentAnalysis[seedPly].eval` (point de vue Blancs) retourne au point de vue du joueur.
+    - **La variante s'ecrit coup par coup** (`renderLine`, « TA VARIANTE 5.Cf3 O-O 6.O-O Cd4 »),
+      numerotee **a partir du demi-coup de reprise** pour porter les memes numeros que la partie -
+      sans ca on perd le fil des le troisieme demi-coup.
+    - **Le retour est explicite et exact** : le bouton de sortie s'appelle « ↩ Revenir a
+      l'analyse », l'intro le repete, et un rappel `onClose` replace l'analyse **sur le coup ou on
+      l'avait laissee** (`lastRenderIndex = -1` pour un rendu sec : le plateau a change de position
+      entre-temps, un glissement mentirait) en remettant l'orientation du plateau.
+    - **Piege corrige en passant : la double francisation.** `Replay` francise lui-meme les SAN
+      qu'on lui passe, et `updateReplayCta` lui envoyait `sanFr`. `toFrench` mappe `R`(ook)->`T`,
+      donc un roque ou un coup de roi francais « Rg1 » ressortait « **Tg1** » - un coup de tour.
+      L'hote passe maintenant le SAN **anglais** (`r.san`), et le meilleur coup n'est plus passe
+      du tout : il se retraduit depuis l'UCI, seule forme dont on soit sur qu'elle n'a pas deja
+      ete francisee.
+    Recette sur partie reelle (nimokaji, 22 demi-coups) : les 4 libelles de bouton aux bons plys ;
+    reprise avant 5.Cxf7 -> O-O joue -> « Nettement mieux, -3.5 -> +0.6 » ; variante a 4 demi-coups
+    correctement numerotee ; ouverture par le moteur verifiee cote Noirs depuis la position de
+    depart (plateau retourne, « Annuler » grise) ; retour a l'analyse exactement sur 5.Cxf7, 0
+    erreur console, telephone 375 px ; `test_core` 143/143.
   - **v284 - recuperer ses dernieres parties depuis l'accueil, et savoir ce qui manque.**
     Sa demande : « ajoute un bouton pour lancer l'analyse recuperation des dernieres depuis
     l'ecran d'accueil (et indique combien des dernieres ne sont pas inclues dedans) ».

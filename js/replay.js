@@ -30,6 +30,21 @@ const Replay = (() => {
   let hintArrow = false;   // l'indice n°3 a été demandé → flèche autorisée ce coup-ci
   let convStats = null;    // bilan de la session : { moves, best, slips, hints }
 
+  // 'whatif' = « Et si… ? » : reprendre la partie ANALYSEE a n'importe quel
+  // coup et jouer la suite. Trois choses que les deux autres modes n'avaient
+  // pas, et sans lesquelles ca ne repond pas a la question posee :
+  //  - le camp joue est IMPOSE par l'hote. Les autres modes le deduisent du
+  //    trait de la position de depart ; ici on peut reprendre APRES son propre
+  //    coup, donc partir sur un trait adverse - le moteur ouvre alors.
+  //  - la variante jouee s'affiche coup par coup, sinon on oublie par quoi on
+  //    est passe des le troisieme demi-coup.
+  //  - l'eval est comparee a celle de la VRAIE partie au meme endroit : tout
+  //    seul, « +0.4 » ne dit pas si on a fait mieux que ce qui s'est passe.
+  let onDone = null;       // rappel de fermeture : l'hote reprend la main
+  let refEvalMe = null;    // eval reelle de la partie apres le coup joue, POV moi
+  let refSan = '';         // ce coup joue, pour nommer le repere
+  let seedPly = null;      // demi-coup de la position de depart (numerotation)
+
   const CONV_WIN = 300;    // seuil « position gagnante » (une pièce d'avance)
   const CONV_SLIP = 120;   // sous ce seuil, l'avantage est considéré comme parti
 
@@ -270,9 +285,11 @@ const Replay = (() => {
           <svg viewBox="0 0 360 360" id="rp-board"></svg>
           <svg viewBox="0 0 360 360" id="rp-arrows" class="arrow-overlay"></svg>
         </div>
+        <div class="rp-line" id="rp-line" hidden></div>
         <div class="guess-feedback rp-comment">
           <div class="rp-verdict" id="rp-verdict"></div>
           <div class="rp-status" id="rp-status"></div>
+          <div class="rp-cmp" id="rp-cmp" hidden></div>
           <div class="rp-hintbox" id="rp-hint-out" hidden></div>
         </div>
         <div class="rp-actions">
@@ -314,13 +331,19 @@ const Replay = (() => {
   function start(entry) { return begin(entry, 'replay'); }
   // « Termine la partie » : même coquille, aide coupée, objectif = gagner.
   function startConversion(entry) { return begin(entry, 'convert'); }
+  // « Et si… ? » : même coquille, depuis n'importe quel coup de la partie.
+  function startWhatIf(entry) { return begin(entry, 'whatif'); }
 
   function begin(entry, m) {
-    mode = m === 'convert' ? 'convert' : 'replay';
+    mode = (m === 'convert' || m === 'whatif') ? m : 'replay';
     if (!entry || !entry.fenBefore) return;
     try { if (!new Chess(entry.fenBefore)) return; } catch (_) { return; }
     seedFen = entry.fenBefore;
-    mySide = seedFen.split(' ')[1] === 'b' ? 'b' : 'w';
+    // Le camp joue : impose par l'hote quand il le connait (mode 'whatif'),
+    // sinon le trait de la position de depart.
+    mySide = (entry.mySide === 'w' || entry.mySide === 'b') ? entry.mySide
+      : (seedFen.split(' ')[1] === 'b' ? 'b' : 'w');
+    onDone = typeof entry.onClose === 'function' ? entry.onClose : null;
     const ply = (typeof entry.ply === 'number') ? entry.ply : null;
     const moveNo = ply != null ? Math.floor(ply / 2) + 1 : (entry.moveNo || null);
     const dot = ply != null ? (ply % 2 === 0 ? '.' : '...') : '.';
@@ -336,8 +359,21 @@ const Replay = (() => {
     // annoncer « +10 » ici serait faux. Sans evalCp le briefing reste sur le
     // matériel, et la vraie éval s'affiche au premier trait.
     intro.cp = (typeof entry.evalCp === 'number') ? entry.evalCp : null;
+    intro.afterSan = fr(entry.afterSan || '');
+    intro.typeLabel = entry.typeLabel || '';
+    seedPly = ply;
+    // Le repere de comparaison : ce que la partie valait APRES le coup
+    // reellement joue depuis cette position (centipions, point de vue Blancs).
+    refEvalMe = (typeof entry.refEvalWhite === 'number')
+      ? (mySide === 'w' ? entry.refEvalWhite : -entry.refEvalWhite) : null;
+    refSan = fr(entry.refSan || '');
     ensureDom();
-    $('#rp-title').textContent = mode === 'convert' ? 'Termine la partie' : 'Rejoue ta défaite';
+    $('#rp-title').textContent = mode === 'convert' ? 'Termine la partie'
+      : mode === 'whatif' ? 'Et si… ?' : 'Rejoue ta défaite';
+    // Le bouton de sortie DIT ou il ramene : c'est ce qui rend l'aller-retour
+    // avec l'analyse sans risque, donc utilisable en plein milieu d'une partie.
+    const quit = $('#rp-quit');
+    if (quit) quit.textContent = mode === 'whatif' ? "↩ Revenir à l'analyse" : '✕ Quitter';
     $('#replay-overlay').hidden = false;
     document.body.classList.add('guess-open');
     BoardRenderer.setFlipped(mySide === 'b');
@@ -351,6 +387,10 @@ const Replay = (() => {
     if (ov) ov.hidden = true;
     document.body.classList.remove('guess-open');
     if (arrowsSvg) BoardRenderer.clearArrows(arrowsSvg);
+    // L'hote reprend la main APRES la fermeture (il redessine son echiquier,
+    // remet son orientation, se replace sur le coup ou on l'avait laisse).
+    const cb = onDone; onDone = null;
+    if (cb) { try { cb(); } catch (_) {} }
   }
 
   function resetToSeed() {
@@ -362,20 +402,58 @@ const Replay = (() => {
     resetHint();
     renderIntro();
     setVerdict('');
+    setCmp('');
     renderBoard(null);
+    // Trait a l'adversaire des le depart (on reprend juste APRES son propre
+    // coup) : c'est le moteur qui ouvre, puis la main revient.
+    if (!gameOver() && sideToMove() !== mySide) oppOpens();
+    else onMyTurn();
+  }
+
+  // Le moteur joue le premier coup quand la position de reprise n'est pas a
+  // mon trait. Meme squelette que la replique de judgeAndReply, sans verdict :
+  // il n'y a aucun coup de moi a juger.
+  async function oppOpens() {
+    busy = true;
+    syncControls();
+    setStatus('\u23f3 L\'ordi joue\u2026');
+    const my = ++token;
+    let res = null;
+    try {
+      if (typeof StockfishEngine !== 'undefined') {
+        if (!StockfishEngine.isReady()) await StockfishEngine.init();
+        if (my !== token) return;
+        res = await StockfishEngine.evaluate(curFen(), REPLY_MT);
+      }
+    } catch (_) { res = null; }
+    if (my !== token) return;
+    const uci = (res && res.bestMove) || firstLegal(curFen());
+    if (uci) {
+      const before = curFen();
+      let g2, rm = null;
+      try { g2 = new Chess(before); rm = g2.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' }); } catch (_) { rm = null; }
+      if (rm) { hist.push({ fen: g2.fen(), move: rm, by: 'opp' }); renderBoard(rm, before); setVerdict(describeReply(rm, null), ''); }
+    }
+    busy = false;
     onMyTurn();
   }
+
+  // Annuler n'a de sens que s'il reste un coup A MOI a retirer : quand le
+  // moteur a ouvert la variante, la pile contient un coup sans en contenir un
+  // de moi, et annuler relancerait son ouverture en boucle.
+  function canUndo() { return hist.some(h => h.by === 'me'); }
 
   // Annuler : revenir à ma position de trait précédente (retire la réplique de
   // l'ordi puis mon coup). Ne descend jamais sous la position de départ.
   function undo() {
     token++;
-    if (hist.length <= 1) return;
+    if (!canUndo()) return;
     if (hist[hist.length - 1].by === 'opp') hist.pop();
     if (hist.length > 1 && hist[hist.length - 1].by === 'me') hist.pop();
     curEvalMe = null; myBestUci = null; busy = false;
     resetHint();
     setVerdict('');
+    setCmp('');
     renderBoard(null);
     onMyTurn();
   }
@@ -404,6 +482,7 @@ const Replay = (() => {
         + `</details>`;
       return;
     }
+    if (mode === 'whatif') { el.innerHTML = whatIfIntro(); return; }
     const head = intro.moveNo != null ? `Coup ${intro.moveNo}${intro.dot} — ` : '';
     let h = `${head}tu avais joué <b>${intro.playedSan || '?'}</b>.`;
     if (intro.tip) h += ` ${intro.tip}`;
@@ -416,13 +495,88 @@ const Replay = (() => {
   function renderBoard(lastMove, animateFrom) {
     if (animateFrom) BoardRenderer.renderAnimated(boardSvg, animateFrom, curFen(), lastMove, ANIM_MS);
     else BoardRenderer.render(boardSvg, curFen(), lastMove);
+    renderLine();
     syncControls();
+  }
+
+  // ═══════════ « Et si… ? » : l'intro, la variante, le repère ═══════════
+
+  // Numerotation a partir du demi-coup de reprise : la variante doit porter les
+  // MEMES numeros que la partie, sinon on ne sait plus ou on est.
+  function plyLabel(ply) {
+    if (ply == null || ply < 0) return null;
+    return { n: Math.floor(ply / 2) + 1, dot: ply % 2 === 0 ? '.' : '\u2026' };
+  }
+
+  function whatIfIntro() {
+    const at = plyLabel(seedPly);
+    const goalBack = ` <b>\u21a9 Revenir à l'analyse</b> te ramène exactement où tu étais.`;
+    if (intro.playedSan) {
+      const head = at ? `<b>Coup ${at.n}${at.dot}</b> — dans la partie, tu as joué <b>${intro.playedSan}</b>`
+                      : `Dans la partie, tu as joué <b>${intro.playedSan}</b>`;
+      let h = head + (intro.typeLabel ? ` <i>(${intro.typeLabel})</i>` : '') + '.';
+      if (intro.tip) h += ` ${intro.tip}`;
+      // Le meilleur coup se retraduit depuis l'UCI quand l'hote ne le nomme
+      // pas : c'est la seule forme dont on soit sur qu'elle n'a pas deja ete
+      // francisee une fois.
+      const best = intro.bestSan || uciToFr(seedFen, intro.bestUci);
+      if (best && !(intro.tip && intro.tip.includes(best))) h += ` Le moteur préférait <b>${best}</b>.`;
+      h += ` <span class="rp-goal">À toi : joue autre chose et vois où ça mène — l'ordi répond, et je compare à ce qui s'est vraiment passé.${goalBack}</span>`;
+      return h;
+    }
+    const before = plyLabel(seedPly != null ? seedPly - 1 : null);
+    const head = (before && intro.afterSan)
+      ? `<b>Après ${before.n}${before.dot} ${intro.afterSan}</b> — tu reprends la partie ici.`
+      : (at ? `<b>Coup ${at.n}${at.dot}</b> — tu reprends la partie ici.` : `Tu reprends la partie ici.`);
+    return head + ` <span class="rp-goal">Joue la suite que tu veux, l'ordi te répond.${goalBack}</span>`;
+  }
+
+  // La variante jouee, coup par coup. Sans elle on perd le fil des le troisieme
+  // demi-coup, et « ta variante vaut +0.4 » ne veut plus rien dire.
+  function renderLine() {
+    const el = $('#rp-line');
+    if (!el) return;
+    const moves = hist.filter(h => h.move);
+    if (mode !== 'whatif' || !moves.length) { el.hidden = true; el.innerHTML = ''; return; }
+    let ply = (seedPly != null) ? seedPly : 0;
+    const parts = [];
+    for (const h of moves) {
+      const white = ply % 2 === 0;
+      const num = (white || !parts.length) ? `<span class="rp-ln-n">${Math.floor(ply / 2) + 1}${white ? '.' : '\u2026'}</span>` : '';
+      parts.push(`${num}<b class="${h.by === 'me' ? 'rp-ln-me' : 'rp-ln-opp'}">${fr(h.move.san)}</b>`);
+      ply++;
+    }
+    el.innerHTML = `<span class="rp-ln-lbl">Ta variante</span> ${parts.join(' ')}`;
+    el.hidden = false;
+  }
+
+  function setCmp(html) {
+    const el = $('#rp-cmp');
+    if (!el) return;
+    el.innerHTML = html || '';
+    el.hidden = !html;
+  }
+
+  // Le repère : ce que la partie valait après le coup réellement joué, contre
+  // ce que vaut la variante maintenant. C'est LA réponse à « qu'est-ce qui se
+  // serait passé » ; une éval seule ne répond qu'à « où j'en suis ».
+  function renderCmp() {
+    if (mode !== 'whatif' || refEvalMe == null || curEvalMe == null || !hist.some(h => h.by === 'me')) { setCmp(''); return; }
+    const d = curEvalMe - refEvalMe;
+    const verdict = d >= 150 ? { t: 'Nettement mieux', c: 'rp-cmp-up' }
+      : d >= 50 ? { t: 'Un peu mieux', c: 'rp-cmp-up' }
+      : d <= -150 ? { t: 'Nettement pire', c: 'rp-cmp-down' }
+      : d <= -50 ? { t: 'Un peu pire', c: 'rp-cmp-down' }
+      : { t: 'Autant dire pareil', c: '' };
+    const real = refSan ? `dans la partie, après <b>${refSan}</b>` : 'dans la partie';
+    setCmp(`<span class="rp-cmp-v ${verdict.c}">${verdict.t}</span>`
+      + `<span class="rp-cmp-d">${real} : <b>${fmtMe(refEvalMe)}</b> · ta variante : <b>${fmtMe(curEvalMe)}</b></span>`);
   }
 
   // Les controles seuls, sans redessiner le plateau : un rendu sec a mon trait
   // effacait l'animation de la reponse de l'ordi dans la meme frame.
   function syncControls() {
-    const undoBtn = $('#rp-undo'); if (undoBtn) undoBtn.disabled = hist.length <= 1 || busy;
+    const undoBtn = $('#rp-undo'); if (undoBtn) undoBtn.disabled = !canUndo() || busy;
     const resetBtn = $('#rp-reset'); if (resetBtn) resetBtn.disabled = hist.length <= 1 || busy;
     const turnEl = $('#rp-turn');
     if (turnEl) turnEl.textContent = gameOver() ? '' : (sideToMove() === mySide ? 'À toi' : 'Ordi…');
@@ -493,6 +647,7 @@ const Replay = (() => {
     const evalTxt = res ? `Éval <b>${evalWhite(res, fen)}</b>.` : 'Moteur indisponible — joue librement.';
     const bestTxt = best ? ` Meilleur : <b>${best}</b> <span class="rp-hint">(flèche bleue)</span>.` : '';
     setStatus(`Trait à <b>toi</b>. ${evalTxt}${bestTxt}`);
+    renderCmp();
   }
 
   function playMyMove(from, to) {
@@ -689,5 +844,5 @@ const Replay = (() => {
     renderBoard(null);
   }
 
-  return { start, startConversion, close };
+  return { start, startConversion, startWhatIf, close };
 })();
