@@ -120,6 +120,10 @@ const CoachGame = (() => {
   let bookPly = 0, bookOut = null;  // bookOut = 'me' | 'coach' | null
   let lastWasBook = false;          // mon dernier coup etait de la theorie
   let threatArrows = false;         // des fleches de menace sont affichees : ne pas les effacer
+  // Le coup de la THEORIE a mon trait (fleche jaune) : { uci, san, src, key,
+  // branch, label, note } ou null. Calcule une fois par tour, relu par le
+  // verdict pour dire ce que le cours aurait joue a ma place.
+  let curTheory = null;
   // Journal des coups pour le suivi lateral : { n, san, mine, k } ou `k` est une
   // cle de Analyzer.MOVE_TYPES (best, excellent, good, book, inaccuracy,
   // mistake, blunder, miss...). Le coup du coach est note lui aussi : son eval
@@ -338,6 +342,11 @@ const CoachGame = (() => {
               </div>
               <svg viewBox="0 0 360 360" id="cg-board"></svg>
               <svg viewBox="0 0 360 360" id="cg-arrows" class="arrow-overlay"></svg>
+              <!-- Les marques de FIN (couronne sur le roi qui gagne, anneau sur
+                   le roi mate) vivent sur leur PROPRE calque : sur celui des
+                   fleches, le moindre clearArrows() les effacerait. -->
+              <svg viewBox="0 0 360 360" id="cg-fx" class="arrow-overlay cg-fx"></svg>
+              <div class="cg-matepop" id="cg-matepop" hidden></div>
             </div>
             <div class="cg-pbar" id="cg-pbar-bottom">
               <span class="cg-who" id="cg-bot-name"></span>
@@ -360,6 +369,10 @@ const CoachGame = (() => {
               <div class="rp-verdict" id="cg-verdict"></div>
               <div class="rp-status" id="cg-status"></div>
               <div class="rp-hintbox" id="cg-hintout" hidden></div>
+              <!-- Le cours d'ouverture, version courte, avec la passerelle vers
+                   la fiche complete. Il prend la place que l'ancien « tu passes
+                   de +0,0 a -1,8 » occupait. -->
+              <div class="cg-course" id="cg-course" hidden></div>
             </div>
             <div class="rp-actions">
               <button class="train-btn ghost" id="cg-hint" hidden>💡 Indice</button>
@@ -426,9 +439,23 @@ const CoachGame = (() => {
       if (c) { gotoPly(+c.dataset.ply); return; }
       navRev(e);
     });
+    // La fenetre du mat : trois sorties, aucune n'est automatique.
+    $('#cg-matepop').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-mp]');
+      if (!b) return;
+      hideMatePop();
+      if (b.dataset.mp === 'tail') replayTail(6);
+      else if (b.dataset.mp === 'bilan') showBilan();
+    });
     $('#cg-sheet-open').onclick = () => setSheet(!sheetOpen);
     $('#cg-sheet-close').onclick = () => setSheet(false);
     $('#cg-backdrop').onclick = () => setSheet(false);
+    // La passerelle vers la fiche de cours : le bouton apparait dans la
+    // capsule, dans le verdict et dans le bandeau du livre - un seul ecouteur.
+    ov.addEventListener('click', (e) => {
+      const g = e.target.closest && e.target.closest('.cg-coursego');
+      if (g) { e.preventDefault(); openCourse(g.dataset.line, g.dataset.branch); }
+    });
     $('#cg-verdict').addEventListener('click', (e) => {
       if (!e.target) return;
       if (e.target.id === 'cg-retry' && !busy) undo();
@@ -542,6 +569,7 @@ const CoachGame = (() => {
     if (ov) ov.hidden = true;
     document.body.classList.remove('guess-open');
     if (arrowsSvg) BoardRenderer.clearArrows(arrowsSvg);
+    hideMatePop();
   }
 
   function view(v) {
@@ -567,7 +595,9 @@ const CoachGame = (() => {
     mySide = side;
 
     const b = bookId ? bookById(bookId) : null;
-    book = b ? { sans: b.sans.slice(), name: b.group + ' — ' + b.name, leaveAt: null } : null;
+    book = b ? { sans: b.sans.slice(), name: b.group + ' — ' + b.name, leaveAt: null,
+      // La cle du cours d'ou vient la ligne : c'est elle qui ouvre la fiche.
+      key: bookId.split('|')[0], li: +bookId.split('|')[1] } : null;
     if (book && cfg.bookMode === 'leave') {
       // Deviation tiree au sort, jamais avant le 3e demi-coup (sinon ce n'est
       // pas une ouverture, c'est un coup au hasard) et toujours sur un coup DU
@@ -585,6 +615,10 @@ const CoachGame = (() => {
     setSheet(false);
     track = []; saved = false; curEvalMe = null; myBestUci = null; hintLevel = 0; hintArrow = false;
     busy = false; token++; threatArrows = false;
+    curTheory = null; courseCache = null;
+    const fx = $('#cg-fx'); if (fx) fx.innerHTML = '';
+    const mp = $('#cg-matepop'); if (mp) { mp.hidden = true; mp.className = 'cg-matepop'; }
+    const cc = $('#cg-course'); if (cc) { cc.hidden = true; cc.innerHTML = ''; }
 
     view('game');
     BoardRenderer.setFlipped(mySide === 'b');
@@ -866,9 +900,10 @@ const CoachGame = (() => {
       at.last ? { from: at.last.from, to: at.last.to } : null, ANIM_MS);
     renderReviewBar();
     renderMoves();
+    renderCoursePanel();
     syncControls();
     // De retour sur la position finale : l'anatomie du mat se rallume.
-    if (endInfo) paintEndMarks();
+    if (endInfo) { paintEndMarks(); paintKingMarks(); }
     // De retour au coup courant : on rend la main (fleches d'aide comprises).
     if (reviewPly == null && myTurn() && !busy) onMyTurn();
   }
@@ -919,6 +954,195 @@ const CoachGame = (() => {
       + `<button type="button" class="train-btn ghost" data-rev="prev">◀</button>`
       + `<button type="button" class="train-btn ghost" data-rev="next">▶</button>`
       + `<button type="button" class="train-btn" data-rev="live">${endInfo ? '▶▶ Revenir à la position finale' : '▶▶ Revenir à la partie'}</button>`;
+  }
+
+  // ═══════════════════ Le cours d'ouverture, en fil rouge ═══════════════════
+  // Avant, l'explication d'un coup rate s'ouvrait sur « Ce que ca coute : tu
+  // passes de +0,0 a -1,8 » : un chiffre que la pastille du coup donne deja
+  // (« -23 pts de chances de gain »), et qui prenait la premiere ligne. La
+  // place sert desormais au COURS - version courte ici, passerelle vers la
+  // fiche complete pour le detail - et a la tactique.
+
+  let courseCache = null;   // { sig, val } : buildBranches() se refait a chaque coup, pas a chaque rendu
+
+  // Ou en est-on dans les cours ? `hist` permet d'interroger la position
+  // d'AVANT mon coup (c'est la qu'on choisissait), pas celle d'apres.
+  function courseHere(hist) {
+    if (!game || typeof Courses === 'undefined' || !Courses.match) return null;
+    const played = hist || game.history();
+    // Le coup 0 compte : quand une ouverture est imposee, le cours est connu
+    // AVANT le premier coup - c'est meme la qu'on veut lire son idee.
+    if (played.length > 24) return null;
+    const sig = played.join(' ');
+    if (courseCache && courseCache.sig === sig) return courseCache.val;
+    let val = null;
+    try { val = computeCourseHere(played, sig); } catch (_) { val = null; }
+    courseCache = { sig, val };
+    return val;
+  }
+
+  function computeCourseHere(played, sig) {
+    // 1. Le cours. Une ouverture imposee le designe directement ; sinon on
+    //    prend celui dont la cle est le plus long prefixe de ce qui est joue.
+    let key = (book && book.key) || null;
+    let course = key ? Courses.get(key) : null;
+    if (!course) {
+      const hit = Courses.match(sig);
+      if (!hit) return null;
+      key = hit.key; course = hit.course;
+    }
+    const branches = Courses.buildBranches(course);
+    if (!branches.length) return null;
+
+    // 2. La branche la plus profonde REELLEMENT suivie - la meme regle que le
+    //    lien « Revoir cette ligne » de l'ecran d'analyse.
+    let bi = -1, deepest = -1;
+    branches.forEach((b, i) => {
+      if (b.sans.length > played.length) return;
+      if (!b.sans.every((x, k) => played[k] === x)) return;
+      if (b.plyEnd > deepest) { deepest = b.plyEnd; bi = i; }
+    });
+    // Entre deux fourches, aucun noeud n'est « deja joue » en entier (le
+    // premier noeud de l'Italienne va jusqu'au coup 5) : la branche pertinente
+    // est alors celle qu'on est en train de PARCOURIR, la plus proche devant.
+    // C'est aussi ce qui donne un cours des le coup 0, ouverture imposee.
+    if (bi < 0) {
+      let near = Infinity;
+      branches.forEach((b, i) => {
+        if (b.sans.length <= played.length) return;
+        for (let k = 0; k < played.length; k++) if (b.sans[k] !== played[k]) return;
+        if (b.plyEnd < near) { near = b.plyEnd; bi = i; }
+      });
+    }
+    if (bi < 0) return null;
+    const br = branches[bi];
+
+    // 3. Le prochain coup de la theorie : une ligne du cours qui prolonge
+    //    EXACTEMENT ce qui est joue. Si deux lignes divergent ici, il n'y a pas
+    //    un coup theorique mais une fourche : on n'en designe aucun.
+    const nexts = [];
+    (course.lines || []).forEach(L => {
+      const sans = L.sans || [];
+      if (sans.length <= played.length) return;
+      for (let k = 0; k < played.length; k++) if (sans[k] !== played[k]) return;
+      if (nexts.indexOf(sans[played.length]) < 0) nexts.push(sans[played.length]);
+    });
+    const next = nexts.length === 1 ? nexts[0] : null;
+
+    // 4. Ce que le cours dit de ce demi-coup (la premiere note non vide parmi
+    //    les lignes qui passent par la branche).
+    const noteAt = (ply) => {
+      for (const li of br.lines) {
+        const L = course.lines[li];
+        const n = L && L.notes && L.notes[ply - 1];
+        if (n) return n;
+      }
+      return '';
+    };
+    const traps = (Courses.spread(course.traps, branches) || [])[bi] || [];
+    const name = (typeof Openings !== 'undefined' && Openings.detect)
+      ? (((Openings.detect(key.split(' ')) || {}).name) || key) : key;
+    return {
+      key, branch: bi, name, label: br.name || name,
+      note: noteAt(played.length),                 // le coup qui vient d'etre joue
+      nextNote: next ? noteAt(played.length + 1) : '',
+      next, traps, intro: course.intro || '',
+      fork: nexts.length > 1 ? nexts.slice(0, 3) : null,
+      atTabiya: played.length <= key.split(' ').length,
+    };
+  }
+
+  // Le coup de la THEORIE a mon trait. Deux sources, dans cet ordre : la ligne
+  // imposee au depart, puis le cours qui correspond a la position.
+  function theoryNow() {
+    if (!game || reviewPly !== null || !myTurn()) return null;
+    const ch = courseHere();
+    let san = bookMoveNow();
+    const src = san ? 'line' : 'course';
+    if (!san) { if (!ch || !ch.next) return null; san = ch.next; }
+    try {
+      const g = new Chess(curFen());
+      const m = g.move(san, { sloppy: true });
+      if (!m) return null;
+      return {
+        uci: m.from + m.to + (m.promotion || ''), san: m.san, src,
+        key: ch ? ch.key : (book ? book.key : null),
+        branch: ch ? ch.branch : -1,
+        label: ch ? ch.label : (book ? book.name : ''),
+        note: ch ? ch.nextNote : '',
+      };
+    } catch (_) { return null; }
+  }
+
+  function firstSentence(txt) {
+    const t = String(txt || '').trim();
+    if (!t) return '';
+    const m = t.match(/^[\s\S]*?[.!?](?=\s|$)/);
+    return (m ? m[0] : t).slice(0, 220);
+  }
+  function noTags(html) { return String(html || '').replace(/<[^>]*>/g, ''); }
+
+  // La capsule du cours, sous le commentaire. En mode assiste elle porte la
+  // note du cours, le coup suivant et le piege de la branche ; en mode libre
+  // elle se limite au nom et au bouton (le mode libre ne souffle pas).
+  function renderCoursePanel() {
+    const el = $('#cg-course');
+    if (!el) return;
+    const ch = (endInfo || reviewPly !== null) ? null : courseHere();
+    if (!ch) { el.hidden = true; el.innerHTML = ''; return; }
+    const assisted = cfg && cfg.aide === 'assiste';
+    const bits = [];
+    if (assisted) {
+      if (ch.note) bits.push(`<p class="nt">${ch.note}</p>`);
+      else if (ch.intro && ch.atTabiya) bits.push(`<p class="nt">${firstSentence(ch.intro)}</p>`);
+      if (curTheory && curTheory.note) bits.push(`<p class="nx">➜ <b>${fr(curTheory.san)}</b> — ${curTheory.note}</p>`);
+      else if (ch.fork) bits.push(`<p class="nx">Fourche du cours : <b>${ch.fork.map(fr).join('</b> · <b>')}</b>.</p>`);
+      const tr = (ch.traps || [])[0];
+      // Les titres de pieges portent deja leur icone (🪤, 🍖, 🛡️) : en
+      // rajouter une donnait « 🪤 🪤 S'il tarde a roquer ».
+      if (tr && tr.title) bits.push(`<p class="tp"><b>${noTags(tr.title)}</b> — le piège de cette branche.</p>`);
+    }
+    el.hidden = false;
+    el.innerHTML = `<div class="t"><span class="ic">📘</span><span>${ch.label}</span>`
+      + `<button type="button" class="cg-coursego" data-line="${ch.key}" data-branch="${ch.branch}">Le détail ▸</button></div>`
+      + bits.join('');
+  }
+
+  // La fiche complete s'ouvre PAR-DESSUS la partie (modale z 2000 contre
+  // l'ecran du coach a 1000) : rien n'est ferme, rien n'est perdu, on referme
+  // et on reprend le coup en cours.
+  function openCourse(line, branch) {
+    if (!line || typeof App === 'undefined' || !App.openOpeningByLine) return;
+    stopTail();
+    const b = (branch == null || +branch < 0) ? undefined : { branch: +branch };
+    try { App.openOpeningByLine(line, b); } catch (_) {}
+  }
+
+  // ── Ce qui est EN PRISE, des deux cotes ──────────────────────────
+  // L'information tactique la plus rentable a son niveau, et elle tient en une
+  // ligne. `seeOn` chiffre l'echange COMPLET : une piece attaquee mais
+  // correctement defendue n'y figure pas.
+  function hangingLine(fen) {
+    if (typeof Tactics === 'undefined' || !Tactics.boardOf || !Tactics.seeOn) return '';
+    let b = null;
+    try { b = Tactics.boardOf(fen); } catch (_) { return ''; }
+    if (!b) return '';
+    const him = mySide === 'w' ? 'b' : 'w';
+    const mine = [], his = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const pc = b[r][c];
+      if (!pc || pc.t === 'k') continue;
+      const sq = 'abcdefgh'[c] + (8 - r);
+      let v = 0;
+      try { v = Tactics.seeOn(b, sq, pc.c === mySide ? him : mySide); } catch (_) { v = 0; }
+      if (v <= 0) continue;
+      (pc.c === mySide ? mine : his).push({ s: `<b>${PC_FR[pc.t]} ${sq}</b>`, v });
+    }
+    const top = (a) => a.sort((x, y) => y.v - x.v).slice(0, 2).map(x => x.s).join(' et ');
+    const out = [];
+    if (his.length) out.push(`tu peux prendre ${top(his)}`);
+    if (mine.length) out.push(`${mine.length > 1 ? 'restent' : 'reste'} en prise chez toi ${top(mine)}`);
+    return out.length ? `⚔️ <b>Le compte des prises</b> : ${out.join(' ; ')}.` : '';
   }
 
   // ── Le bandeau du livre ──────────────────────────────────────────────────
@@ -1015,32 +1239,72 @@ const CoachGame = (() => {
     busy = false;
     syncControls();
 
+    curTheory = theoryNow();
+    const cue = paintCues(fen, curTheory);
     if (cfg.aide === 'assiste') {
-      drawAssist(fen);
       const best = uciToFr(fen, myBestUci);
-      setStatus(`Trait à <b>toi</b>. Éval <b>${fmtMe(curEvalMe)}</b> (ton point de vue).`
-        + (best ? ` Meilleur : <b>${best}</b> <span class="rp-hint">(flèche bleue)</span>.` : ''));
-      $('#cg-hintout').hidden = true;
+      setStatus(`Trait à <b>toi</b>. Éval <b>${fmtMe(curEvalMe)}</b> (ton point de vue).` + cueLegend(cue, best, curTheory));
+      // La place liberee par l'ancien pave d'eval sert a la TACTIQUE : pourquoi
+      // ce coup, puis le compte des prises de la position.
+      const box = $('#cg-hintout');
+      const lines = [];
       const why = whyBest(fen, myBestUci);
-      if (why) { $('#cg-hintout').hidden = false; $('#cg-hintout').innerHTML = `<b>Pourquoi ${best} ?</b> ${why}`; }
+      if (why && best) lines.push(`<b>Pourquoi ${best} ?</b> ${why}`);
+      const hang = hangingLine(fen);
+      if (hang) lines.push(hang);
+      box.hidden = !lines.length;
+      box.innerHTML = lines.map(l => `<p>${l}</p>`).join('');
     } else {
-      // Mode libre : l'ecran est MUET. Pas d'eval, pas de fleche, pas de suite.
-      setStatus(`Trait à <b>toi</b>. <span class="rp-hint">À toi de trouver — aucune aide affichée.</span>`);
+      // Mode libre : l'ecran reste MUET sur le moteur. La theorie, elle, est
+      // deja ecrite en toutes lettres dans le bandeau du livre - la marquer sur
+      // l'echiquier ne revele donc rien de plus.
+      setStatus(`Trait à <b>toi</b>.` + (curTheory
+        ? ` <span class="cg-cue th">● ${fr(curTheory.san)}</span> <span class="rp-hint">— le coup de la théorie (flèche jaune).</span>`
+        : ` <span class="rp-hint">À toi de trouver — aucune aide affichée.</span>`));
     }
+    renderCoursePanel();
     syncHintBtn();
   }
 
-  // Assiste : fleche bleue sur le meilleur coup + ce qu'il menacerait.
-  function drawAssist(fen) {
+  // ── Les deux fleches de l'ouverture ─────────────────────────────────────
+  // BLEU = le coup prefere du moteur (mode assiste, ou 3e indice). JAUNE = le
+  // coup de la theorie, des qu'une ouverture est en cours. Quand les deux
+  // designent le MEME coup - ce qui arrive sans arret au debut - on ne trace
+  // pas deux fleches superposees : la jaune passe LARGE dessous et la bleue
+  // fine dessus, ce qui donne une seule fleche bicolore, et le texte le dit.
+  const C_ENGINE = '#5b8fb9', C_THEORY = '#e2b857';
+  function paintCues(fen, th) {
     threatArrows = false;
+    const assisted = cfg && cfg.aide === 'assiste';
+    const showEngine = !!myBestUci && (assisted || hintArrow);
+    const same = !!(th && showEngine && th.uci === myBestUci);
     const arr = [];
-    if (myBestUci) arr.push({ from: myBestUci.slice(0, 2), to: myBestUci.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 });
-    const t = threatsOfBest(fen, myBestUci);
-    if (t) {
-      for (const c of (t.checks || [])) arr.push({ from: c.from, to: c.sq, color: '#e05252', opacity: 0.9, width: 6 });
-      for (const d of (t.direct || [])) arr.push({ from: d.from, to: d.sq, color: '#4ade80', opacity: 0.85, width: 5 });
+    if (th) arr.push({ from: th.uci.slice(0, 2), to: th.uci.slice(2, 4), color: C_THEORY, opacity: same ? 1 : 0.9, width: same ? 13 : 7 });
+    if (showEngine) arr.push({ from: myBestUci.slice(0, 2), to: myBestUci.slice(2, 4), color: C_ENGINE, opacity: 0.95, width: same ? 5 : 7 });
+    if (assisted) {
+      const t = threatsOfBest(fen, myBestUci);
+      if (t) {
+        for (const c of (t.checks || [])) arr.push({ from: c.from, to: c.sq, color: '#e05252', opacity: 0.9, width: 6 });
+        for (const d of (t.direct || [])) arr.push({ from: d.from, to: d.sq, color: '#4ade80', opacity: 0.85, width: 5 });
+      }
     }
-    BoardRenderer.drawArrows(arrowsSvg, arr);
+    if (arr.length) BoardRenderer.drawArrows(arrowsSvg, arr);
+    else BoardRenderer.clearArrows(arrowsSvg);
+    return { same, showEngine, hasTheory: !!th };
+  }
+
+  // La legende des fleches, en clair : sans elle, deux couleurs sur
+  // l'echiquier sont deux enigmes.
+  function cueLegend(cue, best, th) {
+    if (!cue) return '';
+    if (cue.same && th) {
+      return ` <span class="cg-cue both">● ${fr(th.san)}</span>`
+        + ` <span class="rp-hint">— le moteur ET la théorie disent le même coup.</span>`;
+    }
+    const parts = [];
+    if (cue.showEngine && best) parts.push(`<span class="cg-cue en">● ${best}</span> <span class="rp-hint">le moteur</span>`);
+    if (th) parts.push(`<span class="cg-cue th">● ${fr(th.san)}</span> <span class="rp-hint">la théorie</span>`);
+    return parts.length ? ' ' + parts.join(' <span class="rp-hint">·</span> ') : '';
   }
 
   function threatsOfBest(fen, uci) {
@@ -1086,8 +1350,11 @@ const CoachGame = (() => {
     } else {
       hintArrow = true;
       const best = uciToFr(fen, myBestUci);
-      box.innerHTML = `💡 <b>Le coup</b> : ${best || '?'} <span class="rp-hint">(flèche bleue)</span>.`;
-      if (myBestUci) { BoardRenderer.drawArrows(arrowsSvg, [{ from: myBestUci.slice(0, 2), to: myBestUci.slice(2, 4), color: '#5b8fb9', opacity: 0.9, width: 7 }]); threatArrows = false; }
+      const cue = myBestUci ? paintCues(fen, curTheory) : null;
+      // Le 3e indice peut tomber sur un coup ou la theorie dit la meme chose :
+      // la fleche est alors bicolore, et annoncer « fleche bleue » serait faux.
+      const mark = cue && cue.same ? "flèche bicolore — le moteur et la théorie sont d'accord" : 'flèche bleue';
+      box.innerHTML = `💡 <b>Le coup</b> : ${best || '?'} <span class="rp-hint">(${mark})</span>.`;
     }
     syncHintBtn();
   }
@@ -1309,17 +1576,19 @@ const CoachGame = (() => {
 
   // Le commentaire long. Le user : « sois un peu plus verbeux quand tu expliques
   // pourquoi c'est une erreur / mauvais coup / gaffe / pourquoi il faudrait
-  // faire autrement ». Quatre lignes maximum, toutes concretes : ce que ca
-  // coute, ce que l'adversaire en fait, ce qu'il fallait jouer et pourquoi, et
-  // le reflexe a retenir. Aucune morale, aucun « sois vigilant ».
+  // faire autrement ». Quatre lignes maximum, toutes concretes : ce que
+  // l'adversaire en fait, ce qu'il fallait jouer et pourquoi, ce que le COURS
+  // d'ouverture dit de cette position, et le reflexe a retenir. Aucune morale,
+  // aucun « sois vigilant » - et plus aucun releve d'eval, il fait doublon
+  // avec la pastille du coup.
   function explainSlip(ctx) {
     const bits = [];
-    const { fenBefore, fenAfter, myMove, evalBefore, evalAfter, res, bestUci, bestPv } = ctx;
+    const { fenBefore, fenAfter, myMove, res, bestUci, bestPv } = ctx;
 
-    // 1. Ce que ca coute, en clair.
-    if (evalBefore != null && evalAfter != null) {
-      bits.push(`<b>Ce que ça coûte</b> : tu passes de <b>${fmtMe(evalBefore)}</b> à <b>${fmtMe(evalAfter)}</b> (ton point de vue).`);
-    }
+    // 1. Ce que ca coute n'est PLUS raconte ici. « Tu passes de +0,0 a -1,8 »
+    //    disait en une ligne pleine ce que la pastille du coup dit deja en
+    //    trois mots (« -23 pts de chances de gain »). La place va au cours et
+    //    a la tactique, plus bas.
 
     // 2. Ce que l'adversaire peut en faire : sa meilleure reponse, nommee, avec
     //    ce qu'elle menace. `res` est la recherche faite APRES mon coup, donc
@@ -1368,7 +1637,22 @@ const CoachGame = (() => {
       bits.push(`<b>Il fallait jouer</b> : <b>${bestSan}</b>${why ? ' — ' + why : ''}`);
     }
 
-    // 4. Le reflexe, tire de ce qui vient de se passer (pas un slogan).
+    // 4. Ce que LE COURS dit de cette position. C'est la passerelle demandee :
+    //    une ligne ici, la fiche complete sur le bouton - plutot que de
+    //    recopier le cours dans le commentaire.
+    let hist0 = null;
+    try { hist0 = game.history().slice(0, -1); } catch (_) { hist0 = null; }
+    const ch = hist0 && hist0.length ? courseHere(hist0) : null;
+    if (curTheory && curTheory.uci !== (myMove.from + myMove.to + (myMove.promotion || ''))) {
+      bits.push(`<b>\u{1F4D8} La théorie jouait</b> : <b>${fr(curTheory.san)}</b>`
+        + (curTheory.note ? ` — ${noTags(curTheory.note)}` : '')
+        + (ch ? ` <button type="button" class="cg-coursego inline" data-line="${ch.key}" data-branch="${ch.branch}">Le détail ▸</button>` : ''));
+    } else if (ch) {
+      bits.push(`<b>\u{1F4D8} ${ch.label}</b> — cette position est traitée dans le cours. `
+        + `<button type="button" class="cg-coursego inline" data-line="${ch.key}" data-branch="${ch.branch}">Le détail ▸</button>`);
+    }
+
+    // 5. Le reflexe, tire de ce qui vient de se passer (pas un slogan).
     if (punish && (!oppWhy || oppWhy.indexOf('prise') < 0)) bits.push(`<b>Le réflexe</b> : ${punish}`);
     else if (oppSan && /x/.test(oppUci ? (uciToFr(fenAfter, oppUci) || '') : '')) {
       bits.push(`<b>Le réflexe</b> : avant de lâcher ton coup, regarde les <b>captures</b> que tu laisses à l'adversaire - c'est celle-là que tu n'as pas vue.`);
@@ -1637,6 +1921,8 @@ const CoachGame = (() => {
     const bk = boardNoKing(b, loser);
     const k = findKingSq(b, loser);
     out.king = k;
+    // Le roi VAINQUEUR : c'est lui qui portera la couronne sur l'echiquier.
+    out.wking = findKingSq(b, winner);
     if (!k) return out;
 
     out.checkers = Tactics.attackersOf(b, k, winner).map(p => ({ sq: p.sq, t: p.t }));
@@ -1934,12 +2220,78 @@ const CoachGame = (() => {
     }
     renderReviewBar();
     renderMoves();
+    renderCoursePanel();
     setStatus('');
     renderOver();
     // Les fleches attendent la fin du glissement : peintes tout de suite, elles
     // pointent une case ou la piece n'est pas encore arrivee.
-    setTimeout(() => { if (endInfo) paintEndMarks(); }, ANIM_MS);
+    setTimeout(() => {
+      if (!endInfo) return;
+      paintEndMarks();
+      paintKingMarks();
+      // La fenetre du mat ne s'annonce qu'UNE fois : revenir sur l'echiquier
+      // depuis le bilan ne doit pas la relancer a chaque aller-retour.
+      if (!endInfo.popped) { endInfo.popped = true; showMatePop(); }
+    }, ANIM_MS);
     syncControls();
+  }
+
+  // ── Le mat, marque sur l'echiquier ───────────────────────────────────────
+  // Facon chess.com : une couronne sur le roi qui gagne, un anneau rouge qui
+  // bat sur le roi mate, et une annonce qui se pose par-dessus le plateau.
+  // Elle se ferme sur un bouton : rien ne s'efface tout seul - c'est la regle
+  // de tout cet ecran de fin.
+  function fxMark(sq, cls, glyph) {
+    if (!sq || !BoardRenderer.squareToCoords) return '';
+    const pos = BoardRenderer.squareToCoords(sq);
+    const S = BoardRenderer.SQ || 45;
+    const cx = pos.col * S + S / 2, cy = pos.row * S + S / 2;
+    return `<circle class="cg-fx-ring ${cls}" cx="${cx}" cy="${cy}" r="${S / 2 - 3}"/>`
+      + (glyph ? `<text class="cg-fx-ic ${cls}" x="${cx + S * 0.30}" y="${cy - S * 0.28}"`
+        + ` font-size="${S * 0.46}" text-anchor="middle" dominant-baseline="central">${glyph}</text>` : '');
+  }
+
+  function paintKingMarks() {
+    const fx = $('#cg-fx');
+    if (!fx) return;
+    fx.innerHTML = '';
+    if (!endInfo || reviewPly !== null) return;
+    const an = endInfo.an;
+    if (!an || (an.kind !== 'mate' && an.kind !== 'stalemate')) return;
+    const mated = an.kind === 'mate';
+    fx.innerHTML = fxMark(an.king, mated ? 'dead' : 'pat', mated ? '\u{1F480}' : '\u{1F91D}')
+      + (mated ? fxMark(an.wking, 'crown', '\u{1F451}') : '');
+  }
+
+  function showMatePop() {
+    const el = $('#cg-matepop');
+    if (!el || !endInfo) return;
+    const an = endInfo.an, out = endInfo.out;
+    if (!an || an.kind !== 'mate') { el.hidden = true; return; }
+    const win = out.r === 'win';
+    const n = Math.ceil(game.history().length / 2);
+    const last = moveLog.length ? fr(moveLog[moveLog.length - 1].san) : '';
+    el.className = 'cg-matepop ' + (win ? 'win' : 'loss');
+    el.hidden = false;
+    el.innerHTML = (win ? `<span class="cg-conf">${'<i></i>'.repeat(16)}</span>` : '')
+      + `<div class="cg-mp-card">
+          <span class="cg-mp-ic">${win ? '\u{1F451}' : '\u{1F480}'}</span>
+          <b class="cg-mp-t">Échec et mat</b>
+          <span class="cg-mp-s">${win ? 'Tu mates le coach' : 'Le coach te mate'} au coup <b>${n}</b>${last ? ` — <b>${last}</b>` : ''}.</span>
+          <div class="cg-mp-acts">
+            <button type="button" class="train-btn" data-mp="close">Voir la position ▸</button>
+            <button type="button" class="train-btn ghost" data-mp="tail">⏪ Revoir la fin</button>
+            <button type="button" class="train-btn ghost" data-mp="bilan">\u{1F4CA} Le bilan</button>
+          </div>
+        </div>`;
+    requestAnimationFrame(() => el.classList.add('in'));
+  }
+
+  function hideMatePop() {
+    const el = $('#cg-matepop');
+    if (!el) return;
+    el.classList.remove('in');
+    el.hidden = true;
   }
 
   function renderOver() {
@@ -2035,6 +2387,7 @@ const CoachGame = (() => {
 
   function showBilan() {
     stopTail();
+    hideMatePop();
     if (!endInfo) { view('end'); return; }
     endInfo.seen = true;
     const el = $('#cg-over'); if (el) el.hidden = true;

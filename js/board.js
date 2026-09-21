@@ -659,7 +659,7 @@ const BoardRenderer = (() => {
     }, true);
   }
 
-  const api = { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions, setSpeed, getSpeed, SPEEDS };
+  const api = { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, squareToCoords, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions, setSpeed, getSpeed, SPEEDS, SQ };
   // `ANIM_MS` suit le reglage en cours : les modules qui l'avaient copie au
   // chargement lisent quand meme la bonne valeur s'ils la relisent.
   Object.defineProperty(api, 'ANIM_MS', { get: animMs, enumerable: true });

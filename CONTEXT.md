@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v285**.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v285** ; **v286 ecrite et recettee, PAS encore commitee ni deployee**.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -170,6 +170,68 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v286 - le mode Coach parle ouverture, pas centipions, et le mat se voit.**
+    Trois demandes, un seul ecran touche (`js/coachgame.js`, `css/style.css`, plus deux exports
+    ajoutes a `js/board.js`) :
+    1. **Les deux fleches du debut.** Le mode assiste ne marquait que le coup du moteur. Il
+       marque desormais AUSSI, **en jaune**, le coup de la theorie. Deux sources, dans cet ordre :
+       la ligne imposee au depart (`bookMoveNow`), puis, a defaut, le cours qui correspond a la
+       position - donc la fleche jaune existe meme sans ouverture imposee, des que la partie
+       entre dans un cours. **Le cas « c'est le meme coup » est traite** (il est frequent : 1.e4
+       l'est) : plutot que deux fleches superposees, la jaune passe LARGE dessous et la bleue
+       fine dessus - une seule fleche bicolore - et le texte dit « le moteur ET la theorie disent
+       le meme coup ». Une legende nomme chaque couleur (`cueLegend`), sans quoi deux couleurs
+       sur l'echiquier sont deux enigmes. En mode LIBRE seule la jaune est tracee : le bandeau du
+       livre ecrit deja le coup de la theorie en toutes lettres, la marquer ne revele rien de
+       plus, alors que la bleue romprait le contrat du mode (« rien pendant »).
+       Le 3e indice repeint les deux fleches et adapte son texte (« fleche bicolore »).
+    2. **Le cours d'ouverture branche sur la partie, a la place du releve d'eval.** Sa remarque :
+       « plutot que d'expliciter autant ca coute en termes de perte liee au moteur (tu passes de
+       +0 a -1,8) ». La premiere ligne de `explainSlip` etait exactement ca - et elle faisait
+       DOUBLON avec la pastille du coup, qui dit deja « -23 pts de chances de gain ». Supprimee.
+       La place recuperee sert a deux choses :
+       - une **capsule de cours** (`#cg-course`, `renderCoursePanel`) sous le commentaire : le nom
+         de la branche, ce que le cours dit du coup qui vient d'etre joue, ce qu'il dit du coup
+         suivant, le piege rattache a cette branche, et un bouton **« Le detail ▸ »**. C'est la
+         « passerelle » demandee : la fiche complete s'ouvre **par-dessus** la partie (la modale
+         des cours est en z 2000, l'ecran du coach en z 1000), donc **rien n'est ferme et rien
+         n'est perdu** - on referme, on reprend son coup. En mode libre la capsule se limite au
+         nom + au bouton (le mode libre ne souffle pas).
+       - dans l'explication d'un coup rate, une ligne **« 📘 La theorie jouait : X »** avec la
+         note du cours et le meme bouton. Elle interroge la position d'AVANT le coup
+         (`courseHere(game.history().slice(0, -1))`), sinon la gaffe qui sort du livre ferait
+         disparaitre le cours au moment precis ou il sert.
+       - et, cote TACTIQUE, une ligne **« ⚔️ Le compte des prises »** en mode assiste : ce que tu
+         peux prendre, ce qui reste en prise chez toi, chiffre par `Tactics.seeOn` (donc une piece
+         attaquee mais correctement defendue n'y figure pas).
+       Le moteur de tout ca est `courseHere()` / `computeCourseHere()` : il retrouve le cours
+       (cle du livre impose, sinon `Courses.match`), la branche, la note du demi-coup et le
+       prochain coup theorique. **Piege corrige en recette** : entre deux fourches, AUCUN noeud de
+       `buildBranches` n'est « deja joue » en entier (le premier noeud de l'Italienne va jusqu'au
+       coup 5) - a ne chercher que les noeuds entierement joues, la capsule restait vide du coup 1
+       au coup 5. On retombe donc sur la branche qu'on est en train de PARCOURIR, la plus proche
+       devant - ce qui donne aussi un cours **des le coup 0** quand une ouverture est imposee.
+       Autre detail de recette : les titres de pieges portent deja leur icone, en rajouter une
+       donnait « 🪤 🪤 S'il tarde a roquer ».
+    3. **Le mat, facon chess.com.** Une **couronne** sur le roi qui gagne, un **anneau rouge qui
+       bat** sur le roi mate (`paintKingMarks`, nouveau calque `#cg-fx` - sur celui des fleches,
+       le moindre `clearArrows()` les effacerait), et une **annonce** posee sur le plateau
+       (`showMatePop`) : icone, « Echec et mat », qui mate qui et en combien de coups, confettis
+       CSS sur une victoire, et trois sorties - « Voir la position », « Revoir la fin »,
+       « Le bilan ». **Elle ne part jamais toute seule et ne s'annonce qu'une fois**
+       (`endInfo.popped`) : revenir du bilan ne la relance pas. `endAnatomy` retient desormais
+       `wking` (le roi vainqueur) ; `board.js` exporte `squareToCoords` et `SQ` pour poser les
+       marques a la bonne case, orientation comprise. Tout est coupe sous
+       `prefers-reduced-motion`.
+    Recette en preview (Chrome, 800 px et 375 px) : Italienne imposee, fleche bicolore au coup 1,
+    fleches separees au coup 2 (« ● d4 le moteur · ● Cf3 la theorie »), capsule correcte aux
+    coups 0/1/2, « Le detail » ouvre le cours par-dessus et Echap rend la partie intacte ;
+    2.Fa6?? -> verdict sans releve d'eval, avec « La theorie jouait Cf3 » ; « restent en prise
+    chez toi la dame h5 et le pion e4 » verifie sur une vraie position ; partie complete jouee
+    jusqu'au mat (36 coups) -> couronne, tete de mort, confettis, annonce lisible sur telephone.
+    143 tests `test_core.cjs` verts. **PIEGE DE RECETTE (deja connu, il a encore coute 20 min) :
+    le service worker est cache-first, donc un simple rechargement REJOUE l'ancien fichier meme
+    avec un `?v=` a jour. Il faut `unregister()` + `caches.delete()` avant chaque rechargement.**
   - **v285 - « Et si… ? » : reprendre la partie analysee a N'IMPORTE quel coup.**
     Sa demande : « pendant les parties analysees, permets-moi de continuer a jouer a partir de
     n'importe quel coup, que je puisse evaluer ce qui se serait passe si j'avais pas fait telle
