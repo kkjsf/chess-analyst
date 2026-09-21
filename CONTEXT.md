@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v286** (2026-09-21, en ligne, `5b61f8f`).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v286** (2026-09-21, en ligne, `5b61f8f`). **v287 en local, non commitée** (corrections du cours Londres, voir ci-dessous).
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -17,6 +17,45 @@
   lue par `index.html` et par `sw.js` (elles avaient divergé). `js/freeplay.js` = fond commun
   du mode « Continuer a jouer ». Le worker Stockfish est dans `js/vendor/` (le build wasm
   resout `stockfish.wasm` relativement au worker).
+- **`systeme_londres.html` (2026-09-21)** - rapport HTML autonome sur le Système de Londres,
+  hors app (s'ouvre par double-clic). 13 sections, sommaire collant avec scrollspy (barre
+  dépliante sur mobile), 19 diagrammes **jouables** : échiquier SVG rendu depuis une liste de FEN
+  pré-calculées par chess.js, navigation coup par coup (boutons, puces de coups, flèches clavier,
+  balayage tactile), retournement, flèches et cases marquées. Notation **française**.
+  **52 positions vérifiées à Stockfish** (`tools/sf.cjs`, profondeur 16-22, MultiPV 3-6) ;
+  l'annexe est **générée** depuis la sortie moteur, jamais recopiée. Recoupé avec Wikipédia,
+  Chess.com, Modern Chess, Wikibooks et Remote Chess Academy (sources listées en bas du rapport).
+  Scripts de production dans le scratchpad de session (non versionnés) : `gen_lines.cjs` (FEN +
+  SAN français), `verify*.cjs` (moteur), `build.py` (assemblage + annexe).
+  ⚠️ Deux enseignements de méthode : (1) une ligne « de théorie » reprise d'une source web
+  (`5.Db3 c4 6.Dc2 Ff5!`) **perdait un fou** sur `Dxf5` (+5.06) - toujours rejouer au moteur ce
+  qu'on lit ; (2) le « piège » viral où la dame noire est enfermée
+  (`6.Tb1 Dxa2 7.Ta1 Db2 8.Cc7+ Cxc7 9.Tb1`) est **réfuté** par `9...Dc3+!` (-7.28).
+- **v287 (2026-09-21, LOCAL, non commitée) - corrections du cours « Système de Londres »**,
+  issues de la vérification moteur + sources ci-dessus. 143 tests unitaires OK.
+  - `courses.js` : le schéma d'attaque annoncé « Ce5, Fd3, **Dc1-h6**, sacrifice grec Fxh7+ suivi
+    de **Cg5+** » était **mécaniquement impossible** - avec le cavalier en e5, l'autre est en d2,
+    donc aucun cavalier ne peut aller en g5 (le sacrifice grec exige un cavalier en f3, donc
+    AVANT Ce5), et Dc1 est un coup **défensif** (contre ...Db6/...Ff5). Remplacé par le vrai
+    schéma **Df3 puis Dh3** (ou Dh5) dans 5 endroits : carte de piège, QCM, 3 notes de lignes.
+  - `courses.js` : « l'ordre classique 2.Cf3 est la version de référence, celle des grands
+    maîtres / le plus joué » est **périmé** (Wikipédia : 2.Bf4 est aujourd'hui couramment
+    préféré ; Chess.com le dit « légèrement plus précis »). Reformulé en version **historique**.
+  - `openings.js` (5 entrées) + `app.js` : ECO **D00 → D02**, qui était **incohérent** avec
+    `courses.js` et `opening-tree.js` qui annonçaient déjà D02 pour les mêmes lignes.
+  - `courses.js` : le piège « contre ...Ch5 : Fg5 ! » (correct pour sa position, +0.83) laissait
+    passer bien mieux - si **e3 est joué et Cf3 pas encore**, `Dxh5` gagne **une pièce** (+4.87,
+    la diagonale d1-h5 est ouverte). Avertissement ajouté.
+  - `app.js` : le conseil de coach « jouer ...c5 + ...Db6 sur d4/b2 » envoyait droit dans
+    `Cc3!` (+1.25, et +1.98 si ...Cc6 est déjà joué). Conditionné à « **seulement une fois
+    qu'ils ont joué c3** ».
+  - ✔ **Vérifié correct, non touché** : le piège « Ce5 puis dxe5, la fourchette » (+3.61, toutes
+    les défenses noires restent au-dessus de +3.12), « le fou sort AVANT e3 », « e3 défend d4 ET
+    le fou », « Cbd2 pas Cc3 », « Fg3 », « contre ...Ff5 on joue c4 » (+0.48), et la note
+    « le moteur préfère même le modeste b3 » contre ...Db6 (b3 +0.45 > Db3 +0.32 > Dc2 +0.02).
+  - **La règle qui manquait au cours** (trois cas, tous vérifiés) : face à ...Db6, si ni c3 ni
+    Cbd2 → `Cc3!` (+1.25 à +1.98) ; si Cbd2 joué sans c3 → `dxc5!` (+0.57) ; si c3 joué → `b3`
+    (+0.45) et c'est égal. **c3 et Cc3 sont exclusifs**, et ce choix décide tout le débat ...Db6.
 - `sw.js`, `manifest.json` - PWA.
 - `coach-data.json` - contenu de coaching généré (~680 KB). Certains items de correctness ne se reflètent qu'après une RE-RUN complète du coach.
 - `tools/test_core.cjs` - 143 tests unitaires du coeur logique (`node tools/test_core.cjs`,

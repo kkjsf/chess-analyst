@@ -65,9 +65,9 @@ const Openings = (() => {
     ['d4 d5 c4 c6', 'D10', 'Défense Slave'],
     ['d4 d5 c4 c6 Nf3 Nf6 Nc3 e6', 'D46', 'Semi-Slave'],
     ['d4 d5 Nf3 Nf6 c4 e6 Nc3 c5', 'D32', 'Défense Tarrasch'],
-    ['d4 d5 Bf4', 'D00', 'Système de Londres'],
-    ['d4 d5 Nf3 Nf6 Bf4', 'D00', 'Système de Londres'],
-    ['d4 Nf6 Bf4', 'D00', 'Système de Londres'],
+    ['d4 d5 Bf4', 'D02', 'Système de Londres'],
+    ['d4 d5 Nf3 Nf6 Bf4', 'D02', 'Système de Londres'],
+    ['d4 Nf6 Bf4', 'D02', 'Système de Londres'],
 
     // Indian Defenses
     ['d4 Nf6 c4 g6 Nc3 Bg7', 'E60', 'Défense Est-Indienne'],
@@ -172,8 +172,8 @@ const Openings = (() => {
     ['d4 d5 c4 c6 Nf3 Nf6 e3', 'D12', 'Slave — système lent'],
 
     // London extended
-    ['d4 d5 Bf4 Nf6 e3 c5', 'D00', 'Londres — variante avec ...c5'],
-    ['d4 Nf6 Bf4 d5 e3 e6 Nf3 c5', 'D00', 'Londres — variante principale'],
+    ['d4 d5 Bf4 Nf6 e3 c5', 'D02', 'Londres — variante avec ...c5'],
+    ['d4 Nf6 Bf4 d5 e3 e6 Nf3 c5', 'D02', 'Londres — variante principale'],
 
     // QGA variations
     ['d4 d5 c4 dxc4 Nf3 Nf6 e3 e6 Bxc4', 'D27', 'GDA — variante classique'],

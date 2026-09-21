@@ -4341,7 +4341,7 @@ const App = (() => {
     ]},
     { group: '♛ Contre 1.d4 (avec les Noirs)', items: [
       { t: `Répondre <b>1…d5</b>, puis <b>Gambit dame refusé</b> : …e6, …Cf6, …Fe7, roque.`, line: 'd4 d5 c4 e6' },
-      { t: `Reconnaître le <b>Système Londres</b> adverse (Ff4) et jouer …c5 + …Db6 sur d4/b2.`, line: 'd4 d5 Bf4' },
+      { t: `Reconnaître le <b>Système Londres</b> adverse (Ff4) et jouer …c5, puis …Db6 sur d4/b2 <b>seulement une fois qu'ils ont joué c3</b> (sinon Cc3! et Cb5 sont très forts).`, line: 'd4 d5 Bf4' },
     ]},
     { group: '🪤 Les pièges à connaître', items: [
       { t: `<b>Mat du berger</b> (Dh5 + Fc4 sur f7) : défends par …g6 ou …De7, ne panique pas.` },
@@ -4811,7 +4811,7 @@ const App = (() => {
       deviations: [
         { label: `…dxc4 (Slave acceptée)`, note: `Les Noirs peuvent prendre en c4 et tenter de le tenir par …b5 (soutenu par …a6), au prix de complications tactiques — une ligne plus ambitieuse.` }
       ] },
-    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Système de Londres', en: 'London System', eco: 'D00', side: 'w', level: '👍 Facile à jouer',
+    { cat: '♛ Jeux fermés (1.d4 d5)', name: 'Système de Londres', en: 'London System', eco: 'D02', side: 'w', level: '👍 Facile à jouer',
       line: 'd4 d5 Bf4',
       desc: `Une configuration <b>passe-partout</b> : le fou sort en f4 et les Blancs jouent presque toujours les mêmes coups, quelle que soit la réponse noire. Deux ordres possibles - <b>2.Cf3 Cf6 3.Ff4</b> (classique) ou <b>2.Ff4</b> tout de suite (accéléré) : ils transposent. Peu de théorie, idéal pour gagner du temps et jouer sur plan.`,
       idea: `Un système « passe-partout » : on sort le fou en f4 (avant de jouer e3, pour ne pas l'enfermer), puis e3 qui soutient d4 ET défend le fou, et on répète presque les mêmes coups quelle que soit la réponse noire. L'ordre de référence sort le cavalier d'abord (2.Cf3 Cf6 3.Ff4) ; 2.Ff4 immédiat est la version accélérée. Peu de théorie, beaucoup de temps gagné.`,
