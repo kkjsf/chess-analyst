@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v286** (2026-09-21, en ligne, `5b61f8f`). **v287 en local, non commitée** (corrections du cours Londres, voir ci-dessous).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v286** (2026-09-21, en ligne, `5b61f8f`). **v287 et v288 en local, non commitées** (corrections du cours Londres ; classification des SYSTEMES d'ouverture - voir ci-dessous).
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -58,7 +58,7 @@
     (+0.45) et c'est égal. **c3 et Cc3 sont exclusifs**, et ce choix décide tout le débat ...Db6.
 - `sw.js`, `manifest.json` - PWA.
 - `coach-data.json` - contenu de coaching généré (~680 KB). Certains items de correctness ne se reflètent qu'après une RE-RUN complète du coach.
-- `tools/test_core.cjs` - 143 tests unitaires du coeur logique (`node tools/test_core.cjs`,
+- `tools/test_core.cjs` - 164 tests unitaires du coeur logique (`node tools/test_core.cjs`,
   ou `npm test` dans `tools/`). Tourne aussi en CI avant l'analyse serveur.
 - `tools/` - scripts utilitaires. Chaîne de contenu des leçons (v184) : `mine_lichess.cjs`
   (streame `lichess_db_puzzle.csv.zst`, gitignoré, → pool JSONL) → `pick_lichess.cjs` (choisit les
@@ -209,6 +209,39 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v288 (2026-09-22, LOCAL, non commitée) - le Londres cesse d'etre « Ouverture Pion Dame ».**
+    Signale par le user : beaucoup de ses parties etaient etiquetees « Ouverture Pion Dame »
+    alors que ce sont des Systemes de Londres. Mesure sur ses 201 parties : **36 en « Pion
+    Dame », dont 17 vrais Londres**, et 6 Londres reconnus seulement.
+    - **La cause.** `js/openings.js` est une table de **prefixes sur les coups des DEUX camps**.
+      Cela convient a une ouverture a theorie (la Najdorf n'existe que dans cet ordre-la), mais
+      **pas a un systeme** : au Londres les Blancs posent la meme structure quoi que jouent les
+      Noirs. Le catalogue n'avait que 5 lignes de Londres, toutes avec ...d5 ou ...Cf6 dans un
+      ordre precis ; ses parties reelles (`d4 d5 Cf3 e6 Ff4`, `d4 Cc6 Cf3 b6 Ff4`, `d4 g6 Ff4`,
+      `d4 d5 Cf3 Ff5 Ff4`, transposition depuis 1.Cf3...) tombaient toutes a cote.
+    - **Le correctif.** Une seconde passe `detectSystem()` qui ne regarde **que les coups des
+      Blancs** (7 premiers) et ignore les reponses noires : Londres (d4 + Ff4 avant c4),
+      **Jobava** (Cc3 avant e3), Trompowsky / Levitsky, Veresov, Torre, Colle, Colle-Zukertort,
+      Stonewall, Attaque Est-Indienne. Elle ne s'applique **que** si le catalogue n'a rien dit,
+      ou s'il a repondu un nom **vague** (liste `SOFT`) - un Gambit Englund nomme par prefixe ne
+      devient donc pas un Londres parce que les Blancs ont joue Ff4 au 3e coup.
+    - **Garde-fous ajoutes au catalogue** : `d4 e5` (+4 sous-lignes) = **Gambit Englund**,
+      `d4 c5 dxc5` = variante Krause - sans elles la passe systeme voyait d4 + Ff4 et annoncait
+      un Londres alors que le pion d4 a deja quitte le centre. Plus `e4 e5 Cf3` (Partie du
+      Cavalier Roi), Ponziani et Leonardis, qui vidaient le fourre-tout « Ouverture Pion Roi ».
+    - **Premiers coups rares** (1.g4 Grob, 1.e3 Van 't Kruijs, 1.c3 Saragosse...) : nommes dans
+      une table `FIRST` **hors catalogue**, volontairement - les mettre dans la DB les rendrait
+      « dans le livre » pour `inBook()`, donc excusables dans la notation du mode entraineur.
+    - **Resultat sur ses 201 parties** : Londres **6 -> 21**, « Pion Dame » **36 -> 16** (dont 14
+      sont de vraies parties generiques ou il est Noir face a une sideline), « Pion Roi » 22 -> 5.
+      Le tableau Repertoire (Statistiques) affiche maintenant « Systeme de Londres, 13 parties,
+      6/2/5, 67% » en tete des Blancs au lieu de le disperser.
+    - **Chaque systeme porte une `line` canonique** (Londres -> `d4 d5 Ff4`), sinon le bouton
+      « explorer » du tableau Repertoire, qui a besoin d'une ligne rejouable, disparaissait de sa
+      famille la plus jouee. Les 10 lignes sont verifiees legales par chess.js.
+    - **164 tests** (`tools/test_core.cjs`, +21) dont les ordres de coups de ses vraies parties
+      et les cas a NE PAS classer Londres. `verify_openings.cjs` 121 OK.
+
   - **v286 - le mode Coach parle ouverture, pas centipions, et le mat se voit.**
     Trois demandes, un seul ecran touche (`js/coachgame.js`, `css/style.css`, plus deux exports
     ajoutes a `js/board.js`) :

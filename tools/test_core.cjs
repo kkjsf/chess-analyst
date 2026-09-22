@@ -209,6 +209,46 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   check(G, 'Dragon', d(sicilian.concat(['d6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'g6'])), 'B76 Sicilienne Dragon');
 }
 
+// ─────────────── systemes : le Londres quelle que soit la reponse ───────────
+// Signale par le user : 36 de ses 201 parties tombaient dans « Ouverture Pion
+// Dame », dont 17 Londres. La table du catalogue est un PREFIXE sur les coups
+// des DEUX camps : elle ne connaissait le Londres que contre 1...d5 et 1...Cf6.
+// La passe « systeme » ne regarde que les coups des Blancs.
+{
+  const G = 'systemes';
+  const d = (s) => { const r = Openings.detect(s.split(' ')) || {}; return r.eco + ' ' + r.name; };
+
+  // Les ordres de coups et les reponses noires vus dans ses vraies parties.
+  check(G, 'Londres vs 2...e6', d('d4 d5 Nf3 e6 Bf4 Nd7 e3'), 'D02 Système de Londres');
+  check(G, 'Londres vs Tchigorine', d('d4 d5 Nf3 Nc6 Bf4 h6 e3'), 'D02 Système de Londres');
+  check(G, 'Londres vs 1...Cc6', d('d4 Nc6 Nf3 b6 Bf4 Bb7 e3'), 'D02 Système de Londres');
+  check(G, 'Londres vs la Moderne', d('d4 g6 Bf4 Bg7 e3 c5'), 'D02 Système de Londres');
+  check(G, 'Londres vs 1...e6', d('d4 e6 Nf3 Nc6 Bf4 h6 e3'), 'D02 Système de Londres');
+  check(G, 'Londres par transposition 1.Cf3', d('Nf3 d5 d4 Bf5 g3 Nc6 c3 e6 Bf4'), 'D02 Système de Londres');
+  check(G, 'Londres apres 3.e3 (etiquete Colle par la table)',
+    d('d4 d5 Nf3 Nf6 e3 e6 Bf4 c5'), 'D02 Système de Londres');
+  check(G, 'Jobava = Cc3 avant e3', d('d4 d5 Nc3 Nf6 Bf4 e6 e3'), 'D00 Londres — attaque Jobava');
+
+  // Ce qui ne DOIT pas devenir un Londres.
+  check(G, 'c4 avant Ff4 = famille Gambit Dame', d('d4 d5 c4 e6 Nc3 Nf6 Bf4'), 'D30 Gambit Dame refusé');
+  check(G, 'Englund : le pion d4 a quitte le centre', d('d4 e5 dxe5 Nc6 Bf4 Qe7'), 'A40 Gambit Englund — ligne principale');
+  check(G, '1.d4 d5 sans systeme reste generique', d('d4 d5 a3 Nc6 Nc3 Nxd4'), 'A40 Ouverture Pion Dame');
+  // Les autres setups, sur le meme principe.
+  check(G, 'Colle = e3 + Fd3 sans Ff4', d('d4 d5 Nf3 e6 e3 Nf6 Bd3 c5'), 'D05 Système Colle');
+  check(G, 'Colle-Zukertort = le meme avec b3', d('d4 d5 Nf3 e6 e3 Nf6 Bd3 c5 b3'), 'D05 Système Colle-Zukertort');
+  check(G, 'Torre = Cf3 puis Fg5', d('d4 e6 Nf3 c5 Bg5 Qb6'), 'A46 Attaque Torre');
+  check(G, 'Veresov = Cc3 puis Fg5', d('d4 d5 Nc3 c6 Bg5 h6'), 'D01 Ouverture Veresov');
+  check(G, 'Trompowsky = 1...Cf6 2.Fg5', d('d4 Nf6 Bg5 e6'), 'A45 Attaque Trompowsky');
+  check(G, 'Levitsky = 1...d5 2.Fg5', d('d4 d5 Bg5 h6'), 'D00 Attaque Levitsky (2.Fg5)');
+
+  // Les premiers coups rares : nommes hors catalogue, pour ne pas les rendre
+  // « dans le livre » (inBook) et donc excusables dans la notation.
+  check(G, '1.g4 a un nom', d('g4 e5 d3'), 'A00 Ouverture Grob (1.g4)');
+  check(G, '1.e3 a un nom', d('e3 e5 Nc3'), "A00 Ouverture Van 't Kruijs (1.e3)");
+  check(G, "1.g4 n'est pas du livre pour autant", Openings.inBook(['g4']), false);
+  check(G, "1.e3 non plus", Openings.inBook(['e3']), false);
+}
+
 // ─────────────────────────── dictionnaire des coups (F17) ───────────────────
 {
   const G = 'MOVE_TYPES';

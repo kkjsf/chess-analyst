@@ -276,12 +276,115 @@ const Openings = (() => {
     ['Nf3 d5 e4 dxe4 Ng5', 'A06', 'Gambit Tennison accepté'],
     ['e4 d5 Nf3', 'B01', 'Gambit Tennison (via 1.e4 d5)'],
     ['e4 d5 Nf3 dxe4 Ng5', 'B01', 'Gambit Tennison accepté (via 1.e4 d5)'],
+
+    // Reponses a 1.d4 que la table ne connaissait pas : sans elles, la passe
+    // « systeme » ci-dessous voyait d4 + Ff4 et annoncait un Londres, alors que
+    // le pion d4 a deja quitte le centre et que la partie porte un autre nom.
+    ['d4 e5', 'A40', 'Gambit Englund'],
+    ['d4 e5 dxe5 Nc6', 'A40', 'Gambit Englund — ligne principale'],
+    ['d4 e5 dxe5 Qh4', 'A40', 'Gambit Englund — gambit Moustique'],
+    ['d4 e5 dxe5 f6', 'A40', 'Gambit Englund — contre-gambit Soller'],
+    ['d4 e5 dxe5 d6', 'A40', 'Gambit Englund — gambit Blackburne'],
+    ['d4 c5', 'A43', 'Défense Benoni ancienne'],
+    ['d4 c5 dxc5', 'A43', 'Pion Dame — variante Krause'],
+
+    // 1.e4 e5 sans 3e coup caracteristique : le fourre-tout « Ouverture Pion
+    // Roi » couvrait 22 parties, dont celles-ci qui ont bien un nom.
+    ['e4 e5 Nf3', 'C40', 'Partie du Cavalier Roi'],
+    ['e4 e5 Nf3 Nc6 c3', 'C44', 'Ouverture Ponziani'],
+    ['e4 e5 d3', 'C20', 'Pion Roi — variante Leonardis'],
   ];
 
   DB.sort((a, b) => b[0].split(' ').length - a[0].split(' ').length);
 
+  // ── Systemes (setups des Blancs) ───────────────────────────────────────────
+  // Le catalogue ci-dessus est une table de PREFIXES : il ne nomme une partie
+  // que si les coups joues commencent EXACTEMENT par une de ses lignes, coups
+  // NOIRS compris. Cela convient aux ouvertures a theorie - la Najdorf n'existe
+  // que dans cet ordre-la - mais pas aux SYSTEMES, ou les Blancs posent la meme
+  // structure quoi que jouent les Noirs. Le Londres se joue contre 1...d5,
+  // 1...Cf6, 1...e6, 1...g6, 1...Cc6, 1...f5, et dans n'importe quel ordre
+  // (2.Ff4 accelere, 2.Cf3 puis 3.Ff4, 3.e3 puis 4.Ff4) : il aurait fallu des
+  // centaines de lignes de prefixe. D'ou cette seconde passe, qui ne regarde
+  // QUE les coups des Blancs et ignore les reponses noires.
+  //
+  // Sans elle, 17 des parties de la base tombaient dans le fourre-tout
+  // « Ouverture Pion Dame » alors que ce sont des Londres.
+  function detectSystem(sans) {
+    if (!sans || sans.length < 3) return null;
+    const W = sans.filter((_, i) => i % 2 === 0).slice(0, 7);
+    const B = sans.filter((_, i) => i % 2 === 1);
+    const i = (m) => W.indexOf(m);
+    // Un systeme est confirme par UN coup des Blancs (le fou qui sort du
+    // chaine de pions, le Fd3 du Colle...). `moves` = nombre de demi-coups
+    // jusqu'a lui inclus, pour rester homogene avec la table de prefixes.
+    const plies = (k) => 2 * k + 1;
+    const d4 = i('d4'), bf4 = i('Bf4'), bg5 = i('Bg5'), c4 = i('c4'),
+          nc3 = i('Nc3'), nf3 = i('Nf3'), e3 = i('e3'), bd3 = i('Bd3'),
+          f4 = i('f4'), b3 = i('b3'), g3 = i('g3'), bg2 = i('Bg2'), d3 = i('d3');
+    const hasD4 = d4 >= 0 && d4 <= 2;
+    // c4 AVANT le fou = famille du Gambit Dame, pas un systeme.
+    const noC4Before = (k) => c4 < 0 || c4 > k;
+
+    if (hasD4 && bf4 > d4 && bf4 <= 4 && noC4Before(bf4)) {
+      // Jobava : le cavalier en c3 AVANT e3, la difference n'est pas cosmetique
+      // (e4 reste jouable, c'est une autre ouverture que le Londres tranquille).
+      if (nc3 >= 0 && nc3 <= 3 && (e3 < 0 || nc3 < e3))
+        return { eco: 'D00', name: 'Londres — attaque Jobava', moves: plies(Math.max(bf4, nc3)), line: 'd4 d5 Nc3 Nf6 Bf4', system: true };
+      return { eco: 'D02', name: 'Système de Londres', moves: plies(bf4), line: 'd4 d5 Bf4', system: true };
+    }
+    if (hasD4 && bg5 > d4 && bg5 <= 4 && noC4Before(bg5)) {
+      if (bg5 === 1 && d4 === 0)
+        return B[0] === 'Nf6'
+          ? { eco: 'A45', name: 'Attaque Trompowsky', moves: 3, line: 'd4 Nf6 Bg5', system: true }
+          : { eco: 'D00', name: 'Attaque Levitsky (2.Fg5)', moves: 3, line: 'd4 d5 Bg5', system: true };
+      if (nc3 >= 0 && nc3 < bg5 && (nf3 < 0 || nf3 > bg5))
+        return { eco: 'D01', name: 'Ouverture Veresov', moves: plies(bg5), line: 'd4 d5 Nc3 Nf6 Bg5', system: true };
+      if (nf3 >= 0 && nf3 < bg5)
+        return { eco: 'A46', name: 'Attaque Torre', moves: plies(bg5), line: 'd4 Nf6 Nf3 e6 Bg5', system: true };
+    }
+    if (hasD4 && e3 > d4 && e3 <= 4 && f4 >= 0 && f4 <= 5 && bd3 >= 0 && bd3 <= 6 && c4 < 0)
+      return { eco: 'D00', name: 'Attaque Stonewall', moves: plies(Math.max(f4, bd3)), line: 'd4 d5 e3 Nf6 Bd3 c5 f4', system: true };
+    if (hasD4 && nf3 >= 0 && nf3 <= 3 && e3 > d4 && e3 <= 4 && bd3 >= 1 && bd3 <= 5
+        && bf4 < 0 && bg5 < 0 && c4 < 0 && f4 < 0) {
+      return b3 >= 0 && b3 <= 5
+        ? { eco: 'D05', name: 'Système Colle-Zukertort', moves: plies(Math.max(bd3, b3)), line: 'd4 d5 Nf3 Nf6 e3 e6 Bd3 c5 b3', system: true }
+        : { eco: 'D05', name: 'Système Colle', moves: plies(bd3), line: 'd4 d5 Nf3 Nf6 e3 e6 Bd3', system: true };
+    }
+    if (d4 < 0 && nf3 >= 0 && nf3 <= 1 && g3 >= 0 && g3 <= 3 && bg2 >= 1 && bg2 <= 4
+        && d3 >= 1 && d3 <= 5 && c4 < 0)
+      return { eco: 'A07', name: 'Attaque Est-Indienne', moves: plies(Math.max(bg2, d3)), line: 'Nf3 d5 g3 Nf6 Bg2 e6 d3', system: true };
+    return null;
+  }
+
+  // Noms que la passe « systeme » a le droit de remplacer : le fourre-tout des
+  // premiers coups, et les entrees du catalogue qui decrivent la meme partie de
+  // facon plus vague (1.d4 d5 2.Cf3 Cf6 3.e3 est etiquete Colle, mais si le fou
+  // sort en f4 c'est un Londres). Tout le reste du catalogue reste prioritaire :
+  // un Gambit Englund nomme par prefixe ne devient pas un Londres parce que les
+  // Blancs ont joue Ff4 au 3e coup.
+  const SOFT = new Set([
+    'Ouverture Pion Dame', 'Ouverture Pion Roi', 'Ouverture non répertoriée',
+    'Système Colle', 'Ouverture Réti', 'Réti — système fianchetto',
+    'Réti — système indien', 'Attaque Est-Indienne'
+  ]);
+
+  // Premier coup → nom, quand ni le catalogue ni les systemes ne disent rien.
+  // Volontairement HORS du catalogue : y mettre 1.g4 rendrait ce coup « dans le
+  // livre » pour inBook(), donc excusable dans la notation du mode entraineur.
+  const FIRST = {
+    e4: ['B00', 'Ouverture Pion Roi'], d4: ['A40', 'Ouverture Pion Dame'],
+    Nf3: ['A04', 'Ouverture Réti'], c4: ['A10', 'Ouverture Anglaise'],
+    e3: ['A00', "Ouverture Van 't Kruijs (1.e3)"], c3: ['A00', 'Ouverture Saragosse (1.c3)'],
+    g4: ['A00', 'Ouverture Grob (1.g4)'], b4: ['A00', 'Ouverture Sokolsky (1.b4)'],
+    Nc3: ['A00', 'Ouverture Dunst (1.Cc3)'], d3: ['A00', 'Ouverture Mieses (1.d3)'],
+    h4: ['A00', 'Ouverture Desprez (1.h4)'], a3: ['A00', 'Ouverture Anderssen (1.a3)'],
+    f3: ['A00', 'Ouverture Barnes (1.f3)'], Nh3: ['A00', 'Ouverture Amar (1.Ch3)']
+  };
+
   function detect(moves) {
     const sans = moves.map(m => typeof m === 'string' ? m : m.san);
+    let db = null;
     for (const [line, eco, name] of DB) {
       const tokens = line.split(' ');
       if (tokens.length > sans.length) continue;
@@ -289,11 +392,16 @@ const Openings = (() => {
       for (let i = 0; i < tokens.length; i++) {
         if (sans[i] !== tokens[i]) { match = false; break; }
       }
-      if (match) return { eco, name, moves: tokens.length, line };
+      if (match) { db = { eco, name, moves: tokens.length, line }; break; }
     }
+    if (!db || SOFT.has(db.name)) {
+      const sys = detectSystem(sans);
+      if (sys) return sys;
+    }
+    if (db) return db;
     if (sans.length > 0) {
-      if (sans[0] === 'e4') return { eco: 'B00', name: 'Ouverture Pion Roi', moves: 1 };
-      if (sans[0] === 'd4') return { eco: 'A40', name: 'Ouverture Pion Dame', moves: 1 };
+      const f = FIRST[sans[0]];
+      if (f) return { eco: f[0], name: f[1], moves: 1 };
       return { eco: '???', name: 'Ouverture non répertoriée', moves: 0 };
     }
     return null;
