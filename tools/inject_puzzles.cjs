@@ -87,7 +87,9 @@ for (const m of Mates.MATES) {
     const a = audit(p);
     const tag = `mat ${m.id} · ${p.sol.join(' ')} (${kind(p)})`;
     if (!a.ok) { console.log(`  SUPPR ${tag} : ${a.why}`); drop.add(p.fen + p.sol.join()); continue; }
-    if (!a.mate) { console.log(`  SUPPR ${tag} : la ligne ne mate pas`); drop.add(p.fen + p.sol.join()); continue; }
+    // Les finales de pions (group 'finales', champ outcome) gagnent le RESULTAT,
+    // pas un mat : les exiger mat les supprimait toutes a chaque passe.
+    if (!a.mate && !p.outcome) { console.log(`  SUPPR ${tag} : la ligne ne mate pas`); drop.add(p.fen + p.sol.join()); continue; }
     if (/lichess\.org/.test(p.game || '')) { drop.add(p.fen + p.sol.join()); continue; }
     if (p.ctx) { console.log(`  SUPPR ${tag} : décor artificiel, remplacé par de vraies parties`); drop.add(p.fen + p.sol.join()); continue; }
     console.log(`  garde ${tag}`);
@@ -101,6 +103,7 @@ function literal(p, indent) {
   if (p.demo) parts.push('demo: true');
   if (p.trap) parts.push('trap: true');
   if (p.positional) parts.push('positional: true');
+  if (p.outcome) parts.push(`outcome: ${q(p.outcome)}`);
   if (p.mine) parts.push('mine: `' + p.mine + '`');
   if (p.real) parts.push('real: `' + p.real + '`');
   if (p.game) parts.push(`game: ${q(p.game)}`);

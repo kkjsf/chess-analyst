@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v286** (2026-09-21, en ligne, `5b61f8f`). **v287 et v288 en local, non commitées** (corrections du cours Londres ; classification des SYSTEMES d'ouverture - voir ci-dessous).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v290** (2026-09-25, en ligne) : revue complète du 2026-09-25 (v289, ~45 correctifs) + tous les points restés ouverts (v290) - voir l'historique.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -17,6 +17,41 @@
   lue par `index.html` et par `sw.js` (elles avaient divergé). `js/freeplay.js` = fond commun
   du mode « Continuer a jouer ». Le worker Stockfish est dans `js/vendor/` (le build wasm
   resout `stockfish.wasm` relativement au worker).
+- **`italienne_noirs.html` (2026-09-23)** - second rapport HTML autonome hors app, **côté NOIR**
+  cette fois : que faire après 1.e4 e5. Même machinerie que le rapport Londres (CSS et moteur de
+  diagrammes **extraits de `systeme_londres.html` au build**, donc une seule source), 13 sections,
+  **24 diagrammes jouables**, notation française, **39 positions vérifiées à Stockfish**
+  (profondeur 18, MultiPV 3), annexe générée depuis la sortie moteur.
+  - **Il part des données, pas d'un livre** : `coach-data.json` dit que sur ses 102 parties en
+    Noir, il affronte 1.e4 76 fois et répond ...e5 72 fois, marque **35 %** après 2.Cf3 (et après
+    un Fc4 précoce) contre **73 %** face à 1.d4, que la 1re vraie gaffe tombe au **coup 8** en
+    médiane et que **14 des 23 défaites analysées** se jouent en 10 coups. D'où l'angle : le
+    rapport est organisé par MENACE (la case f7) et pas par nom d'ouverture.
+  - Contenu : la règle « ...f6 n'est pas un coup » (Damiano), le dispositif en six coups, le piège
+    4.Cg5 ?? réfuté par ...Dxg5 (une pièce), les Deux Cavaliers 4.Cg5 **d5 !** puis **5...Ca5 !**,
+    le foie frit, les dames précoces (avec l'ORDRE ...Cc6 puis ...g6), le piège de Légal, un
+    tableau « une recette par ouverture », et **6 positions tirées de ses propres parties** posées
+    en exercices (le diagramme s'arrête juste avant son coup).
+  - **Les évaluations sont affichées du point de vue des NOIRS** (+ = bon pour lui), l'inverse de
+    la convention des livres : c'est assumé et expliqué dans le rapport. Classes CSS `.ev.you` /
+    `.ev.opp` ajoutées par-dessus la CSS reprise du Londres.
+  - ⚠️ Quatre enseignements de méthode, tous payés pendant la rédaction :
+    (1) **piège chess.js 0.12** - `move('bxc6', {sloppy:true})` **échoue** (le `b` initial est lu
+    comme un fou), `move('bxc6')` passe. **68 des 201 parties** de `coach-data.json` contiennent un
+    coup de ce type : **corrigé en v289** (enrobage « strict d'abord » dans `js/chess.min.js`).
+    (2) le moteur a attrapé **deux erreurs d'échiquier de ma part** : `Dh5` annoncé dans une
+    position où le cavalier f3 bloque la diagonale (coup ILLÉGAL), et un « mat en 1 » qui n'en est
+    pas un tant que le fou blanc n'est pas en c4.
+    (3) **vérifier le trait de chaque diagramme** : deux exercices s'arrêtaient un demi-coup trop
+    tôt ou trop tard, la légende annonçant « trait aux Noirs » sur une position blanche. Un
+    contrôle automatique (parité du `data-ply` contre le texte du titre) est plus fiable que l'œil.
+    (4) **ne pas laisser une phrase dépasser les données** : j'avais écrit que ses 3 défaites en
+    Philidor venaient du clouage ...Fg4 - c'est faux, les deux faits (3 défaites en 2...d6 ; 16
+    parties avec ...Fg4) sont vrais séparément mais ne se recoupent pas dans ces parties.
+  - Scripts de production dans le scratchpad de session (non versionnés) : `evals.cjs` (moteur,
+    **reprenable** : il écrit `evals.json` après CHAQUE position), `build.cjs` (diagrammes +
+    helpers), `content1-3.js` (le texte), `labels.js` (libellés accentués de l'annexe),
+    `assemble.cjs` (assemblage).
 - **`systeme_londres.html` (2026-09-21)** - rapport HTML autonome sur le Système de Londres,
   hors app (s'ouvre par double-clic). 13 sections, sommaire collant avec scrollspy (barre
   dépliante sur mobile), 19 diagrammes **jouables** : échiquier SVG rendu depuis une liste de FEN
@@ -31,7 +66,7 @@
   (`5.Db3 c4 6.Dc2 Ff5!`) **perdait un fou** sur `Dxf5` (+5.06) - toujours rejouer au moteur ce
   qu'on lit ; (2) le « piège » viral où la dame noire est enfermée
   (`6.Tb1 Dxa2 7.Ta1 Db2 8.Cc7+ Cxc7 9.Tb1`) est **réfuté** par `9...Dc3+!` (-7.28).
-- **v287 (2026-09-21, LOCAL, non commitée) - corrections du cours « Système de Londres »**,
+- **v287 (2026-09-21, en ligne `2dbde23`) - corrections du cours « Système de Londres »**,
   issues de la vérification moteur + sources ci-dessus. 143 tests unitaires OK.
   - `courses.js` : le schéma d'attaque annoncé « Ce5, Fd3, **Dc1-h6**, sacrifice grec Fxh7+ suivi
     de **Cg5+** » était **mécaniquement impossible** - avec le cavalier en e5, l'autre est en d2,
@@ -209,7 +244,123 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-  - **v288 (2026-09-22, LOCAL, non commitée) - le Londres cesse d'etre « Ouverture Pion Dame ».**
+  - **v290 (2026-09-25, en ligne) - les points laisses ouverts par la revue, tous traites.**
+    `test_core` 167/167 (+3 : clouages du SEE, Jobava), `verify_openings` 120/120, `verify_mates`
+    77/77, 0 erreur console, verifie a 375 px et en desktop.
+    - **Bouton retour du telephone** (`initBackButton`, app.js) : une entree « garde » dans
+      l'historique des qu'on quitte l'accueil ; chaque retour ferme la couche du dessus
+      (`BACK_LAYERS`, du plus haut au plus bas : exercice, fiche concept, fiche d'ouverture,
+      Elo plein ecran, feuille des coups, mats, devine, rejeu, mode Coach, panneau) ou revient a
+      l'accueil. A l'accueil, le retour suivant sort de l'app. Piege : le panneau se detecte par
+      `hidden`, pas par la classe `visible` posee dans un requestAnimationFrame (qui ne tourne
+      pas quand le rendu est en pause).
+    - **Clavier** (`initKeyboardClickables`) : parties recentes, moments du rapport, fiches,
+      lignes de tablebase et de temps recoivent tabindex + role=button, Entree/Espace cliquent ;
+      `aria-label` sur le bouton retour.
+    - **Encoche iPhone** : `viewport-fit=cover` (sans lui tous les `env(safe-area-inset-*)` du
+      CSS valaient 0) + marge haute sur body et les calques plein ecran.
+    - **Promotion au choix** (`BoardRenderer.isPromotion` / `pickPromotion`) en mode Coach, Rejeu
+      et Devine le coup ; Devine compare aussi la piece choisie.
+    - **Repetitions** : le moteur recoit l'historique (`opts.moves`, `position startpos|fen ...
+      moves ...`) en mode Coach et en Rejeu, donc il voit la nulle ; le Rejeu detecte la triple
+      repetition sur sa pile (chess.js reconstruit chaque position sans historique).
+    - **Analyse finie ailleurs** : plus d'arrachement vers l'ecran d'analyse, un bouton
+      « ✅ Analyse prete · Voir » (`readyToast`).
+    - **Statistiques** : vue « Toutes » - l'ecart d'Elo adverse se mesure cadence par cadence (la
+      moitie ancienne surtout journaliere affichait « -175 » alors que l'Elo montait dans chaque
+      cadence) et plus de « niveau estime » qui melange les echelles ; le paquet d'exercices prend
+      aussi les coups manques (les deux cartes comptent enfin la meme chose) ; « Le mot du coach »
+      dit que les % par phase ne sont pas la meme mesure que la moyenne ; seuil « +3 » ecrit.
+    - **La routine** : « 2 defaites d'affilee = stop » (non confirme par ses donnees) devient
+      « echecs, captures, menaces avant chaque coup » (43 % de ses erreurs arrivent quand une prise
+      gratuite existait deja) ; l'alerte de serie de defaites ne cite plus la regle.
+    - **SEE** : les pieces clouees n'attaquent ni ne reprennent plus (`exposesKing`), la prise en
+      passant vaut un pion.
+    - **Revision des ouvertures cle sur le CHEMIN de la branche** (`branchSig`), plus sur son
+      index : ajouter une ligne a un cours deplacait la progression. Migration des anciennes cles
+      a la premiere lecture.
+    - Contenu : Jobava seulement si Cc3 sort aux coups 2-3 avant Cf3 ; le « piege » 4.Cb5 de la
+      Scandinave (4e choix du moteur, +0,3 apres 4…Db6) devient une menace a connaitre ;
+      commentaires « pion isole » limites aux pions qui ont perdu leur voisin ; compteurs de coups
+      du mode Coach en coups, pas en demi-coups.
+    - **Piege d'outillage re-rencontre** : dans `String.replace`, le texte de remplacement
+      interprete `$$` (-> `$`), `` $` `` (tout ce qui PRECEDE) et `$'` (tout ce qui SUIT). Deux
+      `$$('.screen')` sont ainsi devenus `$('.screen')` (dont celui de
+      `showAnalysis`). Rattrape au test navigateur. Pour patcher du JS depuis un script, passer une
+      FONCTION en remplacement, ou utiliser l'outil d'edition.
+    - Verifie non reproductible : le double telechargement des scripts signale par la console
+      (aucun doublon sur un premier chargement propre).
+  - **v289 (2026-09-25, en ligne avec la v290) - REVUE COMPLETE, ~45 correctifs.** Methode : app
+    servie en local et instrumentee (375 px et desktop), 4 relecteurs en parallele (coquille +
+    navigation, statistiques recalculees sur `coach-data.json`, moteur + modes de jeu, contenu
+    pedagogique + outils), chaque constat verifie avant correction. `test_core` 164/164,
+    `verify_openings` 121/121 (desormais en SAN STRICT), `verify_mates` 77/77 (reecrit),
+    `validate_final` 6/6, 0 erreur console.
+    - **chess.js : le bug `bxc6` corrige a la source.** En mode sloppy, toute prise d'un pion b
+      echouait (lue comme un coup de FOU) ; 29 appels `{sloppy:true}` dans l'app. Un enrobage en fin
+      de `js/chess.min.js` essaie le SAN strict d'abord (`move` ET `load_pgn`). `tools/analyze.mjs`
+      charge maintenant CE fichier au lieu du paquet npm : serveur et app partagent le meme chess.js.
+    - **XSS stocke** : un nom de joueur `<img onerror=...>` (PGN colle ou lien `?pgn=` du Share
+      Target) s'executait, puis se rejouait a chaque lancement via la liste des parties recentes.
+      Les en-tetes sont nettoyes a la lecture (`deriveHeaderMoves`), la liste echappe (`escHtml`).
+    - **Les rapports serveur cachaient la precision** : `analyze.mjs` n'ecrivait pas
+      `summary.engineUsed`, donc « Voir l'analyse » depuis Statistiques masquait le bandeau (45 %)
+      et le resume sautait tout ce qui depend du moteur. Corrige a la source et a la lecture.
+    - **Statistiques, ce qui etait FAUX** : (1) « Ton vrai niveau » comparait des Elo APRES la
+      partie (ils bougent dans le sens du resultat dans 97/97 parties rapides), d'ou « 0 % contre
+      plus fort / 100 % contre plus faible » par construction ; reel avant la partie : 2/4 et 2/8
+      en rapide. `annotatePreRatings()` + `preGap()`, et plus de verdict sous 10 parties.
+      (2) « Tu joues trop vite » : 51 % des erreurs en < 15 s, mais 76 % des coups aussi ; taux
+      d'erreur par coup 10 % rapide contre 18 % pose, la carte compare maintenant des TAUX.
+      (3) « Seances de jeu » : la preuve de fatigue etait circulaire (une journee perdante est
+      moins precise par definition) ; les 12 parties jouees apres 2 defaites le meme jour sont a
+      69 % de precision et 75 % de victoires. La carte le dit, et exclut le journalier.
+      (4) « Termine la partie » ignorait le filtre de cadence (38 partout, 25 en rapide).
+      (5) finale : les parties sans finale comptaient 0 dans l'ACPL et le temps (59 -> 111).
+      (6) « La plus faible » ouverture elue sur un seul candidat. (7) serie de victoires qui
+      comptait les parties non classees. (8) texte du pion g qui en disait plus que les donnees.
+    - **Moteur et modes de jeu** : deux `init()` concurrents tuaient Stockfish pour la session
+      (promesse de demarrage partagee) ; drapeau `mate` perime sur une ligne MultiPV ; mode Coach
+      bloque sur « le coach reflechit » apres fermeture en pleine reflexion ; Annuler ne restaurait
+      pas best/slips/mistakes (une gaffe reprise partait quand meme au paquet d'exercices) ;
+      `explainBadMove` appele avec les mauvais arguments (« ce qu'il peut faire » ne sortait
+      jamais) ; commentaire « pions doubles » sur n'importe quel coup ; Replay note en chances de
+      gain (plus de « Gaffe -28497 cp » en passant d'un mat en 3 a +15) et ne retraduit plus le
+      francais (le roi devenait une tour) ; Guess : un coup manque comptait comme bon, meilleur
+      coup affiche vide, sous-promotion notee parfaite.
+    - **Navigation et etat** : ecran d'analyse du mode entraineur empile sur un autre ecran,
+      drapeau `noIngest` qui pouvait exclure la partie suivante, resultats tablebase d'une partie
+      atterrissant dans la suivante, plateau retourne apres un passage par le mode Coach, badge
+      « Analyse » qui ne s'affichait JAMAIS (la cle de cache est maintenant stockee avec la partie,
+      ce qui separe aussi deux revanches du meme jour), lectures `localStorage` non protegees dans
+      `init()`, minuteur du quiz qui sautait une question, Echap qui fermait modale + panneau,
+      rejeu en aveugle du mauvais camp depuis le panneau Ouvertures, rechargement du SW qui aurait
+      perdu une partie Coach en cours, `matchAll()` lance avant `claim()`, « en 71 coups » qui
+      comptait des demi-coups.
+    - **Mobile (375 px)** : le tableau de bord mesurait 412 px (la ligne des puces de periode sans
+      largeur imposee), 18 px rognes de chaque cote ; l'echiquier perdait 22 px (goutiere de la
+      barre d'eval comptee deux fois) : 278 -> 300 px, et `.board-sticky` debordait de 4 px.
+    - **Contenu pedagogique** : **7 exercices partaient d'une position ILLEGALE** (roi noir deja en
+      echec, trait aux Blancs : epaulette, arabe, h7, g7, lolli, Damiano, enfilade) - repositionnes,
+      motif intact, un seul mat possible ; attaque double refutee par ...Tf7 remplacee ; FEN
+      Winawer sans cavalier g8 (+5,0 au lieu de +0,4) ; Reti a 3 cavaliers ; noeud Sicilienne
+      ouverte au mauvais trait ; `Nge2` non canonique dans la Viennoise (le mode Coach croyait
+      sortir du livre) ; regle du carre, roi devant son pion et courses de pions dont le texte
+      contredisait la position ; « Voir la solution » comptait comme une reussite (SRS) ; QCM des
+      cours tous en `answer: 0` sans melange ; point du quiz sur l'echiquier gagne a l'ouverture ;
+      dates fr-FR lues mm/jj par `cardTime`. Catalogue d'ouvertures : 5 doublons (Göring = 4.c3,
+      pas 4.Fc4 ; C53 pour 4.c3 ; C78 pour 5.O-O), Levitsky limite a 1...d5, transpositions vers le
+      Gambit Dame, coups noirs d'un SYSTEME plus notes « theorique ».
+    - **Outils** : `verify_mates` lisait une COPIE de 16 exercices sur 56 et ne testait pas la
+      legalite - reecrit sur `js/mates.js` ; `verify_openings` en strict ; `inject_puzzles` aurait
+      supprime les finales de pions au prochain passage et perdu `outcome` ; CI : l'etape de push
+      passait au vert apres 3 echecs ; `analyze.mjs` heritait des parties de l'ancien pseudo.
+    - **Laisse ouvert** (tout traite en v290, voir au-dessus) : pas d'historique navigateur (le bouton retour
+      d'Android ferme l'app), plusieurs cibles cliquables sans clavier, pas de `viewport-fit=cover`
+      pour l'encoche iPhone, SEE aveugle aux clouages, vue « Toutes » qui melange les echelles Elo
+      rapide et journalier, « erreurs a reviser » qui compte les coups manques que le paquet ne
+      recoit pas, la regle « 2 defaites = stop » de la routine que ses donnees ne confirment pas.
+  - **v288 (2026-09-22, en ligne `d446690`) - le Londres cesse d'etre « Ouverture Pion Dame ».**
     Signale par le user : beaucoup de ses parties etaient etiquetees « Ouverture Pion Dame »
     alors que ce sont des Systemes de Londres. Mesure sur ses 201 parties : **36 en « Pion
     Dame », dont 17 vrais Londres**, et 6 Londres reconnus seulement.

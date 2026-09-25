@@ -659,7 +659,36 @@ const BoardRenderer = (() => {
     }, true);
   }
 
-  const api = { render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, squareToCoords, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions, setSpeed, getSpeed, SPEEDS, SQ };
+  // ── Choix de la promotion ──
+  // Les modes de jeu promouvaient toujours en dame : une dame qui pate ne se
+  // remplacait pas par la tour ou le cavalier gagnants. `isPromotion` dit si
+  // le coup en est une ; `pickPromotion` demande la piece (Promise, null si on
+  // annule par Echap ou en touchant a cote).
+  function isPromotion(fen, from, to) {
+    if (typeof Chess === 'undefined') return false;
+    try { return new Chess(fen).moves({ square: from, verbose: true }).some(m => m.to === to && m.promotion); }
+    catch (_) { return false; }
+  }
+  function pickPromotion(color) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'promo-pick';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-label', 'Choisis la pièce de promotion');
+      const names = { q: 'Dame', r: 'Tour', b: 'Fou', n: 'Cavalier' };
+      wrap.innerHTML = '<div class="promo-pick-box"><p>Promotion</p><div class="promo-pick-row">' +
+        ['q', 'r', 'b', 'n'].map(t => `<button type="button" data-p="${t}" aria-label="${names[t]}"><svg viewBox="0 0 ${SQ} ${SQ}">${PIECE_DEFS[color === 'w' ? t.toUpperCase() : t]}</svg></button>`).join('') +
+        '</div></div>';
+      const done = (p) => { document.removeEventListener('keydown', onKey, true); wrap.remove(); resolve(p); };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } };
+      wrap.addEventListener('click', (e) => { const b = e.target.closest('button[data-p]'); done(b ? b.dataset.p : null); });
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(wrap);
+      wrap.querySelector('button').focus();
+    });
+  }
+
+  const api = { isPromotion, pickPromotion, render, renderAnimated, drawArrow, drawArrows, clearArrows, getCapturedPieces, setFlipped, isFlipped, coordToSquare, squareToCoords, highlightSquares, showMoveHints, squareControl, drawControl, enableDrag, diffPositions, setSpeed, getSpeed, SPEEDS, SQ };
   // `ANIM_MS` suit le reglage en cours : les modules qui l'avaient copie au
   // chargement lisent quand meme la bonne valeur s'ils la relisent.
   Object.defineProperty(api, 'ANIM_MS', { get: animMs, enumerable: true });

@@ -404,6 +404,27 @@ const Coach = (() => {
   // « Ton vrai niveau ». Le drapeau était stocké depuis toujours mais ne servait
   // qu'à la série Elo.
   function ratedGame(g) { return g.rated !== false; }
+  // Chess.com archive les Elo APRES la partie : le sien bouge dans le sens du
+  // resultat dans 97/97 parties rapides et 81/81 journalieres. Comparer ces
+  // Elo-la construisait « 0 % contre plus fort / 100 % contre plus faible » par
+  // definition (une victoire deplace l'ecart d'environ 16 pts vers « plus
+  // faible »). Avant la partie : le sien = celui de sa partie classee
+  // precedente dans la meme cadence, celui de l'adversaire = le sien apres,
+  // corrige du meme delta (l'Elo echange est a somme nulle).
+  function annotatePreRatings() {
+    const byTc = {};
+    games.forEach(g => { if (ratedGame(g) && g.myRating > 0 && g.endTime) (byTc[g.timeClass] = byTc[g.timeClass] || []).push(g); });
+    Object.values(byTc).forEach(list => {
+      list.sort((a, b) => a.endTime - b.endTime);
+      list.forEach((g, i) => {
+        const prev = list[i - 1];
+        g._myPre = prev ? prev.myRating : null;
+        g._oppPre = prev && g.oppRating > 0 ? g.oppRating + (g.myRating - prev.myRating) : null;
+      });
+    });
+  }
+  // Ecart d'Elo AVANT la partie (adversaire - moi), null si inconnu.
+  function preGap(g) { return g._myPre > 0 && g._oppPre > 0 ? g._oppPre - g._myPre : null; }
   function analyzed() { return games.filter(g => g.analysis && !g.analysis.error && ratedGame(g) && !excludedOpp(g.oppName) && !skipCadence(g.timeClass)); }
   // Les parties qu'on a DEJA recuperees mais qui ne comptent pas encore dans
   // les chiffres : memes filtres que `analyzed()`, moins la seule condition
@@ -492,6 +513,7 @@ const Coach = (() => {
       body.innerHTML = `<div class="coach-empty">Aucune partie. Lance une synchronisation pour récupérer tes parties Chess.com.</div>`;
       return;
     }
+    annotatePreRatings();
     const anAll = analyzed();
     if (!anAll.length) {
       body.innerHTML = `<div class="coach-empty">${games.length} parties synchronisées. Lance l'analyse complète pour générer ton bilan.</div>`;
@@ -503,7 +525,7 @@ const Coach = (() => {
     // cadence (analysed or not) — the analysed subset drops games and would
     // undercount a run. Results/dates are known for every synced game.
     const allForTc = (filterTc === 'all' ? games : games.filter(g => (g.timeClass || 'autre') === filterTc))
-      .filter(g => g.result && !excludedOpp(g.oppName) && !skipCadence(g.timeClass));
+      .filter(g => g.result && ratedGame(g) && !excludedOpp(g.oppName) && !skipCadence(g.timeClass));
     // Cards are organised into a few themed sections so related material sits
     // together (results with results, errors with errors …) with a clear
     // labelled band between categories — much easier to scan on desktop than
@@ -797,15 +819,19 @@ const Coach = (() => {
   // carte à sept sections. Un taux de victoire global se laisse gonfler par une
   // opposition qui faiblit ; le score contre des adversaires plus forts, non.
   function renderVsStronger(an) {
-    const rated = an.filter(g => g.myRating > 0 && g.oppRating > 0);
+    const rated = an.filter(g => preGap(g) != null);
     if (rated.length < 8) return '';
-    const up = rated.filter(g => g.oppRating - g.myRating >= 25);
-    const down = rated.filter(g => g.myRating - g.oppRating >= 25);
+    const up = rated.filter(g => preGap(g) >= 25);
+    const down = rated.filter(g => preGap(g) <= -25);
     if (up.length < 4) return '';
     const sc = pool => pct(pool.filter(g => g.result === 'win').length, pool.length);
     const upScore = sc(up);
     const tone = upScore >= 40 ? 'good' : upScore >= 20 ? 'mid' : 'bad';
-    const line = upScore === 0
+    // Sous 10 parties, un pourcentage contre plus fort bouge de 25 points a
+    // chaque resultat : on le montre, on ne le commente pas.
+    const line = up.length < 10
+      ? `Seulement <b>${up.length} parties</b> contre plus fort sur cette période : trop peu pour trancher. C'est ce chiffre-là qu'il faudra regarder quand il portera sur une dizaine de parties.`
+      : upScore === 0
       ? `Tu n'as pas encore battu un adversaire plus fort que toi sur cette période. C'est le repère à faire bouger : il ne dépend ni de la cadence, ni de qui tu croises.`
       : upScore < 25
         ? `Tu gagnes surtout contre plus faible. Le score contre plus fort est le seul qui ne se laisse pas gonfler par l'adversité du moment.`
@@ -825,7 +851,10 @@ const Coach = (() => {
   // les mauvais sont tous des enchaînements de défaites : il continue de jouer
   // après que ça a commencé à casser. La série de défaites en cours était
   // affichée comme une statistique neutre.
-  function renderSessions(an) {
+  function renderSessions(anIn) {
+    // Une « journee » de parties par correspondance n'est pas une seance : ces
+    // parties durent des jours et se terminent quand l'adversaire joue.
+    const an = anIn.filter(g => g.timeClass !== 'daily');
     const days = {};
     an.forEach(g => {
       if (!g.endTime) return;
@@ -852,23 +881,29 @@ const Coach = (() => {
         <span class="sess-acc">${acc}%</span>
       </div>`;
     }).join('');
-    // Bonnes journées vs mauvaises, mesurées : c'est ça qui rend la règle
-    // d'arrêt crédible plutôt que moralisatrice.
-    const withAcc = multi.map(k => ({ k, acc: avg(days[k].map(g => g.analysis.accuracy)), n: days[k].length,
-      l: days[k].filter(g => g.result === 'loss').length }));
-    const good = withAcc.filter(d => d.l * 2 <= d.n), bad = withAcc.filter(d => d.l * 2 > d.n);
-    const gAcc = good.length ? Math.round(avg(good.map(d => d.acc))) : null;
-    const bAcc = bad.length ? Math.round(avg(bad.map(d => d.acc))) : null;
+    // La regle d'arret se juge sur les parties jouees APRES deux defaites le
+    // meme jour, contre toutes les autres. Comparer journees gagnantes et
+    // perdantes etait circulaire : une defaite se joue en moyenne a 58 % de
+    // precision et une victoire a 76 %, donc une journee perdante est « moins
+    // precise » par construction.
+    const after2 = [], others = [];
+    keys.forEach(k => {
+      const gs = days[k].slice().sort((a, b) => a.endTime - b.endTime);
+      gs.forEach((g, i) => (i >= 2 && gs[i - 1].result === 'loss' && gs[i - 2].result === 'loss' ? after2 : others).push(g));
+    });
+    const accOf = pool => Math.round(avg(pool.map(g => g.analysis.accuracy)));
+    const winOf = pool => pct(pool.filter(g => g.result === 'win').length, pool.length);
     // Série de défaites EN COURS (la plus récente), pas la pire de l'historique.
     const chrono = an.slice().sort((a, b) => b.endTime - a.endTime);
     let streak = 0;
     for (const g of chrono) { if (g.result === 'loss') streak++; else break; }
     const alert = streak >= 2
-      ? `<div class="coach-flag coach-flag-warn">🛑 <b>${streak} défaites d'affilée</b> en ce moment. Ta règle : deux de suite, tu arrêtes pour aujourd'hui. Rejouer maintenant, c'est offrir des points.</div>`
+      ? `<div class="coach-flag coach-flag-warn">🛑 <b>${streak} défaites d'affilée</b> en ce moment. Si tu rejoues, fais-le pour une partie posée et vérifiée, pas pour « te refaire ».</div>`
       : '';
-    const gap = (gAcc != null && bAcc != null && gAcc - bAcc >= 8)
-      ? `<p class="coach-note">Tes journées gagnantes tournent à <b>${gAcc}%</b> de précision, les perdantes à <b>${bAcc}%</b>. Ce n'est pas une variation de niveau, c'est de la fatigue : au-delà de deux défaites, tu ne joues plus comme toi.</p>`
-      : '';
+    const gap = after2.length < 8 ? ''
+      : accOf(after2) <= accOf(others) - 3
+        ? `<p class="coach-note">Après deux défaites le même jour, ta précision tombe à <b>${accOf(after2)}%</b> (contre <b>${accOf(others)}%</b> sinon, ${after2.length} parties) : la règle d'arrêt se justifie.</p>`
+        : `<p class="coach-note">Sur tes <b>${after2.length} parties</b> jouées après deux défaites le même jour, tu restes à <b>${accOf(after2)}%</b> de précision et <b>${winOf(after2)}%</b> de victoires (${accOf(others)}% et ${winOf(others)}% sinon) : rien ne montre pour l'instant que tu décroches. La règle d'arrêt reste une précaution, pas un constat.</p>`;
     return `<div class="home-card coach-card" id="coach-sessions">
       <h3>📅 Tes séances de jeu</h3>
       <p class="coach-sub2">Une ligne par journée : parties jouées, bilan, et précision moyenne du jour.</p>
@@ -990,12 +1025,16 @@ const Coach = (() => {
   function renderConvertCta(an) {
     let list = [];
     try { list = conversionTargets(); } catch (_) { list = []; }
+    // Meme perimetre que le reste du tableau (le filtre de cadence) : la carte
+    // annoncait 38 parties dans toutes les vues, dont 13 en journalier.
+    const ids = new Set(an.map(g => g.uuid));
+    list = list.filter(t => ids.has(t.uuid));
     if (list.length < 3) return '';
     const big = list.filter(t => t.maxEval >= 500).length;
     return `<div class="home-card coach-card coach-focus" id="coach-convert-cta">
       <div class="coach-focus-tag">🏁 Termine la partie</div>
       <h2 class="coach-focus-head">${list.length} parties gagnées puis perdues</h2>
-      <p class="coach-focus-sub">Tu menais nettement dans <b>${list.length}</b> parties que tu as perdues${big ? `, dont <b>${big}</b> avec au moins une tour d'avance` : ''}. Reprends la position juste avant la bascule et gagne-la contre Stockfish, <b>guidé coup par coup</b> : le plan de la position, ce qui est en prise, ce que chaque coup te coûte.</p>
+      <p class="coach-focus-sub">Tu menais d'au moins 3 points (une pièce) dans <b>${list.length}</b> parties que tu as perdues${big ? `, dont <b>${big}</b> avec au moins une tour d'avance` : ''}. Reprends la position juste avant la bascule et gagne-la contre Stockfish, <b>guidé coup par coup</b> : le plan de la position, ce qui est en prise, ce que chaque coup te coûte.</p>
       <button class="btn-primary coach-focus-btn" id="coach-convert-go">🏁 Reconvertir une partie</button>
     </div>`;
   }
@@ -1017,20 +1056,26 @@ const Coach = (() => {
     if (clocks.length < 8) return null;
     const times = Analyzer.clocksToTimePerMove(clocks, inc);
     const off = g.userColor === 'w' ? 0 : 1;
-    let moves = 0, spent = 0, last = base;
+    // « Rapide » = moins de 15 s avec plus de la moitie de la pendule : la
+    // meme definition sert aux coups ET aux erreurs, sinon la part d'erreurs
+    // rapides ne dit rien (il joue 3 coups sur 4 en moins de 15 s).
+    const isFast = (i) => (times[i] || 0) < 15 && (clocks[i] || 0) > base / 2;
+    const isCalm = (i) => (times[i] || 0) >= 15 && (clocks[i] || 0) > base / 2;
+    let moves = 0, spent = 0, last = base, fastMoves = 0, calmMoves = 0;
     for (let i = off; i < clocks.length; i += 2) {
       moves++;
       spent += times[i] || 0;
       last = clocks[i];
+      if (isFast(i)) fastMoves++; else if (isCalm(i)) calmMoves++;
     }
     if (!moves) return null;
-    let errCount = 0, fastErr = 0;
+    let errCount = 0, fastErr = 0, calmErr = 0;
     for (const b of (g.analysis && g.analysis.blunderList) || []) {
       if (b.type !== 'blunder' && b.type !== 'mistake') continue;
       errCount++;
-      if ((times[b.ply] || 0) < 15 && (clocks[b.ply] || 0) > base / 2) fastErr++;
+      if (isFast(b.ply)) fastErr++; else if (isCalm(b.ply)) calmErr++;
     }
-    g._pace = { base, spentPerMove: spent / moves, last, errCount, fastErr };
+    g._pace = { base, spentPerMove: spent / moves, last, errCount, fastErr, calmErr, fastMoves, calmMoves };
     return g._pace;
   }
 
@@ -1045,19 +1090,32 @@ const Coach = (() => {
     const fastTot = ps.reduce((s, p) => s + p.fastErr, 0);
     const fastPct = pct(fastTot, errTot);
     if (!errTot) return '';
-    const rushing = fastPct >= 30 || (avgSpd < 12 && avgLeft > base * 0.3);
+    // Le verdict compare des TAUX d'erreur par coup, rapide contre pose. La
+    // part d'erreurs rapides seule (51 %) accusait la vitesse alors qu'il en
+    // joue 76 % des coups ainsi, et qu'un coup rapide est MOINS souvent une
+    // erreur (10 %) qu'un coup pose (18 %).
+    const fastMv = ps.reduce((s, p) => s + p.fastMoves, 0);
+    const calmMv = ps.reduce((s, p) => s + p.calmMoves, 0);
+    const calmTot = ps.reduce((s, p) => s + p.calmErr, 0);
+    const fastRate = fastMv ? fastTot / fastMv * 100 : null;
+    const calmRate = calmMv ? calmTot / calmMv * 100 : null;
+    const comparable = fastMv >= 30 && calmMv >= 30;
+    const rushing = comparable && fastRate > calmRate * 1.2;
     const head = rushing ? 'Tu joues trop vite — ton temps est ta meilleure arme'
       : 'Ton rythme de jeu';
-    const diag = fastTot
-      ? `<b>${fastTot} de tes ${errTot} erreurs (${fastPct}%)</b> ont été jouées en <b>moins de 15 secondes</b> alors qu'il te restait plus de la moitié de ton temps. Ce ne sont pas des fautes de niveau : tu avais les minutes pour les éviter.`
-      : `Aucune de tes erreurs récentes n'a été jouée à la va-vite — continue comme ça.`;
+    const rate = (v) => `${Math.round(v)}%`;
+    const diag = !comparable
+      ? `<b>${fastTot} de tes ${errTot} erreurs</b> ont été jouées en moins de 15 secondes avec plus de la moitié de ton temps. Pas encore assez de coups pour comparer avec tes coups posés.`
+      : rushing
+        ? `Quand tu joues en <b>moins de 15 secondes</b> avec plus de la moitié de ton temps, <b>${rate(fastRate)}</b> de tes coups sont des erreurs, contre <b>${rate(calmRate)}</b> quand tu prends le temps. Ces minutes-là, tu les avais.`
+        : `Tes coups rapides ne sont pas plus fautifs que les autres (<b>${rate(fastRate)}</b> d'erreurs en moins de 15 s, <b>${rate(calmRate)}</b> quand tu prends ton temps) : ralentir ne suffira pas. Ce qui paie, c'est la vérification avant de jouer.`;
     return `<div class="home-card coach-card coach-focus coach-pace" id="coach-pace">
       <div class="coach-focus-tag">⏱️ Ton rythme</div>
       <h2 class="coach-focus-head">${head}</h2>
       <div class="coach-pace-stats">
         <div class="coach-pace-stat"><b>${avgSpd}s</b><span>par coup</span></div>
         <div class="coach-pace-stat"><b>${mmss(avgLeft)}</b><span>restantes en fin de partie</span></div>
-        <div class="coach-pace-stat"><b>${fastPct}%</b><span>d'erreurs jouées en &lt;15s</span></div>
+        <div class="coach-pace-stat"><b>${fastPct}%</b><span>de tes erreurs jouées en &lt;15s</span></div>
       </div>
       <p class="coach-focus-sub">${diag}</p>
       <p class="coach-vig-tip">📏 <b>Règle d'or :</b> après le coup 4, jamais moins de 15 secondes par coup — Échecs, Captures, Menaces, puis joue.</p>
@@ -1155,7 +1213,7 @@ const Coach = (() => {
         <span class="coach-repeat-san">pion ${push.f}</span>
         <span class="coach-repeat-txt"><b>${push.n} poussées coûteuses</b> dans ${push.games.size} parties —
         ${push.w} avec les Blancs, ${push.b} avec les Noirs. C'est le même geste des deux côtés :
-        avancer ce pion devant ton propre roi ouvre les lignes chez toi.</span>
+        un pion qui avance ne recule plus, et quand ton roi est de ce côté, il lui ouvre les lignes.</span>
       </div>` : '';
     return `<div class="home-card coach-card coach-repeat" id="coach-repeat">
       <h3>🔁 La même erreur revient</h3>
@@ -1211,10 +1269,16 @@ const Coach = (() => {
     // — qui arrive presque toujours après un gros gain de matériel — se retrouvait
     // couronnée alors qu'elle était seulement facile. Sans les compteurs
     // « position disputée » (analysis.js), on ne désigne que le maillon faible.
+    // Les phases se mesurent coup par coup (et en position disputee), la
+    // moyenne generale partie par partie a la maniere de Chess.com : un maillon
+    // faible a 72 % a cote d'une moyenne de 67 % se lit comme une contradiction
+    // si on ne dit pas que ce ne sont pas les memes chiffres.
+    const sameScale = contested && worst && worst.a > acc
+      ? ` Ces pourcentages ne comptent que les coups joués en position encore disputée, d'où des valeurs plus hautes que ta moyenne générale.` : '';
     if (best && worst && best.k !== worst.k && contested)
-      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de ${accLabel(an)}) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%).`);
+      s.push(`Ton point fort est <b>${best.l}</b> (${best.a}% de ${accLabel(an)}) ; à l'inverse, <b>${worst.l}</b> est ton maillon faible (${worst.a}%).${sameScale}`);
     else if (worst)
-      s.push(`Ton maillon faible est <b>${worst.l}</b> (${worst.a}% de précision).`);
+      s.push(`Ton maillon faible est <b>${worst.l}</b> (${worst.a}% de ${accLabel(an)}).${sameScale}`);
     if (blRate > 0)
       s.push(`Tu lâches une erreur grave environ tous les <b>${Math.round(100 / Math.max(blRate, 0.1))} coups</b> : réduire ces gaffes est de loin le levier n°1 pour gagner des points.`);
     if (priorWin !== null && Math.abs(recentWin - priorWin) >= 15)
@@ -1285,8 +1349,8 @@ const Coach = (() => {
     // by opponent strength, compared PER GAME (his Elo moved 437 points, so a
     // period average mislabels a 400-rated opponent as "stronger" even for games
     // played at 700). Same definition as renderVsStronger, one number per fact.
-    const vsStronger = an.filter(g => g.oppRating > 0 && g.myRating > 0 && g.oppRating - g.myRating >= 25);
-    const vsWeaker = an.filter(g => g.oppRating > 0 && g.myRating > 0 && g.myRating - g.oppRating >= 25);
+    const vsStronger = an.filter(g => preGap(g) >= 25);
+    const vsWeaker = an.filter(g => preGap(g) != null && preGap(g) <= -25);
 
     const ratingSvg = ratingChart(an);
 
@@ -2532,7 +2596,11 @@ const Coach = (() => {
         return { name, n: list.length, w, d, l, acc, score, rep, url: pickOpeningUrl(urls, name) };
       }).filter(r => r.n >= 1).sort((a, b) => b.n - a.n);
       if (!rows.length) return '';
-      const worst = rows.filter(r => r.n >= 8).sort((a, b) => a.score - b.score)[0];
+      // « La plus faible » suppose une comparaison : avec une seule ouverture a
+      // 8 parties ou plus, elle etait sacree la pire (60 %) devant des lignes a
+      // 14 % et 20 % trop peu jouees pour concourir.
+      const eligible = rows.filter(r => r.n >= 8);
+      const worst = eligible.length >= 2 ? eligible.sort((a, b) => a.score - b.score)[0] : null;
       const shown = rows.slice(0, 6);
       // Always surface the flagged weakest opening, even if it's outside the top 6.
       if (worst && !shown.some(r => r.name === worst.name)) shown.push(worst);
@@ -2592,7 +2660,10 @@ const Coach = (() => {
         pe[p] += phaseErrOf(a, p);
         const src = phasePool(a, p);
         if (src) { pa[p].total += src.total; pa[p].count += src.count; }
-        if (a.phaseAcpl && typeof a.phaseAcpl[p] === 'number') pc[p].push(a.phaseAcpl[p]);
+        // Les anciens rapports ecrivent 0 pour une phase sans aucun coup : on
+        // ne compte que les phases reellement jouees.
+        const played = a.phaseAccuracy && a.phaseAccuracy[p] && a.phaseAccuracy[p].count > 0;
+        if (played && a.phaseAcpl && typeof a.phaseAcpl[p] === 'number') pc[p].push(a.phaseAcpl[p]);
       });
       totalBlunders += a.blunders || 0;
       totalMistakes += a.mistakes || 0;
@@ -3221,15 +3292,27 @@ const Coach = (() => {
     // en affrontant du 134 points plus faible, alors que la précision — le seul
     // indicateur insensible à l'adversaire — n'avait pas bougé d'un point.
     const oppOf = pool => { const r = pool.filter(g => g.oppRating > 0); return r.length ? avg(r.map(g => g.oppRating)) : null; };
-    const oppE = oppOf(early), oppL = oppOf(late);
-    const oppDelta = (oppE != null && oppL != null) ? Math.round(oppL - oppE) : null;
+    // Rapide et journalier ont deux echelles Elo : en vue « Toutes », une moitie
+    // surtout journaliere contre une moitie surtout rapide affichait « l'Elo
+    // adverse a baisse de 175 points » alors qu'il MONTAIT dans chaque cadence.
+    // L'ecart se mesure donc cadence par cadence, pondere par le nombre de parties.
+    const tcs = [...new Set(an.map(g => g.timeClass || 'autre'))];
+    const mixed = tcs.length > 1;
+    let num = 0, den = 0;
+    tcs.forEach(tc => {
+      const e = early.filter(g => (g.timeClass || 'autre') === tc), l = late.filter(g => (g.timeClass || 'autre') === tc);
+      const oe = oppOf(e), ol = oppOf(l), n = Math.min(e.length, l.length);
+      if (oe != null && ol != null && n) { num += (ol - oe) * n; den += n; }
+    });
+    const oppE = mixed ? null : oppOf(early), oppL = mixed ? null : oppOf(late);
+    const oppDelta = den ? Math.round(num / den) : null;
     const oppConfounded = oppDelta != null && Math.abs(oppDelta) >= 50;
 
     const s = [];
     const accWord = Math.abs(acc.diff) < 1.5 ? 'est restée stable' : (acc.improved ? 'a progressé' : 'a reculé');
     s.push(`En comparant tes <b>${late.length}</b> parties les plus récentes aux <b>${early.length}</b> d'avant, ta précision moyenne <b>${accWord}</b> (${fmt(acc.a, 'accuracy')} → ${fmt(acc.b, 'accuracy')}) et ton taux de victoire est passé de <b>${winE}%</b> à <b>${winL}%</b>.`);
     if (oppConfounded) {
-      s.push(`⚠️ À lire avec prudence : sur la même coupure, l'Elo moyen de tes adversaires a <b>${oppDelta < 0 ? 'baissé' : 'monté'} de ${Math.abs(oppDelta)} points</b> (${Math.round(oppE)} → ${Math.round(oppL)}). ${oppDelta < 0
+      s.push(`⚠️ À lire avec prudence : sur la même coupure, l'Elo moyen de tes adversaires a <b>${oppDelta < 0 ? 'baissé' : 'monté'} de ${Math.abs(oppDelta)} points</b> (${mixed ? 'à cadence égale' : Math.round(oppE) + ' → ' + Math.round(oppL)}). ${oppDelta < 0
         ? "Une partie de ce gain vient donc d'une opposition plus faible, pas de ton jeu. Le repère fiable, c'est la précision."
         : "Tes résultats sont donc meilleurs qu'ils n'en ont l'air : tu affrontes plus fort."}`);
     }
@@ -3310,7 +3393,8 @@ const Coach = (() => {
     let ttMoves = 0, ttErrors = 0, totalErrors = 0;
     t.forEach(g => {
       const tm = g.analysis.time;
-      ['opening', 'middle', 'endgame'].forEach(p => { if (tm.phaseSec && typeof tm.phaseSec[p] === 'number') ph[p].push(tm.phaseSec[p]); });
+      // 0 = phase absente dans les anciens rapports (null dans les nouveaux).
+      ['opening', 'middle', 'endgame'].forEach(p => { if (tm.phaseSec && tm.phaseSec[p] > 0) ph[p].push(tm.phaseSec[p]); });
       ttMoves += tm.timeTroubleMoves || 0;
       ttErrors += tm.timeTroubleErrors || 0;
       totalErrors += (g.analysis.blunders || 0) + (g.analysis.mistakes || 0);
@@ -3344,7 +3428,8 @@ const Coach = (() => {
 
     const rated = an.filter(g => g.oppRating);
     let perf = null;
-    if (rated.length) {
+    // Pas de « niveau estime » qui melange les echelles rapide et journaliere.
+    if (rated.length && new Set(rated.map(g => g.timeClass || 'autre')).size === 1) {
       const avgOpp = avg(rated.map(g => g.oppRating));
       const w = rated.filter(g => g.result === 'win').length;
       const l = rated.filter(g => g.result === 'loss').length;

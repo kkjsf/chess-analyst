@@ -115,6 +115,7 @@ const CoachGame = (() => {
   let myBestUci = null, myBestPv = '', myLines = null;
   let stats = null;         // { moves, best, slips, hints, mistakes: [] }
   let track = [];           // eval vue de mon camp, coup par coup (courbe du bilan)
+  let statSnaps = [];       // les stats juste avant chacun de mes coups notes : Annuler les restaure
   let hintLevel = 0, hintArrow = false;
   let book = null;          // { sans: [], name, leaveAt } ou null
   let bookPly = 0, bookOut = null;  // bookOut = 'me' | 'coach' | null
@@ -503,6 +504,14 @@ const CoachGame = (() => {
   // Une partie est en cours ? On la REPREND. Sinon on quitterait sa partie en
   // allant voir ses statistiques, ce qui est le genre de detail qui fait
   // abandonner un mode de jeu.
+  // L'historique de la partie pour le moteur (voir engine.js), seulement si la
+  // FEN cherchee est bien la position courante de la partie.
+  function histFor(fen, extra) {
+    const o = Object.assign({}, extra);
+    if (game && fen === game.fen()) o.moves = game.history({ verbose: true }).map(m => m.from + m.to + (m.promotion || ''));
+    return o;
+  }
+
   function inProgress() {
     try { return !!(game && !saved && cfg && game.history().length > 0 && !game.game_over()); }
     catch (_) { return false; }
@@ -519,7 +528,9 @@ const CoachGame = (() => {
       renderBoard(null);
       renderBookBar();
       renderMoves();
-      if (myTurn() && !busy) onMyTurn();
+      // Ferme pendant que le coach reflechissait : close() a invalide sa
+      // reponse, personne d'autre ne la relancera.
+      if (!busy) { if (myTurn()) onMyTurn(); else coachMove(); }
       return;
     }
     // Partie finie mais pas encore rangee : on revient exactement ou on etait,
@@ -609,7 +620,7 @@ const CoachGame = (() => {
     bookPly = 0; bookOut = null;
 
     game = new Chess();
-    stats = { moves: 0, best: 0, slips: 0, hints: 0, mistakes: [] };
+    stats = { moves: 0, best: 0, slips: 0, hints: 0, mistakes: [] }; statSnaps = [];
     moveLog = []; pendingOpp = null; myLines = null; reviewPly = null;
     endInfo = null; stopTail();
     setSheet(false);
@@ -844,7 +855,7 @@ const CoachGame = (() => {
       else rail.scrollLeft = rail.scrollWidth;
     }
     const title = $('#cg-side-title');
-    if (title) title.textContent = 'Suivi des coups' + (moveLog.length ? ` · ${moveLog.length} coups` : '');
+    if (title) title.textContent = 'Suivi des coups' + (moveLog.length ? ` · ${Math.ceil(moveLog.length / 2)} coups` : '');
 
     // Le decompte de MES coups, dans l'ordre du dictionnaire de l'app.
     const tally = $('#cg-tally');
@@ -1209,7 +1220,7 @@ const CoachGame = (() => {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return;
-        res = await StockfishEngine.evaluate(fen, DEPTH_ME);
+        res = await StockfishEngine.evaluate(fen, DEPTH_ME, histFor(fen));
       }
     } catch (_) { res = null; }
     if (my !== token) return;
@@ -1379,11 +1390,15 @@ const CoachGame = (() => {
     } catch (_) { return false; }
   }
 
-  function playMyMove(from, to) {
+  function playMyMove(from, to, promo) {
     if (busy || !myTurn() || reviewPly !== null) return;
     const fen = curFen();
+    if (!promo && BoardRenderer.isPromotion(fen, from, to)) {
+      BoardRenderer.pickPromotion(mySide).then(p => { if (p && fen === curFen()) playMyMove(from, to, p); });
+      return;
+    }
     let mv = null;
-    try { mv = game.move({ from, to, promotion: 'q' }); } catch (_) { mv = null; }
+    try { mv = game.move({ from, to, promotion: promo || 'q' }); } catch (_) { mv = null; }
     if (!mv) { setStatus('⚠️ Coup illégal. Glisse une pièce sur une case légale.'); return; }
 
     // Sortie de livre de MON cote : le bandeau le dit, comme dans les cours.
@@ -1418,12 +1433,13 @@ const CoachGame = (() => {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return;
-        res = await StockfishEngine.evaluate(fenAfter, DEPTH_ME);   // pleine force : c'est la note
+        res = await StockfishEngine.evaluate(fenAfter, DEPTH_ME, histFor(fenAfter));   // pleine force : c'est la note
       }
     } catch (_) { res = null; }
     if (my !== token) return;
 
     const after = meScore(res, fenAfter);
+    statSnaps.push({ moves: stats.moves, best: stats.best, slips: stats.slips, nMistakes: stats.mistakes.length });
     stats.moves++;
     track.push(after == null ? null : Math.max(-1500, Math.min(1500, after)));
 
@@ -1596,7 +1612,7 @@ const CoachGame = (() => {
     let punish = '';
     try {
       if (typeof Analyzer !== 'undefined' && Analyzer.explainBadMove) {
-        punish = Analyzer.explainBadMove(fenBefore, fenAfter, { from: myMove.from, to: myMove.to, san: myMove.san }) || '';
+        punish = Analyzer.explainBadMove(fenAfter, myMove, res && res.lines) || '';
       }
     } catch (_) { punish = ''; }
     const oppUci = res && res.bestMove ? res.bestMove : null;
@@ -1719,7 +1735,7 @@ const CoachGame = (() => {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return null;
-        res = await StockfishEngine.evaluate(fen, 'movetime ' + prm.mt, { skill: prm.skill });
+        res = await StockfishEngine.evaluate(fen, 'movetime ' + prm.mt, histFor(fen, { skill: prm.skill }));
       }
     } catch (_) { res = null; }
     if (my !== token) return null;
@@ -1787,8 +1803,16 @@ const CoachGame = (() => {
     if (!h) return;
     if (sideToMove() === mySide && h >= 2) { game.undo(); game.undo(); }
     else game.undo();
-    if (track.length) track.pop();
-    if (stats && stats.moves > 0) stats.moves--;
+    // Annuler ne retirait que stats.moves : une gaffe reprise restait dans
+    // slips/mistakes (et partait au paquet d'exercices), un meilleur coup annule
+    // gonflait best au-dela de moves.
+    const mine = game.history({ verbose: true }).filter(m => m.color === mySide).length;
+    while (track.length > mine) track.pop();
+    while (stats && statSnaps.length > mine) {
+      const snap = statSnaps.pop();
+      stats.moves = snap.moves; stats.best = snap.best; stats.slips = snap.slips;
+      stats.mistakes.length = snap.nMistakes;
+    }
     // On retire du journal ce qu'on vient de defaire (mon coup + la reponse).
     while (moveLog.length > game.history().length) moveLog.pop();
     pendingOpp = null;

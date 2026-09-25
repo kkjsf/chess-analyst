@@ -410,7 +410,7 @@ const Courses = (() => {
         },
         {
           name: 'Classique (3.Fc4)', eco: 'C26',
-          sans: ['e4', 'e5', 'Nc3', 'Nf6', 'Bc4', 'Nc6', 'd3', 'Bb4', 'Nge2', 'd5'],
+          sans: ['e4', 'e5', 'Nc3', 'Nf6', 'Bc4', 'Nc6', 'd3', 'Bb4', 'Ne2', 'd5'],
           notes: [
             '', '', '', '',
             `L'autre grand plan : le fou file en c4 contre f7 (comme à l'Italienne), en gardant f4 en réserve.`,
@@ -524,10 +524,11 @@ const Courses = (() => {
       ],
       traps: [
         { at: 1,
-          title: `⚡ Contre 3…Dd6 : le saut Cb5 !`,
-          hint: `Après 3…Dd6, joue 4.Cb5 ! : le cavalier attaque la dame et menace surtout la fourchette Cxc7+ (roi + tour a8). Les Noirs doivent défendre précisément (4…Ca6 ou 4…Dd8). Un temps gagné et un piège posé. Joue Cb5.`,
-          fen: 'rnb1kbnr/ppp1pppp/3q4/8/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4',
-          sol: ['Nb5']
+          // Verifie au moteur (profondeur 20) : 4.Cb5 n'est que le 4e choix (+0,9
+          // contre +1,3 pour 4.Cf3) et apres 4…Db6 il ne reste que +0,3. Ce n'est
+          // donc pas un exercice a « trouver », c'est une menace a connaitre.
+          title: `⚡ Contre 3…Dd6 : le saut Cb5, à connaître`,
+          hint: `Après 3…Dd6, 4.Cb5 attaque la dame et menace la fourchette Cxc7+ (roi + tour a8) : les Noirs doivent le voir venir. Mais ce n'est pas un coup gagnant : après 4…Db6 (ou 4…Dd8) le cavalier n'a rien pris et doit reculer. Le moteur préfère simplement se développer : <b>4.Cf3</b> ou <b>4.d4</b>. Côté Noirs, retiens la menace sur c7 ; côté Blancs, ne perds pas de temps à la tenter.`
         },
         {
           title: `🛡️ Les trois bonnes retraites de la dame`,
@@ -869,7 +870,7 @@ const Courses = (() => {
         {
           label: '3…Fb4 (Winawer) après 3.Cc3',
           hint: `Le fou cloue ton cavalier c3. Ne le défends pas : <b>pousse e5</b>. Tu gagnes de l'espace et le fou devra prendre en c3 (ce qui te donne la paire de fous) ou reculer.`,
-          fen: 'rnbqk2r/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4',
+          fen: 'rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4',
           sol: ['e5']
         },
         {

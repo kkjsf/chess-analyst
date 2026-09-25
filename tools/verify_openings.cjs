@@ -19,8 +19,10 @@ const ok = () => { checks++; };
 function playLine(sans, from) {
   const g = from ? new Chess(from) : new Chess();
   for (const san of sans) {
-    const m = g.move(san, { sloppy: true });
-    if (!m) return { g, err: 'coup illégal : ' + san };
+    // STRICT : l'app compare le SAN tel quel (coachgame compare mv.san au
+    // livre), donc un « Nge2 » la ou chess.js ecrit « Ne2 » sort du livre.
+    const m = g.move(san);
+    if (!m) return { g, err: 'coup illégal ou SAN non canonique : ' + san };
   }
   return { g };
 }

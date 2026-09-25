@@ -35,12 +35,19 @@ const StockfishEngine = (() => {
   // evaluate() calls run strictly one at a time: a new `position` is never
   // posted while a previous search still owes us its bestmove.
   let chain = Promise.resolve();
+  // Un seul demarrage a la fois. Deux init() concurrents (deux coups d'exploration
+  // pendant le chargement du wasm) creaient deux workers : le premier n'avait
+  // jamais son readyok, son delai de 10 s tuait ensuite le worker VIVANT et
+  // laissait ready = true avec worker = null, donc plus aucune analyse de la
+  // session.
+  let starting = null;
 
   function init() {
     if (ready) return Promise.resolve();
     if (failed) return Promise.reject(new Error('engine_failed'));
+    if (starting) return starting;
 
-    return new Promise((resolve, reject) => {
+    starting = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         failed = true;
         if (worker) { worker.terminate(); worker = null; }
@@ -119,7 +126,9 @@ const StockfishEngine = (() => {
 
           if (!currentLines[idx]) currentLines[idx] = { score: 0, move: null, pv: '', mate: null };
 
-          if (cp) currentLines[idx].score = parseInt(cp[1]);
+          // Les lignes MultiPV sont des RANGS, pas des coups fixes : un rang qui
+          // annoncait un mat peut revenir en cp a la profondeur suivante.
+          if (cp) { currentLines[idx].score = parseInt(cp[1]); currentLines[idx].mate = null; }
           else if (mate) {
             const m = parseInt(mate[1]);
             currentLines[idx].score = m > 0 ? 30000 - m : -30000 - m;
@@ -145,6 +154,8 @@ const StockfishEngine = (() => {
 
       worker.postMessage('uci');
     });
+    starting.catch(() => {}).then(() => { starting = null; });
+    return starting;
   }
 
   // `opts.skill` (0-20) baisse volontairement la force pour ce coup-la ; omis,
@@ -198,7 +209,12 @@ const StockfishEngine = (() => {
         worker.postMessage('setoption name Skill Level value ' + wantSkill);
         curSkill = wantSkill;
       }
-      worker.postMessage('position fen ' + fen);
+      // `opts.moves` (UCI depuis la position initiale) donne l'historique au
+      // moteur : avec la seule FEN il ne voit pas les repetitions, donc ni la
+      // nulle qu'il pourrait forcer ni celle qu'il devrait eviter.
+      if (opts && Array.isArray(opts.moves) && opts.moves.length)
+        worker.postMessage('position ' + (opts.startFen ? 'fen ' + opts.startFen : 'startpos') + ' moves ' + opts.moves.join(' '));
+      else worker.postMessage('position fen ' + fen);
       if (typeof depth === 'string' && depth.startsWith('movetime')) {
         worker.postMessage('go ' + depth);
       } else {

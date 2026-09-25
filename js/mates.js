@@ -110,7 +110,7 @@ const Mates = (() => {
       fen: '3rkr2/8/4Q3/8/8/8/8/6K1',
       arrows: [{ from: 'e6', to: 'e8', color: R }],
       puzzles: [
-        { fen: '3rkr2/8/8/4Q3/8/8/8/6K1 w - - 0 1', sol: ['Qe6#'], hint: `Les tours d8 et f8 emmurent leur propre roi. Plante la dame juste en face.` },
+        { fen: '3rkr2/8/8/8/2Q5/8/8/6K1 w - - 0 1', sol: ['Qe6#'], hint: `Les tours d8 et f8 emmurent leur propre roi. Plante la dame juste en face.` },
         { fen: '3r1r2/p4k1p/1p3P2/4K3/PP6/6RP/3p4/8 w - - 2 40', sol: ['Rg7+', 'Ke8', 'Re7#'], real: `Lichess · niveau 948`, game: 'https://lichess.org/7S035LzP/black', lvl: 'facile', hint: `Le roi est emmuré par ses propres pièces de chaque côté. Plante la dame juste en face.` },
         { fen: '2Q5/p4ppk/4p3/3p3p/1B1Pb1q1/2P5/PP3K1P/3R1R2 b - - 0 25', sol: ['Qf3+', 'Ke1', 'Qe3#'], real: `Lichess · niveau 1123`, game: 'https://lichess.org/GcCjw72z', lvl: 'moyenne', hint: `Le roi est emmuré par ses propres pièces de chaque côté. Plante la dame juste en face.` },
         { fen: '1r4nr/3N1pkp/2B1p1p1/8/Pp3N2/3P2P1/1bPQKP1P/q7 w - - 3 24', sol: ['Nh5+', 'gxh5', 'Qg5#'], real: `Lichess · niveau 1317`, game: 'https://lichess.org/YAfjFzmW/black', lvl: 'moyenne', hint: `Le roi est emmuré par ses propres pièces de chaque côté. Plante la dame juste en face.` },
@@ -136,7 +136,7 @@ const Mates = (() => {
       fen: '7k/7R/5N2/8/8/8/8/6K1',
       arrows: [{ from: 'h7', to: 'h8', color: R }, { from: 'f6', to: 'g8', color: B }],
       puzzles: [
-        { fen: '7k/8/5N2/8/8/8/8/6KR w - - 0 1', sol: ['Rh7#'], hint: `Le cavalier f6 tient déjà g8 et h7. Amène la tour au contact du roi.` },
+        { fen: '7k/R7/5N2/8/8/8/8/6K1 w - - 0 1', sol: ['Rh7#'], hint: `Le cavalier f6 tient déjà g8 et h7. Amène la tour au contact du roi.` },
         { fen: '5bk1/3R3p/4n1p1/5p2/6N1/7P/5KP1/2r5 w - - 0 43', sol: ['Nf6+', 'Kh8', 'Rxh7#'], real: `Lichess · niveau 886`, game: 'https://lichess.org/LrDzsdut/black', lvl: 'facile', hint: `Tour + cavalier dans le coin : le cavalier garde la case de fuite et protège la tour.` },
         { fen: '2r2b1k/1pq2pp1/p3pN1p/7Q/P7/2P1P3/6RP/6K1 w - - 4 28', sol: ['Qxh6+', 'gxh6', 'Rg8#'], real: `Lichess · niveau 1149`, game: 'https://lichess.org/bY548xUo/black', lvl: 'moyenne', hint: `Tour + cavalier dans le coin : le cavalier garde la case de fuite et protège la tour.` },
         { fen: '8/5kpR/1p2p1r1/5p2/8/1P2Qn2/P4PBP/3q1N1K b - - 23 40', sol: ['Qxf1+', 'Bxf1', 'Rg1#'], real: `Lichess · niveau 1268`, game: 'https://lichess.org/fkNNNkGR', lvl: 'moyenne', hint: `Tour + cavalier dans le coin : le cavalier garde la case de fuite et protège la tour.` },
@@ -173,7 +173,7 @@ const Mates = (() => {
       fen: '7k/6pQ/8/8/8/3B4/8/6K1',
       arrows: [{ from: 'd3', to: 'h7', color: B }, { from: 'h7', to: 'h8', color: R }],
       puzzles: [
-        { fen: '7k/6p1/8/7Q/8/3B4/8/6K1 w - - 0 1', sol: ['Qh7#'], hint: `Le fou d3 tient la case h7. Pose-y la dame : le roi est coincé dans le coin.` },
+        { fen: '4r2k/6p1/8/5Q2/8/3B4/8/6K1 w - - 0 1', sol: ['Qh7#'], hint: `Le fou d3 tient la case h7. Pose-y la dame : le roi est coincé dans le coin.` },
         { fen: '6rk/1p1P3p/p6Q/3pP3/8/P2B1q2/1P4rP/6RK w - - 0 31', sol: ['Qxh7#'], real: `Lichess · niveau 957`, game: 'https://lichess.org/QAkx9CLH/black', lvl: 'facile', hint: `La dame vient sur h7, protégée par le fou de cases claires : le roi est coincé dans le coin.` },
         { fen: 'r2qrbk1/1bp2pp1/pn1p3p/1p2P3/3PNn2/1P1Q1N1P/PBB2PP1/R3R1K1 w - - 2 19', sol: ['Nf6+', 'Qxf6', 'Qh7#'], real: `Lichess · niveau 1089`, game: 'https://lichess.org/RDd3Xx2q/black', lvl: 'moyenne', hint: `La dame vient sur h7, protégée par le fou de cases claires : le roi est coincé dans le coin.` },
         { fen: '5r1k/ppp2qpp/3b4/8/3N4/2Q1N2P/PP3P1P/4R1K1 b - - 0 24', sol: ['Qxf2+', 'Kh1', 'Qxh2#'], real: `Lichess · niveau 1280`, game: 'https://lichess.org/bTIn2jo6', lvl: 'moyenne', hint: `La dame vient sur h7, protégée par le fou de cases claires : le roi est coincé dans le coin.` },
@@ -185,7 +185,7 @@ const Mates = (() => {
       fen: '6k1/6Q1/8/8/8/8/1B6/6K1',
       arrows: [{ from: 'b2', to: 'g7', color: B }, { from: 'g7', to: 'g8', color: R }],
       puzzles: [
-        { fen: '6k1/8/6Q1/8/8/8/1B6/6K1 w - - 0 1', sol: ['Qg7#'], hint: `Le fou b2 balaie toute la grande diagonale et défend g7. Amènes-y la dame.` },
+        { fen: '6k1/8/8/4Q3/8/8/1B6/6K1 w - - 0 1', sol: ['Qg7#'], hint: `Le fou b2 balaie toute la grande diagonale et défend g7. Amènes-y la dame.` },
         { fen: '3r2k1/1b3ppp/p1q1P3/8/P1pr4/4Q3/BPP3PP/1R3RK1 b - - 0 23', sol: ['Qxg2#'], real: `Lichess · niveau 869`, game: 'https://lichess.org/gJpG4ufq', lvl: 'facile', hint: `La dame se pose en g7, soutenue par le fou de la grande diagonale.` },
         { fen: '6k1/pp3ppp/2b1p3/7q/3Q1P2/P6P/1P4P1/R4R1K b - - 0 26', sol: ['Qxh3+', 'Kg1', 'Qxg2#'], real: `Lichess · niveau 1185`, game: 'https://lichess.org/zd3hkvxa', lvl: 'moyenne', hint: `La dame se pose en g7, soutenue par le fou de la grande diagonale.` },
         { fen: 'r2q3k/pbp2n1p/1p3b1B/3p1Q2/2P5/8/PP3PPP/R3R1K1 w - - 0 21', sol: ['Re8+', 'Qxe8', 'Qxf6+', 'Kg8', 'Qg7#'], real: `Lichess · niveau 1387`, game: 'https://lichess.org/vLYUBCKb/black', lvl: 'soutenue', hint: `La dame se pose en g7, soutenue par le fou de la grande diagonale.` },
@@ -197,7 +197,7 @@ const Mates = (() => {
       fen: '6k1/6Q1/5P2/8/8/8/8/6K1',
       arrows: [{ from: 'f6', to: 'g7', color: B }, { from: 'g7', to: 'g8', color: R }],
       puzzles: [
-        { fen: '6k1/8/5P2/6Q1/8/8/8/6K1 w - - 0 1', sol: ['Qg7#'], hint: `Le pion f6 protège la case g7. Plante la dame au contact du roi.` },
+        { fen: '6k1/8/5P1Q/8/8/8/8/6K1 w - - 0 1', sol: ['Qg7#'], hint: `Le pion f6 protège la case g7. Plante la dame au contact du roi.` },
         { fen: 'r1b2rk1/pp1p1p1p/5P2/4qpp1/1PB1P1Q1/P7/6PP/R6K w - - 0 21', sol: ['Qxg5+', 'Kh8', 'Qg7#'], real: `Lichess · niveau 906`, game: 'https://lichess.org/mHToC93l/black', lvl: 'facile', hint: `Le pion f6 tient la case g7 : amène la dame au contact du roi.` },
         { fen: '5r1k/Q2R4/4qPp1/1p2p1n1/2p1P3/2P2B2/P5K1/8 w - - 0 43', sol: ['Rh7+', 'Nxh7', 'Qg7#'], real: `Lichess · niveau 1162`, game: 'https://lichess.org/VB4gDXSf/black', lvl: 'moyenne', hint: `Le pion f6 tient la case g7 : amène la dame au contact du roi.` },
         { fen: '5r2/1q2n2k/p4Ppp/2p5/2Pp1Q2/P7/3B2PP/7K w - - 0 35', sol: ['Qxh6+', 'Kg8', 'Qg7#'], real: `Lichess · niveau 1312`, game: 'https://lichess.org/aVedPnkJ/black', lvl: 'moyenne', hint: `Le pion f6 tient la case g7 : amène la dame au contact du roi.` },
@@ -209,7 +209,7 @@ const Mates = (() => {
       fen: '7k/7Q/6P1/8/8/8/8/6K1',
       arrows: [{ from: 'g6', to: 'h7', color: B }, { from: 'h7', to: 'h8', color: R }],
       puzzles: [
-        { fen: '7k/8/6P1/7Q/8/8/8/6K1 w - - 0 1', sol: ['Qh7#'], hint: `Le pion g6 verrouille h7. Amène la dame sur la colonne h pour mater dans le coin.` },
+        { fen: 'r6k/4Q3/6P1/8/8/8/8/6K1 w - - 0 1', sol: ['Qh7#'], hint: `Le pion g6 verrouille h7. Amène la dame sur la colonne h pour mater dans le coin.` },
         { fen: '1r4k1/p4p2/4pQPp/3p2q1/3P4/2N5/5PPK/1b6 w - - 0 35', sol: ['Qxf7+', 'Kh8', 'Qh7#'], real: `Lichess · niveau 970`, game: 'https://lichess.org/i4dYZ269/black', lvl: 'facile', hint: `Le pion g6 verrouille h7 : amène la dame sur la colonne h.` },
         { fen: '1k5r/1pp2p2/p4P2/8/4B3/2P2QpP/Pr3qP1/2R1R2K b - - 1 33', sol: ['Rxh3+', 'gxh3', 'Qh2#'], real: `Lichess · niveau 1190`, game: 'https://lichess.org/D8WpGFZU', lvl: 'moyenne', hint: `Le pion g6 verrouille h7 : amène la dame sur la colonne h.` },
         { fen: '2r1brk1/6p1/4p1P1/ppbp1p1R/5B2/2PBP2P/PP3q2/2KQ4 w - - 5 25', sol: ['Rh8+', 'Kxh8', 'Qh5+', 'Kg8', 'Qh7#'], real: `Lichess · niveau 1221`, game: 'https://lichess.org/nMds3cZ9/black', lvl: 'moyenne', hint: `Le pion g6 verrouille h7 : amène la dame sur la colonne h.` },
@@ -223,7 +223,7 @@ const Mates = (() => {
     { id: 'carre', group: 'finales', icon: '⬛', name: 'La règle du carré', en: 'Rule of the square',
       lesson: `La question la plus fréquente d'une finale : <b>le roi rattrape-t-il le pion ?</b> Pas besoin de calculer coup par coup, il y a une règle qui donne la réponse d'un coup d'œil.<br><br>
       Trace le <b>carré</b> dont un côté va du pion jusqu'à sa case de promotion. Si le roi adverse est <b>dans</b> ce carré (ou peut y entrer au trait), il attrape le pion. S'il est <b>dehors</b>, le pion passe.<br><br>
-      Sur le diagramme, le pion h5 doit franchir h6-h7-h8 : trois cases, donc un carré de 4 sur 4, colonnes <b>e à h</b> et rangées <b>5 à 8</b>. Le roi noir en <b>e6</b> est dedans de justesse : il rattrape. Une seule colonne plus à gauche, en <b>d6</b>, il est dehors et le pion passe.<br><br>
+      Sur le diagramme, le pion h5 doit franchir h6-h7-h8 : trois cases, donc un carré de 4 sur 4, colonnes <b>e à h</b> et rangées <b>5 à 8</b>. Le roi noir en <b>e6</b> est dedans de justesse : il rattrape. Une colonne plus à gauche, en <b>d6</b>, il est dehors, mais comme c'est <b>à lui de jouer</b> il y rentre (…Re5 ou …Re7) et rattrape encore. En <b>c6</b>, c'est fini : même au trait, il ne rentre plus, et le pion passe.<br><br>
       <b>⚠ Deux pièges</b> : un pion sur sa case de départ avance de deux cases, donc on trace le carré depuis la <b>troisième</b> rangée ; et un pion de son propre camp sur le chemin du roi peut lui coûter le tempo qui change tout.`,
       seq: null,
       fen: '8/8/4k3/7P/8/8/8/7K b - - 0 1',
@@ -235,13 +235,13 @@ const Mates = (() => {
     { id: 'roi-devant', group: 'finales', icon: '🚶', name: 'Le roi devant son pion', en: 'King in front of the pawn',
       lesson: `Roi + pion contre roi seul, c'est la finale la plus courante du monde — et elle est <b>gagnante ou nulle selon un détail</b> : où est ton roi.<br><br>
       <b>La règle :</b> pousse ton <b>roi devant le pion</b>, pas le pion devant le roi. Le pion ne se promeut que si le roi lui ouvre la route.<br><br>
-      Sur le diagramme, le roi blanc est en <b>d6</b>, devant son pion d5, et le roi noir doit céder : c'est gagné. Déplace mentalement le roi blanc <b>derrière</b> le pion (d4 avec le pion d5) et la même position devient <b>nulle</b> — le roi noir tient d7/d8 et tu ne passes jamais.<br><br>
+      Sur le diagramme, le roi blanc est en <b>d6</b>, devant son pion d5 : c'est gagné, <b>quel que soit le trait</b> (un roi sur la 6ᵉ rangée devant son pion gagne toujours, sauf pion de tour). Déplace mentalement le roi blanc <b>derrière</b> le pion (d4 avec le pion d5) et la même position devient <b>nulle</b> — le roi noir tient d7/d8 et tu ne passes jamais.<br><br>
       <b>Le test de l'opposition</b> : quand les deux rois se font face avec une case entre eux et que c'est à l'adversaire de jouer, il doit s'écarter et tu gagnes du terrain. C'est tout le mécanisme de cette finale.`,
       seq: null,
       fen: '3k4/8/3K4/3P4/8/8/8/8 w - - 0 1',
       arrows: [{ from: 'd6', to: 'e6', color: G }, { from: 'd5', to: 'd6', color: B }],
       puzzles: [
-        { fen: '3k4/8/3K4/3P4/8/8/8/8 w - - 0 1', sol: ['Ke6'], demo: true, hint: `Ne pousse pas le pion : contourne. Écarte-toi d'une colonne pour forcer le roi noir à choisir un côté, puis prends la case devant ton pion.` },
+        { fen: '3k4/8/3K4/3P4/8/8/8/8 w - - 0 1', sol: ['Ke6'], demo: true, hint: `Ton pion est bloqué par ton propre roi : c'est le roi qui travaille. Écarte-toi d'une colonne (Re6 ou Rc6) : le roi noir doit choisir un côté, tu prends d7 de l'autre, et le pion avance derrière toi.` },
       ] },
 
     { id: 'course', group: 'finales', icon: '🏃', name: 'La course de pions', en: 'Pawn race',
@@ -253,8 +253,8 @@ const Mates = (() => {
       fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1',
       arrows: [{ from: 'b2', to: 'b8', color: G }, { from: 'g7', to: 'g1', color: R }],
       puzzles: [
-        { fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1', sol: ['b4'], outcome: 'win', hint: `Compte : ton pion b2 a besoin de 5 coups (avec le double pas), le sien de 5 aussi — mais c'est à toi. Un seul coup garde l'avance, et ce n'est pas un coup de roi.` },
-        { fen: '8/7k/6p1/8/8/1P6/7K/8 w - - 0 1', sol: ['b4'], outcome: 'win', hint: `Même compte, un rang de plus pour lui. Pousse, tout de suite.` },
+        { fen: '8/6pk/8/8/8/8/1P5K/8 w - - 0 1', sol: ['b4'], outcome: 'win', hint: `Son pion g7 ne court pas vraiment : ton roi h2 l'attend en g3. La vraie question, c'est la règle du carré : le roi noir en h7 rattrape-t-il ton pion ? Un seul coup le laisse dehors, et ce n'est pas un coup de roi.` },
+        { fen: '8/7k/6p1/8/8/1P6/7K/8 w - - 0 1', sol: ['b4'], outcome: 'win', hint: `Même idée : son pion g6 ne passe pas tant que ton roi garde g3. Pousse tout de suite : un seul coup de roi, et le roi noir entre dans le carré.` },
       ] },
 
     { id: 'pion-tour', group: 'finales', icon: '🅰️', name: 'Le pion de tour : la nulle du coin', en: 'Rook pawn draw',

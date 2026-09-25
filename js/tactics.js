@@ -53,7 +53,7 @@ const Tactics = (() => {
       desc: `Terme général : un coup crée <b>deux menaces simultanées</b> impossibles à parer en un seul temps. Ici la dame e4 attaque à la fois le cavalier b7 et le fou e7.`,
       fen: '6k1/1n2b3/8/8/4Q3/8/8/4K3', arrows: [{ from: 'e4', to: 'b7', color: G }, { from: 'e4', to: 'e7', color: G }],
       puzzles: [
-        { fen: '6k1/1r6/8/8/8/8/8/3Q2K1 w - - 0 1', sol: ['Qd5+', 'Kf8', 'Qxb7'], hint: `Un échec en diagonale qui vise aussi la tour à l'autre bout.` },
+        { fen: 'r5k1/8/8/8/8/8/8/3Q2K1 w - - 0 1', sol: ['Qd5+', 'Kh8', 'Qxa8+'], hint: `Un échec en diagonale qui vise aussi la tour à l'autre bout.` },
         { fen: 'rnb1k2r/ppp1qNpp/1b1p3n/4p2Q/2B1P3/8/PPPP2PP/RNBK1R2 b kq - 0 8', sol: ['Bg4+', 'Qxg4', 'Nxg4'], real: `Lichess · niveau 983`, game: 'https://lichess.org/EX8Pl0ew', lvl: 'facile', hint: `Un échec de fou, qui met la dame dans le collimateur. Le motif : deux menaces d'un coup, impossible de parer les deux.` },
         { fen: '6rk/Rpb3rp/6pQ/4N3/2Pp2P1/1q1P3P/4RP2/6K1 b - - 0 30', sol: ['Qd1+', 'Kg2', 'Qxe2'], real: `Lichess · niveau 1137`, game: 'https://lichess.org/kWxG4yV0', lvl: 'moyenne', hint: `Un échec de dame, qui met la tour dans le collimateur. Le motif : deux menaces d'un coup, impossible de parer les deux.` },
         { fen: '1k3r2/pp4p1/2pp2r1/4P3/7b/1BP5/P3K2B/RN3R2 b - - 8 30', sol: ['Rg2+', 'Kd3', 'Rxf1'], real: `Lichess · niveau 1275`, game: 'https://lichess.org/W0GBLuOc', lvl: 'moyenne', hint: `Un échec de tour, qui met le fou et le pion dans le collimateur. Le motif : deux menaces d'un coup, impossible de parer les deux.` },
@@ -126,7 +126,7 @@ const Tactics = (() => {
       desc: `Une pièce longue exerce une pression <b>à travers</b> une pièce adverse, comme si celle-ci était transparente — soit pour attaquer une cible au-delà, soit pour défendre une case derrière l'écran.`,
       fen: '3r2k1/8/8/8/8/8/3R4/3RK3', arrows: [{ from: 'd1', to: 'd8', color: G }],
       puzzles: [
-        { fen: 'q7/8/8/8/k7/8/8/3Q2K1 w - - 0 1', sol: ['Qa1+', 'Kb4', 'Qxa8'], hint: `Donne échec sur la colonne a : le roi et la dame noire sont alignés. Le roi doit s'écarter et laisse tomber la dame derrière lui (embrochade).` },
+        { fen: 'q7/8/8/8/k7/8/8/4Q1K1 w - - 0 1', sol: ['Qa1+', 'Kb4', 'Qxa8'], hint: `Donne échec sur la colonne a : le roi et la dame noire sont alignés. Le roi doit s'écarter et laisse tomber la dame derrière lui (embrochade).` },
         { fen: '2r4k/6b1/7p/p1PQ1q2/8/3R2P1/P1KB4/8 b - - 4 38', sol: ['Rxc5+', 'Qxc5', 'Qxc5+'], real: `Lichess · niveau 990`, game: 'https://lichess.org/KXEwAX47', lvl: 'facile', hint: `Un échec de tour, qui met la dame dans le collimateur. Le motif : une pièce longue agit à travers une autre.` },
         { fen: 'r7/2k3pp/2pq4/p1Q5/1r1n1P2/6P1/P6P/3RR2K w - - 1 32', sol: ['Re7+', 'Qxe7', 'Qxe7+'], real: `Lichess · niveau 1187`, game: 'https://lichess.org/LtMEGOaK/black', lvl: 'moyenne', hint: `Un échec de tour, qui met le pion dans le collimateur. Le motif : une pièce longue agit à travers une autre.` },
         { fen: '8/2p1Q2p/p5pk/1p4q1/2nP3b/P7/1PP5/1K5R w - - 7 37', sol: ['Rxh4+', 'Qxh4', 'Qxh4+'], real: `Lichess · niveau 1204`, game: 'https://lichess.org/2KybDZ5F/black', lvl: 'moyenne', hint: `Un échec de tour, qui met le pion dans le collimateur. Le motif : une pièce longue agit à travers une autre.` },
@@ -352,6 +352,22 @@ const Tactics = (() => {
 
   // Échange statique (SEE) : ce que `color` gagne, en pions, en déclenchant les
   // captures sur `sq` (l'adversaire reprend au mieux, et ainsi de suite).
+  // Prendre avec la piece posee en `from` decouvre-t-il son propre roi ? Une
+  // piece clouee n'est pas un attaquant : sans ce test, 5k2/8/3p4/4n3/1B6/8/8/4R1K1
+  // disait Txe5 perdant (le pion d6, cloue par le Fb4 sur f8, « reprenait »).
+  function exposesKing(b, from, sq, color) {
+    const f = sq2rc(from), t = sq2rc(sq);
+    const moved = b[f.r][f.c], taken = b[t.r][t.c];
+    b[f.r][f.c] = null; b[t.r][t.c] = moved;
+    let hit = false;
+    for (let r = 0; r < 8 && !hit; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (p && p.t === 'k' && p.c === color) { hit = attackersOf(b, rc2sq(r, c), other(color)).length > 0; break; }
+    }
+    b[f.r][f.c] = moved; b[t.r][t.c] = taken;
+    return hit;
+  }
+
   function seeOn(b, sq, color) {
     const { r, c } = sq2rc(sq);
     const target = at(b, r, c);
@@ -360,7 +376,9 @@ const Tactics = (() => {
     // la récursion (l'adversaire « reprendrait » le roi pour 100).
     if (target.t === 'k') return 0;
     const guarded = attackersOf(b, sq, other(color)).length > 0;
-    const atk = attackersOf(b, sq, color).filter(a => a.t !== 'k' || !guarded);
+    const atk = attackersOf(b, sq, color)
+      .filter(a => a.t !== 'k' || !guarded)
+      .filter(a => a.t === 'k' || !exposesKing(b, a.sq, sq, color));
     if (!atk.length) return 0;
     atk.sort((x, y) => VAL[x.t] - VAL[y.t]);
     const f = sq2rc(atk[0].sq);
@@ -387,6 +405,13 @@ const Tactics = (() => {
   // Ce que me rapporte MON coup `my` depuis la position `g2` (plateau `b2`),
   // capture et/ou promotion, une fois la reprise adverse déduite.
   function moveValue(g2, b2, me, my) {
+    // En passant : la case d'arrivee est vide, seeOn n'y voyait rien a prendre.
+    if (my.flags && my.flags.indexOf('e') >= 0) {
+      let g3, done = null;
+      try { g3 = new Chess(g2.fen()); done = g3.move({ from: my.from, to: my.to }); } catch (_) { done = null; }
+      if (!done) return 0;
+      return VAL.p - Math.max(0, seeOn(boardOf(g3.fen()), my.to, other(me)));
+    }
     if (!my.promotion) return my.captured ? seeOn(b2, my.to, me) : 0;
     // Promotion : on simule, puis on regarde ce que l'adversaire récupère sur
     // la case d'arrivée (la neuve dame se fait souvent reprendre aussitôt).
@@ -857,6 +882,9 @@ const Tactics = (() => {
   function solve() {
     if (locked) return;
     locked = true;
+    // Voir la solution n'est pas reussir : sans ca, un rejeu en aveugle fini
+    // par ce bouton faisait monter la branche d'une boite (srsTouch).
+    sessionClean = false;
     // play out the whole remaining line, arrow on the key move
     const exp = expectedMove();
     if (exp) BoardRenderer.drawArrows($('#tac-arrows'), [{ from: exp.from, to: exp.to, color: G, opacity: 0.9, width: 6 }]);

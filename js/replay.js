@@ -57,6 +57,16 @@ const Replay = (() => {
   // ── helpers d'affichage (calqués sur l'explorateur d'ouverture) ──
   function fr(san) { return (typeof Analyzer !== 'undefined' && Analyzer.toFrench) ? Analyzer.toFrench(san) : san; }
 
+  // Les appelants passent tantot l'anglais, tantot le francais (blunderList,
+  // sanFr de l'analyse). Retraduire du francais changeait le roi en tour
+  // (« Rg1 » -> « Tg1 ») : on ne traduit que ce qui se lit comme un coup
+  // anglais LEGAL dans la position de depart.
+  function sanFrOnce(fen, san) {
+    if (!san) return '';
+    try { const m = new Chess(fen).move(san); if (m) return fr(m.san); } catch (_) {}
+    return san;
+  }
+
   function uciToFr(fen, uci) {
     if (!uci) return null;
     try {
@@ -325,7 +335,19 @@ const Replay = (() => {
 
   function curFen() { return hist.length ? hist[hist.length - 1].fen : seedFen; }
   function sideToMove() { return curFen().split(' ')[1] === 'w' ? 'w' : 'b'; }
-  function gameOver() { try { return new Chess(curFen()).game_over(); } catch (_) { return false; } }
+  // Chaque position est rebatie depuis sa FEN, sans historique : chess.js ne
+  // peut donc pas voir une triple repetition. On la compte sur la pile.
+  const posKey = (fen) => fen.split(' ').slice(0, 4).join(' ');
+  function threefold() {
+    const k = posKey(curFen());
+    return hist.filter(h => posKey(h.fen) === k).length >= 3;
+  }
+  function gameOver() { try { return new Chess(curFen()).game_over() || threefold(); } catch (_) { return false; } }
+  // L'historique pour le moteur (repetitions), quand la FEN est la position courante.
+  function histFor(fen) {
+    if (fen !== curFen() || hist.length < 2) return undefined;
+    return { startFen: seedFen, moves: hist.slice(1).map(h => h.move.from + h.move.to + (h.move.promotion || '')) };
+  }
 
   // ── entrée publique ──
   function start(entry) { return begin(entry, 'replay'); }
@@ -348,7 +370,7 @@ const Replay = (() => {
     const moveNo = ply != null ? Math.floor(ply / 2) + 1 : (entry.moveNo || null);
     const dot = ply != null ? (ply % 2 === 0 ? '.' : '...') : '.';
     intro = {
-      playedSan: fr(entry.playedSan || ''), bestSan: fr(entry.bestSan || ''),
+      playedSan: sanFrOnce(seedFen, entry.playedSan), bestSan: uciToFr(seedFen, entry.bestUci) || sanFrOnce(seedFen, entry.bestSan),
       bestUci: entry.bestUci || '', tip: (entry.tip || '').replace(/<[^>]*>/g, '').trim(),
       moveNo, dot,
     };
@@ -423,7 +445,7 @@ const Replay = (() => {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return;
-        res = await StockfishEngine.evaluate(curFen(), REPLY_MT);
+        res = await StockfishEngine.evaluate(curFen(), REPLY_MT, histFor(curFen()));
       }
     } catch (_) { res = null; }
     if (my !== token) return;
@@ -620,7 +642,7 @@ const Replay = (() => {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return;
-        res = await StockfishEngine.evaluate(fen, DEPTH_MY);
+        res = await StockfishEngine.evaluate(fen, DEPTH_MY, histFor(fen));
       }
     } catch (_) { res = null; }
     if (my !== token) return;
@@ -650,11 +672,15 @@ const Replay = (() => {
     renderCmp();
   }
 
-  function playMyMove(from, to) {
+  function playMyMove(from, to, promo) {
     if (busy || gameOver() || sideToMove() !== mySide) return;
     const fen = curFen();
+    if (!promo && BoardRenderer.isPromotion(fen, from, to)) {
+      BoardRenderer.pickPromotion(mySide).then(p => { if (p && fen === curFen()) playMyMove(from, to, p); });
+      return;
+    }
     let g, mv = null;
-    try { g = new Chess(fen); mv = g.move({ from, to, promotion: 'q' }); } catch (_) { mv = null; }
+    try { g = new Chess(fen); mv = g.move({ from, to, promotion: promo || 'q' }); } catch (_) { mv = null; }
     if (!mv) { setStatus('⚠️ Coup illégal. Glisse une pièce sur une case légale.'); return; }
     const myUci = from + to + (mv.promotion || '');
     const fenAfterMe = g.fen();
@@ -673,7 +699,7 @@ const Replay = (() => {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return;
-        res = await StockfishEngine.evaluate(fenAfterMe, REPLY_MT);
+        res = await StockfishEngine.evaluate(fenAfterMe, REPLY_MT, histFor(fenAfterMe));
       }
     } catch (_) { res = null; }
     if (my !== token) return;
@@ -682,9 +708,14 @@ const Replay = (() => {
     const afterMe = meScore(res, fenAfterMe);
     const mateForMe = meMate(res, fenAfterMe);
     const cpLoss = (curEvalMe != null && afterMe != null) ? Math.max(0, curEvalMe - afterMe) : null;
+    // La note se lit en CHANCES DE GAIN, comme l'analyseur et le mode entraineur :
+    // en centipions bruts, passer d'un mat en 3 (29997) a +15 affichait
+    // « Gaffe (-28497 cp) », et +8 -> +5 « te fait reperdre une partie gagnee ».
+    const wpl = (cpLoss != null && typeof Analyzer !== 'undefined' && Analyzer.cpToWinPct)
+      ? Math.max(0, Analyzer.cpToWinPct(curEvalMe) - Analyzer.cpToWinPct(afterMe)) : null;
     const iDeliveredMate = (() => { try { return new Chess(fenAfterMe).in_checkmate(); } catch (_) { return false; } })();
     if (convStats) convStats.moves++;
-    const verdict = gradeMyMove(myUci === myBestUci, cpLoss, mateForMe, iDeliveredMate, fenAfterMe, myMove, res);
+    const verdict = gradeMyMove(myUci === myBestUci, cpLoss, wpl, mateForMe, iDeliveredMate, fenAfterMe, myMove, res);
     // Le bouton « Reprendre ce coup » va TOUJOURS en fin de bloc, après la
     // réponse de l'ordi : sinon il s'intercale au milieu du commentaire.
     const tail = (v) => (v.retry ? RETRY_HTML : '');
@@ -726,7 +757,14 @@ const Replay = (() => {
   // Verdict textuel de mon coup, calqué sur la classification de l'app mais en
   // direct : coup parfait / précis / imprécision / erreur / gaffe, enrichi par
   // le commentaire de analysis.js (pièce en prise, fourchette menacée…).
-  function gradeMyMove(isBest, cpLoss, mateForMe, iDeliveredMate, fenAfterMe, myMove, res) {
+  function gradeMyMove(isBest, cpLoss, wpl, mateForMe, iDeliveredMate, fenAfterMe, myMove, res) {
+    // Bandes de l'analyseur (analysis.js) : 2 / 5 / 10 / 20 pts de chances de
+    // gain. Le chiffre en cp ne s'affiche que s'il veut dire quelque chose :
+    // ni mat d'un cote ni de l'autre, et moins de 3 pions.
+    const band = wpl != null ? (wpl < 0.02 ? 0 : wpl < 0.05 ? 1 : wpl < 0.10 ? 2 : wpl < 0.20 ? 3 : 4)
+      : cpLoss == null ? null : (cpLoss <= 20 ? 0 : cpLoss <= 50 ? 1 : cpLoss <= 100 ? 2 : cpLoss <= 250 ? 3 : 4);
+    const loss = cpLoss == null ? null : Math.round(cpLoss);
+    const cost = (loss != null && loss <= 300 && Math.abs(curEvalMe) < 2000) ? ` (-${loss} cp)` : '';
     if (iDeliveredMate) {
       if (convStats) convStats.best++; // un mat compte évidemment comme le meilleur coup
       return { html: '🏆 <b>Échec et mat !</b> Superbe, tu punis la position.', cls: 'right' };
@@ -751,17 +789,13 @@ const Replay = (() => {
         if (convStats) convStats.best++;
         return { html: `✅ <b>Le meilleur coup.</b> ${advHold(after)}`, cls: 'right' };
       }
-      if (cpLoss == null) return { html: `🔵 Coup joué. ${advHold(after)}`, cls: '' };
-      const loss = Math.round(cpLoss);
-      if (loss <= 30) return { html: `👍 <b>Solide</b>, tu gardes la main. ${advHold(after)}`, cls: 'right' };
-      if (loss <= 100) return { html: `🟡 <b>Imprécis</b> (-${loss} cp), pas grave ici. ${advDrop(after)}${bad ? ' ' + bad : ''}${goneTxt}`, cls: '' };
+      if (band == null) return { html: `🔵 Coup joué. ${advHold(after)}`, cls: '' };
+      if (band <= 1) return { html: `👍 <b>Solide</b>, tu gardes la main. ${advHold(after)}`, cls: 'right' };
+      if (band === 2) return { html: `🟡 <b>Imprécis</b>${cost}, pas grave ici. ${advDrop(after)}${bad ? ' ' + bad : ''}${goneTxt}`, cls: '' };
       if (convStats) convStats.slips++;
-      const head = loss > 250
+      const head = band === 4
         ? `🔴 <b>Voilà exactement le genre de coup qui te fait reperdre une partie gagnée.</b>`
         : `🟠 <b>Ce coup laisse filer une partie de ton avantage.</b>`;
-      // Au-delà de 3 pions perdus, le chiffre en centipions n'apprend rien de
-      // plus que « de +6.9 à -6.1 » : on ne garde que la phrase.
-      const cost = loss > 300 ? '' : ` (-${loss} cp)`;
       return { html: `${head}${cost} ${advDrop(after)}${bad ? ' ' + bad : ''}${goneTxt}`, cls: 'wrong', retry: true };
     }
     if (mateForMe != null && mateForMe < 0) {
@@ -769,13 +803,12 @@ const Replay = (() => {
       return { html: `🔴 <b>Attention</b> — ce coup permet un mat forcé pour l'adversaire.${bad ? ' ' + bad : ''}`, cls: 'wrong' };
     }
     if (isBest) return { html: '✅ <b>Parfait</b>, c\'est le meilleur coup.', cls: 'right' };
-    if (cpLoss == null) return { html: '🔵 Coup joué.', cls: '' };
-    const loss = Math.round(cpLoss);
-    if (loss <= 20) return { html: '👍 <b>Précis</b>, tu gardes le fil.', cls: 'right' };
-    if (loss <= 50) return { html: `🟡 <b>Petite imprécision</b> (-${loss} cp), rien de grave.`, cls: '' };
+    if (band == null) return { html: '🔵 Coup joué.', cls: '' };
+    if (band === 0) return { html: '👍 <b>Précis</b>, tu gardes le fil.', cls: 'right' };
+    if (band <= 2) return { html: `🟡 <b>Petite imprécision</b>${cost}, rien de grave.`, cls: '' };
     const bad = badExplain(fenAfterMe, myMove, res);
-    if (loss <= 120) return { html: `🟠 <b>Erreur</b> (-${loss} cp).${bad ? ' ' + bad : ''}`, cls: 'wrong' };
-    return { html: `🔴 <b>Gaffe</b> (-${loss} cp).${bad ? ' ' + bad : ''}`, cls: 'wrong' };
+    if (band === 3) return { html: `🟠 <b>Erreur</b>${cost}.${bad ? ' ' + bad : ''}`, cls: 'wrong' };
+    return { html: `🔴 <b>Gaffe</b>${cost}.${bad ? ' ' + bad : ''}`, cls: 'wrong' };
   }
 
   // Ce que l'adversaire (le moteur) menace après mon coup, via analysis.js.
@@ -817,7 +850,7 @@ const Replay = (() => {
           : `<div class="rp-term">🏆 Échec et mat, bien joué ! Annule pour explorer une variante.</div>`;
       }
       if (g.in_stalemate()) return (mode === 'convert' ? converted(false) : `<div class="rp-term">Pat — nulle. Annule pour tenter autre chose.</div>`);
-      if (g.in_draw()) return (mode === 'convert' ? converted(false) : `<div class="rp-term">Nulle (matériel / répétition). Annule pour tenter autre chose.</div>`);
+      if (g.in_draw() || (fen === curFen() && threefold())) return (mode === 'convert' ? converted(false) : `<div class="rp-term">Nulle (matériel / répétition). Annule pour tenter autre chose.</div>`);
     } catch (_) {}
     return '';
   }

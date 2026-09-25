@@ -2867,8 +2867,12 @@ body.guess-open { overflow: hidden; }
   /* The board scrolls away when reading, so it no longer needs to be shrunk to
      leave room for content — give it the full available width. When pinned for
      move review it still fits: it's the only thing kept on screen. */
-  .board-container { max-width: calc(100% - 22px); }
-  .player-bar { max-width: calc(100% - 22px); }
+  /* La goutiere de la barre d'eval est deja le padding-left du wrapper : la
+     retrancher une 2e fois ici coutait 22 px d'echiquier. */
+  .board-container, .player-bar { max-width: 100%; }
+  /* .analysis-body n'a que 12 px de marge ici : le -16 px de .board-sticky
+     debordait de 4 px de chaque cote. */
+  .analysis-body > .board-sticky { margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
   .analysis-body { padding: 12px; padding-bottom: calc(78px + env(safe-area-inset-bottom, 0)); }
   .panel { max-width: 100%; }
   .tabbar .tab { padding-left: 0; padding-right: 0; }
@@ -2894,6 +2898,9 @@ body.guess-open { overflow: hidden; }
 .coach-entry { background: linear-gradient(135deg, #1c3a4a, #16213e); }
 .coach-body { width: 100%; max-width: 480px; margin: 0 auto; padding: 12px 14px calc(78px + env(safe-area-inset-bottom, 0)); display: flex; flex-direction: column; align-items: center; }
 .coach-card { max-width: 480px; }
+/* Sans largeur explicite, la ligne des puces de periode (nowrap) elargissait tout
+   le tableau a 412 px sur un telephone de 375 : 18 px rognes de chaque cote. */
+#coach-dashboard { width: 100%; min-width: 0; }
 
 /* ── Coach themed sections ──────────────────────────────────────────────────
    Cards are grouped into a few categories, each with its own accent colour.
@@ -5721,3 +5728,27 @@ html.booting #recent-list:empty {
 .cg-review .t { flex: 1; min-width: 140px; }
 .cg-review .t b { color: var(--text); }
 .cg-review .train-btn { padding: 7px 10px; font-size: 12px; min-height: 34px; }
+
+/* ═══ Encoche et barre d'accueil (iPhone installe) ═══
+   Sans viewport-fit=cover, tous les env(safe-area-inset-bottom) de ce fichier
+   valaient 0, et la barre d'etat « black-translucent » recouvrait le haut de la
+   page. Sur un ecran sans encoche, env() vaut 0 : rien ne bouge. */
+body,
+.guess-overlay,
+.panel,
+.opening-modal-overlay,
+.concept-modal-overlay { padding-top: env(safe-area-inset-top, 0px); }
+.rating-modal-overlay { padding-top: max(12px, env(safe-area-inset-top, 0px)); }
+
+/* Choix de la promotion (BoardRenderer.pickPromotion), au-dessus de tout. */
+.promo-pick { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); }
+.promo-pick-box { background: var(--bg-elevated, #1c2238); border: 1px solid var(--accent-dim, #6b5a2a); border-radius: 14px; padding: 12px 14px 14px; text-align: center; }
+.promo-pick-box p { margin: 0 0 8px; font-weight: 600; color: var(--text, #eee); }
+.promo-pick-row { display: flex; gap: 8px; }
+.promo-pick-row button { width: 60px; height: 60px; padding: 4px; border-radius: 10px; border: 1px solid transparent; background: var(--bg, #12172b); cursor: pointer; }
+.promo-pick-row button:hover, .promo-pick-row button:focus-visible { border-color: var(--accent, #e2b857); }
+.promo-pick-row svg { width: 100%; height: 100%; }
+
+/* Analyse terminee pendant qu'on etait ailleurs (readyToast, app.js). */
+.ready-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 1500; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--accent-dim, #6b5a2a); background: var(--bg-elevated, #1c2238); color: var(--text, #eee); font: inherit; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+.ready-toast b { color: var(--accent, #e2b857); }

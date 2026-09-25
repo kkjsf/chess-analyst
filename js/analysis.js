@@ -223,9 +223,19 @@ const Analyzer = (() => {
       if (fork) return `L'adversaire menace une fourchette sur ${fork.names.join(' et ')}.`;
     } catch (_) {}
 
-    const struct = analyzeStructure(fenAfter);
-    if (madeMove.piece === 'p' && struct.doubled[madeMove.color] > 0) return 'Ce coup crée des pions doublés, affaiblissant la structure.';
-    if (madeMove.piece === 'p' && struct.isolated[madeMove.color] > 0) return 'Ce coup isole un pion, le rendant vulnérable.';
+    // Seule une prise de pion change de colonne, donc seule elle peut CREER des
+    // pions doubles ou isoles. Sans ce garde, n'importe quel h3 imprecis se
+    // voyait reprocher des pions c doubles depuis vingt coups.
+    if (madeMove.piece !== 'p' || madeMove.from[0] === madeMove.to[0]) return '';
+    const col = madeMove.to.charCodeAt(0) - 97;
+    const onFile = new Chess(fenAfter).board().filter(r => r[col] && r[col].type === 'p' && r[col].color === madeMove.color).length;
+    if (onFile > 1) return 'Ce coup crée des pions doublés, affaiblissant la structure.';
+    // Isole : un pion des colonnes voisines de la colonne quittee n'a plus aucun
+    // voisin. Un pion isole depuis longtemps ailleurs n'est pas la faute du coup.
+    const files = new Set();
+    new Chess(fenAfter).board().forEach(r => r.forEach((p, f) => { if (p && p.type === 'p' && p.color === madeMove.color) files.add(f); }));
+    const F = madeMove.from.charCodeAt(0) - 97;
+    if ([F - 1, F + 1].some(f => files.has(f) && !files.has(f - 1) && !files.has(f + 1))) return 'Ce coup isole un pion, le rendant vulnérable.';
 
     return '';
   }
@@ -643,7 +653,7 @@ const Analyzer = (() => {
     }
     let ttErrors = 0;
     for (const p of blunderPlies) if (ttPly[p]) ttErrors++;
-    const ph = (k) => phaseSec[k].c ? Math.round(phaseSec[k].t / phaseSec[k].c) : 0;
+    const ph = (k) => phaseSec[k].c ? Math.round(phaseSec[k].t / phaseSec[k].c) : null;
     return {
       timed: true,
       avgMoveSec: cnt ? Math.round((sum / cnt) * 10) / 10 : 0,
@@ -744,7 +754,9 @@ const Analyzer = (() => {
       }
     }
 
-    const acplOf = (k) => phaseCp[k].count ? Math.round(phaseCp[k].total / phaseCp[k].count) : 0;
+    // null, pas 0, pour une phase absente : 59 parties rapides sur 101 n'ont
+    // pas de finale, et leurs 0 tiraient l'ACPL moyen de la finale de 111 a 59.
+    const acplOf = (k) => phaseCp[k].count ? Math.round(phaseCp[k].total / phaseCp[k].count) : null;
     const mq = {
       brilliant: us.brilliants || 0, best: us.best || 0, great: us.great || 0,
       excellent: us.excellent || 0, good: us.good || 0, book: us.book || 0, forced: us.forced || 0,
@@ -980,7 +992,9 @@ const Analyzer = (() => {
       //   Mistake     wpl 0.10–0.20
       //   Blunder     wpl 0.20–1.00
       const wpl = winPctLoss;
-      const inBook = bookDepth && i < bookDepth;
+      // Un SYSTEME (Londres, Stonewall...) ne decrit que les coups des Blancs :
+      // les reponses noires, quelles qu'elles soient, n'y sont pas « du livre ».
+      const inBook = bookDepth && i < bookDepth && (!bookInfo.system || i % 2 === 0);
       const noEngine = !(evalBefore && evalAfter);
       // A "good piece sacrifice" for Brilliant, tied to the move just played:
       // the piece that moved is left en prise for net ≥ 2. Requiring the offer

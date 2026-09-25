@@ -1,5 +1,12 @@
 const App = (() => {
   const STORAGE_KEY = 'chess-analyst-games';
+  // Stockage bloque (SecurityError) ou valeur corrompue : loadRecent() tourne
+  // dans init(), avant le Share Target et toute la section Apprendre, qui
+  // tombaient avec lui.
+  function readGames() {
+    try { const g = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); return Array.isArray(g) ? g : []; }
+    catch (_) { return []; }
+  }
   // Analyse « en lecture seule » (mode entraineur) : `noIngest` est arme par
   // loadPgnAndAnalyze({ingest:false}) et consomme au debut d'onAnalyze dans
   // `readOnlyRun`, qui pilote les deux ecritures (paquet d'exercices + liste
@@ -26,6 +33,7 @@ const App = (() => {
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
+  const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   // Focus trap for modal dialogs: keeps Tab/Shift+Tab within `dialog`, focuses
   // its first control on open, and restores focus to the opener on release.
@@ -89,6 +97,8 @@ const App = (() => {
     initConcepts();
     initOpenings();
     initSettings();
+    initBackButton();
+    initKeyboardClickables();
     pruneRoutineKeys();
     refreshHome();
     // L'accueil est rempli : on rend la main au CSS normal (voir le script
@@ -287,10 +297,6 @@ const App = (() => {
     } catch (_) {}
   }
 
-  function isGameCached(header, moveCount) {
-    return !!getCachedAnalysis(cacheKey(header, moveCount));
-  }
-
   function extractChessComUrl(text) {
     const m = text.match(/https?:\/\/(www\.)?chess\.com\/[^\s]+/i);
     return m ? m[0] : null;
@@ -369,7 +375,12 @@ const App = (() => {
     if (chess.history().length === 0) chess.load_pgn(pgnText, { sloppy: true });
     if (chess.history().length === 0) return null;
 
+    // Les en-tetes PGN (noms, Elo, date, evenement) viennent d'un texte colle ou
+    // d'un lien de partage et finissent dans des innerHTML : un nom
+    // `<img onerror=...>` s'executait, puis se rejouait a chaque lancement via la
+    // liste des parties recentes. Aucun en-tete legitime ne contient ces signes.
     const header = chess.header();
+    for (const k in header) header[k] = String(header[k]).replace(/[<>"]/g, '');
     let moves = chess.history({ verbose: true });
 
     const movesText = (cleaned.substring(cleaned.lastIndexOf(']') + 1)
@@ -480,7 +491,9 @@ const App = (() => {
     if (cached) {
       saveGame(pgnText, header, moves.length);
       currentPgn = pgnText;
-      showAnalysis(header, moves, cached.analysis, cached.summary);
+      // Une analyse locale pose toujours engineUsed (vrai ou faux) ; absent, c'est
+      // un rapport serveur mis en cache avant qu'il ne porte le champ.
+      showAnalysis(header, moves, cached.analysis, { ...cached.summary, engineUsed: cached.summary.engineUsed !== false });
       return;
     }
 
@@ -517,7 +530,24 @@ const App = (() => {
     }
     if (!readOnlyRun) saveGame(pgnText, header, moves.length);
     currentPgn = pgnText;
+    // Parti ailleurs pendant l'analyse (un onglet, un exercice) : on ne l'arrache
+    // pas a ce qu'il fait, on lui dit que c'est pret.
+    if (!$('#screen-import').classList.contains('active') || topLayer()) {
+      readyToast(() => showAnalysis(header, moves, analysis, summary));
+      return;
+    }
     showAnalysis(header, moves, analysis, summary);
+  }
+
+  function readyToast(open) {
+    const old = document.querySelector('.ready-toast');
+    if (old) old.remove();
+    const t = document.createElement('button');
+    t.type = 'button';
+    t.className = 'ready-toast';
+    t.innerHTML = '✅ Analyse prête · <b>Voir</b>';
+    t.addEventListener('click', () => { t.remove(); closeOverlays(); open(); });
+    document.body.appendChild(t);
   }
 
   function showProgressBar(text) {
@@ -611,6 +641,7 @@ const App = (() => {
     $$('.screen').forEach(s => s.classList.remove('active'));
     $('#screen-analysis').classList.add('active');
     setTab('analyser');
+    armBack();
     // La timeline a ete CONSTRUITE avant que l'ecran soit affiche : la largeur
     // du SVG valait alors 0, donc son repere restait a 320 unites pour un
     // element large de 586 px - c'est ce qui etirait les courbes en desktop. On
@@ -634,7 +665,11 @@ const App = (() => {
     const parsed = deriveHeaderMoves(rec.pgn);
     if (!parsed) return false;
     const { header, moves } = parsed;
-    const { analysis, summary } = rec.report;
+    // Le rapport serveur vient toujours de Stockfish, mais `tools/analyze.mjs`
+    // n'ecrivait pas `engineUsed` : le bandeau de precision restait masque et le
+    // resume sautait tout ce qui depend du moteur (corrige aussi a la source).
+    const { analysis } = rec.report;
+    const summary = { ...rec.report.summary, engineUsed: true };
     currentClocks = extractClocks(rec.pgn);
     currentPgn = rec.pgn;
     const ck = cacheKey(header, moves.length);
@@ -654,10 +689,16 @@ const App = (() => {
   // mode entraineur : une partie contre le coach doit pouvoir passer par
   // l'ecran d'analyse tout en restant hors de l'archive et hors des stats.
   function loadPgnAndAnalyze(pgn, opts) {
+    // Une analyse deja en cours refuse la suivante AVANT de consommer
+    // noIngest : arme ici, il aurait exclu en silence la vraie partie d'apres.
+    if (analyzing) { showError('Analyse déjà en cours : patientez la fin avant d\'en lancer une autre.'); return; }
     noIngest = !!(opts && opts.ingest === false);
     const input = $('#pgn-input');
     if (input) input.value = pgn;
-    $('#screen-coach').classList.remove('active');
+    // Le mode entraineur est un calque ouvert depuis n'importe quel ecran : ne
+    // retirer que #screen-coach laissait l'analyse precedente active au-dessus
+    // de la barre de progression.
+    $$('.screen').forEach(s => s.classList.remove('active'));
     $('#screen-import').classList.add('active');
     onAnalyze();
   }
@@ -1227,13 +1268,35 @@ const App = (() => {
   const SRS_KEY = 'ca_lessons_srs';
   const SRS_BOXES = [1, 3, 7, 21];
   const DAY = 864e5;
-  function srsAll() { try { return JSON.parse(localStorage.getItem(SRS_KEY) || '{}'); } catch (_) { return {}; } }
+  // Une branche est identifiee par son CHEMIN de coups (`b.sans`), plus par sa
+  // place dans la liste : ajouter une ligne a un cours decalait les index et
+  // transportait la progression sur les mauvaises branches. Les anciennes cles
+  // « ligne#3 » sont converties a la premiere lecture.
+  const branchSig = (b) => b.sans.join(' ');
+  function srsMigrate(o) {
+    let moved = false;
+    for (const k of Object.keys(o)) {
+      const cut = k.indexOf('#'), line = k.slice(0, cut), rest = k.slice(cut + 1);
+      if (!/^\d+$/.test(rest)) continue;
+      const course = (typeof Courses !== 'undefined') ? Courses.get(line) : null;
+      const b = course ? Courses.buildBranches(course)[+rest] : null;
+      if (b && !o[line + '#' + branchSig(b)]) o[line + '#' + branchSig(b)] = o[k];
+      delete o[k]; moved = true;
+    }
+    return moved;
+  }
+  function srsAll() {
+    let o;
+    try { o = JSON.parse(localStorage.getItem(SRS_KEY) || '{}'); } catch (_) { return {}; }
+    if (srsMigrate(o)) srsWrite(o);
+    return o;
+  }
   function srsWrite(o) { try { localStorage.setItem(SRS_KEY, JSON.stringify(o)); } catch (_) {} }
-  function srsGet(line, i) { return srsAll()[line + '#' + i] || null; }
+  function srsGet(line, sig) { return srsAll()[line + '#' + sig] || null; }
   // Une branche revue monte d'une boite ; une branche ratee (2 fautes au rejeu
   // en aveugle) redescend a la premiere.
-  function srsTouch(line, i, ok) {
-    const all = srsAll(), k = line + '#' + i;
+  function srsTouch(line, sig, ok) {
+    const all = srsAll(), k = line + '#' + sig;
     const e = all[k] || { box: -1, seen: 0 };
     e.box = ok === false ? 0 : Math.min(SRS_BOXES.length - 1, e.box + 1);
     e.seen = (e.seen || 0) + 1;
@@ -1244,7 +1307,7 @@ const App = (() => {
   function srsDue() {
     const all = srsAll(), now = Date.now();
     return Object.keys(all).filter(k => (all[k].due || 0) <= now)
-      .map(k => ({ line: k.split('#')[0], i: +k.split('#')[1], e: all[k] }));
+      .map(k => ({ line: k.slice(0, k.indexOf('#')), sig: k.slice(k.indexOf('#') + 1), e: all[k] }));
   }
   function srsLabel(e) {
     if (!e) return '';
@@ -1300,62 +1363,62 @@ const App = (() => {
     if (user) {
       if (userWon) {
         if (termLower.includes('checkmate') || termLower.includes('mat')) {
-          line2 = `Vous gagnez par échec et mat en ${analysis.length} coups — bien joué !`;
+          line2 = `Vous gagnez par échec et mat en ${Math.ceil(analysis.length / 2)} coups — bien joué !`;
         } else if (termLower.includes('resign') || termLower.includes('abandon')) {
-          line2 = `Votre adversaire abandonne après ${analysis.length} coups.`;
+          line2 = `Votre adversaire abandonne après ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('time')) {
-          line2 = `Vous gagnez au temps après ${analysis.length} coups.`;
+          line2 = `Vous gagnez au temps après ${Math.ceil(analysis.length / 2)} coups.`;
         } else {
-          line2 = `Victoire en ${analysis.length} coups, bravo !`;
+          line2 = `Victoire en ${Math.ceil(analysis.length / 2)} coups, bravo !`;
         }
       } else if (userLost) {
         if (termLower.includes('checkmate') || termLower.includes('mat')) {
-          line2 = `Défaite par mat en ${analysis.length} coups — voyons ce qui s'est passé.`;
+          line2 = `Défaite par mat en ${Math.ceil(analysis.length / 2)} coups — voyons ce qui s'est passé.`;
         } else if (termLower.includes('resign') || termLower.includes('abandon')) {
-          line2 = `Vous abandonnez après ${analysis.length} coups.`;
+          line2 = `Vous abandonnez après ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('time')) {
-          line2 = `Défaite au temps après ${analysis.length} coups.`;
+          line2 = `Défaite au temps après ${Math.ceil(analysis.length / 2)} coups.`;
         } else {
-          line2 = `Défaite en ${analysis.length} coups — analysons pour progresser.`;
+          line2 = `Défaite en ${Math.ceil(analysis.length / 2)} coups — analysons pour progresser.`;
         }
       } else if (isDraw) {
-        line2 = `Partie nulle en ${analysis.length} coups.`;
+        line2 = `Partie nulle en ${Math.ceil(analysis.length / 2)} coups.`;
       } else {
-        line2 = `Partie de ${analysis.length} coups.`;
+        line2 = `Partie de ${Math.ceil(analysis.length / 2)} coups.`;
       }
     } else {
       if (result === '1-0') {
         if (termLower.includes('checkmate') || termLower.includes('mat')) {
-          line2 = `Victoire des Blancs par échec et mat en ${analysis.length} coups.`;
+          line2 = `Victoire des Blancs par échec et mat en ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('resign') || termLower.includes('abandon')) {
-          line2 = `Les Noirs ont abandonné après ${analysis.length} coups.`;
+          line2 = `Les Noirs ont abandonné après ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('time')) {
-          line2 = `Les Blancs gagnent au temps après ${analysis.length} coups.`;
+          line2 = `Les Blancs gagnent au temps après ${Math.ceil(analysis.length / 2)} coups.`;
         } else {
-          line2 = `Victoire des Blancs en ${analysis.length} coups.`;
+          line2 = `Victoire des Blancs en ${Math.ceil(analysis.length / 2)} coups.`;
         }
       } else if (result === '0-1') {
         if (termLower.includes('checkmate') || termLower.includes('mat')) {
-          line2 = `Victoire des Noirs par échec et mat en ${analysis.length} coups.`;
+          line2 = `Victoire des Noirs par échec et mat en ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('resign') || termLower.includes('abandon')) {
-          line2 = `Les Blancs ont abandonné après ${analysis.length} coups.`;
+          line2 = `Les Blancs ont abandonné après ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('time')) {
-          line2 = `Les Noirs gagnent au temps après ${analysis.length} coups.`;
+          line2 = `Les Noirs gagnent au temps après ${Math.ceil(analysis.length / 2)} coups.`;
         } else {
-          line2 = `Victoire des Noirs en ${analysis.length} coups.`;
+          line2 = `Victoire des Noirs en ${Math.ceil(analysis.length / 2)} coups.`;
         }
       } else if (isDraw) {
         if (termLower.includes('stalemate') || termLower.includes('pat')) {
-          line2 = `Partie nulle par pat après ${analysis.length} coups.`;
+          line2 = `Partie nulle par pat après ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('repetition') || termLower.includes('répétition')) {
-          line2 = `Partie nulle par répétition après ${analysis.length} coups.`;
+          line2 = `Partie nulle par répétition après ${Math.ceil(analysis.length / 2)} coups.`;
         } else if (termLower.includes('agreement') || termLower.includes('accord')) {
-          line2 = `Partie nulle par accord mutuel après ${analysis.length} coups.`;
+          line2 = `Partie nulle par accord mutuel après ${Math.ceil(analysis.length / 2)} coups.`;
         } else {
-          line2 = `Partie nulle en ${analysis.length} coups.`;
+          line2 = `Partie nulle en ${Math.ceil(analysis.length / 2)} coups.`;
         }
       } else {
-        line2 = `Partie de ${analysis.length} coups.`;
+        line2 = `Partie de ${Math.ceil(analysis.length / 2)} coups.`;
       }
     }
 
@@ -1584,6 +1647,9 @@ const App = (() => {
           if (opening.structure === undefined) opening.structure = cat.structure;
           if (opening.mistakes === undefined) opening.mistakes = cat.mistakes;
           if (opening.deviations === undefined) opening.deviations = cat.deviations;
+          // Le camp aussi : sans lui le rejeu en aveugle retombait sur la parite
+          // du 1er coup de la branche et faisait jouer le mauvais camp.
+          if (opening.side === undefined) opening.side = cat.side;
         }
       }
     }
@@ -1953,7 +2019,7 @@ const App = (() => {
 
       detailsEl.hidden = true; detailsEl.innerHTML = '';
 
-      const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const esc = escHtml;
       const has = (a) => Array.isArray(a) && a.length;
 
       const branches = Courses.buildBranches(course);
@@ -2135,7 +2201,7 @@ const App = (() => {
           // Pas de prefixe d'emoji : Tactics ajoute deja le sien au titre.
           'En aveugle · ' + (b.name || labelOf(b)),
           // Une ligne ratee redescend en premiere boite (voir srsTouch).
-          { onDone: (okAll) => { if (iBranch >= 0) srsTouch(opening.line, iBranch, okAll !== false); } }
+          { onDone: (okAll) => { if (iBranch >= 0) srsTouch(opening.line, branchSig(b), okAll !== false); } }
         );
       }
 
@@ -2314,7 +2380,7 @@ const App = (() => {
         }
 
         // L'etat de revision de CETTE branche.
-        const srs = srsGet(opening.line, i);
+        const srs = srsGet(opening.line, branchSig(branches[i]));
         if (srs) h += `<div class="ob-srs"><span class="dot"></span>` +
           `<span>branche revue ${srs.seen} fois &middot; <b>${srsLabel(srs)}</b></span></div>`;
 
@@ -2350,6 +2416,14 @@ const App = (() => {
         if (quizzes[i].length) renderQuiz(quizzes[i]);
       }
 
+      // Les 34 QCM des cours ont tous answer: 0 : sans melange, la bonne reponse
+      // etait toujours le premier bouton.
+      function shuffledIdx(n) {
+        const a = Array.from({ length: n }, (_, i) => i);
+        for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+        return a;
+      }
+
       function renderQuiz(qs) {
         const host = $('#ob-quiz');
         let k = 0, score = 0;
@@ -2366,14 +2440,16 @@ const App = (() => {
             host.innerHTML = `<p class="ol-quiz-q">${q.q}</p>` +
               `<button class="train-btn good ob-qplay">Jouer sur l'échiquier</button>` +
               `<div class="ol-quiz-fb" hidden></div>`;
+            // Le point se gagne en trouvant la suite, pas en ouvrant l'echiquier.
             host.querySelector('.ob-qplay').addEventListener('click', () => {
-              Tactics.start([{ fen: q.fen, sol: q.sol, hint: q.explain }], q.q);
-              score++; k++; draw();
+              Tactics.start([{ fen: q.fen, sol: q.sol, hint: q.explain }], q.q, {
+                onDone: (clean) => { if (clean) score++; k++; draw(); }
+              });
             });
             return;
           }
           host.innerHTML = `<p class="ol-quiz-q">${q.q}</p><div class="ol-quiz-opts">` +
-            q.opts.map((o, j) => `<button class="quiz-opt" data-j="${j}">${esc(o)}</button>`).join('') +
+            shuffledIdx(q.opts.length).map(j => `<button class="quiz-opt" data-j="${j}">${esc(q.opts[j])}</button>`).join('') +
             `</div><div class="ol-quiz-fb" hidden></div>`;
           host.querySelectorAll('.quiz-opt').forEach(b => b.addEventListener('click', () => answer(+b.dataset.j)));
         }
@@ -2405,7 +2481,7 @@ const App = (() => {
         // Premiere visite de la branche dans cette session : elle entre (ou
         // monte) dans la boite de revision - une ligne lue une fois est une
         // ligne oubliee.
-        if (!visited.has(i)) { visited.add(i); srsTouch(opening.line, i, true); }
+        if (!visited.has(i)) { visited.add(i); srsTouch(opening.line, branchSig(branches[i]), true); }
         const b = branches[i];
         // L'échiquier suit l'arbre : on charge le chemin complet du noeud et on
         // s'arrête sur sa position, les flèches ◀ ▶ rejouant la branche.
@@ -2429,7 +2505,8 @@ const App = (() => {
       // directement sur la tabiya en desktop, où l'arbre reste visible à gauche.
       // Deep-link : on atterrit directement sur la branche demandee, meme sur
       // mobile (ou l'on arrive normalement sur la carte de l'arbre).
-      const want = lessonOpts && typeof lessonOpts.branch === 'number' &&
+      const bySig = lessonOpts && lessonOpts.branchSig ? branches.findIndex(b => branchSig(b) === lessonOpts.branchSig) : -1;
+      const want = bySig >= 0 ? bySig : lessonOpts && typeof lessonOpts.branch === 'number' &&
         lessonOpts.branch >= 0 && lessonOpts.branch < branches.length ? lessonOpts.branch : null;
       if (want !== null) { renderRail(); renderSibs(); show(want); }
       // Sur mobile on arrive sur la CARTE de l'arbre : rien n'a encore ete lu,
@@ -3819,10 +3896,14 @@ const App = (() => {
   }
 
 
+  let tbRun = 0;
   async function probeEndgameTablebase(analysis) {
     const card = $('#tablebase-card');
     const content = $('#tablebase-content');
     card.hidden = true;
+    // Jusqu'a 20 requetes lichess en serie : si une autre partie s'ouvre entre
+    // temps, les resultats de celle-ci ne doivent pas atterrir dans son rapport.
+    const run = ++tbRun;
 
     const tbResults = [];
     for (let i = analysis.length - 1; i >= 0 && i >= analysis.length - 20; i--) {
@@ -3832,6 +3913,7 @@ const App = (() => {
       if (pieces.length > 7 || pieces.length < 3) continue;
 
       const tb = await Analyzer.probeTablebase(r.fen);
+      if (run !== tbRun) return;
       if (!tb || tb.category === undefined) continue;
 
       const moveNum = Math.floor(i / 2) + 1;
@@ -3945,6 +4027,77 @@ const App = (() => {
     else setTab('analyser');
   }
 
+  // ── Clavier : les cibles cliquables qui ne sont pas des <button> ──
+  // Parties recentes, moments du rapport, fiches concepts/ouvertures, lignes de
+  // la tablebase et du temps : des <div> a simple clic, inatteignables au
+  // clavier. On les etiquette (tabindex + role) au fil des rendus, et Entree /
+  // Espace declenchent le clic.
+  const KB_CLICKABLE = '.recent-item, .moment, .concept, .tt-move-row, .tb-result, .km-move[data-goto]';
+  function initKeyboardClickables() {
+    const tag = () => document.querySelectorAll(KB_CLICKABLE).forEach(el => {
+      if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.hasAttribute('tabindex')) return;
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+    });
+    let pending = null;
+    new MutationObserver(() => { if (!pending) pending = setTimeout(() => { pending = null; tag(); }, 120); })
+      .observe(document.body, { childList: true, subtree: true });
+    tag();
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches(KB_CLICKABLE) && e.target.tagName !== 'BUTTON') {
+        e.preventDefault();
+        e.target.click();
+      }
+    });
+  }
+
+  // ── Bouton retour (Android, geste de retour, touche Precedent) ──
+  // Sans historique, le retour du telephone fermait l'app depuis n'importe quel
+  // ecran, modale ou partie en cours. Une seule entree « garde » est posee
+  // au-dessus de l'accueil des qu'on le quitte ; chaque retour la consomme,
+  // ferme la couche du dessus (ou revient a l'accueil) et la repose tant qu'on
+  // n'est pas revenu au calme. A l'accueil, le retour suivant sort de l'app.
+  // Ordre = du plus haut au plus bas (un exercice s'ouvre par-dessus une fiche
+  // d'ouverture, qui s'ouvre par-dessus le mode entraineur).
+  const BACK_LAYERS = [
+    ['#tactics-overlay', '#tac-close'],
+    ['#concept-modal.visible', '#concept-modal-close'],
+    ['#opening-modal.visible', '#opening-modal-close'],
+    ['.rating-modal-overlay', '.rating-modal-close'],
+    ['#cg-backdrop', '#cg-sheet-close'],
+    ['#mate-overlay', '#mate-close'],
+    ['#guess-overlay', '#guess-close'],
+    ['#replay-overlay', '#rp-close'],
+    ['#cg-overlay', '#cg-close'],
+    ['#panel-overlay', '#panel-overlay'],
+  ];
+  const layerOpen = (el) => !!el && !el.hidden && getComputedStyle(el).display !== 'none';
+  function topLayer() {
+    for (const [sel, closeSel] of BACK_LAYERS) {
+      const el = document.querySelector(sel);
+      if (layerOpen(el)) return (el.matches(closeSel) ? el : el.querySelector(closeSel)) || document.querySelector(closeSel);
+    }
+    return null;
+  }
+  const atRest = () => !topLayer() && $('#screen-import').classList.contains('active');
+  function armBack() {
+    if (!atRest() && !(history.state && history.state.caBack)) history.pushState({ caBack: 1 }, '');
+  }
+  function initBackButton() {
+    window.addEventListener('popstate', () => {
+      const close = topLayer();
+      if (close) close.click();
+      else if (!$('#screen-import').classList.contains('active')) {
+        closeOverlays();
+        $$('.screen').forEach(s => s.classList.remove('active'));
+        showImport();
+      }
+      setTimeout(armBack, 0);
+    });
+    // Toute couche ou tout ecran s'ouvre sur un geste : on arme apres chacun.
+    ['click', 'keyup'].forEach(ev => document.addEventListener(ev, () => setTimeout(armBack, 0), true));
+  }
+
   // Les calques `.guess-*` (mode entraineur, mats, rejeu, devine le coup) sont en
   // position:fixed par-dessus tout et posent `body.guess-open` (overflow:hidden).
   // Changer d'onglet sans les fermer laisse donc l'ancien ecran affiche ET le
@@ -3977,6 +4130,12 @@ const App = (() => {
       $('#screen-import').classList.remove('active');
       $('#screen-analysis').classList.add('active');
       setTab('analyser');
+      // Le mode entraineur, les tactiques et l'entrainement retournent le
+      // plateau partage : sans ceci, le coup suivant se redessinait du mauvais
+      // cote sous des noms de joueurs restes a leur place.
+      BoardRenderer.setFlipped(currentUser === 'b');
+      lastRenderIndex = -1;
+      goTo(currentIndex);
     } else {
       showImport();
     }
@@ -4019,7 +4178,7 @@ const App = (() => {
     // would otherwise bubble up and abort showAnalysis, losing the analysis
     // the user just waited for).
     try {
-      const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const games = readGames();
       const entry = {
         pgn,
         white: header.White || '?',
@@ -4027,9 +4186,15 @@ const App = (() => {
         result: header.Result || '*',
         date: header.Date || new Date().toISOString().slice(0, 10),
         savedAt: Date.now(),
-        moveCount
+        moveCount,
+        // La cle du cache d'analyse, telle quelle : la reconstruire depuis
+        // {White, Black, Date} ne tombait jamais sur la vraie (Link, heure,
+        // cadence), donc le badge « Analysé » ne s'affichait jamais, et deux
+        // revanches du meme jour s'ecrasaient l'une l'autre dans la liste.
+        ck: cacheKey(header, moveCount)
       };
-      const dupeIdx = games.findIndex(g => g.white === entry.white && g.black === entry.black && g.date === entry.date);
+      const dupeIdx = games.findIndex(g => g.ck ? g.ck === entry.ck
+        : (g.white === entry.white && g.black === entry.black && g.date === entry.date && g.moveCount === moveCount));
       if (dupeIdx >= 0) games.splice(dupeIdx, 1);
       games.unshift(entry);
       if (games.length > 20) games.length = 20;
@@ -4043,7 +4208,7 @@ const App = (() => {
     homeBound = true;
     const resume = $('#resume-card');
     if (resume) resume.addEventListener('click', () => {
-      const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      const games = readGames();
       if (!games.length) return;
       $('#pgn-input').value = games[0].pgn;
       onAnalyze();
@@ -4067,9 +4232,9 @@ const App = (() => {
     if (userWon) { cls = 'win'; lbl = 'Victoire'; }
     else if (userLost) { cls = 'loss'; lbl = 'Défaite'; }
     const title = $('#resume-title'); if (title) title.textContent = `${g.white} vs ${g.black}`;
-    const cached = isGameCached({ White: g.white, Black: g.black, Date: g.date }, g.moveCount);
+    const cached = !!(g.ck && getCachedAnalysis(g.ck));
     const meta = $('#resume-meta');
-    if (meta) meta.innerHTML = `<span class="chip ${cls}">${lbl}</span><span>${formatDate(g.date)}</span>` +
+    if (meta) meta.innerHTML = `<span class="chip ${cls}">${lbl}</span><span>${escHtml(formatDate(g.date))}</span>` +
       (cached ? '<span class="cached-badge">Analysé</span>' : '');
     const svg = $('#resume-board-svg');
     if (svg && typeof BoardRenderer !== 'undefined') {
@@ -4086,7 +4251,7 @@ const App = (() => {
     // (mêmes puces de période et même plein écran que le bilan) et se sert de
     // l'archive locale, pas des parties collées ici.
     if (typeof Coach !== 'undefined' && Coach.homeLevel) Coach.homeLevel($('#home-level'));
-    const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    const games = readGames();
     const section = $('#recent-section');
     const list = $('#recent-list');
     const hint = $('#home-hint');
@@ -4113,14 +4278,14 @@ const App = (() => {
       else if (userLost) { resultClass = 'loss'; resultLabel = 'Défaite'; }
 
       const dateStr = formatDate(g.date);
-      const cached = isGameCached({ White: g.white, Black: g.black, Date: g.date }, g.moveCount);
+      const cached = !!(g.ck && getCachedAnalysis(g.ck));
       const cachedBadge = cached ? '<span class="cached-badge">Analysé</span>' : '';
 
       item.innerHTML = `
         <span class="result ${resultClass}">${resultLabel}</span>
-        <span class="players">${g.white} vs ${g.black}</span>
+        <span class="players">${escHtml(g.white)} vs ${escHtml(g.black)}</span>
         ${cachedBadge}
-        <span class="date">${dateStr}</span>
+        <span class="date">${escHtml(dateStr)}</span>
         <button class="delete-btn" data-index="${i}" title="Supprimer">×</button>`;
 
       item.addEventListener('click', (e) => {
@@ -4136,9 +4301,9 @@ const App = (() => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = +btn.dataset.index;
-        const games = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const games = readGames();
         games.splice(idx, 1);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(games));
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(games)); } catch (_) {}
         loadRecent();
       });
     });
@@ -4188,11 +4353,12 @@ const App = (() => {
     // Une ligne d'ouverture a reviser : sans ce rappel, une ligne lue une fois
     // etait une ligne perdue (voir la repetition espacee, srsTouch).
     { key: 'ligne',     icon: '📖', label: "Réviser une ligne d'ouverture",   action: 'ligne', dueLines: true },
-    // La règle d'arrêt EST un item de la routine, pas un conseil en pied de
-    // carte : ses journées à deux défaites d'affilée tombent à 44-52 % de
-    // précision contre 76-81 % les bons jours. Ce n'est pas le niveau qui
-    // baisse, c'est l'attention.
-    { key: 'rapide',    icon: '♟️', label: 'Une partie en Rapide - <b>2 défaites d\'affilée = stop</b>', action: null },
+    // L'ancienne consigne « 2 défaites d'affilée = stop » reposait sur une
+    // comparaison circulaire (journées perdantes vs gagnantes) ; mesurées, ses
+    // parties jouées après deux défaites sont à 69 % de précision et 75 % de
+    // victoires. Ce que ses données montrent vraiment : 43 % de ses erreurs
+    // surviennent alors qu'une prise gratuite existait déjà. D'où la vérification.
+    { key: 'rapide',    icon: '♟️', label: 'Une partie en Rapide - <b>échecs, captures, menaces</b> avant chaque coup', action: null },
   ];
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   function routineTodayKey() { return 'chess-routine-' + isoDay(new Date()); }
@@ -4285,7 +4451,7 @@ const App = (() => {
       // La branche la plus en retard d'abord ; si rien n'est du, la premiere
       // ouverture jamais ouverte, sinon le panneau des ouvertures.
       const due = srsDue().sort((a, b) => (a.e.due || 0) - (b.e.due || 0));
-      if (due.length) { openOpeningByLine(due[0].line, { branch: due[0].i }); return; }
+      if (due.length) { openOpeningByLine(due[0].line, { branchSig: due[0].sig }); return; }
       const seen = srsAll();
       const fresh = OPENINGS.find(o => !Object.keys(seen).some(k => k.split('#')[0] === o.line));
       if (fresh) { openOpeningByLine(fresh.line); return; }
@@ -4432,10 +4598,11 @@ const App = (() => {
     overlay.addEventListener('click', closeAll);
     $$('.panel-close').forEach(btn => btn.addEventListener('click', closeAll));
     document.addEventListener('keydown', (e) => {
-      // A concept-zoom modal can layer on top of a panel; when it's open let it
-      // own Escape so a single press doesn't cascade-close both at once.
-      const cm = $('#concept-modal');
-      if (e.key === 'Escape' && !(cm && cm.classList.contains('visible'))) closeAll();
+      // A concept-zoom or opening modal can layer on top of a panel; when one is
+      // open let it own Escape so a single press doesn't cascade-close both.
+      const cm = $('#concept-modal'), om = $('#opening-modal');
+      const modalUp = (cm && cm.classList.contains('visible')) || (om && om.classList.contains('visible'));
+      if (e.key === 'Escape' && !modalUp) closeAll();
     });
   }
 
@@ -4949,7 +5116,7 @@ const App = (() => {
       const course = (typeof Courses !== 'undefined') ? Courses.get(o.line) : null;
       cards[i].addEventListener('click', () =>
         openOpeningExplorer({
-          name: title, eco: o.eco, line: o.line, moves,
+          name: title, eco: o.eco, line: o.line, moves, side: o.side,
           idea: o.idea, plans: o.plans, structure: o.structure,
           mistakes: o.mistakes, deviations: o.deviations, course
         }, [], o.level || '', flip));
@@ -5023,7 +5190,11 @@ const App = (() => {
       if (+btn.dataset.idx === q.answer) btn.classList.add('correct');
       if (+btn.dataset.idx === idx && !correct) btn.classList.add('wrong');
     });
+    // Relancer le quiz pendant ces 2,2 s remplacait quizState : le minuteur
+    // de l'ancien faisait alors sauter la 1re question du nouveau.
+    const qs = quizState;
     setTimeout(() => {
+      if (qs !== quizState) return;
       quizState.current++;
       renderQuizQuestion();
     }, 2200);

@@ -117,7 +117,11 @@ const Training = (() => {
   // all three into the sampling weight so the session leans on your real
   // weaknesses without ever going fully deterministic.
   function cardTime(it) {
-    const d = it.date ? Date.parse(String(it.date).replace(/\./g, '-')) : NaN;
+    // Les cartes venues du Coach portent une date fr-FR « jj/mm/aaaa », que
+    // Date.parse lisait mm/jj (04/09 = 9 avril) ou rejetait (jour > 12).
+    const fr = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(it.date || ''));
+    const d = fr ? Date.UTC(+fr[3], +fr[2] - 1, +fr[1])
+      : it.date ? Date.parse(String(it.date).replace(/\./g, '-')) : NaN;
     return isNaN(d) ? (it.savedAt || 0) : d;
   }
   // "2024.05.12" → "12 mai 2024" for the puzzle's game context. Falls back to
@@ -645,7 +649,10 @@ const Training = (() => {
     for (let i = 0; i < analysis.length; i++) {
       const r = analysis[i];
       if (!r || !r.move || r.move.color !== user) continue;
-      if (r.type !== 'blunder' && r.type !== 'mistake') continue;
+      // Les coups manques (un gain laisse passer) entrent aussi au paquet :
+      // retrouver le coup gagnant est un exercice, et le bilan les comptait deja
+      // dans « erreurs a reviser » sans qu'on puisse jamais les rejouer.
+      if (r.type !== 'blunder' && r.type !== 'mistake' && r.type !== 'miss') continue;
       if (!r.bestUci || r.bestUci.length < 4 || !r.fenBefore) continue;
       base.push({
         id: gameKey + '#' + i, fen: r.fenBefore, side: user,
@@ -667,7 +674,7 @@ const Training = (() => {
     const base = [];
     for (const b of blunders) {
       if (!b.bestUci || b.bestUci.length < 4 || !b.fenBefore) continue;
-      if (b.type !== 'blunder' && b.type !== 'mistake') continue;
+      if (b.type !== 'blunder' && b.type !== 'mistake' && b.type !== 'miss') continue;
       base.push({
         id: gameKey + '#' + b.ply, fen: b.fenBefore, side: meta.side,
         bestUci: b.bestUci, bestSan: b.bestSan || '',

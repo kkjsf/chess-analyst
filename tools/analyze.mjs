@@ -38,7 +38,9 @@ const STOCKFISH_PATH = process.env.STOCKFISH_PATH || 'stockfish';
 const UA = 'chess-analyst-coach/1.0 (+https://github.com/kkjsf/chess-analyst)';
 
 // ── reuse browser logic ──
-const { Chess } = require('chess.js');
+// Le MEME chess.js que l'app (js/chess.min.js), avec son correctif « strict
+// d'abord » : le paquet npm lit « bxc6 » comme un coup de fou en mode sloppy.
+const { Chess } = require('../js/chess.min.js');
 globalThis.Chess = Chess;
 globalThis.Openings = require('../js/openings.js');
 // analysis.js reads the board through Tactics (SEE / netGain / threats) to tell
@@ -104,7 +106,7 @@ function createEngine() {
           const mate = line.match(/\bscore mate (-?\d+)/);
           const pv = line.match(/\bpv\s+(.+)/);
           if (!lines[idx]) lines[idx] = { score: 0, move: null, pv: '', mate: null };
-          if (cp) lines[idx].score = parseInt(cp[1]);
+          if (cp) { lines[idx].score = parseInt(cp[1]); lines[idx].mate = null; }
           else if (mate) { const m = parseInt(mate[1]); lines[idx].score = m > 0 ? 30000 - m : -30000 - m; lines[idx].mate = m; }
           if (pv) { const s = pv[1].trim(); lines[idx].pv = s; lines[idx].move = s.split(/\s+/)[0]; }
         } else if (line.startsWith('bestmove')) {
@@ -187,6 +189,7 @@ async function analyzeGame(rec) {
   if (!moves.length) return { stats: { error: 'pgn' }, results: null, summary: null };
   const results = await Analyzer.analyzeGameAsync(new Chess(), moves, null, 'depth ' + DEPTH);
   const summary = Analyzer.generateSummary(results, moves);
+  summary.engineUsed = true;
   const stats = Analyzer.computeGameStats(results, summary, {
     side: rec.userColor, pgn: rec.pgn, timeClass: rec.timeClass, timeControl: rec.timeControl
   });
@@ -205,6 +208,9 @@ async function main() {
   } else if (existsSync(OUT)) {
     try {
       const prev = JSON.parse(readFileSync(OUT, 'utf8'));
+      // Un autre pseudo (lancement manuel avec --user) ne doit pas heriter des
+      // parties du precedent : elles partaient sous le nouveau nom.
+      if (prev.username && prev.username.toLowerCase() !== USER.toLowerCase()) prev.games = [];
       for (const g of (prev.games || [])) if (g.analysis && !g.analysis.error && !excludedOpp(g.oppName) && !SKIP_TC.has(g.timeClass)) existing[g.uuid] = g;
       console.log(`[coach] ${Object.keys(existing).length} games already analyzed (kept)`);
     } catch (e) { console.warn('[coach] could not read existing output:', e.message); }

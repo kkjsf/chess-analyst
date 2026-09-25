@@ -4,7 +4,10 @@ const Openings = (() => {
     ['e4 e5 Nf3 Nc6 Bb5', 'C60', 'Partie Espagnole (Ruy Lopez)'],
     // C70, pas C68 : C68 est réservé à la variante d'échange (après 4.Fxc6).
     ['e4 e5 Nf3 Nc6 Bb5 a6', 'C70', 'Ruy Lopez — défense Morphy'],
-    ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O', 'C88', 'Ruy Lopez — système fermé'],
+    // Doublons supprimes (2026-09-25) : la table est lue dans l'ordre et la 1re
+    // ligne gagne, donc la seconde entree d'un meme prefixe n'etait jamais lue - et
+    // la premiere portait parfois le mauvais nom (Göring = 4.c3, pas 4.Fc4).
+    ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O', 'C78', 'Ruy Lopez — 5.O-O'],
     ['e4 e5 Nf3 Nc6 Bc4', 'C50', 'Partie Italienne'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5', 'C50', 'Giuoco Piano'],
     ['e4 e5 Nf3 Nc6 Bc4 Nf6', 'C55', 'Partie des Deux Cavaliers'],
@@ -103,7 +106,9 @@ const Openings = (() => {
     ['d4 f5', 'A80', 'Défense Hollandaise'],
 
     // King's Indian Attack
-    ['Nf3 d5 g3', 'A05', 'Attaque Est-Indienne'],
+    // Réti, pas encore l'Attaque Est-Indienne : c'est detectSystem() qui la nomme
+    // quand d3 suit sans c4 (le nom est dans SOFT, donc remplacable).
+    ['Nf3 d5 g3', 'A07', 'Réti — système fianchetto'],
 
     // Misc
     ['d4 d5 Nf3 Nf6 e3', 'D02', 'Système Colle'],
@@ -111,7 +116,7 @@ const Openings = (() => {
     ['d4 d6', 'A41', 'Défense Old Indian'],
 
     // Italian variations
-    ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3', 'C54', 'Giuoco Piano — variante classique'],
+    ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3', 'C53', 'Giuoco Piano — variante centrale (4.c3)'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5 b4', 'C51', 'Gambit Evans'],
     ['e4 e5 Nf3 Nc6 Bc4 Nf6 d4', 'C55', 'Deux Cavaliers — attaque Max Lange'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5 d3', 'C50', 'Giuoco Pianissimo'],
@@ -123,7 +128,11 @@ const Openings = (() => {
     ['e4 e5 Nf3 Nc6 Bb5 d6', 'C62', 'Ruy Lopez — défense Steinitz'],
 
     // Scotch variations
-    ['e4 e5 Nf3 Nc6 d4 exd4 Bc4', 'C44', 'Gambit Écossais — variante Göring'],
+    ['e4 e5 Nf3 Nc6 d4 exd4 Bc4', 'C44', 'Gambit Écossais'],
+    ['e4 e5 Nf3 Nc6 d4 exd4 c3', 'C44', 'Gambit Göring'],
+    // Transpositions vers le Gambit Dame que la table de prefixes ratait.
+    ['d4 d5 Nf3 Nf6 c4', 'D06', 'Gambit Dame'],
+    ['d4 e6 c4 d5', 'D30', 'Gambit Dame refusé'],
     ['e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Bc5', 'C45', 'Écossaise — variante classique'],
     ['e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Nf6', 'C45', 'Écossaise — variante Schmidt'],
 
@@ -243,13 +252,10 @@ const Openings = (() => {
     ['f4 d5 Nf3 Nf6 e3 g6', 'A03', 'Bird — système Leningrad inversé'],
 
     // Ruy Lopez — variations supplémentaires
-    ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O', 'C84', 'Ruy Lopez — variante fermée'],
     ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 O-O c3 d5', 'C89', 'Ruy Lopez — attaque Marshall'],
     ['e4 e5 Nf3 Nc6 Bb5 a6 Bxc6 dxc6', 'C68', 'Ruy Lopez — variante d\'échange'],
-    ['e4 e5 Nf3 Nc6 Bb5 d6', 'C62', 'Ruy Lopez — défense Steinitz'],
 
     // Italienne — Giuoco Piano & Deux Cavaliers en profondeur
-    ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3', 'C53', 'Giuoco Piano — variante centrale'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d4', 'C54', 'Giuoco Piano — attaque centrale'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5 b4 Bxb4 c3', 'C52', 'Gambit Evans accepté'],
     ['e4 e5 Nf3 Nc6 Bc4 Bc5 b4 Bb6', 'C51', 'Gambit Evans décliné'],
@@ -261,7 +267,6 @@ const Openings = (() => {
     ['e4 e5 Nf3 Nc6 Bc4 Be7', 'C50', 'Défense hongroise'],
 
     // Écossaise / gambits
-    ['e4 e5 Nf3 Nc6 d4 exd4 Bc4', 'C44', 'Gambit Écossais'],
 
     // Gambit du Roi — Falkbeer
     ['e4 e5 f4 d5', 'C31', 'Gambit du Roi — contre-gambit Falkbeer'],
@@ -271,7 +276,6 @@ const Openings = (() => {
     ['e4 e5 Nc3 Nc6 Bc4 Bc5', 'C25', 'Viennoise — variante Hamppe'],
 
     // Réti & Gambit Tennison
-    ['Nf3 d5 g3', 'A05', 'Réti — système fianchetto'],
     ['Nf3 d5 e4', 'A06', 'Gambit Tennison'],
     ['Nf3 d5 e4 dxe4 Ng5', 'A06', 'Gambit Tennison accepté'],
     ['e4 d5 Nf3', 'B01', 'Gambit Tennison (via 1.e4 d5)'],
@@ -329,15 +333,20 @@ const Openings = (() => {
     if (hasD4 && bf4 > d4 && bf4 <= 4 && noC4Before(bf4)) {
       // Jobava : le cavalier en c3 AVANT e3, la difference n'est pas cosmetique
       // (e4 reste jouable, c'est une autre ouverture que le Londres tranquille).
-      if (nc3 >= 0 && nc3 <= 3 && (e3 < 0 || nc3 < e3))
+      // Et TOT (2e ou 3e coup), avant Cf3 : 1.d4 Cf6 2.Cf3 d5 3.Ff4 c5 4.Cc3
+      // est un Londres classique dont le cavalier sort tard, pas un Jobava.
+      if (nc3 >= 0 && nc3 <= 2 && (nf3 < 0 || nf3 > nc3) && (e3 < 0 || nc3 < e3))
         return { eco: 'D00', name: 'Londres — attaque Jobava', moves: plies(Math.max(bf4, nc3)), line: 'd4 d5 Nc3 Nf6 Bf4', system: true };
       return { eco: 'D02', name: 'Système de Londres', moves: plies(bf4), line: 'd4 d5 Bf4', system: true };
     }
     if (hasD4 && bg5 > d4 && bg5 <= 4 && noC4Before(bg5)) {
-      if (bg5 === 1 && d4 === 0)
-        return B[0] === 'Nf6'
-          ? { eco: 'A45', name: 'Attaque Trompowsky', moves: 3, line: 'd4 Nf6 Bg5', system: true }
-          : { eco: 'D00', name: 'Attaque Levitsky (2.Fg5)', moves: 3, line: 'd4 d5 Bg5', system: true };
+      // Trompowsky contre ...Cf6, Levitsky contre ...d5 : les deux seules. Un
+      // 2.Fg5 contre ...e6 ou ...g6 n'est ni l'un ni l'autre.
+      if (bg5 === 1 && d4 === 0) {
+        if (B[0] === 'Nf6') return { eco: 'A45', name: 'Attaque Trompowsky', moves: 3, line: 'd4 Nf6 Bg5', system: true };
+        if (B[0] === 'd5') return { eco: 'D00', name: 'Attaque Levitsky (2.Fg5)', moves: 3, line: 'd4 d5 Bg5', system: true };
+        return null;
+      }
       if (nc3 >= 0 && nc3 < bg5 && (nf3 < 0 || nf3 > bg5))
         return { eco: 'D01', name: 'Ouverture Veresov', moves: plies(bg5), line: 'd4 d5 Nc3 Nf6 Bg5', system: true };
       if (nf3 >= 0 && nf3 < bg5)

@@ -228,7 +228,7 @@ const OpeningTree = (() => {
             idea: "La réponse la plus combative à 1.e4. Jeu asymétrique → <span class='k'>semi-ouvert</span>, contre-jeu sur l'aile dame.",
             plans: { w: "Ouvrir le centre (d4), attaquer sur l'aile roi, souvent roque long et poussée de pions.", b: "Contre-jeu sur l'aile dame via la colonne c semi-ouverte (...a6, ...b5), viser le centre." },
             kids: [
-              { mv: '2.Cf3 d6 3.d4', icon: '🗡️', lbl: 'Sicilienne ouverte', eco: 'B30–B99', fen: 'rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq - 1 5',
+              { mv: '2.Cf3 d6 3.d4 … 5.Cc3', icon: '🗡️', lbl: 'Sicilienne ouverte', eco: 'B30–B99', fen: 'rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R b KQkq - 2 5',
                 appLine: 'e4 c5', cc: 'Sicilian-Defense',
                 idea: "Les Blancs ouvrent le centre. Najdorf, Dragon, Scheveningen en découlent.",
                 plans: { w: "Développer vite, roquer, choisir un plan d'attaque (colonne f, poussée f4-g4 sur le roi).", b: "Structure flexible (Najdorf, Dragon), pression sur e4 et jeu actif sur l'aile dame." },
@@ -419,7 +419,7 @@ const OpeningTree = (() => {
         appLine: 'c4', cc: 'English-Opening',
         idea: "Ouverture de <span class='k'>flanc</span> : contrôle d5 à distance sans avancer de pion central. Transpose souvent.",
         plans: { w: "Contrôler d5 à distance, jeu flexible sur l'aile dame, transposer au bon moment.", b: "Répondre au centre (...e5, Sicilienne inversée) ou ...c5/...Cf6, garder la symétrie." } },
-      { mv: '1.Cf3', icon: '🐎', lbl: 'Réti', fam: 'flank', eco: 'A04–A09', fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKBNR b KQkq - 1 1',
+      { mv: '1.Cf3', icon: '🐎', lbl: 'Réti', fam: 'flank', eco: 'A04–A09', fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1',
         appLine: 'Nf3 d5 c4', cc: 'Reti-Opening',
         idea: "Flexible et hypermoderne : développe avant de fixer la structure. Peut transposer partout.",
         plans: { w: "Développer avant de fixer la structure, pression hypermoderne sur d5, fianchetto.", b: "Occuper le centre (...d5, ...e6/...c6) et le tenir, ou copier le plan de flanc." },

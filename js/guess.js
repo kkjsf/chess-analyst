@@ -134,12 +134,16 @@ const GuessMove = (() => {
     };
   }
 
-  function submit(from, to) {
+  function submit(from, to, promo) {
     const p = plies[gi];
+    if (!promo && BoardRenderer.isPromotion(p.fenBefore, from, to)) {
+      BoardRenderer.pickPromotion(p.fenBefore.split(' ')[1]).then(pc => { if (pc && plies[gi] === p && !answered) submit(from, to, pc); });
+      return;
+    }
     let ok = false;
     try {
       const g = new Chess(p.fenBefore);
-      ok = !!g.move({ from, to, promotion: 'q' });
+      ok = !!g.move({ from, to, promotion: promo || 'q' });
     } catch (_) {}
     if (!ok) {
       const fb = $('#guess-feedback');
@@ -147,7 +151,7 @@ const GuessMove = (() => {
       fb.textContent = '⚠️ Coup illégal — clique la pièce puis sa case d\'arrivée.';
       return;
     }
-    reveal({ from, to });
+    reveal({ from, to, promotion: promo || 'q' });
   }
 
   function reveal(guess) {
@@ -155,9 +159,13 @@ const GuessMove = (() => {
     const p = plies[gi];
     const bu = p.bestUci;
     const hasBest = bu && bu.length >= 4;
-    const isBest = guess && hasBest && (guess.from + guess.to) === bu.slice(0, 4);
+    // Une sous-promotion attendue (e7e8n) n'est pas « parfaite » parce que les
+    // cases coincident : la piece choisie doit etre la bonne.
+    const isBest = guess && hasBest && (guess.from + guess.to) === bu.slice(0, 4) && (bu.length < 5 || bu[4] === (guess.promotion || 'q'));
     const isPlayed = guess && guess.from === p.playedFrom && guess.to === p.playedTo;
-    const playedWasError = p.type === 'blunder' || p.type === 'mistake' || p.type === 'inaccuracy';
+    const playedWasError = p.type === 'blunder' || p.type === 'mistake' || p.type === 'miss' || p.type === 'inaccuracy';
+    // analysis.js met bestSan a null quand le coup joue ETAIT le meilleur.
+    const bestName = p.bestSan || p.playedSan || '—';
 
     let good = false, cls = 'shown', msg;
     if (isBest) {
@@ -168,9 +176,9 @@ const GuessMove = (() => {
       msg = `✅ Bon coup — c'est exactement ce que tu avais joué.`;
     } else if (isPlayed && playedWasError) {
       cls = 'wrong';
-      msg = `❌ C'est le coup que tu avais joué… et c'était une erreur. Le moteur préférait <b>${p.bestSan || '—'}</b>.`;
+      msg = `❌ C'est le coup que tu avais joué… et c'était une erreur. Le moteur préférait <b>${bestName}</b>.`;
     } else if (guess) {
-      msg = `Le moteur jouait <b>${p.bestSan || '—'}</b>. En partie, tu avais joué ${p.playedSan}.`;
+      msg = `Le moteur jouait <b>${bestName}</b>. En partie, tu avais joué ${p.playedSan}.`;
     } else {
       msg = `Solution : <b>${p.bestSan || p.playedSan}</b>. En partie, tu avais joué ${p.playedSan}.`;
     }

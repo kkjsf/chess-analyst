@@ -16,7 +16,7 @@
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 
-global.Chess = require('./node_modules/chess.js/chess.js').Chess;
+global.Chess = require(path.join(ROOT, 'js/chess.min.js')).Chess; // le meme chess.js que l'app (correctif « strict d'abord »)
 const Tactics = require(path.join(ROOT, 'js/tactics.js'));
 global.Tactics = Tactics;
 global.Openings = require(path.join(ROOT, 'js/openings.js'));
@@ -67,6 +67,11 @@ function T(group, label, fen, from, to, fn, want, promotion) {
     see('2br4/8/8/8/8/8/8/2R5 w - - 0 1', 'c8', 'w'), -2);
   check(G, 'échange équilibré rend 0 ou mieux, jamais négatif à tort',
     see('8/8/8/3p4/8/8/8/8 w - - 0 1', 'd5', 'w'), 0); // aucun attaquant blanc
+  // Clouages : une piece clouee sur son roi n'attaque ni ne reprend.
+  check(G, 'le defenseur cloue ne reprend pas (d6 cloue par Fb4)',
+    see('5k2/8/3p4/4n3/1B6/8/8/4R1K1 w - - 0 1', 'e5', 'w'), 3);
+  check(G, "l'attaquant cloue ne compte pas (Cd4 cloue par Td8)",
+    see('3r3k/8/8/1q6/3N4/8/8/3K4 w - - 0 1', 'b5', 'w'), 0);
 }
 
 // ─────────────────────────── netGain (le juge de paix) ──────────────────────
@@ -228,6 +233,7 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   check(G, 'Londres apres 3.e3 (etiquete Colle par la table)',
     d('d4 d5 Nf3 Nf6 e3 e6 Bf4 c5'), 'D02 Système de Londres');
   check(G, 'Jobava = Cc3 avant e3', d('d4 d5 Nc3 Nf6 Bf4 e6 e3'), 'D00 Londres — attaque Jobava');
+  check(G, 'Cc3 au 4e coup apres Cf3 = Londres, pas Jobava', d('d4 Nf6 Nf3 d5 Bf4 c5 Nc3'), 'D02 Système de Londres');
 
   // Ce qui ne DOIT pas devenir un Londres.
   check(G, 'c4 avant Ff4 = famille Gambit Dame', d('d4 d5 c4 e6 Nc3 Nf6 Bf4'), 'D30 Gambit Dame refusé');

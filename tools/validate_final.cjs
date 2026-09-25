@@ -20,7 +20,7 @@ function validate(id, fen, sol) {
 const candidates = [
   { id:'attraction', fen:'6k1/3Q4/8/2q3N1/8/8/7K/8 w - - 0 1',
     sol:['Qg7+','Kxg7','Ne6+','Kg8','Nxc5'] },
-  { id:'xray', fen:'q7/8/8/8/k7/8/8/3Q2K1 w - - 0 1',
+  { id:'xray', fen:'q7/8/8/8/k7/8/8/4Q1K1 w - - 0 1',
     sol:['Qa1+','Kb4','Qxa8'] },
   { id:'zwischenzug', fen:'6k1/6r1/8/8/8/3q4/4Q3/4K1R1 w - - 0 1',
     sol:['Rxg7+','Kxg7','Qxd3'] },
