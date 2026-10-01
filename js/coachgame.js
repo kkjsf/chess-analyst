@@ -254,7 +254,7 @@ const CoachGame = (() => {
     ov.innerHTML = `
       <div class="guess-panel">
         <div class="guess-head">
-          <button class="back-btn" id="cg-close">←</button>
+          <button class="back-btn" id="cg-close" title="Fermer - une partie en cours t'attendra">←</button>
           <span class="guess-title" id="cg-title">Jouer avec le coach</span>
           <span class="guess-score" id="cg-turn"></span>
         </div>
@@ -348,6 +348,7 @@ const CoachGame = (() => {
                    fleches, le moindre clearArrows() les effacerait. -->
               <svg viewBox="0 0 360 360" id="cg-fx" class="arrow-overlay cg-fx"></svg>
               <div class="cg-matepop" id="cg-matepop" hidden></div>
+              <div class="cg-matepop cg-confirm" id="cg-confirm" hidden></div>
             </div>
             <div class="cg-pbar" id="cg-pbar-bottom">
               <span class="cg-who" id="cg-bot-name"></span>
@@ -366,7 +367,7 @@ const CoachGame = (() => {
               <button type="button" class="cg-nav" data-rev="next" title="Coup suivant">▶</button>
               <button type="button" class="cg-more" id="cg-sheet-open" title="Tous les coups">⤢</button>
             </div>
-            <div class="guess-feedback rp-comment">
+            <div class="guess-feedback rp-comment" id="cg-feedback">
               <div class="rp-verdict" id="cg-verdict"></div>
               <div class="rp-status" id="cg-status"></div>
               <div class="rp-hintbox" id="cg-hintout" hidden></div>
@@ -375,11 +376,16 @@ const CoachGame = (() => {
                    de +0,0 a -1,8 » occupait. -->
               <div class="cg-course" id="cg-course" hidden></div>
             </div>
+            <!-- La relecture d'un coup passe : la meme explication qu'en mode
+                 assiste, quel que soit le regime joue. Le panneau du direct
+                 reste en place, masque, et continue de se mettre a jour. -->
+            <div class="guess-feedback rp-comment cg-revnote" id="cg-revnote" hidden></div>
             <div class="rp-actions">
               <button class="train-btn ghost" id="cg-hint" hidden>💡 Indice</button>
               <button class="train-btn ghost" id="cg-undo">↶ Annuler</button>
               <button class="train-btn ghost" id="cg-swap" hidden>👁 Aide</button>
               <button class="train-btn ghost" id="cg-resign">🏳 Abandonner</button>
+              <button class="train-btn ghost" id="cg-new">⟲ Nouvelle partie</button>
             </div>
           </div>
           <div class="cg-backdrop" id="cg-backdrop" hidden></div>
@@ -411,6 +417,15 @@ const CoachGame = (() => {
     $('#cg-undo').onclick = () => { if (!busy) undo(); };
     $('#cg-hint').onclick = () => useHint();
     $('#cg-resign').onclick = () => { if (!busy) finish('resign'); };
+    $('#cg-new').onclick = () => askNewGame();
+    $('#cg-confirm').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-cf]');
+      if (!b) return;
+      hideConfirm();
+      if (b.dataset.cf === 'again') rematch();
+      else if (b.dataset.cf === 'setup') toSetup();
+      else if (b.dataset.cf === 'resign' && !busy) finish('resign');
+    });
     $('#cg-swap').onclick = () => {
       cfg.aide = cfg.aide === 'libre' ? 'assiste' : 'libre';
       saveCfg(cfg);
@@ -447,6 +462,7 @@ const CoachGame = (() => {
       hideMatePop();
       if (b.dataset.mp === 'tail') replayTail(6);
       else if (b.dataset.mp === 'bilan') showBilan();
+      else if (b.dataset.mp === 'again') rematch();
     });
     $('#cg-sheet-open').onclick = () => setSheet(!sheetOpen);
     $('#cg-sheet-close').onclick = () => setSheet(false);
@@ -542,10 +558,16 @@ const CoachGame = (() => {
       else enterEndBoard();
       return;
     }
-    const c = loadCfg();
     cfg = null;
     view('setup');
+    fillSetup();
+  }
 
+  // Les reglages de la derniere partie, remis dans le formulaire. Appele aussi
+  // par la revanche : une partie REPRISE a l'ouverture de l'ecran n'est jamais
+  // passee par ici, et startGame() lirait alors un formulaire vide.
+  function fillSetup() {
+    const c = loadCfg();
     // Livre : catalogue des lignes des cours.
     const sel = $('#cg-book');
     if (!sel.options.length) {
@@ -561,7 +583,9 @@ const CoachGame = (() => {
     }
     if (c.book) sel.value = c.book;
     $('#cg-bookmode').hidden = !sel.value;
-    if (c.side) $$('#cg-side button').forEach(b => b.classList.toggle('on', b.dataset.v === c.side));
+    // `sidePref` garde « au hasard » : `side` ne retient que le camp tire.
+    const side = c.sidePref || c.side;
+    if (side) $$('#cg-side button').forEach(b => b.classList.toggle('on', b.dataset.v === side));
     if (c.aide) $$('#cg-aide button').forEach(b => b.classList.toggle('on', b.dataset.v === c.aide));
     if (c.bookMode) $$('#cg-bookmode button').forEach(b => b.classList.toggle('on', b.dataset.v === c.bookMode));
     $('#cg-hinton').classList.toggle('on', c.hint !== false);
@@ -593,11 +617,12 @@ const CoachGame = (() => {
 
   // ═════════════════════════ La partie ═════════════════════════
   function startGame() {
-    let side = segVal('#cg-side') || 'w';
+    const sidePref = segVal('#cg-side') || 'w';
+    let side = sidePref;
     if (side === 'r') side = Math.random() < 0.5 ? 'w' : 'b';
     const bookId = $('#cg-book').value || '';
     cfg = {
-      side, elo: +$('#cg-elo').value, aide: segVal('#cg-aide') || 'libre',
+      side, sidePref, elo: +$('#cg-elo').value, aide: segVal('#cg-aide') || 'libre',
       hint: $('#cg-hinton').classList.contains('on'),
       book: bookId, bookMode: segVal('#cg-bookmode') || 'follow',
     };
@@ -629,6 +654,9 @@ const CoachGame = (() => {
     curTheory = null; courseCache = null;
     const fx = $('#cg-fx'); if (fx) fx.innerHTML = '';
     const mp = $('#cg-matepop'); if (mp) { mp.hidden = true; mp.className = 'cg-matepop'; }
+    hideConfirm();
+    for (const id of ['#cg-undo', '#cg-resign']) { const b = $(id); if (b) b.hidden = false; }
+    const ov = $('#cg-over'); if (ov) { ov.hidden = true; ov.innerHTML = ''; }
     const cc = $('#cg-course'); if (cc) { cc.hidden = true; cc.innerHTML = ''; }
 
     view('game');
@@ -774,7 +802,7 @@ const CoachGame = (() => {
   function syncHintBtn() {
     const b = $('#cg-hint');
     if (!b) return;
-    b.hidden = !(cfg && cfg.hint && cfg.aide === 'libre' && myTurn() && !gameOver());
+    b.hidden = !(cfg && cfg.hint && cfg.aide === 'libre' && myTurn() && !gameOver() && reviewPly == null);
     b.disabled = busy || hintLevel >= 3;
     b.textContent = hintLevel >= 3 ? '💡 Indice donné'
       : hintLevel === 2 ? '💡 Donne-moi le coup'
@@ -956,7 +984,7 @@ const CoachGame = (() => {
   function renderReviewBar() {
     const el = $('#cg-review');
     if (!el) return;
-    if (reviewPly == null) { el.hidden = true; el.innerHTML = ''; return; }
+    if (reviewPly == null) { el.hidden = true; el.innerHTML = ''; renderRevNote(); return; }
     const n = Math.ceil(reviewPly / 2);
     const dots = reviewPly % 2 === 1 ? '.' : '…';
     const e = moveLog[reviewPly - 1];
@@ -965,6 +993,64 @@ const CoachGame = (() => {
       + `<button type="button" class="train-btn ghost" data-rev="prev">◀</button>`
       + `<button type="button" class="train-btn ghost" data-rev="next">▶</button>`
       + `<button type="button" class="train-btn" data-rev="live">${endInfo ? '▶▶ Revenir à la position finale' : '▶▶ Revenir à la partie'}</button>`;
+    renderRevNote();
+  }
+
+  // ── La relecture commentee ───────────────────────────────────────────────
+  // Revoir un coup passe donne l'explication du mode ASSISTE, quel que soit le
+  // regime joue : c'est apres la partie qu'on etudie ses erreurs. Rien n'est
+  // recalcule (tout a ete range dans le journal pendant la partie), et le
+  // panneau du direct - ou celui du mat - s'efface le temps de la relecture
+  // au lieu de recouvrir l'explication.
+  function renderRevNote() {
+    const note = $('#cg-revnote');
+    if (!note) return;
+    const on = reviewPly != null;
+    note.hidden = !on;
+    const live = $('#cg-feedback'); if (live) live.hidden = on;
+    const over = $('#cg-over'); if (over && endInfo && !endInfo.seen) over.hidden = on;
+    if (!on) { note.innerHTML = ''; return; }
+    const ply = reviewPly;
+    const e = moveLog[ply - 1];
+    const at = fenAtPly(ply);
+    if (!e || !at) { note.innerHTML = ''; return; }
+    const parts = [], arr = [];
+    const blue = (uci) => ({ from: uci.slice(0, 2), to: uci.slice(2, 4), color: C_ENGINE, opacity: 0.95, width: 7 });
+    if (e.vh) parts.push(`<div class="rp-verdict ${e.vc || ''}">${e.vh}</div>`);
+    if (e.mine) {
+      // Apres MON coup : ce que le moteur jouait a ma place. Une erreur le dit
+      // deja dans son commentaire ; une imprecision ou un bon coup, non.
+      if (e.bu && e.bu !== e.mu) {
+        arr.push(blue(e.bu));
+        const prev = fenAtPly(ply - 1);
+        if (!e.sl && prev) {
+          const best = uciToFr(prev.fen, e.bu), why = whyBest(prev.fen, e.bu, e.bpv || '');
+          if (best) parts.push(`<div class="cg-revbest"><b>Le moteur jouait</b> : <span class="cg-cue en">● ${best}</span>${why ? ' — ' + why : ''}</div>`);
+        }
+      }
+    } else {
+      if (e.arr) arr.push(...e.arr);
+      const n = e.next;
+      if (n && n.uci) {
+        const best = uciToFr(at.fen, n.uci);
+        arr.push(blue(n.uci));
+        const lines = [];
+        const why = whyBest(at.fen, n.uci, n.pv || '');
+        if (why && best) lines.push(`<b>Pourquoi ${best} ?</b> ${why}`);
+        const hang = hangingLine(at.fen);
+        if (hang) lines.push(hang);
+        parts.push(`<div class="rp-status">Trait à <b>toi</b>.${n.ev != null ? ` Éval <b>${fmtMe(n.ev)}</b> (ton point de vue).` : ''}`
+          + (best ? ` <span class="cg-cue en">● ${best}</span> <span class="rp-hint">le coup du moteur (flèche bleue)</span>` : '') + `</div>`);
+        if (lines.length) parts.push(`<div class="rp-hintbox">${lines.map(l => `<p>${l}</p>`).join('')}</div>`);
+      }
+    }
+    note.innerHTML = parts.join('') || `<p class="rp-hint">Aucun commentaire n'a été gardé pour ce coup.</p>`;
+    // Les fleches attendent la fin du glissement de la piece.
+    setTimeout(() => {
+      if (reviewPly !== ply || !arr.length) return;
+      BoardRenderer.drawArrows(arrowsSvg, arr);
+      threatArrows = true;
+    }, ANIM_MS);
   }
 
   // ═══════════════════ Le cours d'ouverture, en fil rouge ═══════════════════
@@ -1233,6 +1319,9 @@ const CoachGame = (() => {
     if (lastLog && curEvalMe != null) lastLog.ev = mySide === 'w' ? curEvalMe : -curEvalMe;
     myBestUci = res && res.bestMove ? res.bestMove : null;
     myBestPv = res && res.pv ? res.pv : '';
+    // Ce que le mode assiste aurait montre ICI, range sur le coup qui y mene :
+    // la relecture le ressort tel quel, meme si la partie s'est jouee en libre.
+    if (lastLog && myBestUci) lastLog.next = { uci: myBestUci, pv: myBestPv, ev: curEvalMe };
     myLines = (res && res.lines) ? res.lines : null;   // mes coups candidats, notes dans LA MEME recherche
     // Le coup que le coach vient de jouer se note maintenant : son eval avant
     // (mesuree juste apres mon coup) contre son eval apres (celle-ci, vue de son
@@ -1299,8 +1388,12 @@ const CoachGame = (() => {
         for (const d of (t.direct || [])) arr.push({ from: d.from, to: d.sq, color: '#4ade80', opacity: 0.85, width: 5 });
       }
     }
-    if (arr.length) BoardRenderer.drawArrows(arrowsSvg, arr);
-    else BoardRenderer.clearArrows(arrowsSvg);
+    // L'eval a pu finir pendant qu'on relisait un coup passe : on ne peint pas
+    // les fleches du direct sur une autre position (le retour les repeindra).
+    if (reviewPly === null) {
+      if (arr.length) BoardRenderer.drawArrows(arrowsSvg, arr);
+      else BoardRenderer.clearArrows(arrowsSvg);
+    }
     return { same, showEngine, hasTheory: !!th };
   }
 
@@ -1457,6 +1550,9 @@ const CoachGame = (() => {
     });
     const myIdx = logMove(myMove.san, true, v.k);
     if (moveLog[myIdx] && after != null) moveLog[myIdx].ev = mySide === 'w' ? after : -after;
+    // Le commentaire du coup, garde pour la relecture (sans la proposition de
+    // reprise : elle n'a de sens qu'en direct).
+    if (moveLog[myIdx]) Object.assign(moveLog[myIdx], { vh: v.html, vc: v.cls, sl: !!v.slip, bu: myBestUci, bpv: myBestPv, mu: myUci });
     // Ce que le BILAN lira. Tout est deja calcule ici : le noter coute zero
     // recherche, et sans ces quatre champs le bilan ne peut dire ni la
     // precision, ni la phase qui casse, ni le coup qui a fait basculer.
@@ -1501,6 +1597,7 @@ const CoachGame = (() => {
       // …e5 et …Cf6 sortaient « imprecision » et « erreur »).
       const oppBook = lastMoveWasBook(reply.tag === 'coup du livre');
       const oppIdx = logMove(reply.mv.san, false, null);
+      const oppLog = moveLog[oppIdx];
       const oppUciPlayed = reply.mv.from + reply.mv.to + (reply.mv.promotion || '');
       // La recherche faite apres MON coup portait sur SES options : si son coup
       // y figure, on le note immediatement et sans bruit.
@@ -1523,11 +1620,12 @@ const CoachGame = (() => {
           for (const c of (t.checks || [])) arr.push({ from: c.from, to: c.sq, color: '#e05252', opacity: 0.95, width: 7 });
           for (const d of (t.direct || [])) arr.push({ from: d.from, to: d.sq, color: '#e05252', opacity: 0.85, width: 6 });
           for (const d of (t.discovered || [])) arr.push({ from: d.from, to: d.sq, color: '#5b8fb9', opacity: 0.85, width: 6 });
-          if (arr.length) { BoardRenderer.drawArrows(arrowsSvg, arr); threatArrows = true; }
+          if (arr.length) { BoardRenderer.drawArrows(arrowsSvg, arr); threatArrows = true; if (oppLog) oppLog.arr = arr; }
           const s = Tactics.threatSentence ? Tactics.threatSentence(t, t.final !== false) : '';
           if (s) threatHtml = `<div class="cg-threat">${s}</div>`;
         }
       }
+      if (oppLog) oppLog.vh = replyHtml + threatHtml;
     }
 
     setVerdict(v.html + replyHtml + threatHtml + (v.slip ? RETRY : ''), v.cls);
@@ -2230,6 +2328,63 @@ const CoachGame = (() => {
     enterEndBoard();
   }
 
+  // ═════════════════════ Nouvelle partie / quitter ═════════════════════
+  // Recommencer passait par le bilan puis les reglages. Desormais un bouton,
+  // et une seule question quand il y a quelque chose a perdre.
+  function askNewGame() {
+    const el = $('#cg-confirm');
+    if (!el || !cfg) return toSetup();
+    const live = inProgress() && moveLog.some(e => e.mine);
+    const sideTxt = cfg.sidePref === 'r' ? 'camp au hasard' : cfg.side === 'w' ? 'Blancs' : 'Noirs';
+    const n = Math.ceil(moveLog.length / 2);
+    el.hidden = false;
+    el.innerHTML = `<div class="cg-mp-card">
+        <span class="cg-mp-ic">♟</span>
+        <b class="cg-mp-t">Nouvelle partie</b>
+        <span class="cg-mp-s">${live
+          ? `La partie en cours (${n} coup${n > 1 ? 's' : ''}) sera <b>abandonnée sans être enregistrée</b>. Pour qu'elle compte dans ton historique, choisis « Abandonner ».`
+          : `Coach ~${prm ? prm.elo : cfg.elo} · ${cfg.aide === 'libre' ? 'libre' : 'assisté'} · ${sideTxt}`}</span>
+        <div class="cg-mp-acts">
+          <button type="button" class="train-btn" data-cf="again">↻ ${live ? 'Recommencer' : 'Revanche'}, mêmes réglages</button>
+          <button type="button" class="train-btn ghost" data-cf="setup">⚙ Changer les réglages</button>
+          ${live ? `<button type="button" class="train-btn ghost" data-cf="resign">🏳 Abandonner (partie enregistrée)</button>` : ''}
+          <button type="button" class="train-btn ghost" data-cf="cancel">${live ? '▶ Continuer la partie' : 'Annuler'}</button>
+        </div>
+      </div>`;
+    requestAnimationFrame(() => el.classList.add('in'));
+  }
+  function hideConfirm() {
+    const el = $('#cg-confirm');
+    if (!el) return;
+    el.classList.remove('in');
+    el.hidden = true;
+  }
+
+  // La partie en cours (s'il y en a une) est lachee sans etre enregistree.
+  function dropGame() {
+    token++;
+    busy = false;
+    stopTail();
+    hideMatePop();
+    hideConfirm();
+    endInfo = null;
+    game = null;
+    reviewPly = null;
+    renderRevNote();
+    if (arrowsSvg) BoardRenderer.clearArrows(arrowsSvg);
+  }
+  function rematch() {
+    dropGame();
+    fillSetup();
+    startGame();
+  }
+  function toSetup() {
+    dropGame();
+    cfg = null;
+    view('setup');
+    fillSetup();
+  }
+
   // ── L'echiquier de fin ───────────────────────────────────────────────────
   function enterEndBoard() {
     if (!endInfo) { view('end'); return; }
@@ -2306,6 +2461,7 @@ const CoachGame = (() => {
             <button type="button" class="train-btn" data-mp="close">Voir la position ▸</button>
             <button type="button" class="train-btn ghost" data-mp="tail">⏪ Revoir la fin</button>
             <button type="button" class="train-btn ghost" data-mp="bilan">\u{1F4CA} Le bilan</button>
+            <button type="button" class="train-btn ghost" data-mp="again">↻ Revanche, mêmes réglages</button>
           </div>
         </div>`;
     requestAnimationFrame(() => el.classList.add('in'));
@@ -2345,9 +2501,11 @@ const CoachGame = (() => {
         <button type="button" class="train-btn ghost" data-act="tail">⏪ Revoir la fin au ralenti</button>
         ${an.flight && an.flight.length ? `<button type="button" class="train-btn ghost" data-act="marks">${marks}</button>` : ''}
         <button type="button" class="train-btn" data-act="bilan">📊 Voir le bilan ▸</button>
+        <button type="button" class="train-btn ghost" data-act="again">↻ Revanche</button>
+        <button type="button" class="train-btn ghost" data-act="setup">⚙ Autres réglages</button>
       </div>
       <p class="foot">Rien ne presse : remonte la partie coup par coup avec ◀ ▶, ou clique n'importe quel coup
-        dans la liste. Le bilan t'attend, il ne partira pas.</p>`;
+        dans la liste - chaque coup retrouve son explication, comme en mode assisté. Le bilan t'attend, il ne partira pas.</p>`;
   }
 
   // Ce que l'echiquier MONTRE de l'anatomie. `level` 0 = l'echec et les cases,
@@ -2367,6 +2525,8 @@ const CoachGame = (() => {
     const b = e.target.closest('button[data-act]');
     if (!b || !endInfo) return;
     if (b.dataset.act === 'bilan') return showBilan();
+    if (b.dataset.act === 'again') return rematch();
+    if (b.dataset.act === 'setup') return toSetup();
     if (b.dataset.act === 'tail') return replayTail(6);
     if (b.dataset.act === 'marks') {
       endInfo.level = endInfo.level >= 1 ? 0 : 1;
@@ -2589,7 +2749,8 @@ const CoachGame = (() => {
       sug ? `<div class="cg-next"><b>Niveau conseillé : ~${sug.elo}</b> ${sug.why}</div>` : '',
       `<div class="rp-actions">
         <button class="train-btn ghost" id="cg-analyse">🔍 Analyser cette partie</button>
-        <button class="train-btn ghost" id="cg-again">↻ Rejouer</button>
+        <button class="train-btn ghost" id="cg-again">↻ Revanche</button>
+        <button class="train-btn ghost" id="cg-tosetup">⚙ Autres réglages</button>
         <button class="train-btn ghost" id="cg-tohist">🗄 L'historique</button>
       </div>`,
     ].join('');
@@ -2598,7 +2759,8 @@ const CoachGame = (() => {
       close();
       if (typeof App !== 'undefined' && App.loadPgnAndAnalyze) App.loadPgnAndAnalyze(rec.pgn, { ingest: false });
     };
-    $('#cg-again').onclick = () => { endInfo = null; view('setup'); };
+    $('#cg-again').onclick = () => rematch();
+    $('#cg-tosetup').onclick = () => toSetup();
     $('#cg-tohist').onclick = () => { endInfo = null; showHistory(); };
     const srs = $('#cg-tosrs');
     if (srs) srs.onclick = () => {

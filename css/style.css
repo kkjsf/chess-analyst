@@ -5752,3 +5752,11 @@ body,
 /* Analyse terminee pendant qu'on etait ailleurs (readyToast, app.js). */
 .ready-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 1500; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--accent-dim, #6b5a2a); background: var(--bg-elevated, #1c2238); color: var(--text, #eee); font: inherit; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
 .ready-toast b { color: var(--accent, #e2b857); }
+
+/* v291 - la relecture commentee et la carte « Nouvelle partie ». */
+.cg-revnote { border-left: 3px solid var(--accent); }
+.cg-revnote .rp-hintbox { margin-top: 8px; }
+.cg-revbest { font-size: 13.5px; line-height: 1.5; color: var(--text-dim); margin-top: 6px; }
+.cg-revbest b { color: var(--text); }
+.cg-confirm { z-index: 4; }
+.cg-confirm .cg-mp-ic { animation: none; }

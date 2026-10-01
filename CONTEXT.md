@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v290** (2026-09-25, en ligne) : revue complète du 2026-09-25 (v289, ~45 correctifs) + tous les points restés ouverts (v290) - voir l'historique.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v291** (2026-10-01, en ligne) : mode Coach, nouvelle partie / quitter en un bouton et relecture commentée après la fin - voir l'historique.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -244,6 +244,35 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v291 (2026-10-01, en ligne) - mode Coach : recommencer, quitter, et relire ses erreurs.**
+    `js/coachgame.js` + 6 lignes de CSS. `test_core` 167/167, verifie dans le navigateur
+    (partie en libre, gaffe, relecture en direct, mat subi, revanche, reglages, 375 px).
+    - **Nouvelle partie en un bouton** (`⟲ Nouvelle partie`, toujours visible, y compris sur
+      l'echiquier de fin) : une carte par-dessus le plateau (`#cg-confirm`, habillage de la
+      fenetre du mat) propose Recommencer / Revanche avec les memes reglages, Changer les
+      reglages, Abandonner (partie enregistree), Continuer. Une partie en cours lachee ainsi
+      n'est **pas** enregistree, et la carte le dit. Revanche aussi sur l'echiquier de fin, dans
+      la fenetre du mat et dans le bilan (« Rejouer » renvoyait aux reglages).
+    - **Piege corrige au passage** : une partie REPRISE a l'ouverture de l'ecran ne passait
+      jamais par le remplissage du formulaire, donc une revanche aurait lu un formulaire vide
+      (livre sans options). D'ou `fillSetup()` extrait d'`open()`, rappele par `rematch()`.
+      Et `cfg.sidePref` garde « au hasard » : `cfg.side` ne retenait que le camp tire.
+    - **Relecture commentee** : revoir un coup passe (en direct ou apres la fin) affiche
+      l'explication du mode ASSISTE quel que soit le regime joue. Rien n'est recalcule : le
+      verdict de chaque coup (`vh`/`vc`/`sl`), le meilleur coup d'avant (`bu`/`bpv`), les fleches
+      de menace du coach (`arr`) et « ce que l'assiste aurait montre ici » (`next` : coup moteur,
+      suite, eval) sont ranges dans `moveLog` pendant la partie. Apres MON coup : verdict + fleche
+      bleue du coup moteur (+ « Le moteur jouait X » quand ce n'etait pas une erreur, que le
+      verdict ne commente pas) ; apres le SIEN : sa menace + le coup moteur, le pourquoi et le
+      compte des prises. Ces champs ne vont PAS dans l'historique enregistre (`rec.log`).
+    - **Ce qui masquait l'explication** : le panneau du mat (`#cg-over`) restait au-dessus du
+      commentaire pendant toute la relecture. Il s'efface desormais tant qu'on regarde un coup
+      passe et revient sur la position finale ; le panneau du direct (`#cg-feedback`) fait de
+      meme et continue de se mettre a jour, masque. `paintCues` ne peint plus sur une position
+      relue (une eval qui finit pendant la relecture posait les fleches du direct dessus).
+    - Piege vu en test : `renderReviewBar()` sortait tot quand `reviewPly` repasse a null, donc
+      le panneau de relecture restait affiche au retour a la partie - appeler `renderRevNote()`
+      AVANT ce return.
   - **v290 (2026-09-25, en ligne) - les points laisses ouverts par la revue, tous traites.**
     `test_core` 167/167 (+3 : clouages du SEE, Jobava), `verify_openings` 120/120, `verify_mates`
     77/77, 0 erreur console, verifie a 375 px et en desktop.
