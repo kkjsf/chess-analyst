@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v291** (2026-10-01, en ligne). **v292 locale non commitée** (2026-10-07) : niveau du coach recalibré sur ses parties (Skill Level était sans effet) - voir l'historique.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v292** (2026-10-07, en ligne) : niveau du coach recalibré sur ses parties (Skill Level était sans effet) - voir l'historique.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -244,7 +244,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-  - **v292 (2026-10-07, LOCALE, non commitee) - le niveau du coach recalibre sur ses parties.**
+  - **v292 (2026-10-07, en ligne `f91c830`) - le niveau du coach recalibre sur ses parties.**
     Plainte : « en ~350 je perds souvent, alors que je bats les bots Chess.com a 1100 ».
     **Deux causes, mesurees.** (1) **`Skill Level` n'avait AUCUN effet** : Stockfish ne
     l'applique qu'a son `bestmove`, or `coachReply` tirait son coup dans les lignes MultiPV,
