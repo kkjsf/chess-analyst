@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v291** (2026-10-01, en ligne) : mode Coach, nouvelle partie / quitter en un bouton et relecture commentée après la fin - voir l'historique.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v291** (2026-10-01, en ligne). **v292 locale non commitée** (2026-10-07) : niveau du coach recalibré sur ses parties (Skill Level était sans effet) - voir l'historique.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -96,7 +96,7 @@
 - `tools/test_core.cjs` - 164 tests unitaires du coeur logique (`node tools/test_core.cjs`,
   ou `npm test` dans `tools/`). Tourne aussi en CI avant l'analyse serveur.
 - `tools/` - scripts utilitaires. Chaîne de contenu des leçons (v184) : `mine_lichess.cjs`
-  (streame `lichess_db_puzzle.csv.zst`, gitignoré, → pool JSONL) → `pick_lichess.cjs` (choisit les
+  (streame `lichess_db_puzzle.csv.zst`, gitignoré, **supprimé du disque le 2026-10-01** - à retélécharger sur database.lichess.org avant une re-extraction, → pool JSONL) → `pick_lichess.cjs` (choisit les
   exercices par motif : thème + motif visible + gain qui tient) → `inject_puzzles.cjs` (audite
   l'existant et réécrit les tableaux `puzzles` des catalogues, rejouable). Vérification moteur :
   `sf.cjs` + `verify_lessons.cjs` (`DEPTH=14 node tools/verify_lessons.cjs [mates|tactics]`).
@@ -194,7 +194,7 @@
   **Fait technique verifie en live (envoi de `uci` au worker) : le moteur embarque est Stockfish
   2019-08-15 Multi-Variant, il a `Skill Level` 0-20 mais PAS `UCI_Elo` ni `UCI_LimitStrength`.**
   Un niveau se fabrique donc en combinant Skill Level + movetime court + tirage pondere dans les
-  5 lignes de MultiPV + taux de gaffe volontaire, et il faudra le calibrer en jouant. **Piege :
+  5 lignes de MultiPV + taux de gaffe volontaire, et il faudra le calibrer en jouant. **(Corrige en v292 : Skill Level n'agit que sur `bestmove`, jamais sur les lignes MultiPV ou l'on tire - il etait donc sans effet ; l'echelle est desormais { mt, temp, blunder }, calee par `tools/tune_coach.cjs`.)** **Piege :
   `Skill Level 20` et `MultiPV 5` sont poses une seule fois a l'init de `js/engine.js` - si le
   mode les baisse sans les restaurer, tout l'analyseur se degrade en silence.**
 - **`_mockups/coach-mobile-2026-09.html` (10/09/2026) - VALIDEE ET IMPLEMENTEE en v253-v256.**
@@ -244,6 +244,31 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v292 (2026-10-07, LOCALE, non commitee) - le niveau du coach recalibre sur ses parties.**
+    Plainte : « en ~350 je perds souvent, alors que je bats les bots Chess.com a 1100 ».
+    **Deux causes, mesurees.** (1) **`Skill Level` n'avait AUCUN effet** : Stockfish ne
+    l'applique qu'a son `bestmove`, or `coachReply` tirait son coup dans les lignes MultiPV,
+    qui restent celles de la recherche pleine force. Le coach tirait donc parmi les 5 meilleurs
+    coups d'un Stockfish complet. (2) Le tirage etait au RANG, resserre a 15 % devant une piece
+    gratuite, et la gaffe volontaire y etait interdite : il ne ratait presque rien.
+    **Mesure avant** (`tools/calibrate_coach.cjs`, 160 de ses positions rapides, sa vraie
+    reponse contre celle du coach) : lui ACPL 145 / 13,8 % de gaffes / piece offerte prise
+    54 % ; coach **~250 : 115 / 10 % / 88 %**, ~400 : 105 / 9,4 % / 75 %. Le reglage minimum
+    jouait mieux que lui (et c'etait mesure avec l'asm.js de Node, 8x plus lent que le WASM).
+    **Correctif** : recherche pleine force + movetime court, tirage **pondere par la perte** de
+    chaque ligne (`choiceWeights` : exp(-perte/temp), perte bornee a 1000 cp, mat compris),
+    gaffe volontaire hors echec seulement. Echelle `{ mt, temp, blunder }` calee par
+    `tools/tune_coach.cjs` (cache `tools/.coach_tune.json` : les 5 lignes vues + la perte reelle
+    de chacune + celle de coups au hasard, donc tout reglage s'evalue en esperance sans relancer
+    Stockfish ; `build` ~25 min, `fit` instantane). Temperatures FIXEES et monotones (400 a 30),
+    seul `blunder` ajuste : l'ajustement libre troquait l'un contre l'autre et sortait une
+    echelle incoherente. **Mesure apres** (vraie recherche) : lui 140 / 13,8 % / 57 % ;
+    **~250 : 194 / 21 % / 48 %**, ~400 : 126 / 11,9 % / 74 %, ~600 : 106 / 8,1 % / 83 % -
+    son niveau (~350) tombe entre les deux. Les barreaux au-dessus de 400 sont des ordres de
+    grandeur (aucune partie de reference a ces niveaux). Aussi : `suggestNext()` bornait la
+    descente a 400, donc 3 defaites a ~350 proposaient de MONTER a 400 ; bornes = `LADDER`.
+    `test_core` 162/162 (bloc NIVEAU reecrit). Verifie dans le navigateur (partie lancee a
+    ~350, le coach ouvre 1.h4, 0 erreur console). **A jouer pour confirmer au ressenti.**
   - **v291 (2026-10-01, en ligne) - mode Coach : recommencer, quitter, et relire ses erreurs.**
     `js/coachgame.js` + 6 lignes de CSS. `test_core` 167/167, verifie dans le navigateur
     (partie en libre, gaffe, relecture en direct, mat subi, revanche, reglages, 375 px).

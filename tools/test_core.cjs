@@ -301,67 +301,50 @@ function T(group, label, fen, from, to, fn, want, promotion) {
 }
 
 // ────────────── force de jeu du mode entraineur (js/coachgame.js) ──────────
-// Le moteur embarque n'a pas d'option d'Elo (ni UCI_Elo ni UCI_LimitStrength),
-// donc le niveau est FABRIQUE : Skill Level + movetime + tirage pondere dans le
-// top 5 + gaffe volontaire. Ces quatre etages n'ont de sens que s'ils varient
-// dans le bon sens, et c'est exactement le genre de table qu'on casse en la
-// retouchant a la main.
+// Le moteur embarque n'a pas d'option d'Elo, et `Skill Level` n'agit que sur
+// son `bestmove`, pas sur les lignes MultiPV ou le coach tire son coup. Le
+// niveau est donc FABRIQUE : movetime + tirage pondere par la perte de chaque
+// ligne + gaffe volontaire. Ces etages n'ont de sens que s'ils varient dans le
+// bon sens, et c'est exactement le genre de table qu'on casse en la retouchant.
 {
   const G = 'NIVEAU';
   const P = CoachGame.paramsFor;
 
-  // Monotonie : plus l'Elo vise est haut, plus le moteur est fort et regulier.
-  const elos = [400, 500, 600, 760, 900, 1100, 1200, 1400];
+  const elos = [250, 400, 500, 600, 760, 900, 1100, 1200, 1400];
   const params = elos.map(P);
   const nonDecr = (k) => params.every((p, i) => i === 0 || p[k] >= params[i - 1][k]);
   const nonIncr = (k) => params.every((p, i) => i === 0 || p[k] <= params[i - 1][k]);
-  check(G, 'skill croit avec l\'Elo', nonDecr('skill'), true);
   check(G, 'movetime croit avec l\'Elo', nonDecr('mt'), true);
-  check(G, 'le tirage se resserre quand l\'Elo monte', nonIncr('spread'), true);
+  check(G, 'la temperature baisse quand l\'Elo monte', nonIncr('temp'), true);
   check(G, 'la gaffe volontaire diminue quand l\'Elo monte', nonIncr('blunder'), true);
-
-  // Bornes : un curseur hors echelle ne doit pas produire de reglage absurde.
   check(G, 'sous le plancher on retombe sur le 1er barreau', P(100).elo, CoachGame.LADDER[0].elo);
   check(G, 'au-dessus du plafond on retombe sur le dernier', P(3000).elo,
     CoachGame.LADDER[CoachGame.LADDER.length - 1].elo);
-  check(G, 'skill reste dans 0-20',
-    params.filter(p => p.skill < 0 || p.skill > 20).length, 0);
   check(G, 'la proba de gaffe reste une proba',
     params.filter(p => p.blunder < 0 || p.blunder > 1).length, 0);
-  // Son niveau (760 rapide) doit rester un adversaire faible mais pas nul.
-  check(G, 'a ~760 le moteur est bride sans etre absurde',
-    P(760).skill <= 5 && P(760).skill >= 1, true);
-  // Au plafond, plus de coup lache au hasard : le mode doit pouvoir servir
-  // d'adversaire propre quand il aura progresse.
-  check(G, 'au plafond, aucune gaffe volontaire', P(1400).blunder, 0);
+  check(G, 'au plafond, presque plus de coup lache', P(1400).blunder <= 0.03, true);
 
-  // Tirage dans les lignes MultiPV. `rnd` est injecte, donc deterministe.
-  const pick = CoachGame.pickIndex;
-  check(G, 'rnd=0 prend toujours le meilleur coup', pick(5, 2, 0), 0);
-  check(G, 'spread nul = toujours le meilleur coup', pick(5, 0, 0.99), 0);
-  check(G, 'une seule ligne : index 0', pick(1, 4, 0.99), 0);
-  check(G, 'jamais hors bornes',
-    [0, .2, .4, .6, .8, .999].map(r => pick(5, 4, r)).filter(i => i < 0 || i > 4).length, 0);
-  // Un tirage large doit reellement descendre dans la liste, sinon les niveaux
-  // bas ne sont qu'un Stockfish un peu lent.
-  const deep = [.5, .7, .9, .99].map(r => pick(5, 4, r));
-  check(G, 'un tirage large atteint le 3e coup ou plus loin', Math.max(...deep) >= 2, true);
-  const tight = [.5, .7, .9].map(r => pick(5, 0.7, r));
-  check(G, 'un tirage etroit reste sur les 2 premiers', Math.max(...tight) <= 1, true);
+  const W = CoachGame.choiceWeights;
+  const L = (...sc) => sc.map((s, i) => ({ move: 'm' + i, score: s, mate: null }));
+  const sum = (w) => w.reduce((s, x) => s + x, 0);
+  check(G, 'les poids somment a 1', Math.abs(sum(W(L(50, 30, -100, -400), P(400))) - 1) < 1e-9, true);
+  check(G, 'temperature nulle = toujours le meilleur coup', W(L(50, 49, 48), { temp: 0 }).join(), '1,0,0');
+  const eq = W(L(20, 20, 20), P(400));
+  check(G, 'coups equivalents : poids egaux', Math.abs(eq[0] - eq[2]) < 1e-9, true);
+  // Le coeur du recalibrage : a ~350 une piece offerte n'est PAS prise a coup
+  // sur (elle l'etait a 97 %, avec Skill Level sans effet), mais elle reste le
+  // coup le plus probable ; au plafond, elle est prise presque toujours.
+  const freePiece = L(320, 20, 10, 0, -10);
+  check(G, 'a ~350 une piece offerte peut etre ratee', W(freePiece, P(350))[0] < 0.9, true);
+  check(G, 'a ~350 elle reste le coup le plus probable', W(freePiece, P(350))[0] > 0.3, true);
+  check(G, 'a ~1400 la piece est prise', W(freePiece, P(1400))[0] > 0.97, true);
+  check(G, 'un mat compte comme 1000 cp, pas 30000',
+    W([{ move: 'a', score: 29997, mate: 3 }, { move: 'b', score: 0, mate: null }], P(400))[1] > 0, true);
 
-  // Le coup EVIDENT. Mesure en jouant : sans ce resserrement, le coach laissait
-  // passer une dame gratuite deux fois sur trois - un adversaire faible doit
-  // rester faible dans les positions floues, pas aveugle devant une piece.
-  const eff = CoachGame.effSpread;
-  const L2 = (a, b) => [{ move: 'a', score: a, mate: null }, { move: 'b', score: b, mate: null }];
-  check(G, 'coups equivalents : etalement inchange', eff(L2(20, 15), 4), 4);
-  check(G, 'ecart net : etalement reduit', eff(L2(140, 20), 4) < 4, true);
-  check(G, 'une piece a ramasser : etalement fortement reduit', eff(L2(920, 20), 4) <= 1, true);
-  check(G, 'mat en vue : etalement quasi nul', eff([{ move: 'a', score: 3000, mate: 3 }, { move: 'b', score: 90, mate: null }], 4) < 1, true);
-  check(G, 'une seule ligne : rien a resserrer', eff([{ move: 'a', score: 0, mate: null }], 4), 4);
-  // Et le resserrement doit vraiment changer le coup joue, pas juste le chiffre.
-  const obvious = [.3, .5, .7, .9].map(r => pick(5, eff(L2(920, 20), 4), r));
-  check(G, 'devant une piece gratuite, le coach prend', Math.max(...obvious) <= 1, true);
+  const pick = CoachGame.pickWeighted;
+  check(G, 'rnd=0 prend le premier coup', pick([0.5, 0.3, 0.2], 0), 0);
+  check(G, 'rnd=0.6 tombe sur le 2e', pick([0.5, 0.3, 0.2], 0.6), 1);
+  check(G, 'rnd~1 reste dans les bornes', pick([0.5, 0.3, 0.2], 0.9999999), 2);
 
   // La perte se lit DANS une seule recherche (lignes MultiPV), pas en
   // soustrayant deux recherches : c'est ce qui faisait sortir « ?! » sur un coup

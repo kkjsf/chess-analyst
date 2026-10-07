@@ -35,21 +35,35 @@ const CoachGame = (() => {
   const ANIM_MS = (typeof BoardRenderer !== 'undefined' && BoardRenderer.ANIM_MS) || 340;
 
   // ── L'echelle de force ────────────────────────────────────────────────────
-  // Point de depart a calibrer en jouant : `skill` = Skill Level UCI, `mt` =
-  // movetime en ms, `spread` = etalement du tirage dans le top 5 (plus grand =
-  // joue plus souvent le 2e/3e coup), `blunder` = probabilite de lacher un coup
-  // au hasard. C'est ce dernier etage qui rend un adversaire de 500 credible :
-  // un moteur bride joue mal mais ne donne jamais une piece, ce qui est faux.
-  // Le plancher est a 250 et pas a 400 : son Elo rapide mesure est de ~350, donc
-  // une echelle qui commence a 400 mettrait « mon niveau » hors de l'echelle.
+  // v292 : refaite apres « je perds a ~350 et je bats les bots Chess.com a
+  // 1100 ». Deux defauts de l'ancienne echelle (skill/spread/blunder) :
+  //  1. `Skill Level` ne servait a RIEN. Stockfish ne l'applique qu'a son
+  //     `bestmove` ; les lignes MultiPV, dans lesquelles on tirait, restent
+  //     celles de la recherche pleine force. On tirait donc parmi les 5
+  //     meilleurs coups d'un Stockfish complet.
+  //  2. Le tirage se faisait au RANG (exp(-i/spread)) et se resserrait a 15 %
+  //     devant une piece gratuite, et la gaffe volontaire etait interdite dans
+  //     ces memes positions : le coach ne ratait quasiment jamais rien, alors
+  //     qu'a 350 on rate une piece offerte un tiers du temps.
+  // Desormais le tirage se fait sur la PERTE de chaque ligne (en centipions,
+  // vue du coach) : poids exp(-perte/temp). `temp` grand = les coups faibles
+  // sortent souvent, et une piece gratuite (perte 300 pour qui ne la prend
+  // pas) n'est plus prise a coup sur. `blunder` = proba de jouer un coup legal
+  // au hasard, jamais en echec. Barreaux cales par `tools/tune_coach.cjs` sur
+  // les memes positions que ses vraies parties rapides.
+  // Mesure a l'appui (tools/tune_coach.cjs, 150 positions de ses parties
+  // rapides) : lui = ACPL 137, 18 % de gaffes ; ~250 -> 172 / 18,7 % ;
+  // ~400 -> 140 / 14,2 % ; ~760 -> 96 / 7,6 % ; ~1400 -> 47 / 1,6 %.
+  // Avant ce recalibrage, le reglage MINIMUM jouait a ACPL 115 / 10 %, donc
+  // nettement mieux que lui.
   const LADDER = [
-    { elo: 250,  skill: 0, mt: 30,  spread: 5.0, blunder: 0.18 },
-    { elo: 400,  skill: 0, mt: 50,  spread: 4.0, blunder: 0.12 },
-    { elo: 600,  skill: 1, mt: 80,  spread: 3.0, blunder: 0.08 },
-    { elo: 760,  skill: 3, mt: 120, spread: 2.0, blunder: 0.05 },
-    { elo: 900,  skill: 5, mt: 200, spread: 1.6, blunder: 0.03 },
-    { elo: 1200, skill: 9, mt: 400, spread: 1.0, blunder: 0.00 },
-    { elo: 1400, skill: 12, mt: 600, spread: 0.7, blunder: 0.00 },
+    { elo: 250,  mt: 40,  temp: 400, blunder: 0.37 },
+    { elo: 400,  mt: 40,  temp: 250, blunder: 0.265 },
+    { elo: 600,  mt: 60,  temp: 150, blunder: 0.195 },
+    { elo: 760,  mt: 80,  temp: 100, blunder: 0.155 },
+    { elo: 900,  mt: 120, temp: 70,  blunder: 0.125 },
+    { elo: 1200, mt: 250, temp: 45,  blunder: 0.06 },
+    { elo: 1400, mt: 400, temp: 30,  blunder: 0.025 },
   ];
 
   // Interpolation lineaire entre les deux barreaux qui encadrent `elo`.
@@ -64,45 +78,30 @@ const CoachGame = (() => {
     const mix = (a, b) => a + (b - a) * t;
     return {
       elo: e,
-      skill: Math.round(mix(lo.skill, hi.skill)),
       mt: Math.round(mix(lo.mt, hi.mt)),
-      spread: +mix(lo.spread, hi.spread).toFixed(2),
+      temp: Math.round(mix(lo.temp, hi.temp)),
       blunder: +mix(lo.blunder, hi.blunder).toFixed(3),
     };
   }
 
-  // Un coup EVIDENT se trouve meme a 350. Mesure en jouant : avec le seul
-  // tirage pondere, le coach laissait passer une dame gratuite deux fois sur
-  // trois - et un adversaire qui ne punit jamais rien n'entraine personne.
-  // Quand la meilleure ligne devance la suivante d'au moins une piece, on
-  // resserre donc fortement le tirage. L'etalement ne joue alors que dans les
-  // positions ou plusieurs coups se valent, c'est-a-dire la ou un joueur faible
-  // se trompe vraiment.
-  const OBVIOUS_CP = 200;   // ~une piece d'ecart avec le 2e coup
-  const CLEAR_CP = 100;     // un ecart net, sans etre criant
-  function effSpread(lines, spread) {
-    if (!(spread > 0) || !lines || lines.length < 2) return spread;
-    const a = lines[0], b = lines[1];
-    if (a && a.mate != null && a.mate > 0) return +(spread * 0.15).toFixed(3);   // mat en vue
-    if (!a || !b || typeof a.score !== 'number' || typeof b.score !== 'number') return spread;
-    const gap = a.score - b.score;                                              // vu du trait
-    if (gap >= OBVIOUS_CP) return +(spread * 0.15).toFixed(3);   // ~3 % de chances de rater quand meme
-    if (gap >= CLEAR_CP) return +(spread * 0.6).toFixed(3);
-    return spread;
+  // Poids de chaque ligne MultiPV : exp(-perte/temp), perte bornee a 1000 cp
+  // (un mat compte comme 1000). A temp 0, seul le meilleur coup sort.
+  const CAP_CP = 1000;
+  function choiceWeights(lines, prm) {
+    if (!lines || !lines.length) return [];
+    const cap = (s) => Math.max(-CAP_CP, Math.min(CAP_CP, typeof s === 'number' ? s : 0));
+    const top = cap(lines[0].score);
+    const T = prm && prm.temp > 0 ? prm.temp : 0;
+    const w = lines.map((l, i) => T ? Math.exp(-Math.max(0, top - cap(l.score)) / T) : (i === 0 ? 1 : 0));
+    const sum = w.reduce((s, x) => s + x, 0);
+    return w.map(x => x / sum);
   }
 
-  // Tirage pondere dans les `n` lignes rendues par MultiPV. Poids
-  // exp(-i/spread) : a spread 0 seul le meilleur coup sort, a spread 4 le 4e
-  // coup a encore une chance reelle. `rnd` est injectable pour les tests.
-  function pickIndex(n, spread, rnd) {
-    const k = Math.max(1, n | 0);
-    if (!(spread > 0)) return 0;
-    const w = [];
-    let sum = 0;
-    for (let i = 0; i < k; i++) { const x = Math.exp(-i / spread); w.push(x); sum += x; }
-    let r = (typeof rnd === 'number' ? rnd : Math.random()) * sum;
-    for (let i = 0; i < k; i++) { r -= w[i]; if (r <= 0) return i; }
-    return k - 1;
+  // Tirage dans des poids normalises. `rnd` est injectable pour les tests.
+  function pickWeighted(w, rnd) {
+    let r = typeof rnd === 'number' ? rnd : Math.random();
+    for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return i; }
+    return Math.max(0, w.length - 1);
   }
 
   // ── Etat de la partie en cours ────────────────────────────────────────────
@@ -511,9 +510,9 @@ const CoachGame = (() => {
     const p = paramsFor(v);
     $('#cg-elo').value = p.elo;
     $('#cg-elo-v').textContent = '~' + p.elo;
-    $('#cg-elo-hint').innerHTML = `Skill ${p.skill}/20, ${p.mt} ms de réflexion, `
+    $('#cg-elo-hint').innerHTML = `${p.mt} ms de réflexion, `
       + (p.blunder > 0 ? `<b>${Math.round(p.blunder * 100)} %</b> de coups lâchés` : `aucun coup lâché`)
-      + `. Le moteur embarqué n'a pas d'option d'Elo : ce niveau est une <b>approximation</b>, à ajuster au ressenti.`;
+      + `. Calé sur tes parties rapides, mais le moteur n'a pas d'option d'Elo : ce niveau reste une <b>approximation</b>, à ajuster au ressenti.`;
   }
 
   // ═════════════════════════ Ouverture / fermeture ═════════════════════════
@@ -1826,27 +1825,26 @@ const CoachGame = (() => {
     }
     if (book && !bookOut && book.leaveAt != null && game.history().length === book.leaveAt) bookOut = 'coach';
 
-    // 2. Une seule recherche par coup, a SON niveau (Skill Level bride +
-    //    movetime court). Les 5 lignes servent aux deux tirages qui suivent.
+    // 2. Une seule recherche par coup, PLEINE force et movetime court : le
+    //    niveau se fabrique dans le tirage, pas dans le moteur (Skill Level
+    //    n'agit que sur `bestmove`, jamais sur les lignes ou l'on tire).
     let res = null;
     try {
       if (typeof StockfishEngine !== 'undefined') {
         if (!StockfishEngine.isReady()) await StockfishEngine.init();
         if (my !== token) return null;
-        res = await StockfishEngine.evaluate(fen, 'movetime ' + prm.mt, histFor(fen, { skill: prm.skill }));
+        res = await StockfishEngine.evaluate(fen, 'movetime ' + prm.mt, histFor(fen));
       }
     } catch (_) { res = null; }
     if (my !== token) return null;
 
     const lines = (res && res.lines) ? res.lines.filter(l => l && l.move) : [];
-    const sp = effSpread(lines, prm.spread);
-    const obvious = sp < prm.spread;         // piece a ramasser, ou mat en vue
 
     // 3. Gaffe volontaire : un coup legal au hasard. Jamais en echec (meme un
-    //    debutant sort son roi), jamais quand il y a une piece a ramasser.
+    //    debutant sort son roi).
     let inCheck = false;
     try { inCheck = game.in_check(); } catch (_) {}
-    if (prm.blunder > 0 && !inCheck && !obvious && Math.random() < prm.blunder) {
+    if (prm.blunder > 0 && !inCheck && Math.random() < prm.blunder) {
       const ms = game.moves({ verbose: true });
       if (ms.length) {
         const m = ms[Math.floor(Math.random() * ms.length)];
@@ -1855,10 +1853,11 @@ const CoachGame = (() => {
       }
     }
 
-    // 4. Sinon : tirage pondere dans les lignes du moteur.
+    // 4. Sinon : tirage pondere par la perte de chaque ligne.
     let uci = null;
-    if (lines.length) uci = lines[pickIndex(lines.length, sp)].move;
+    if (lines.length) uci = lines[pickWeighted(choiceWeights(lines, prm))].move;
     else if (res && res.bestMove) uci = res.bestMove;
+
 
     if (!uci) {
       const ms = game.moves({ verbose: true });
@@ -2947,11 +2946,11 @@ const CoachGame = (() => {
     const g = load().games.filter(x => x.elo === prm.elo).slice(-3);
     const last2 = g.slice(-2);
     if (last2.length === 2 && last2.every(x => x.result === 'win')) {
-      return { elo: Math.min(1400, prm.elo + 50), why: '(+50) — deux victoires de suite à ce niveau. On monte d\'un cran, pas de trois : le but est de rester là où tu dois vraiment réfléchir.' };
+      return { elo: Math.min(LADDER[LADDER.length - 1].elo, prm.elo + 50), why: '(+50) — deux victoires de suite à ce niveau. On monte d\'un cran, pas de trois : le but est de rester là où tu dois vraiment réfléchir.' };
     }
     const last3 = g.slice(-3);
     if (last3.length === 3 && last3.every(x => x.result === 'loss')) {
-      return { elo: Math.max(400, prm.elo - 50), why: '(-50) — trois défaites de suite : un adversaire trop fort n\'apprend rien, il punit trop tôt.' };
+      return { elo: Math.max(LADDER[0].elo, prm.elo - 50), why: '(-50) — trois défaites de suite : un adversaire trop fort n\'apprend rien, il punit trop tôt.' };
     }
     return null;
   }
@@ -3143,7 +3142,7 @@ const CoachGame = (() => {
     fr2.readAsText(file);
   }
 
-  return { open, showHistory, close, inProgress, paramsFor, pickIndex, effSpread, winLoss, lineLoss,
+  return { open, showHistory, close, inProgress, paramsFor, choiceWeights, pickWeighted, winLoss, lineLoss,
     endAnatomy, endArrows, gameReport, betweenSqs, LADDER };
 })();
 
