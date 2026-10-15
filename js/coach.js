@@ -203,7 +203,7 @@ const Coach = (() => {
     ['Pirc', 'Pirc'], ['Alekhine', 'Alekhine'], ['Moderne', 'Défense Moderne'],
     ['Owen', 'Défense Owen'], ['Nimzowitsch', 'Défense Nimzowitsch'],
     ['Trois Cavaliers', 'Trois/Quatre Cavaliers'], ['Quatre Cavaliers', 'Trois/Quatre Cavaliers'],
-    ['Nimzo', 'Nimzo-Indienne'], ['Est-Indienne', 'Est-Indienne'], ['Ouest-Indienne', 'Ouest-Indienne'],
+    ['Nimzo', 'Nimzo-Indienne'], ['Attaque Est-Indienne', 'Attaque Est-Indienne'], ['Est-Indienne', 'Est-Indienne'], ['Ouest-Indienne', 'Ouest-Indienne'],
     ['Grünfeld', 'Grünfeld'], ['Benoni', 'Benoni'], ['Benko', 'Benko'], ['Budapest', 'Budapest'],
     ['Catalane', 'Catalane'], ['Slave', 'Slave'],
     ['Gambit Dame', 'Gambit Dame'], ['GDR', 'Gambit Dame'], ['GDA', 'Gambit Dame'], ['Tarrasch', 'Gambit Dame'],
@@ -219,14 +219,37 @@ const Coach = (() => {
     for (const [kw, fam] of FAMILY_MAP) if (name.indexOf(kw) >= 0) return fam;
     return name.split(' — ')[0];
   }
+  // Les familles que nomme un coup NOIR. Avec les Blancs, c'est l'adversaire
+  // qui les a choisies : « Gambit Englund, 6 parties » n'est pas une ligne a lui,
+  // c'est ce qu'on a oppose a son 1.d4.
+  const DEFENSES = new Set(['Sicilienne', 'Française', 'Caro-Kann', 'Scandinave', 'Petrov', 'Philidor',
+    'Pirc', 'Alekhine', 'Slave', 'Nimzo-Indienne', 'Est-Indienne', 'Ouest-Indienne', 'Grünfeld',
+    'Benoni', 'Benko', 'Budapest', 'Hollandaise', 'Old Indian', 'Dragon', 'Gambit Englund']);
+  const isDefense = f => DEFENSES.has(f) || /^Défense /.test(f || '');
+  // Le choix des BLANCS : la famille quand un coup blanc la definit (Viennoise,
+  // Italienne, Londres) ; sinon le systeme qu'ils ont pose malgre la defense
+  // (1.d4 d6 2.Cf3 Cf6 3.Ff4 est un Londres, pas une Old Indian) ; sinon la plus
+  // longue ligne du catalogue qui soit a eux (une Petrov est leur 2.Cf3, Partie
+  // du Cavalier Roi) ; sinon leur 1er coup. Sans coups, inconnu.
+  function whiteChoice(sans, family) {
+    if (!isDefense(family)) return family;
+    if (!sans || !sans.length) return null;
+    const sys = Openings.detectSystem(sans);
+    if (sys) return familyFr(sys.name);
+    const own = Openings.prefixes(sans).find(p => !isDefense(familyFr(p.name)));
+    return familyFr((own || Openings.detect(sans.slice(0, 1))).name);
+  }
   function frenchOpening(g) {
     if (g._fr) return g._fr;
-    let info = null;
-    try { info = Openings.detect(Analyzer.parsePgnMoves(g.pgn)); } catch (_) {}
+    let info = null, sans = null;
+    try { sans = Analyzer.parsePgnMoves(g.pgn).map(m => m.san); info = Openings.detect(sans); } catch (_) {}
     const name = (info && info.name) || g.opening || 'Inconnue';
+    const family = familyFr(name);
     g._fr = {
       name,
-      family: familyFr(name),
+      family,
+      white: whiteChoice(sans, family),
+      first: sans && sans.length ? Analyzer.toFrench(sans[0]) : null,
       line: (info && info.line) || null,
       moves: (info && info.moves) || 0,
       eco: (info && info.eco) || null,
@@ -436,6 +459,12 @@ const Coach = (() => {
   }
   function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
   function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+  // [[valeur, nombre], ...], le plus frequent d'abord ; les vides ne comptent pas.
+  function tally(xs) {
+    const m = {};
+    xs.forEach(x => { if (x) m[x] = (m[x] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }
   function fmtDate(ts) { const d = new Date(ts * 1000); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }); }
   function fmtIso(iso) { try { return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return iso; } }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -969,48 +998,123 @@ const Coach = (() => {
     </div>`;
   }
 
+  // ── Juger une ouverture sur l'ouverture ──
+  // Le score d'une ligne se joue surtout APRES elle : il en sort propre au
+  // Londres (+2 atteint 19 fois sur 22) et n'y marque que 45 %, perdus a la
+  // conversion. Ce qui juge l'ouverture : les erreurs commises dans la phase
+  // d'ouverture, le coup de la 1re gaffe et, quand l'analyse le porte
+  // (`evalAt12`, ecrit depuis la v293), l'eval apres le 12e coup.
+  const OPENING_MOVES = 10; // phaseOf : l'ouverture s'arrete au 20e demi-coup
+  function openingExit(gs) {
+    const n = gs.length;
+    const opErr = gs.reduce((s, g) => s + ((g.analysis.phaseErrors || {}).opening || 0), 0) / n;
+    // Une partie sans gaffe compte « jamais » ; mediane haute, la meme que la
+    // revue pedagogique (Londres 21, Viennoise 17).
+    const firsts = gs.map(g => {
+      const b = (g.analysis.blunderList || []).filter(x => x.type === 'blunder').map(x => x.ply);
+      return b.length ? Math.floor(Math.min(...b) / 2) + 1 : Infinity;
+    }).sort((a, b) => a - b);
+    const ev = gs.map(g => g.analysis.evalAt12).filter(v => typeof v === 'number');
+    return { n, opErr, firstBlunder: firsts[Math.floor(n / 2)], eval12: ev.length >= 4 && ev.length * 2 >= n ? avg(ev) : null };
+  }
+  // Propre = pas plus d'erreurs d'ouverture que d'habitude dans cette couleur
+  // (15 % de marge), 1re gaffe en mediane APRES l'ouverture, et pas plus d'un
+  // demi-pion de retard au 12e coup quand l'eval est connue.
+  function cleanExit(x, base) {
+    return x.opErr <= base.opErr * 1.15 && x.firstBlunder > OPENING_MOVES && (x.eval12 == null || x.eval12 >= -50);
+  }
+  // La ligne d'une partie : avec les Blancs, ce qu'il a CHOISI (whiteChoice) -
+  // la famille detectee comptait la Petrov, la Scandinave ou le Gambit Englund
+  // de l'adversaire comme autant de lignes a lui (15 « familles » en 60 parties
+  // rapides, dont 6 defenses adverses). Avec les Noirs, la famille telle quelle.
+  function lineKey(g) {
+    const fr = frenchOpening(g);
+    return g.userColor === 'w' ? fr.white : fr.family;
+  }
+  // Une ligne par groupe d'au moins `min` parties, avec sa sortie d'ouverture.
+  function openingLines(gs, min) {
+    const fam = {};
+    gs.slice().sort((a, b) => a.endTime - b.endTime).forEach(g => {
+      const f = lineKey(g);
+      if (f && f !== 'Inconnue') (fam[f] = fam[f] || []).push(g);
+    });
+    const base = gs.length ? openingExit(gs) : null;
+    const lines = Object.keys(fam).filter(f => fam[f].length >= min).map(name => {
+      const l = fam[name], x = openingExit(l);
+      const pts = l.reduce((s, g) => s + (g.result === 'win' ? 1 : g.result === 'draw' ? 0.5 : 0), 0);
+      return Object.assign(x, { name, games: l, score: pts / l.length, clean: cleanExit(x, base) });
+    });
+    return { lines, base };
+  }
+  // La ligne a recommander : celle qu'il JOUE (la plus frequente sur ses 20
+  // dernieres parties de cette couleur), tant qu'il en sort propre. Le tri au
+  // score lui demandait de quitter le Londres adopte depuis la revue (22
+  // parties, 45 %) pour la Viennoise (9 parties, 67 %, la derniere le 11 aout) :
+  // un ecart de la taille du hasard, ne au milieu de jeu.
+  const RECENT_N = 20;
+  function systemPick(gs) {
+    const { lines, base } = openingLines(gs, 4);
+    const recent = new Set(gs.slice().sort((a, b) => a.endTime - b.endTime).slice(-RECENT_N));
+    lines.forEach(r => { r.recent = r.games.filter(g => recent.has(g)).length; r.last = r.games[r.games.length - 1].endTime; });
+    const byN = (a, b) => (b.n - a.n) || (b.last - a.last);
+    lines.sort((a, b) => (b.recent - a.recent) || byN(a, b));
+    // Sous 3 parties recentes, « la ligne du moment » ne veut rien dire : on
+    // retombe sur la plus jouee.
+    const pick = lines[0] && lines[0].recent >= 3 ? lines[0] : lines.slice().sort(byN)[0] || null;
+    const alt = pick && !pick.clean ? lines.find(r => r !== pick && r.clean) || null : null;
+    return { pick, alt, base, recentN: recent.size };
+  }
+  const dec1 = v => v.toFixed(1).replace('.', ',');
+  function exitText(x, base) {
+    const fb = x.firstBlunder === Infinity ? 'aucune gaffe dans au moins la moitié des parties' : `1re gaffe au coup ${x.firstBlunder} en médiane`;
+    const ev = x.eval12 == null ? '' : `, ${x.eval12 >= 0 ? '+' : '-'}${dec1(Math.abs(x.eval12) / 100)} au 12e coup`;
+    return `${dec1(x.opErr)} erreur${x.opErr >= 2 ? 's' : ''} d'ouverture par partie (${dec1(base.opErr)} sur toutes tes lignes), ${fb}${ev}`;
+  }
+  // Le nom d'une ligne des Blancs, avec les defenses adverses qui la font quand
+  // elles en sont la majorite : « Ouverture Pion Roi te coute » ne dit rien tant
+  // qu'on ne lit pas que c'est 1.e4 contre la Scandinave ou la Caro-Kann.
+  function lineName(r) {
+    const opp = tally(r.games.filter(g => g.userColor === 'w').map(g => frenchOpening(g).family).filter(isDefense));
+    const n = opp.reduce((s, [, k]) => s + k, 0);
+    return `<b>${esc(r.name)}</b>` + (n * 2 >= r.n ? ` (${opp.slice(0, 2).map(([f]) => esc(f)).join(', ')}${opp.length > 2 ? '…' : ''})` : '');
+  }
+
   // ── Ton système : le conseil qui manquait sur les ouvertures ──
   // Le Coach classait les performances par ligne sans jamais dire la seule
   // chose utile à ce niveau : REDUIS. 6 familles croisées en 29 parties avec
   // les Blancs, aucune assez jouée pour en tirer une conclusion.
   function renderSystem(an) {
     const byColor = (c) => {
-      const fam = {};
-      an.filter(g => g.userColor === c).forEach(g => {
-        const f = frenchOpening(g).family;
-        if (!f || f === 'Inconnue') return;
-        const o = fam[f] || (fam[f] = { n: 0, w: 0, d: 0, acc: 0 });
-        o.n++; o.acc += g.analysis.accuracy || 0;
-        if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++;
-      });
-      const rows = Object.keys(fam).map(name => {
-        const o = fam[name];
-        return { name, n: o.n, score: (o.w + o.d * 0.5) / o.n, acc: Math.round(o.acc / o.n) };
-      });
-      // Le meilleur candidat = le plus joué parmi ceux au score correct, sinon
-      // simplement le plus joué. On ne recommande pas une ligne vue 2 fois.
-      // Le critère de choix est le SCORE : c'est donc le score qu'on affiche.
-      // Afficher la précision à la place laissait croire que la ligne avait été
-      // retenue pour ça, et pouvait la donner à 72 % deux centimètres au-dessus
-      // d'une barre qui la donne à 46 %.
-      const solid = rows.filter(r => r.n >= 4).sort((a, b) => (b.score - a.score) || (b.n - a.n));
-      return { rows: rows.sort((a, b) => b.n - a.n), pick: solid[0] || null, count: rows.length };
+      const gs = an.filter(g => g.userColor === c);
+      const keys = gs.map(lineKey).filter(f => f && f !== 'Inconnue');
+      return Object.assign(systemPick(gs), { gs, count: new Set(keys).size, games: keys.length });
     };
     const w = byColor('w'), b = byColor('b');
     if (w.count < 3 && b.count < 3) return '';
+    // Avec les Blancs, ses lignes a lui, son 1er coup, et les defenses adverses
+    // nommees pour dire qu'elles ne comptent pas.
+    const ownSpread = (o) => {
+      const s = o.count > 1 ? 's' : '';
+      const firsts = tally(o.gs.map(g => frenchOpening(g).first));
+      const opp = tally(o.gs.map(g => frenchOpening(g).family).filter(isDefense));
+      return `<b>${o.count} ligne${s}</b> à toi en ${o.games} parties`
+        + (firsts.length > 1 ? ` (${firsts.slice(0, 2).map(([m, n]) => `1.${esc(m)} dans ${n}`).join(', ')})` : '')
+        + (opp.length ? `, comptée${s} sur tes coups, pas sur la défense de l'adversaire (${opp.slice(0, 2).map(([f]) => esc(f)).join(', ')}${opp.length > 2 ? '…' : ''})` : '');
+    };
     const line = (o, ic, lbl, mine) => {
       if (!o.count) return '';
-      const games = o.rows.reduce((s, r) => s + r.n, 0);
-      const spread = `<b>${o.count} famille${o.count > 1 ? 's' : ''}</b> différente${o.count > 1 ? 's' : ''} en ${games} parties`;
+      const spread = mine ? ownSpread(o) : `<b>${o.count} famille${o.count > 1 ? 's' : ''}</b> différente${o.count > 1 ? 's' : ''} en ${o.games} parties`;
       // `mine` = c'est TOI qui choisis l'ouverture (les Blancs). Avec les Noirs
       // la famille détectée est celle que l'ADVERSAIRE a jouée, donc on ne peut
       // pas te dire « garde celle-là » : ce qui se choisit, c'est ta réponse.
-      const rec = mine
-        ? (o.pick
-            ? `Garde <b>${esc(o.pick.name)}</b> (${o.pick.n} parties, ${Math.round(o.pick.score * 100)}% de points marqués) et joue-la à chaque fois.`
-            : `Aucune ligne assez jouée pour en faire ton système : choisis-en une et tiens-la.`)
-        : `Ici la famille est l'ouverture de l'adversaire, pas la tienne : ce qui se choisit, c'est ta <b>réponse</b>. Fixe-en <b>une contre 1.e4</b> et <b>une contre 1.d4</b>, et joue-les toujours.`;
-      return `<div class="sys-row"><span class="sys-ic">${ic}</span><div><b>${lbl}</b> — ${spread}. ${rec}</div></div>`;
+      const p = o.pick;
+      const usage = p && (p.recent >= 3 ? `ta ligne du moment (${p.recent} de tes ${o.recentN} dernières parties)` : `ta ligne la plus jouée (${p.n} parties)`);
+      const rec = !mine
+        ? `Ici la famille est l'ouverture de l'adversaire, pas la tienne : ce qui se choisit, c'est ta <b>réponse</b>. Fixe-en <b>une contre 1.e4</b> et <b>une contre 1.d4</b>, et joue-les toujours.`
+        : !p ? `Aucune ligne assez jouée pour en faire ton système : choisis-en une et tiens-la.`
+        : p.clean ? `Garde ${lineName(p)} : c'est ${usage} et tu en sors propre, ${exitText(p, o.base)}. Joue-la à chaque fois : son score (${Math.round(p.score * 100)}%) se joue après l'ouverture.`
+        : `${lineName(p)}, ${usage}, te coûte dès l'ouverture : ${exitText(p, o.base)}. Revois-la dans Apprendre avant de la rejouer${o.alt ? `, ou reviens à ${lineName(o.alt)}, dont tu sors propre (${o.alt.n} parties)` : ''}.`;
+      return `<div class="sys-row"><span class="sys-ic">${ic}</span><div><b>${lbl}</b> - ${spread}. ${rec}</div></div>`;
     };
     return `<div class="home-card coach-card" id="coach-system">
       <h3>♟ Ton système</h3>
@@ -1094,6 +1198,9 @@ const Coach = (() => {
     // part d'erreurs rapides seule (51 %) accusait la vitesse alors qu'il en
     // joue 76 % des coups ainsi, et qu'un coup rapide est MOINS souvent une
     // erreur (10 %) qu'un coup pose (18 %).
+    // D'ou aussi, en bas de carte, un DECLENCHEUR et pas un plancher de temps :
+    // la « regle d'or » des 15 s par coup l'aurait fait tomber au temps dans 48
+    // de ses 121 parties rapides (revue pedagogique, 2e edition, N1).
     const fastMv = ps.reduce((s, p) => s + p.fastMoves, 0);
     const calmMv = ps.reduce((s, p) => s + p.calmMoves, 0);
     const calmTot = ps.reduce((s, p) => s + p.calmErr, 0);
@@ -1118,7 +1225,7 @@ const Coach = (() => {
         <div class="coach-pace-stat"><b>${fastPct}%</b><span>de tes erreurs jouées en &lt;15s</span></div>
       </div>
       <p class="coach-focus-sub">${diag}</p>
-      <p class="coach-vig-tip">📏 <b>Règle d'or :</b> après le coup 4, jamais moins de 15 secondes par coup — Échecs, Captures, Menaces, puis joue.</p>
+      <p class="coach-vig-tip">🔎 <b>Avant chaque coup :</b> ses échecs, ses prises, ses menaces. S'il y en a une, prends ton temps. Sinon, joue.</p>
     </div>`;
   }
 
@@ -2513,24 +2620,26 @@ const Coach = (() => {
     // conseillait de réviser la Petrov sur la foi de deux défaites). Au-dessous
     // de MIN_VERDICT on affiche la ligne, sans conclusion.
     const MIN_VERDICT = 8;
-    const side = (c) => {
-      const gs = an.filter(g => g.userColor === c);
-      if (!gs.length) return null;
+    const groups = (gs, keyOf) => {
       const fam = {};
       gs.forEach(g => {
-        const f = frenchOpening(g).family;
+        const f = keyOf(g);
         if (!f || f === 'Inconnue') return;
-        const o = fam[f] || (fam[f] = { n: 0, w: 0, d: 0, l: 0 });
+        const o = fam[f] || (fam[f] = { name: f, n: 0, w: 0, d: 0, l: 0 });
         o.n++;
         if (g.result === 'win') o.w++; else if (g.result === 'draw') o.d++; else o.l++;
       });
-      const ranked = Object.keys(fam)
-        .map(name => { const o = fam[name]; return { name, n: o.n, w: o.w, d: o.d, l: o.l, score: (o.w + o.d * 0.5) / o.n }; })
-        .filter(r => r.n >= MIN)
-        .sort((a, b) => b.n - a.n);
+      return Object.values(fam).map(o => Object.assign(o, { score: (o.w + o.d * 0.5) / o.n })).sort((a, b) => b.n - a.n);
+    };
+    const side = (c) => {
+      const gs = an.filter(g => g.userColor === c);
+      if (!gs.length) return null;
       const w = gs.filter(g => g.result === 'win').length;
       const d = gs.filter(g => g.result === 'draw').length;
-      return { n: gs.length, score: (w + d * 0.5) / gs.length, ranked };
+      // Avec les Blancs, les defenses adverses sortent des lignes (lineKey) et
+      // reviennent en detail : ce que l'adversaire lui oppose.
+      const opp = c === 'w' ? groups(gs, g => { const f = frenchOpening(g).family; return isDefense(f) ? f : null; }) : [];
+      return { gs, n: gs.length, score: (w + d * 0.5) / gs.length, ranked: groups(gs, lineKey).filter(r => r.n >= MIN), opp };
     };
     const wc = side('w'), bc = side('b');
     if (!wc && !bc) return '';
@@ -2543,25 +2652,55 @@ const Coach = (() => {
         <span class="op-wdl"><span class="wdl-w">${r.w}</span>/<span class="wdl-d">${r.d}</span>/<span class="wdl-l">${r.l}</span> · ${r.n}p</span>
       </div>`;
     };
+    // Le verdict juge chaque ligne sur l'OUVERTURE (voir openingExit), plus sur
+    // le score : « la plus fragile » tombait sur le Londres (45 % sur 22) face a
+    // la Viennoise (67 % sur 9), un ecart d'environ une erreur type ne au milieu
+    // de jeu, alors qu'il sort aussi propre de l'un que de l'autre.
     const verdict = (o, mine) => {
-      const solid = o.ranked.slice().sort((a, b) => b.score - a.score || b.n - a.n).filter(r => r.n >= MIN_VERDICT);
-      if (solid.length < 2) return `<div class="coach-note">Pas encore ${MIN_VERDICT} parties sur deux lignes différentes de ce côté — au-dessous, le score est du hasard.</div>`;
-      const b = solid[0], w = solid[solid.length - 1];
-      return mine
-        ? `<div class="coach-flag">💪 Ta plus rentable : <b>${esc(b.name)}</b> (${Math.round(b.score * 100)}% sur ${b.n}p) · ⚠ la plus fragile : <b>${esc(w.name)}</b> (${Math.round(w.score * 100)}% sur ${w.n}p).</div>`
-        : `<div class="coach-flag">💪 Tu t'en sors le mieux contre <b>${esc(b.name)}</b> (${Math.round(b.score * 100)}% sur ${b.n}p) · ⚠ le moins bien contre <b>${esc(w.name)}</b> (${Math.round(w.score * 100)}% sur ${w.n}p) : c'est ta <b>réponse</b> à celle-là qu'il faut fixer.</div>`;
+      const { lines, base } = openingLines(o.gs, MIN_VERDICT);
+      if (lines.length < 2) return `<div class="coach-note">Pas encore ${MIN_VERDICT} parties sur deux lignes différentes de ce côté - au-dessous, le score est du hasard.</div>`;
+      const vs = mine ? 'avec' : 'contre';
+      const costly = lines.filter(r => !r.clean).sort((a, b) => (a.firstBlunder - b.firstBlunder) || (b.opErr - a.opErr));
+      const clean = lines.filter(r => r.clean).sort((a, b) => b.n - a.n);
+      const parts = [];
+      if (costly.length) {
+        const c = costly[0];
+        parts.push(mine
+          ? `⚠ ${lineName(c)} te coûte dès l'ouverture : ${exitText(c, base)}.`
+          : `⚠ Contre <b>${esc(c.name)}</b>, tu sors mal de l'ouverture : ${exitText(c, base)}. C'est ta <b>réponse</b> à celle-là qu'il faut fixer.`);
+      }
+      if (clean.length) parts.push(`💪 Tu sors propre de l'ouverture ${vs} ${clean.map(r => mine ? lineName(r) : `<b>${esc(r.name)}</b>`).join(', ')}.`);
+      // Le score ne departage deux lignes qu'au-dela de deux erreurs types.
+      const hi = lines.reduce((a, r) => r.score > a.score ? r : a), lo = lines.reduce((a, r) => r.score < a.score ? r : a);
+      const se = Math.sqrt(hi.score * (1 - hi.score) / hi.n + lo.score * (1 - lo.score) / lo.n);
+      const sc = r => `<b>${esc(r.name)}</b> (${Math.round(r.score * 100)}% sur ${r.n}p)`;
+      parts.push(hi.score - lo.score < Math.max(0.1, 2 * se)
+        ? `Entre ${sc(hi)} et ${sc(lo)}, l'écart de score est de la taille du hasard.`
+        : `Côté score, tu marques nettement plus ${vs} ${sc(hi)} ${mine ? "qu'avec" : 'que contre'} ${sc(lo)}${hi.clean && lo.clean ? ", et tu sors propre des deux : l'écart naît au milieu de jeu" : ''}.`);
+      return `<div class="coach-flag">${parts.join(' ')}</div>`;
+    };
+    const oppLine = (o) => {
+      if (!o.opp.length) return '';
+      // Les 5 plus frequentes (deux parties au moins), le reste en un compte.
+      const often = o.opp.filter(r => r.n >= 2).slice(0, 5), rest = o.opp.slice(often.length);
+      const list = often.length
+        ? often.map(r => `<b>${esc(r.name)}</b> ${r.n}p · ${Math.round(r.score * 100)}%`).join(', ')
+          + (rest.length ? `, et ${rest.length} autre${rest.length > 1 ? 's' : ''}${rest.every(r => r.n === 1) ? ' une seule fois' : ''}` : '')
+        : o.opp.map(r => `<b>${esc(r.name)}</b>`).join(', ') + (rest.length > 1 ? ', une fois chacune' : ', une fois');
+      return `<p class="op-opp">Ce que l'adversaire t'oppose : ${list}.</p>`;
     };
     const block = (o, ic, lbl, sub, mine) => !o || !o.ranked.length ? '' : `
       <div class="op-side">
         <div class="op-side-head">${ic} <b>${lbl}</b> <span class="op-side-sc">${Math.round(o.score * 100)}%</span> <span class="op-n">${o.n}p</span></div>
         <p class="op-side-sub">${sub}</p>
         <div class="op-list">${o.ranked.map(barRow).join('')}</div>
+        ${mine ? oppLine(o) : ''}
         ${verdict(o, mine)}
       </div>`;
     return `<div class="home-card coach-card" id="coach-opening-perf">
       <h3>🎯 Performance par ouverture</h3>
-      <p class="coach-sub2">Ton score (V + ½N) par famille, <b>chaque couleur à part</b> — au moins ${MIN} parties par ligne.</p>
-      ${block(wc, '♔', 'Avec les Blancs', "Ce sont TES ouvertures : ce tableau dit lesquelles te rapportent.", true)}
+      <p class="coach-sub2">Ton score (V + ½N) par ligne, <b>chaque couleur à part</b> - au moins ${MIN} parties par ligne.</p>
+      ${block(wc, '♔', 'Avec les Blancs', "Rangées par ce que TU as joué : ton système, sinon ton 1er coup. La défense choisie par l'adversaire est à part, sous la liste.", true)}
       ${block(bc, '♚', 'Avec les Noirs', "Ce sont les ouvertures de l'ADVERSAIRE. Le tableau ne dit donc pas quoi jouer, il dit contre quoi tu souffres.", false)}
     </div>`;
   }
@@ -3032,10 +3171,25 @@ const Coach = (() => {
     return s / arr.length;
   }
   // First half vs second half of the timeline — used for "mieux / pire qu'avant".
+  // Le classement provisoire de chaque cadence (la fenetre que calibInfo retire
+  // deja de la courbe Elo) sort ensuite des deux moities. Il ouvrait la moitie
+  // ancienne : 8 parties a 0 victoire contre des adversaires de 443 a 959, d'ou
+  // « 42 % -> 52 % de victoires » la ou le jeu reel donnait 48 % -> 52 %. La
+  // coupure reste au milieu de la chronologie complete, comme la courbe.
+  function placementGames(an) {
+    const out = new Set();
+    ratingSeries(an).forEach(s => {
+      const info = calibInfo(s.games);
+      if (info.showCal) s.games.slice(0, info.calN).forEach(g => out.add(g));
+    });
+    return out;
+  }
   function splitHalves(an) {
     const g = an.filter(x => x.endTime).slice().sort((a, b) => a.endTime - b.endTime);
     const half = Math.floor(g.length / 2);
-    return { early: g.slice(0, half), late: g.slice(half), all: g };
+    const cal = placementGames(g);
+    const keep = x => !cal.has(x);
+    return { early: g.slice(0, half).filter(keep), late: g.slice(half).filter(keep), all: g.filter(keep), placement: cal.size };
   }
   // Improvement badge for one error type (fewer = better → green ↓).
   function trendBadge(early, late, type) {
@@ -3268,12 +3422,16 @@ const Coach = (() => {
   // Reads the same recent-half vs earlier-half comparison as the evolution
   // chart and says, in plain French, where you're gaining and where you slip.
   function renderProgressStory(an) {
-    const { early, late } = splitHalves(an);
+    const { early, late, placement } = splitHalves(an);
     if (early.length < 4 || late.length < 4) return '';
-    const subj = { accuracy: 'ta précision', blunder: 'tes gaffes', mistake: 'tes erreurs', miss: 'tes coups manqués', strong: 'tes coups forts' };
+    const subj = { accuracy: 'ta précision', blunder: 'tes gaffes', mistake: 'tes erreurs', miss: 'tes coups manqués' };
     const unit = k => EVO_META[k].kind === 'pct' ? '' : ' pour 100 coups';
     const fmt = (v, k) => EVO_META[k].kind === 'pct' ? Math.round(v) + '%' : v.toFixed(1);
-    const rows = ['accuracy', 'blunder', 'mistake', 'miss', 'strong'].map(k => {
+    // Les « coups forts » ne sont plus lus ici : ils dependent surtout des
+    // cadeaux de l'adversaire, et selon leur definition ils montaient (4,4 ->
+    // 5,5 brillants + tres bons) ou baissaient (19,3 -> 18,3 au sens large) sur
+    // les memes parties. La carte en tirait « Continue comme ça ».
+    const rows = ['accuracy', 'blunder', 'mistake', 'miss'].map(k => {
       const m = EVO_META[k];
       const a = metricValue(early, k, 'per100'), b = metricValue(late, k, 'per100'), diff = b - a;
       const improved = m.better === 'down' ? diff < 0 : diff > 0;
@@ -3284,7 +3442,7 @@ const Coach = (() => {
     const acc = rows[0];
     const changed = rows.filter(r => r.sig && r.k !== 'accuracy');
     const gains = changed.filter(r => r.improved).sort((x, y) => y.rel - x.rel);
-    const regr = changed.filter(r => !r.improved && r.k !== 'strong').sort((x, y) => y.rel - x.rel);
+    const regr = changed.filter(r => !r.improved).sort((x, y) => y.rel - x.rel);
     const winE = pct(early.filter(g => g.result === 'win').length, early.length);
     const winL = pct(late.filter(g => g.result === 'win').length, late.length);
     // Un taux de victoire n'est comparable que si l'ADVERSAIRE est comparable.
@@ -3310,20 +3468,30 @@ const Coach = (() => {
 
     const s = [];
     const accWord = Math.abs(acc.diff) < 1.5 ? 'est restée stable' : (acc.improved ? 'a progressé' : 'a reculé');
-    s.push(`En comparant tes <b>${late.length}</b> parties les plus récentes aux <b>${early.length}</b> d'avant, ta précision moyenne <b>${accWord}</b> (${fmt(acc.a, 'accuracy')} → ${fmt(acc.b, 'accuracy')}) et ton taux de victoire est passé de <b>${winE}%</b> à <b>${winL}%</b>.`);
+    const calTxt = placement ? ` (hors ${placement > 1 ? `tes ${placement} parties` : 'ta partie'} de placement)` : '';
+    s.push(`En comparant tes <b>${late.length}</b> parties les plus récentes aux <b>${early.length}</b> d'avant${calTxt}, ta précision moyenne <b>${accWord}</b> (${fmt(acc.a, 'accuracy')} → ${fmt(acc.b, 'accuracy')}) et ton taux de victoire est passé de <b>${winE}%</b> à <b>${winL}%</b>.`);
     if (oppConfounded) {
       s.push(`⚠️ À lire avec prudence : sur la même coupure, l'Elo moyen de tes adversaires a <b>${oppDelta < 0 ? 'baissé' : 'monté'} de ${Math.abs(oppDelta)} points</b> (${mixed ? 'à cadence égale' : Math.round(oppE) + ' → ' + Math.round(oppL)}). ${oppDelta < 0
         ? "Une partie de ce gain vient donc d'une opposition plus faible, pas de ton jeu. Le repère fiable, c'est la précision."
         : "Tes résultats sont donc meilleurs qu'ils n'en ont l'air : tu affrontes plus fort."}`);
     }
+    // « Continue comme ça » seulement si le progrès tient debout : il porte sur
+    // la précision ou les gaffes, la précision ne recule pas ET l'opposition ne
+    // s'est pas effondrée.
+    const blun = rows.find(r => r.k === 'blunder');
+    const solid = !oppConfounded || oppDelta > 0;
+    const keepGoing = solid && !(acc.sig && !acc.improved) &&
+      ((acc.sig && acc.improved) || (blun.sig && blun.improved));
+    const tail = keepGoing ? ' Continue comme ça.' : '';
     if (gains.length) {
       const g = gains[0];
-      // « Continue comme ça » seulement si le progrès tient debout : la
-      // précision ne recule pas ET l'opposition ne s'est pas effondrée.
-      const solid = !oppConfounded || oppDelta > 0;
-      const tail = solid && !acc.sig ? ' Continue comme ça.' : (solid && acc.improved ? ' Continue comme ça.' : '');
-      s.push(`Ta plus belle progression, c'est <b>${subj[g.k]}</b> : ${fmt(g.a, g.k)} → ${fmt(g.b, g.k)}${unit(g.k)}.${tail}`);
-    }
+      // Le « continue » se rattache a ce qui le justifie : si la plus belle
+      // progression est ailleurs et la precision stable, ce sont les gaffes.
+      const why = keepGoing && !(acc.sig && acc.improved) && g.k !== 'blunder'
+        ? ` Tes gaffes baissent aussi (${fmt(blun.a, 'blunder')} → ${fmt(blun.b, 'blunder')}${unit('blunder')}) : continue comme ça.`
+        : tail;
+      s.push(`Ta plus belle progression, c'est <b>${subj[g.k]}</b> : ${fmt(g.a, g.k)} → ${fmt(g.b, g.k)}${unit(g.k)}.${why}`);
+    } else if (tail) s.push(tail.trim());
     if (regr.length) {
       const r = regr[0];
       s.push(`Le point qui régresse, c'est <b>${subj[r.k]}</b> : ${fmt(r.a, r.k)} → ${fmt(r.b, r.k)}${unit(r.k)} - c'est là qu'il faut remettre de l'attention.`);
@@ -3948,5 +4116,10 @@ const Coach = (() => {
     return out;
   }
 
-  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, ensureLocal, homeLevel, lineStats, myRatings };
+  // splitHalves .. frenchOpening : exposes pour tools/test_core.cjs (aucun
+  // DOM dans ces fonctions).
+  return { show, hide, getUser, setUser, accuracyBaseline, conversionTargets, ensureData, ensureLocal, homeLevel, lineStats, myRatings,
+    splitHalves, renderProgressStory, openingExit, cleanExit, systemPick, renderSystem, renderOpeningPerf, frenchOpening };
 })();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = Coach;

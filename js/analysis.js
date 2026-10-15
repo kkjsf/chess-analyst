@@ -157,6 +157,36 @@ const Analyzer = (() => {
     };
   }
 
+  // Le coup results[i] laissait-il passer une menace que l'adversaire venait de
+  // poser ? Trois cas, ceux du declencheur « ses echecs, ses prises, ses
+  // menaces » : on etait en echec ; il venait de prendre, on pouvait reprendre
+  // et on ne l'a pas fait ; son coup attaquait une de nos pieces (en prise au
+  // SEE, et pas avant son coup) qui reste en prise apres le notre.
+  // C'est ce qui autorise le verdict de rythme a accuser la vitesse : sur ses
+  // 121 parties rapides, un coup joue en moins de 15 s est MOINS souvent une
+  // erreur (10 %) qu'un coup pose (17 %), y compris face a une piece attaquee.
+  function missedThreat(results, i) {
+    const r = results[i], prev = results[i - 1];
+    if (!r || !r.move || !prev || !prev.move || typeof Tactics === 'undefined') return null;
+    const me = r.move.color, foe = me === 'w' ? 'b' : 'w';
+    if (new Chess(r.fenBefore).in_check()) return { kind: 'check' };
+    const now = Tactics.boardOf(r.fenBefore);
+    if (prev.move.captured && r.move.to !== prev.move.to && Tactics.seeOn(now, prev.move.to, me) > 0)
+      return { kind: 'recapture', sq: prev.move.to };
+    const earlier = Tactics.boardOf(prev.fenBefore), after = Tactics.boardOf(r.fen);
+    let worst = null;
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+      const p = now[row][col];
+      const sq = 'abcdefgh'[col] + (8 - row);
+      if (!p || p.c !== me || p.t === 'k' || sq === r.move.from) continue;
+      const gain = Tactics.seeOn(now, sq, foe);
+      if (gain <= 0 || Tactics.seeOn(earlier, sq, foe) >= gain) continue;
+      if (Tactics.seeOn(after, sq, foe) <= 0) continue;
+      if (!worst || gain > worst.gain) worst = { kind: 'hanging', sq, t: p.t, name: PIECE_NAMES_FR[p.t], gain };
+    }
+    return worst;
+  }
+
   function analyzeStructure(fen) {
     const board = parseFenBoard(fen);
     const pawns = { w: Array(8).fill(0), b: Array(8).fill(0) };
@@ -767,6 +797,13 @@ const Analyzer = (() => {
 
     const time = computeTimeStats(results, info, side, blunders.map(b => b.ply));
 
+    // Eval (point de vue du joueur) apres le 12e coup de chaque camp : le Coach
+    // juge une ouverture sur la position qu'elle laisse, pas sur le score de la
+    // partie, qui se joue surtout au milieu de jeu (carte « Ton systeme »).
+    const r12 = results[23];
+    const evalAt12 = r12 && typeof r12.eval === 'number'
+      ? Math.max(-1000, Math.min(1000, side === 'w' ? r12.eval : -r12.eval)) : null;
+
     return {
       analyzedAt: Date.now(),
       // Effort moteur qui a produit ces chiffres. Deux qualités très différentes
@@ -790,7 +827,7 @@ const Analyzer = (() => {
       conversionMoment,
       phaseAcpl: { opening: acplOf('opening'), middle: acplOf('middle'), endgame: acplOf('endgame') },
       moveQuality: mq,
-      maxUserEval, minUserEval, turningPoint,
+      maxUserEval, minUserEval, turningPoint, evalAt12,
       time,
       blunderList: blunders,
       highlights
@@ -1385,7 +1422,7 @@ const Analyzer = (() => {
     } catch (_) { return null; }
   }
 
-  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase, explainBadMove, detectFork, phaseOf, blendedAccuracy, volatilityWeights, MOVE_TYPES, MOVE_CLASS };
+  return { analyzeGame, analyzeGameAsync, generateSummary, computeGameStats, parsePgnMoves, toFrench, materialCount, cpToWinPct, describeEval, parseClocks, clocksToTimePerMove, tcIncrement, winLossToAccuracy, probeTablebase, explainBadMove, detectFork, missedThreat, phaseOf, blendedAccuracy, volatilityWeights, MOVE_TYPES, MOVE_CLASS };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Analyzer;

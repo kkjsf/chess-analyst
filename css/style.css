@@ -3167,6 +3167,9 @@ details.coach-group[open] > summary.coach-group-head { margin-bottom: 10px; }
 .op-side-head { display: flex; align-items: baseline; gap: 8px; font-size: 14px; color: var(--text); }
 .op-side-sc { color: var(--accent); font-weight: 700; }
 .op-side-sub { font-size: 12px; color: var(--text-dim); margin: 3px 0 9px; line-height: 1.45; }
+/* Avec les Blancs, les defenses adverses ne sont pas des lignes : un detail sous la liste. */
+.op-opp { font-size: 12px; color: var(--text-dim); margin: 9px 0 0; line-height: 1.5; }
+.op-opp b { color: var(--text); font-weight: 600; }
 .op-row { display: grid; grid-template-columns: minmax(90px, 1.3fr) minmax(110px, 2fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
 .op-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .op-bar { position: relative; height: 18px; background: var(--bg-2); border-radius: 5px; overflow: hidden; }

@@ -3377,9 +3377,8 @@ const App = (() => {
 
 
 
-  // The opposite of time trouble: playing a 10-min game at blitz speed. Most
-  // beginner blunders here are played in seconds with a nearly-full clock —
-  // this card makes that visible and hammers the one rule that fixes it.
+  // The opposite of time trouble: playing a 10-min game at blitz speed. It
+  // only blames speed when a fast error let a threat through (see `rushed`).
   // Le rythme : renvoie le materiau du verdict au lieu de remplir une carte.
   // « Ton rythme » (onglet Conseil) et « Pression du temps » (onglet Analyse)
   // etaient deux cartes distinctes, dans deux onglets differents, et la premiere
@@ -3410,7 +3409,7 @@ const App = (() => {
       if (isError && spent < 15 && remaining > base / 2) {
         const moveNum = Math.floor(i / 2) + 1;
         const dot = i % 2 === 0 ? '.' : '...';
-        fastErrors.push({ index: i, label: `${moveNum}${dot} ${r.sanFr}`, spent: Math.round(spent), remaining, type: r.type });
+        fastErrors.push({ index: i, label: `${moveNum}${dot} ${r.sanFr}`, spent: Math.round(spent), remaining, type: r.type, threat: Analyzer.missedThreat(analysis, i) });
       }
     }
     if (userMoves < 4) return null;
@@ -3419,17 +3418,29 @@ const App = (() => {
     const avgSpent = Math.round(spentTotal / Math.max(1, userMoves - 1));
 
     // Le titre du verdict : une phrase, le chiffre qui la porte a droite.
+    // Une erreur rapide n'accuse la vitesse que si elle laissait passer une
+    // menace (Analyzer.missedThreat). Avant, une seule erreur en moins de 15 s
+    // suffisait : le titre tombait dans 87 de ses 121 parties rapides, alors
+    // que ses coups rapides sont ses coups les MOINS fautifs. Maintenant 35.
+    const rushed = fastErrors.filter(f => f.threat);
     let head, num, tone;
-    if (fastErrors.length) {
-      const worst = fastErrors[0];
-      head = `<b>Tu joues vite quand il faut réfléchir.</b> ${fastErrors.length === 1 ? 'Une erreur jouée' : fastErrors.length + ' erreurs jouées'} en moins de 15 s avec ${mmss(worst.remaining)} au compteur.`;
-      num = fastErrors.length; tone = 'bad';
-    } else if (avgSpent < 12 && lastClock > base * 0.4) {
-      head = `<b>${avgSpent} s par coup</b> et ${mmss(lastClock)} inutilisées à la fin : ton temps est une arme, dépense-le.`;
-      num = avgSpent + 's'; tone = 'warn';
+    if (rushed.length) {
+      const f = rushed[0], t = f.threat;
+      const why = t.kind === 'check' ? 'pour parer un échec'
+        : t.kind === 'recapture' ? `sans reprendre en ${t.sq}`
+        : `alors que ton ${t.name} ${t.sq} était en prise depuis son coup`;
+      const more = rushed.length > 1 ? ` Et ${rushed.length - 1} autre${rushed.length > 2 ? 's' : ''} du même genre.` : '';
+      head = `<b>Tu as joué vite face à une menace.</b> ${f.label} en ${f.spent} s, avec ${mmss(f.remaining)} au compteur, ${why}.${more}`;
+      num = rushed.length; tone = 'bad';
     } else if (lastClock < 30) {
       head = `<b>Tu as fini à ${Math.round(lastClock)} s.</b> La fin de partie s'est jouée à la pendule.`;
       num = Math.round(lastClock) + 's'; tone = 'bad';
+    } else if (fastErrors.length) {
+      head = `<b>Pas une affaire de vitesse.</b> ${fastErrors.length === 1 ? 'Une erreur jouée' : fastErrors.length + ' erreurs jouées'} en moins de 15 s, mais sans échec, prise ou menace laissée de côté. Ralentis quand il y en a une, pas à chaque coup.`;
+      num = avgSpent + 's'; tone = 'ok';
+    } else if (avgSpent < 12 && lastClock > base * 0.4) {
+      head = `<b>${avgSpent} s par coup</b> et ${mmss(lastClock)} inutilisées à la fin : ton temps est une arme, dépense-le.`;
+      num = avgSpent + 's'; tone = 'warn';
     } else {
       head = `<b>Bon équilibre :</b> ${avgSpent} s par coup, ${mmss(lastClock)} de réserve à la fin.`;
       num = avgSpent + 's'; tone = 'ok';
@@ -3446,7 +3457,9 @@ const App = (() => {
         `<button class="pace-chip" data-goto="${f.index + 1}">${f.label} · ${f.spent}s <span class="pace-chip-clk">(${mmss(f.remaining)} restants)</span></button>`
       ).join('') + `</div>`;
     }
-    html += `<div class="pace-rule">📏 <b>Règle d'or :</b> après le coup 4, jamais moins de 15 secondes par coup. Échecs, Captures, Menaces — puis joue.</div>`;
+    // Un declencheur, pas un plancher de temps : meme texte que la carte
+    // « Ton rythme » du Coach (voir renderPace).
+    html += `<div class="pace-rule">🔎 <b>Avant chaque coup :</b> ses échecs, ses prises, ses menaces. S'il y en a une, prends ton temps. Sinon, joue.</div>`;
 
     return { head, num, tone, html };
   }

@@ -27,6 +27,8 @@ global.Analyzer = Analyzer;
 const CoachGame = require(path.join(ROOT, 'js/coachgame.js'));
 // board.js : seule sa fonction pure `diffPositions` est testee (aucun DOM).
 const BoardRenderer = require(path.join(ROOT, 'js/board.js'));
+// coach.js : les cartes du bilan testees ici ne touchent pas au DOM.
+const Coach = require(path.join(ROOT, 'js/coach.js'));
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -608,6 +610,224 @@ function T(group, label, fen, from, to, fn, want, promotion) {
   const clean = [];
   for (let i = 0; i < 20; i++) clean.push({ n: i + 1, san: 'a' + i, mine: i % 2 === 0, k: 'best', wpl: 0.004, cp: 4, ph: 'middle', ev: 10 });
   check(G, 'une partie sans faute sort une precision elevee', R(clean).accuracy >= 90, true);
+}
+
+// ────────── le bilan du Coach : parties fabriquees (js/coach.js) ───────────
+// Une partie minimale : ce que lisent splitHalves, les cartes de trajectoire et
+// d'ouverture. Sans PGN, la famille vient du champ `opening`.
+let gameSeq = 0;
+function game(o) {
+  const { a: over, ...rest } = o;
+  const analysis = Object.assign({ accuracy: 70, moveCount: 40, blunders: 1, mistakes: 1,
+    phaseErrors: { opening: 0, middle: 1, endgame: 0 }, blunderList: [{ type: 'blunder', ply: 40 }],
+    moveQuality: { brilliant: 0, great: 0, miss: 1 } }, over || {});
+  return Object.assign({ uuid: 'g' + (++gameSeq), endTime: 1000 + gameSeq, userColor: 'w', result: 'loss',
+    timeClass: 'rapid', rated: true, myRating: 350, oppRating: 350, opening: 'Système de Londres' }, rest, { analysis });
+}
+
+// ───── « Ta trajectoire » sans le classement provisoire (revue 2, N2) ──────
+// La moitie ancienne s'ouvrait sur les 8 parties de placement (0 victoire
+// contre 443-959 Elo) : 42 % -> 52 % de victoires la ou le jeu reel donnait
+// 48 % -> 52 %. calibInfo savait deja les retirer de la courbe Elo.
+{
+  const G = 'trajectoire';
+  // 30 parties : 8 de placement (Elo qui degringole de 760, toutes perdues),
+  // puis 22 a ~350 qui gagnent une fois sur deux.
+  const pool = [];
+  for (let i = 0; i < 8; i++) pool.push(game({ myRating: 760 - i * 50, oppRating: 900, result: 'loss' }));
+  for (let i = 0; i < 22; i++) pool.push(game({ myRating: 350 + (i % 3), result: i % 2 ? 'win' : 'loss' }));
+  const h = Coach.splitHalves(pool);
+  check(G, 'les 8 parties de placement sortent', h.placement, 8);
+  check(G, 'la coupure reste au milieu : 15 - 8 dans la moitie ancienne', [h.early.length, h.late.length], [7, 15]);
+  check(G, 'aucune partie de placement dans les moities', h.early.concat(h.late).some(g => g.myRating > 400), false);
+  // Elo plat : pas de classement provisoire, rien ne sort.
+  const flat = pool.slice(8).map(g => game({ myRating: 350, result: g.result }));
+  check(G, 'sans placement visible, rien ne sort', Coach.splitHalves(flat).placement, 0);
+
+  const story = Coach.renderProgressStory(pool);
+  check(G, 'la carte dit qu elle compte hors placement', /hors tes 8 parties de placement/.test(story), true);
+  check(G, 'le taux de victoire ancien ignore le placement (3 sur 7, pas 3 sur 15)', /passé de <b>43%<\/b>/.test(story), true);
+
+  // Precision et gaffes immobiles, coups forts qui montent : pas de « continue ».
+  const strong = [];
+  for (let i = 0; i < 20; i++) strong.push(game({ result: i % 2 ? 'win' : 'loss', a: { moveQuality: { brilliant: i < 10 ? 0 : 3, great: i < 10 ? 0 : 3, miss: 1 } } }));
+  const s2 = Coach.renderProgressStory(strong);
+  check(G, 'des coups forts en hausse ne valent pas « Continue comme ça »', /Continue comme ça|continue comme ça/.test(s2), false);
+  check(G, 'les coups forts ne sont plus lus comme une progression', /coups forts/.test(s2), false);
+
+  // Les gaffes baissent nettement, la precision ne recule pas : « continue ».
+  const fewer = [];
+  for (let i = 0; i < 20; i++) fewer.push(game({ result: i % 2 ? 'win' : 'loss', a: { blunders: i < 10 ? 4 : 1 } }));
+  check(G, 'des gaffes en baisse valent « Continue comme ça »', /Continue comme ça/.test(Coach.renderProgressStory(fewer)), true);
+  // ... sauf si la precision recule en meme temps.
+  const worse = [];
+  for (let i = 0; i < 20; i++) worse.push(game({ result: i % 2 ? 'win' : 'loss', a: { blunders: i < 10 ? 4 : 1, accuracy: i < 10 ? 75 : 65 } }));
+  check(G, 'pas de « continue » si la precision recule', /ontinue comme ça/.test(Coach.renderProgressStory(worse)), false);
+}
+
+// ───── « Ton systeme » : la ligne qu'il joue, jugee sur l'ouverture (N3) ────
+// Cas reel : 22 Londres recents (45 %, sortie propre) contre 9 Viennoises
+// anciennes (67 %) - la carte recommandait la Viennoise au score.
+{
+  const G = 'ouvertures';
+  const E = Coach.openingExit;
+  const fb = [
+    game({ a: { blunderList: [{ type: 'blunder', ply: 20 }] } }),                              // coup 11
+    game({ a: { blunderList: [{ type: 'mistake', ply: 4 }, { type: 'blunder', ply: 31 }] } }), // coup 16
+    game({ a: { blunderList: [] } })                                                           // jamais
+  ];
+  check(G, '1re gaffe : coup (pas demi-coup), mediane haute, « jamais » compte', E(fb).firstBlunder, 16);
+  check(G, 'une erreur (pas une gaffe) ne compte pas comme 1re gaffe', E([fb[1]]).firstBlunder, 16);
+  // (JSON.stringify(Infinity) vaut "null" : comparer en booleen.)
+  check(G, 'sans gaffe dans la moitie des parties : jamais', E([fb[0], fb[2]]).firstBlunder === Infinity, true);
+  check(G, 'eval au 12e coup ignoree tant que peu de parties la portent',
+    E([game({ a: { evalAt12: -300 } }), game({}), game({}), game({})]).eval12, null);
+  const ev4 = [100, -100, 50, -50].map(v => game({ a: { evalAt12: v } }));
+  check(G, 'eval au 12e coup moyennee quand elle est la', E(ev4).eval12, 0);
+  // `evalAt12` est ecrit par l'analyse (js/analysis.js), vu du joueur.
+  const plies = [];
+  for (let i = 0; i < 30; i++) plies.push({ move: { color: i % 2 ? 'b' : 'w' }, eval: i * 10, type: 'good', winPctLoss: 0 });
+  const stats = (res, side) => Analyzer.computeGameStats(res, { stats: { w: {}, b: {} } }, { side });
+  check(G, "l'analyse ecrit l'eval apres le 12e coup des Noirs, vue du joueur", stats(plies, 'b').evalAt12, -230);
+  check(G, 'partie finie avant le 12e coup : pas d eval', stats(plies.slice(0, 20), 'w').evalAt12, null);
+  const base = { opErr: 1.35 };
+  check(G, 'propre : moins d erreurs d ouverture que d habitude, gaffe apres le coup 10',
+    Coach.cleanExit({ opErr: 0.9, firstBlunder: 21, eval12: null }, base), true);
+  check(G, 'pas propre : la 1re gaffe tombe dans l ouverture',
+    Coach.cleanExit({ opErr: 0.9, firstBlunder: 9, eval12: null }, base), false);
+  check(G, 'pas propre : bien plus d erreurs d ouverture que d habitude',
+    Coach.cleanExit({ opErr: 2.0, firstBlunder: 21, eval12: null }, base), false);
+  check(G, 'pas propre : sort a -1 au 12e coup',
+    Coach.cleanExit({ opErr: 0.9, firstBlunder: 21, eval12: -100 }, base), false);
+
+  // 9 Viennoises anciennes a 67 %, 22 Londres recents a 45 %, quelques
+  // Scandinaves subies. Les deux lignes sortent propres.
+  const mk = (londonDirty) => {
+    const gs = [];
+    for (let i = 0; i < 9; i++) gs.push(game({ opening: 'Partie Viennoise', result: i < 6 ? 'win' : 'loss',
+      a: { phaseErrors: { opening: 1, middle: 1, endgame: 0 }, blunderList: [{ type: 'blunder', ply: 34 }] } }));
+    // Une defense : sans ses coups on ne saurait pas ce que les Blancs ont joue.
+    for (let i = 0; i < 3; i++) gs.push(game({ pgn: '1. e4 d5 2. exd5 Qxd5', result: 'loss',
+      a: { phaseErrors: { opening: 3, middle: 0, endgame: 0 }, blunderList: [{ type: 'blunder', ply: 12 }] } }));
+    for (let i = 0; i < 22; i++) gs.push(game({ opening: 'Système de Londres', result: i < 9 ? 'win' : i < 11 ? 'draw' : 'loss',
+      a: londonDirty
+        ? { phaseErrors: { opening: 3, middle: 0, endgame: 0 }, blunderList: [{ type: 'blunder', ply: 10 }] }
+        : { phaseErrors: { opening: 1, middle: 1, endgame: 0 }, blunderList: [{ type: 'blunder', ply: 40 }] } }));
+    return gs;
+  };
+  const clean = Coach.systemPick(mk(false));
+  check(G, 'recommande la ligne jouee recemment, pas la mieux notee', clean.pick && clean.pick.name, 'Système de Londres');
+  check(G, '... comptee sur les 20 dernieres parties', clean.pick && clean.pick.recent, 20);
+  check(G, '... et jugee propre a la sortie d ouverture', clean.pick && clean.pick.clean, true);
+  const dirty = Coach.systemPick(mk(true));
+  check(G, 'une ligne du moment qui coute en ouverture reste nommee', dirty.pick && dirty.pick.name, 'Système de Londres');
+  check(G, '... mais signalee', dirty.pick && dirty.pick.clean, false);
+  check(G, '... avec la ligne propre en repli', dirty.alt && dirty.alt.name, 'Viennoise');
+
+  const sys = Coach.renderSystem(mk(false));
+  check(G, '« Ton systeme » dit de garder le Londres', /Garde <b>Système de Londres<\/b>/.test(sys), true);
+  check(G, '« Ton systeme » ne pousse plus vers la Viennoise', /Viennoise/.test(sys), false);
+  check(G, '« Ton systeme » coute en ouverture : revoir, ou revenir a la Viennoise',
+    /te coûte dès l'ouverture.*reviens à <b>Viennoise<\/b>/.test(Coach.renderSystem(mk(true))), true);
+
+  const perf = Coach.renderOpeningPerf(mk(false));
+  check(G, 'Performance par ouverture : plus de « la plus fragile » au score', /fragile/.test(perf), false);
+  check(G, 'Performance par ouverture : 67 % sur 9 contre 45 % sur 22 = hasard', /taille du hasard/.test(perf), true);
+  check(G, 'Performance par ouverture : nomme la ligne qui coute en ouverture',
+    /<b>Système de Londres<\/b> te coûte dès l'ouverture/.test(Coach.renderOpeningPerf(mk(true))), true);
+}
+
+// ───── Avec les Blancs, sa ligne est ce qu'IL a joue ──────────────────────
+// La famille detectee comptait les defenses adverses comme ses ouvertures : en
+// rapide, « 15 familles en 60 parties » dont Gambit Englund (6), Petrov,
+// Philidor, Scandinave, Caro-Kann, Francaise, Sicilienne.
+{
+  const G = 'attribution Blancs';
+  const fr = (pgn, userColor) => Coach.frenchOpening(game({ pgn, userColor: userColor || 'w' }));
+  const att = (pgn) => { const f = fr(pgn); return [f.family, f.white]; };
+  check(G, 'Gambit Englund : son choix est 1.d4, pas un Londres (3.Ff4 apres 2.dxe5)',
+    att('1. d4 e5 2. dxe5 Nc6 3. Bf4 Qe7'), ['Gambit Englund', 'Ouverture Pion Dame']);
+  check(G, 'Old Indian ou il pose 3.Ff4 : son Londres',
+    att('1. d4 d6 2. Nf3 Nf6 3. Bf4 Bg4'), ['Old Indian', 'Système de Londres']);
+  check(G, 'Hollandaise contre 2.Ff4 : son Londres', att('1. d4 f5 2. Bf4 Nf6'), ['Hollandaise', 'Système de Londres']);
+  check(G, 'Petrov : son choix est 2.Cf3', att('1. e4 e5 2. Nf3 Nf6 3. Nxe5 d6'), ['Petrov', 'Partie du Cavalier Roi']);
+  check(G, 'Philidor : son choix est 2.Cf3', att('1. e4 e5 2. Nf3 d6 3. d4'), ['Philidor', 'Partie du Cavalier Roi']);
+  check(G, 'Scandinave : son choix est 1.e4', att('1. e4 d5 2. exd5 Qxd5 3. Nc3'), ['Scandinave', 'Ouverture Pion Roi']);
+  check(G, 'Alapin : un coup blanc dans une famille noire reste 1.e4', att('1. e4 c5 2. c3 Nf6'), ['Sicilienne', 'Ouverture Pion Roi']);
+  check(G, 'Defense hongroise : son choix est l Italienne (3.Fc4)',
+    att('1. e4 e5 2. Nf3 Nc6 3. Bc4 Be7'), ['Défense hongroise', 'Italienne']);
+  check(G, 'une famille nommee par un coup blanc ne bouge pas (Falkbeer = sa Viennoise)',
+    att('1. e4 e5 2. Nc3 Nf6 3. Bc4'), ['Viennoise', 'Viennoise']);
+  check(G, "l'Attaque Est-Indienne (Blancs) n'est plus rangee dans l'Est-Indienne (Noirs)",
+    att('1. Nf3 d5 2. g3 Nf6 3. Bg2 e6 4. d3'), ['Attaque Est-Indienne', 'Attaque Est-Indienne']);
+  check(G, '1er coup note en francais', fr('1. Nf3 d5 2. g3').first, 'Cf3');
+  check(G, 'une defense sans coups : choix inconnu, pas compte', Coach.frenchOpening(game({ opening: 'Défense Petrov' })).white, null);
+  check(G, 'avec les Noirs la famille reste la famille', fr('1. e4 e5 2. Nf3 Nf6 3. Nxe5 d6', 'b').family, 'Petrov');
+
+  // detectSystem seule : le pion d4 qui prend avant le fou n'est plus un systeme.
+  const sys = (s) => { const r = Openings.detectSystem(s.split(' ')); return r && r.name; };
+  check(G, 'detectSystem : 1.d4 e5 2.dxe5 puis 3.Ff4 n est pas un Londres', sys('d4 e5 dxe5 Nc6 Bf4'), null);
+  check(G, 'detectSystem : 1.d4 c5 2.dxc5 puis 4.Ff4 non plus', sys('d4 c5 dxc5 e6 Nf3 Bxc5 Bf4'), null);
+  check(G, 'detectSystem : dxc5 APRES le fou reste un Londres', sys('d4 d5 Bf4 c5 e3 Nc6 dxc5'), 'Système de Londres');
+  check(G, 'prefixes : du plus long au plus court',
+    Openings.prefixes('e4 e5 Nf3 Nf6 Nxe5'.split(' ')).map(p => p.name), ['Défense Petrov', 'Partie du Cavalier Roi']);
+
+  // Un bilan comme le sien : Londres recents, Englund, Petrov et Philidor,
+  // Scandinaves, Viennoises ; plus des Petrov avec les Noirs.
+  const pool = [];
+  const add = (k, pgn, o) => { for (let i = 0; i < k; i++) pool.push(game(Object.assign({ pgn }, o))); };
+  const bad = { phaseErrors: { opening: 3, middle: 0, endgame: 0 }, blunderList: [{ type: 'blunder', ply: 12 }] };
+  add(5, '1. e4 e5 2. Nc3 Nc6 3. Bc4', { result: 'win' });
+  add(2, '1. e4 e5 2. Nf3 Nf6 3. Nxe5 d6', {});
+  add(2, '1. e4 e5 2. Nf3 d6 3. d4', {});
+  add(3, '1. e4 d5 2. exd5 Qxd5 3. Nc3', {});
+  add(8, '1. d4 e5 2. dxe5 Nc6 3. Nf3 Qe7', { a: bad });
+  add(4, '1. e4 e5 2. Nf3 Nf6 3. Nxe5 d6', { userColor: 'b' });
+  add(14, '1. d4 d5 2. Bf4 Nf6 3. e3 e6', { result: 'win' });
+  const card = Coach.renderSystem(pool);
+  check(G, '« Ton systeme » compte ses lignes, pas les defenses (5, pas 6 familles)', /<b>5 lignes<\/b> à toi en 34 parties/.test(card), true);
+  check(G, '... avec son 1er coup', /1\.d4 dans 22, 1\.e4 dans 12/.test(card), true);
+  check(G, '... et les defenses adverses nommees a part', /pas sur la défense de l'adversaire \(Gambit Englund, Scandinave…\)/.test(card), true);
+  check(G, '... et garde le Londres', /Garde <b>Système de Londres<\/b>/.test(card), true);
+  const perf = Coach.renderOpeningPerf(pool);
+  const [white, black] = perf.split('♚');
+  const rows = (h) => [...h.matchAll(/class="op-name" title="([^"]+)"/g)].map(m => m[1]);
+  check(G, 'Performance, Blancs : une ligne par choix a lui',
+    rows(white), ['Système de Londres', 'Ouverture Pion Dame', 'Viennoise', 'Partie du Cavalier Roi', 'Ouverture Pion Roi']);
+  check(G, 'Performance, Blancs : ce que l adversaire t oppose, avec le score',
+    /Ce que l'adversaire t'oppose : <b>Gambit Englund<\/b> 8p · 0%, <b>Scandinave<\/b> 3p · 0%, <b>Petrov<\/b> 2p · 0%, <b>Philidor<\/b> 2p · 0%\./.test(white), true);
+  check(G, 'Performance, Blancs : la ligne qui coute dit quelles defenses la font',
+    /⚠ <b>Ouverture Pion Dame<\/b> \(Gambit Englund\) te coûte dès l'ouverture/.test(white), true);
+  check(G, 'Performance, Noirs : inchange, la Petrov reste la Petrov', rows(black), ['Petrov']);
+  check(G, 'Performance, Noirs : pas de detail des defenses adverses', /t'oppose/.test(black), false);
+}
+
+// ───── verdict de rythme : la vitesse accusee seulement face a une menace ─────
+// Le titre « Tu joues vite quand il faut reflechir » tombait des qu'UNE erreur
+// etait jouee en moins de 15 s pendule pleine : 87 de ses 121 parties rapides.
+// Il ne vise plus que l'erreur rapide qui laisse passer une menace qu'il venait
+// de poser (Analyzer.missedThreat) : 35 parties.
+{
+  const G = 'rythme';
+  // Rejoue des SAN depuis la position initiale : { move, fenBefore, fen } par
+  // demi-coup, ce que lit missedThreat dans les resultats d'analyse.
+  const missed = (sans) => {
+    const g = new Chess();
+    const res = sans.map(s => { const fenBefore = g.fen(); const move = g.move(s); return { move, fenBefore, fen: g.fen() }; });
+    if (res.some(r => !r.move)) return 'COUP ILLEGAL';
+    return Analyzer.missedThreat(res, res.length - 1);
+  };
+  const brief = (t) => t && [t.kind, t.sq, t.name];
+  check(G, 'en echec : la menace est la', missed(['e4', 'f6', 'Qh5+', 'g6']), { kind: 'check' });
+  check(G, 'il prend en d5, on joue ailleurs : prise non reprise', missed(['e4', 'd5', 'exd5', 'a6']), { kind: 'recapture', sq: 'd5' });
+  check(G, 'il attaque e5, on joue ailleurs : pion laisse en prise',
+    brief(missed(['e4', 'e5', 'Nf3', 'a6'])), ['hanging', 'e5', 'pion']);
+  check(G, 'le berger : 3...Cf6 laisse f7 a la dame',
+    brief(missed(['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6'])), ['hanging', 'f7', 'pion']);
+  check(G, 'menace paree (...Cc6 defend e5) : rien a reprocher a la vitesse', missed(['e4', 'e5', 'Nf3', 'Nc6']), null);
+  check(G, 'piece deja en prise avant son coup : pas une menace qu il vient de poser',
+    missed(['e4', 'e5', 'Nf3', 'a6', 'a3', 'h6']), null);
+  check(G, 'son coup ne gagne rien (c4 contre d5 defendu) : pas de menace', missed(['d4', 'd5', 'c4', 'e6']), null);
 }
 
 // ─────────────────────────── rapport ────────────────────────────────────────

@@ -327,8 +327,13 @@ const Openings = (() => {
           nc3 = i('Nc3'), nf3 = i('Nf3'), e3 = i('e3'), bd3 = i('Bd3'),
           f4 = i('f4'), b3 = i('b3'), g3 = i('g3'), bg2 = i('Bg2'), d3 = i('d3');
     const hasD4 = d4 >= 0 && d4 <= 2;
-    // c4 AVANT le fou = famille du Gambit Dame, pas un systeme.
-    const noC4Before = (k) => c4 < 0 || c4 > k;
+    // c4 AVANT le fou = famille du Gambit Dame, pas un systeme. Et le pion d4
+    // qui prend avant lui (1.d4 e5 2.dxe5, 1.d4 c5 2.dxc5) : le centre est parti.
+    // Le catalogue le disait par prefixe (Englund, Krause) ; le dire ici rend
+    // detectSystem juste seule, et c'est elle que lit l'attribution des Blancs
+    // du Coach quand le catalogue a nomme une defense.
+    const dx = W.findIndex(m => m.startsWith('dx'));
+    const noC4Before = (k) => (c4 < 0 || c4 > k) && (dx < 0 || dx > k);
 
     if (hasD4 && bf4 > d4 && bf4 <= 4 && noC4Before(bf4)) {
       // Jobava : le cavalier en c3 AVANT e3, la difference n'est pas cosmetique
@@ -352,10 +357,10 @@ const Openings = (() => {
       if (nf3 >= 0 && nf3 < bg5)
         return { eco: 'A46', name: 'Attaque Torre', moves: plies(bg5), line: 'd4 Nf6 Nf3 e6 Bg5', system: true };
     }
-    if (hasD4 && e3 > d4 && e3 <= 4 && f4 >= 0 && f4 <= 5 && bd3 >= 0 && bd3 <= 6 && c4 < 0)
+    if (hasD4 && e3 > d4 && e3 <= 4 && f4 >= 0 && f4 <= 5 && bd3 >= 0 && bd3 <= 6 && c4 < 0 && noC4Before(Math.max(f4, bd3)))
       return { eco: 'D00', name: 'Attaque Stonewall', moves: plies(Math.max(f4, bd3)), line: 'd4 d5 e3 Nf6 Bd3 c5 f4', system: true };
     if (hasD4 && nf3 >= 0 && nf3 <= 3 && e3 > d4 && e3 <= 4 && bd3 >= 1 && bd3 <= 5
-        && bf4 < 0 && bg5 < 0 && c4 < 0 && f4 < 0) {
+        && bf4 < 0 && bg5 < 0 && c4 < 0 && f4 < 0 && noC4Before(bd3)) {
       return b3 >= 0 && b3 <= 5
         ? { eco: 'D05', name: 'Système Colle-Zukertort', moves: plies(Math.max(bd3, b3)), line: 'd4 d5 Nf3 Nf6 e3 e6 Bd3 c5 b3', system: true }
         : { eco: 'D05', name: 'Système Colle', moves: plies(bd3), line: 'd4 d5 Nf3 Nf6 e3 e6 Bd3', system: true };
@@ -434,7 +439,17 @@ const Openings = (() => {
     return false;
   }
 
-  return { detect, inBook };
+  // Toutes les lignes du catalogue qui sont un prefixe des coups joues, la plus
+  // longue d'abord (l'ordre de DB) ; detect() ne rend que la premiere. Le Coach
+  // y remonte une Petrov jusqu'a ce que les Blancs ont choisi : 2.Cf3.
+  function prefixes(sans) {
+    return DB.filter(([line]) => {
+      const tokens = line.split(' ');
+      return tokens.length <= sans.length && tokens.every((t, i) => sans[i] === t);
+    }).map(([line, eco, name]) => ({ eco, name, moves: line.split(' ').length, line }));
+  }
+
+  return { detect, inBook, detectSystem, prefixes };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Openings;

@@ -17,7 +17,7 @@
 // Single source of truth for the cache-busting version. Bump ONLY this line on
 // deploy — it versions the stylesheet, every app script (below), and the
 // service-worker registration (which derives its cache name from the ?v= query).
-window.APP_VERSION = '292';
+window.APP_VERSION = '296';
 document.write('<link rel="stylesheet" href="css/style.css?v=' + APP_VERSION + '">');
 // The script list itself lives in js/app-scripts.js so sw.js can precache
 // exactly what the page loads. Written here (parser-blocking) so APP_SCRIPTS is
@@ -463,7 +463,10 @@ document.write('<script src="js/app-scripts.js?v=' + APP_VERSION + '"><\/script>
         </div>
       </div>
       <div class="routine-list" id="routine-list"></div>
-      <p class="routine-foot"><b>La règle d'or :</b> après le coup 4, jamais moins de <b>15 secondes</b> par coup. Échecs, prises, menaces — puis joue. La moitié de tes erreurs sont des coups joués en moins de 15 s avec la pendule pleine.</p>
+      <!-- Un declencheur, pas un plancher de temps : la regle des 15 s par coup
+           l'aurait fait tomber au temps dans 48 de ses 121 parties rapides, et
+           ses coups rapides sont MOINS souvent des erreurs que ses coups poses. -->
+      <p class="routine-foot"><b>Avant chaque coup :</b> ses échecs, ses prises, ses menaces. S'il y en a une, prends ton temps. Sinon, joue.</p>
     </section>
 
     <!-- Accès rapides -->

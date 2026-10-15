@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v292** (2026-10-07, en ligne) : niveau du coach recalibré sur ses parties (Skill Level était sans effet) - voir l'historique.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v292** (2026-10-07, en ligne) : niveau du coach recalibré sur ses parties (Skill Level était sans effet). **v293 locale, NON commitée (2026-10-15)** : les écarts N1-N3 de la revue pédagogique (2e édition) corrigés - voir l'historique. **v294 locale (même jour)** : avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses (APP_VERSION servi : 296).
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -244,6 +244,154 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v294 + v296 (2026-10-15, locale, NON commitee) - avec les Blancs, une ligne = ce qu'IL a joue.**
+    `js/openings.js`, `js/coach.js`, `css/style.css`, `tools/test_core.cjs` (+28 tests, bloc
+    « attribution Blancs »). Bumpee en 294, puis en 296 pour retester un petit correctif (295 est la
+    session parallele ci-dessous). Verifie dans l'app servie en local, vues Rapide et Toutes.
+    - **Le defaut.** `renderSystem`, `renderOpeningPerf` et `openingLines` groupaient ses parties
+      blanches par la famille detectee, qui est souvent la DEFENSE adverse : en rapide « 15 familles
+      differentes en 60 parties », dont Gambit Englund (6), Petrov, Philidor, Scandinave, Caro-Kann,
+      Francaise, Sicilienne, alors qu'il joue presque toujours 1.d4 / Londres.
+    - **L'attribution.** `whiteChoice` (coach.js, champ `white` de `frenchOpening`) : la famille si un
+      coup blanc la definit ; sinon le systeme de `detectSystem` (1.d4 d6 2.Cf3 Cf6 3.Ff4 = Londres,
+      pas Old Indian) ; sinon la plus longue ligne du catalogue qui soit a lui (`Openings.prefixes` :
+      Petrov ou Philidor = sa Partie du Cavalier Roi, 2.Cf3 ; Defense hongroise = son Italienne) ;
+      sinon son 1er coup (Ouverture Pion Roi / Pion Dame). Familles noires = `DEFENSES` + tout nom en
+      « Defense ... ». `lineKey(g)` = ce choix avec les Blancs, la famille avec les Noirs (inchange).
+      Une defense sans PGN (parties fabriquees des tests) n'a pas de choix connu : pas comptee.
+    - **Resultat.** Rapide : **7 lignes en 60 parties** (1.d4 dans 31, 1.e4 dans 29) - Londres 23,
+      Cavalier Roi 9, Viennoise 9, Pion Dame 8 (dont Englund 6), Pion Roi 8 (Scandinave 3, Caro-Kann
+      2...). Toutes : 9 lignes en 107 parties au lieu de 20 familles. « Ton systeme » dit toujours
+      « Garde Systeme de Londres », desormais 14 des 20 dernieres (la partie « Old Indian » ou il a
+      pose 3.Ff4 compte). Performance par ouverture ajoute « Ce que l'adversaire t'oppose » (les 5
+      plus frequentes, score contre chacune) et nomme les defenses d'une ligne quand elles en font la
+      majorite (`lineName`) : « ⚠ Ouverture Pion Roi (Scandinave, Caro-Kann...) te coute des
+      l'ouverture : 2,3 erreurs d'ouverture par partie, 1re gaffe au coup 10 en mediane » - le vrai
+      trou de son 1.e4, invisible tant que ces parties etaient eparpillees en familles de 1 a 3.
+    - **Correctifs annexes.** `detectSystem` refuse un systeme quand le pion d4 a pris AVANT le coup
+      qui le confirme (1.d4 e5 2.dxe5 puis 3.Ff4 n'est pas un Londres) : `detect()` ne change sur
+      aucune des 222 parties de `coach-data.json` (le catalogue le disait deja par prefixe), mais
+      l'attribution l'appelle sur des parties que le catalogue a nommees. `FAMILY_MAP` : l'Attaque
+      Est-Indienne (Blancs) n'est plus rangee dans l'Est-Indienne (Noirs).
+    - **Pas touche** : le cote Noirs (la carte y dit encore « la famille est l'ouverture de
+      l'adversaire », alors que Petrov, Philidor, Scandinave y sont SES defenses) et le tableau
+      Repertoire (il liste les familles rencontrees, ce qui reste juste).
+    - Piege : deux sessions en parallele sur ce dossier se disputent le port 3456 du
+      `.claude/launch.json` ; `npx serve` se replie alors sur un port aleatoire (52276) que
+      `preview_start` annonce mal (3457) - lire `preview_logs`.
+  - **v295 (2026-10-15, locale, NON commitee) - le titre de rythme de l'ecran d'analyse n'accuse
+    plus la vitesse par defaut.** Suite de N1 (v293). `js/analysis.js` (`missedThreat`, exportee),
+    `js/app.js` (`paceStats` seulement), `tools/test_core.cjs` (groupe `rythme`, +7), `index.html`.
+    Les versions 294 et 296 du meme jour sont celles d'une session parallele (familles d'ouvertures).
+    - **Mesure d'abord** (121 parties rapides classees de `coach-data.json`, scripts de scratchpad
+      non versionnes) : « Tu joues vite quand il faut reflechir » tombait des qu'UNE erreur etait
+      jouee en < 15 s pendule a plus de moitie, soit **87 parties sur 121 (72 %)**. Or, pendule a
+      plus de moitie, ses coups en < 15 s sont des erreurs a **10,0 %** (196 / 1 959) contre
+      **17,2 %** pour ses coups poses (111 / 645), et l'ecart tient meme avec une piece en prise
+      sur l'echiquier (11,9 % contre 17,5 %) : il ralentit deja sur les positions dures.
+    - **Regle** : `Analyzer.missedThreat(results, i)` dit si le coup laissait passer une menace que
+      l'adversaire venait de poser : on etait en echec ; il venait de prendre et on pouvait
+      reprendre (SEE > 0) sans le faire ; une de nos pieces, en prise au SEE depuis son coup (et pas
+      avant, ce qui couvre le defenseur enleve), reste en prise apres le notre. Le titre vitesse ne
+      vise plus que ces erreurs rapides : **35 parties sur 121** (26 piece laissee en prise, 11 en
+      echec, 1 prise non reprise ; une partie peut cumuler). Il nomme le coup et la menace :
+      « Tu as joué vite face à une menace. 5... Fb6 en 9 s, avec 9:36 au compteur, alors que ton
+      pion e5 était en prise depuis son coup. » Les pastilles des erreurs rapides restent.
+    - **Sinon (52 parties)** : « Pas une affaire de vitesse. N erreurs jouées en moins de 15 s,
+      mais sans échec, prise ou menace laissée de côté. Ralentis quand il y en a une, pas à chaque
+      coup. » (ton ok, chiffre = secondes par coup), qui renvoie au declencheur affiche dessous.
+      Une fin a la pendule (< 30 s) passe avant ce titre neutre ; sans erreur rapide, rien ne change.
+    - **Ecartees, chiffres a l'appui** : la menace au sens large (une piece en prise au SEE avant
+      le coup, ou sa prise, traitee ou non) garde **73 parties**, car 55 % de ses coups rapides se
+      jouent avec quelque chose en prise. Comparer les taux rapide / pose de la partie : 23 parties
+      avec au moins 5 coups poses (6 en mediane), et les 13 qu'elle ajouterait reposent toutes sur
+      0 erreur posee.
+    - **Pas touche, a revoir** : « N s par coup et M:SS inutilisees a la fin : ton temps est une
+      arme, depense-le », autre reproche de vitesse, tombe dans 15 des 34 parties sans erreur rapide.
+    - `missedThreat` a besoin de `Tactics` (global, comme `detectFork`) ; cout : un balayage SEE de
+      64 cases sur les seules erreurs rapides.
+  - **v293 (2026-10-15, locale, NON commitee) - les 3 ecarts N1-N3 de la revue pedagogique corriges.**
+    `js/coach.js`, `js/app.js`, `js/analysis.js`, `index.html`, `tools/test_core.cjs` (+33 tests,
+    195/195). Verifie dans l'app servie en local (vue Rapide, `coach-data.json` du 12/10, ecran
+    d'analyse d'une partie recente compris, 0 erreur console).
+    - **N1 - plus de « regle d'or des 15 s ».** Remplacee par un declencheur sans plancher de temps,
+      « Avant chaque coup : ses echecs, ses prises, ses menaces. S'il y en a une, prends ton temps.
+      Sinon, joue. », a TROIS endroits : carte « Ton rythme » (coach.js), ecran d'analyse
+      (`.pace-rule`, app.js) et **pied de la routine de l'accueil** (`index.html`), que la revue
+      n'avait pas vu et qui affirmait encore « la moitie de tes erreurs sont des coups joues en moins
+      de 15 s ». Le delai de 10 s de Vigilance reste (exercice, pas regle de partie). **Restait tel
+      quel** : le titre par partie de l'ecran d'analyse, « Tu joues vite quand il faut reflechir »,
+      des qu'une erreur tombe en < 15 s pendule pleine - vrai pour la partie, mais il accuse la
+      vitesse dans la plupart des parties alors que ses coups rapides sont les moins fautifs.
+      Recadre en v295 (au-dessus).
+    - **N2 - « Ta trajectoire » hors placement.** `splitHalves` coupe toujours au milieu de la
+      chronologie complete, puis retire des deux moities la fenetre de placement de chaque cadence
+      (`placementGames` = `ratingSeries` + `calibInfo`, la meme que la courbe Elo). Rapide : 61
+      recentes contre 52 (et non 60), 48 % -> 52 % au lieu de 42 % -> 52 %, et la carte le dit
+      (« hors tes 8 parties de placement »). Les badges « mieux / pire qu'avant » et le verdict de
+      « Ton evolution » lisent les memes moities, donc en profitent. Les « coups forts » ne sont plus
+      lus par la carte (4,4 -> 5,5 ou 19,3 -> 18,3 selon la definition, sur les memes parties) ;
+      « Continue comme ca » exige un progres significatif de la precision ou des gaffes, sans recul
+      de la precision ni opposition effondree, et s'il vient des gaffes alors que la plus belle
+      progression est ailleurs, la phrase nomme les gaffes. Rapide aujourd'hui : stable, pas de
+      « continue ».
+    - **N3 - une ouverture jugee sur l'ouverture.** Nouveaux `openingExit` (erreurs de la phase
+      d'ouverture par partie, coup de la 1re gaffe en **mediane haute avec « jamais » = Infinity** -
+      la definition qui redonne les chiffres de la revue, Londres 21 / Viennoise 17 -, eval moyenne
+      au 12e coup quand au moins 4 parties et la moitie la portent), `cleanExit` (erreurs d'ouverture
+      <= 1,15 x la moyenne de la couleur, 1re gaffe apres le coup 10 = fin de la phase d'ouverture de
+      `phaseOf`, eval >= -0,5), `openingLines`, `systemPick`. « Ton systeme » recommande la ligne la
+      plus jouee sur les 20 dernieres parties de la couleur (repli sur la plus jouee sous 3 parties
+      recentes) tant qu'il en sort propre ; sinon il la nomme comme couteuse et propose la ligne
+      propre en repli. Rapide : « Garde Systeme de Londres : c'est ta ligne du moment (13 de tes 20
+      dernieres parties) et tu en sors propre, 0,9 erreur d'ouverture par partie (1,4 sur toutes tes
+      lignes), 1re gaffe au coup 21 en mediane. Joue-la a chaque fois : son score (45 %) se joue
+      apres l'ouverture. » **Performance par ouverture** ne dit plus « la plus rentable / la plus
+      fragile » au score : il nomme la ligne qui coute en ouverture (vue Toutes : la Scandinave avec
+      les Blancs, la Petrov avec les Noirs), celles dont il sort propre, et ne tire du score que ce
+      qu'il peut : sous deux erreurs types (et 10 points) l'ecart est « de la taille du hasard »
+      (Viennoise 67 % sur 9 contre Londres 45 % sur 22 = ~1,1 erreur type). Les deux couleurs.
+    - **Nouveau champ d'analyse `evalAt12`** (`computeGameStats`, js/analysis.js) : eval vue du
+      joueur apres le 12e coup des Noirs (`results[23]`), bornee a +-1000, null si la partie est plus
+      courte. Les parties deja dans `coach-data.json` ne l'ont pas (le serveur garde les analyses
+      existantes) : le critere s'active au fil des nouvelles parties, ou d'un coup apres un
+      `tools/analyze.mjs --full`.
+    - `js/coach.js` finit par `module.exports = Coach` et expose `splitHalves`,
+      `renderProgressStory`, `openingExit`, `cleanExit`, `systemPick`, `renderSystem`,
+      `renderOpeningPerf` : requerable sous Node sans DOM, comme `coachgame.js`.
+    - Pieges : mon patch Python avait converti `coach.js` en LF (lecture texte puis ecriture
+      `newline=''`) alors que le working copy est en CRLF (`core.autocrlf=true`) - remis a
+      l'identique. Et `check()` compare en JSON : `JSON.stringify(Infinity)` vaut `"null"`, donc
+      tester `=== Infinity` en booleen.
+  - **2026-10-15 - REVUE PEDAGOGIQUE, 2e EDITION (rapport seul, aucun fichier de l'app touche).**
+    `revue_pedagogique.html` reecrit en place (la 1re edition n'est plus que dans l'historique de
+    l'artifact), republie au meme lien https://claude.ai/artifact/C9e5aKPpWnf9TVhPa7LeEo.
+    Donnees : `coach-data.json` du 12/10 (tire par fast-forward de `origin/main`), 213 parties
+    classees (92 journalieres, 121 rapides), coupure avant/apres au 28/08. App v292 servie en local
+    et lue en vue Rapide. Scripts de calcul dans le scratchpad de session (non versionnes).
+    - **Il progresse toujours** : journalier 543 -> 743 (+200), rapide 266 -> 365 (+99, sommet 412
+      le 23/09). Rapide hors placement, avant/depuis la revue : ACPL 133 -> 120, gaffes/100
+      6,6 -> 6,0, victoires 48 -> 52 %, Elo adverse 338 -> 358, 1re gaffe coup 10 -> 13. Petit,
+      pas significatif a 63 parties.
+    - **La conversion n'a PAS bouge** : 34 % puis 37 % des parties rapides a +2 perdues ; depuis la
+      revue, 19 de ses 28 defaites rapides sont des parties gagnees. Les 33 parties jetees cassent au
+      milieu de jeu (26/33), sur une gaffe (32/33), ~15 coups apres le premier +3.
+    - **3 affirmations de la 1re edition retirees** (deja corrigees dans l'app en v289-v290, jamais
+      dans le rapport) : « 50 % des erreurs en < 15 s » (51 % de TOUS les coups le sont ; taux
+      d'erreur 8,6 % sous 15 s contre 16,3 % au-dessus, et la regle des 15 s l'aurait fait tomber au
+      temps dans 48 parties rapides sur 121) ; « 0 % contre plus fort » (Elo d'apres partie) ;
+      « 2 defaites = stop » (apres 2 defaites : 67 % de precision, 69 % de victoires).
+    - **3 ecarts nouveaux dans l'app** (corriges en v293, voir au-dessus) : **N1** la « Regle d'or : jamais moins de
+      15 secondes » reste affichee sous la phrase qui la refute (`js/coach.js:1121`,
+      `js/app.js:3449`) ; **N2** « Ta trajectoire » compte les 8 parties de placement dans la moitie
+      ancienne (42 -> 52 % au lieu de 48 -> 52 %, `splitHalves` sans `calibInfo`, coach.js:3325) ;
+      **N3** « Ton systeme » lui dit de jouer la Viennoise (9 parties, 67 %) alors qu'il a adopte le
+      Londres (35 parties blanches sur 36 en 1.d4 depuis la revue) qui sort aussi propre de
+      l'ouverture (1re gaffe coup 21, +2 atteint 19 fois sur 22) : le score juge le milieu de jeu,
+      et le tri se fait sur le score contrairement au commentaire (coach.js:1010, 2551).
+    - Piege retenu : la page n'a pas de `<meta viewport>` d'origine (format artifact), donc
+      l'emulation mobile du navigateur la rend a 980 px ; ajoute en tete avec `<meta charset>`
+      (dans le head implicite en local, ignores une fois l'artifact enveloppe).
   - **v292 (2026-10-07, en ligne `f91c830`) - le niveau du coach recalibre sur ses parties.**
     Plainte : « en ~350 je perds souvent, alors que je bats les bots Chess.com a 1100 ».
     **Deux causes, mesurees.** (1) **`Skill Level` n'avait AUCUN effet** : Stockfish ne
