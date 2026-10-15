@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v292** (2026-10-07, en ligne) : niveau du coach recalibré sur ses parties (Skill Level était sans effet). **v293 locale, NON commitée (2026-10-15)** : les écarts N1-N3 de la revue pédagogique (2e édition) corrigés - voir l'historique. **v294 locale (même jour)** : avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses (APP_VERSION servi : 296).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v296** (2026-10-15, en ligne `8370846`) : un seul commit pour v293 (les écarts N1-N3 de la revue pédagogique, 2e édition), v295 (le titre « Tu joues vite » ne vise plus que l'erreur rapide qui laisse passer une menace) et v294/v296 (avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses) - voir l'historique.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -244,7 +244,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-  - **v294 + v296 (2026-10-15, locale, NON commitee) - avec les Blancs, une ligne = ce qu'IL a joue.**
+  - **v294 + v296 (2026-10-15, en ligne `8370846`) - avec les Blancs, une ligne = ce qu'IL a joue.**
     `js/openings.js`, `js/coach.js`, `css/style.css`, `tools/test_core.cjs` (+28 tests, bloc
     « attribution Blancs »). Bumpee en 294, puis en 296 pour retester un petit correctif (295 est la
     session parallele ci-dessous). Verifie dans l'app servie en local, vues Rapide et Toutes.
@@ -279,7 +279,7 @@
     - Piege : deux sessions en parallele sur ce dossier se disputent le port 3456 du
       `.claude/launch.json` ; `npx serve` se replie alors sur un port aleatoire (52276) que
       `preview_start` annonce mal (3457) - lire `preview_logs`.
-  - **v295 (2026-10-15, locale, NON commitee) - le titre de rythme de l'ecran d'analyse n'accuse
+  - **v295 (2026-10-15, en ligne avec la v296, `8370846`) - le titre de rythme de l'ecran d'analyse n'accuse
     plus la vitesse par defaut.** Suite de N1 (v293). `js/analysis.js` (`missedThreat`, exportee),
     `js/app.js` (`paceStats` seulement), `tools/test_core.cjs` (groupe `rythme`, +7), `index.html`.
     Les versions 294 et 296 du meme jour sont celles d'une session parallele (familles d'ouvertures).
@@ -310,7 +310,7 @@
       arme, depense-le », autre reproche de vitesse, tombe dans 15 des 34 parties sans erreur rapide.
     - `missedThreat` a besoin de `Tactics` (global, comme `detectFork`) ; cout : un balayage SEE de
       64 cases sur les seules erreurs rapides.
-  - **v293 (2026-10-15, locale, NON commitee) - les 3 ecarts N1-N3 de la revue pedagogique corriges.**
+  - **v293 (2026-10-15, en ligne avec la v296, `8370846`) - les 3 ecarts N1-N3 de la revue pedagogique corriges.**
     `js/coach.js`, `js/app.js`, `js/analysis.js`, `index.html`, `tools/test_core.cjs` (+33 tests,
     195/195). Verifie dans l'app servie en local (vue Rapide, `coach-data.json` du 12/10, ecran
     d'analyse d'une partie recente compris, 0 erreur console).
