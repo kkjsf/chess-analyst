@@ -1,7 +1,14 @@
 // The cache name derives from the ?v= this worker was registered with (see
 // index.html APP_VERSION) — one version source drives the whole app.
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
-const CACHE_NAME = 'chess-analyst-v' + VERSION;
+const CACHE_PREFIX = 'chess-analyst-';
+const CACHE_NAME = CACHE_PREFIX + 'v' + VERSION;
+
+// Cache Storage is per ORIGIN, and kkjsf.github.io also hosts Harmonic Atlas.
+// Without cacheName, caches.match() searches its caches too: offline, the
+// ignoreSearch fallback would answer our Inter stylesheet with its Google Fonts
+// CSS (another family, same URL minus the query).
+const matchOwn = (req, opts) => caches.match(req, Object.assign({ cacheName: CACHE_NAME }, opts));
 
 // The app's script list, straight from the file index.html reads — precaching
 // a hand-maintained copy is how courses.js and opening-tree.js ended up loaded
@@ -47,9 +54,13 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   // matchAll() APRES claim() : lance en parallele, il pouvait revenir vide et
   // l'onglet ouvert ne recevait jamais SW_UPDATED.
+  // Ne supprimer que NOS anciens caches : l'origine est partagee avec Harmonic
+  // Atlas, et chaque mise a jour effacait son app et ses echantillons audio.
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys
+        .filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME)
+        .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(() => self.clients.matchAll())
       .then(clients => clients.forEach(client => client.postMessage({ type: 'SW_UPDATED' })))
@@ -74,7 +85,7 @@ self.addEventListener('fetch', (e) => {
   // version (the stale-version cache is dropped on activate).
   if (e.request.method === 'GET' && url.origin === self.location.origin && url.searchParams.has('v')) {
     e.respondWith((async () => {
-      const cached = await caches.match(e.request);
+      const cached = await matchOwn(e.request);
       if (cached) return cached;
       try {
         const resp = await fetch(e.request);
@@ -84,7 +95,7 @@ self.addEventListener('fetch', (e) => {
         }
         return resp;
       } catch (_) {
-        return (await caches.match(e.request, { ignoreSearch: true })) || Response.error();
+        return (await matchOwn(e.request, { ignoreSearch: true })) || Response.error();
       }
     })());
     return;
@@ -106,8 +117,8 @@ self.addEventListener('fetch', (e) => {
       .catch(async () => {
         // Offline: try the exact request first, then ignore the ?v= query so a
         // versioned asset still resolves to its precached (unversioned) entry.
-        return (await caches.match(e.request))
-          || (await caches.match(e.request, { ignoreSearch: true }));
+        return (await matchOwn(e.request))
+          || (await matchOwn(e.request, { ignoreSearch: true }));
       })
   );
 });

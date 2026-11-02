@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v296** (2026-10-15, en ligne `8370846`) : un seul commit pour v293 (les écarts N1-N3 de la revue pédagogique, 2e édition), v295 (le titre « Tu joues vite » ne vise plus que l'erreur rapide qui laisse passer une menace) et v294/v296 (avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses) - voir l'historique.
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v296** (2026-10-15, en ligne `8370846`) : un seul commit pour v293 (les écarts N1-N3 de la revue pédagogique, 2e édition), v295 (le titre « Tu joues vite » ne vise plus que l'erreur rapide qui laisse passer une menace) et v294/v296 (avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses) - voir l'historique. **v297 prête en local (2026-11-02, non commitée)** : le service worker ne supprime plus les caches de Harmonic Atlas (même origine).
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -10,6 +10,10 @@
 - Source unique de version: bumper UNIQUEMENT `window.APP_VERSION` dans `index.html`.
 - `sw.js` dérive `CACHE_NAME` depuis le `?v=`. Le SW est cache-first pour les assets `?v=`.
 - Ne pas dupliquer le numéro de version ailleurs.
+- **Origine partagée** : `kkjsf.github.io` héberge aussi Harmonic Atlas, et Cache Storage est par
+  origine. Le SW ne supprime que les caches `chess-analyst-*` et ne lit que le sien
+  (`matchOwn`) : ne jamais revenir à un `caches.keys()` filtré sur `!== CACHE_NAME` ni à un
+  `caches.match()` sans `cacheName` (v297).
 
 **Fichiers clés:**
 - `index.html` - app principale.
@@ -244,6 +248,31 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
+  - **v297 (2026-11-02, LOCALE, ni commitee ni en ligne) - le service worker ne touche plus aux
+    caches de Harmonic Atlas.** `sw.js` + `index.html` (bump). Trouve en diagnostiquant les
+    echantillons mandoline/banjo de Harmonic Atlas sur desktop.
+    - **Le defaut.** Cache Storage est par ORIGINE, et `kkjsf.github.io` heberge les deux apps.
+      L'`activate` supprimait tout cache different de `CACHE_NAME` : chaque mise a jour de
+      chess-analyst effacait `harmonic-atlas-<version>` (app hors ligne) et
+      `harmonic-atlas-runtime` (Tone.js, piano, guitare, mandoline, banjo) sur tout appareil qui
+      utilise les deux. Correction : `CACHE_PREFIX = 'chess-analyst-'` (toutes les versions passees
+      s'appelaient `chess-analyst-v<n>`), le nettoyage ne vise que ce prefixe.
+    - **Second defaut, dans `fetch`.** `caches.match()` sans `cacheName` fouille TOUS les caches de
+      l'origine. Hors ligne, le repli `ignoreSearch` repondait a la feuille Google Fonts Inter avec
+      la feuille Playfair/IBM Plex que `harmonic-atlas-runtime` garde (meme URL au query pres) :
+      mauvaise reponse, verifiee en console. Les 4 appels passent par `matchOwn` (= `cacheName:
+      CACHE_NAME`). Sans effet sur ses propres URLs : les anciennes versions sont supprimees a
+      l'activation, donc elles n'etaient deja plus cherchables.
+    - **Verifie** dans l'app servie en local (port 3461) : caches factices `harmonic-atlas-test`,
+      `harmonic-atlas-runtime` et `chess-analyst-v1` crees en console, deux activations forcees
+      (`sw.js?v=297b` puis retour en `?v=297`) : les deux `harmonic-atlas-*` survivent, `v1`,
+      `v297` puis `v297b` sont supprimes. Une sonde `?v=` posee dans `chess-analyst-v297` est servie
+      par le cache (le serveur repond 404), la meme posee dans `harmonic-atlas-test` ne l'est plus.
+      App chargee, 27 entrees precachees, aucune erreur console hors la sonde. `test_core` 228/228.
+    - **Le deploiement suffit** : c'est l'`activate` de la NOUVELLE version qui tourne, donc meme
+      un appareil reste en v296 ne vide plus rien en passant en v297. Harmonic Atlas, de son cote,
+      filtrait deja sur `harmonic-atlas-` ; son `caches.match` reste global mais sans `ignoreSearch`,
+      donc il ne peut tomber que sur la meme URL exacte.
   - **v294 + v296 (2026-10-15, en ligne `8370846`) - avec les Blancs, une ligne = ce qu'IL a joue.**
     `js/openings.js`, `js/coach.js`, `css/style.css`, `tools/test_core.cjs` (+28 tests, bloc
     « attribution Blancs »). Bumpee en 294, puis en 296 pour retester un petit correctif (295 est la
