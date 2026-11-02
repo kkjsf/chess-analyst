@@ -1,7 +1,7 @@
 # Chess Analyst - Context
 
 **Quoi:** PWA d'analyse de parties d'échecs. On importe un PGN (ou via Share Target), l'app rejoue la partie sur un échiquier SVG et produit une analyse coach en français (précision, coups clés, tactiques, ouvertures).
-**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v296** (2026-10-15, en ligne `8370846`) : un seul commit pour v293 (les écarts N1-N3 de la revue pédagogique, 2e édition), v295 (le titre « Tu joues vite » ne vise plus que l'erreur rapide qui laisse passer une menace) et v294/v296 (avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses) - voir l'historique. **v297 prête en local (2026-11-02, non commitée)** : le service worker ne supprime plus les caches de Harmonic Atlas (même origine).
+**Statut:** Actif, déployé. Développement continu. **Dernière version livrée: v297** (2026-11-02, en ligne `7b1ccf2`, vérifiée live) : le service worker ne supprime plus les caches de Harmonic Atlas (même origine). Avant elle, v296 (2026-10-15, en ligne `8370846`) : un seul commit pour v293 (les écarts N1-N3 de la revue pédagogique, 2e édition), v295 (le titre « Tu joues vite » ne vise plus que l'erreur rapide qui laisse passer une menace) et v294/v296 (avec les Blancs, « Ton système » et « Performance par ouverture » comptent SES lignes, plus les défenses adverses) - voir l'historique.
 **Stack:** Vanilla JS (`js/`, `css/`), chess.js (UMD), Stockfish (analyse MultiPV + précision via WDL), échiquier SVG, PWA avec Share Target. UI en français.
 **Repo / déploiement:** `git@github.com:kkjsf/chess-analyst.git` (compte GitHub `kkjsf`), hébergé en Pages/statique.
 **Lancer:** ouvrir `index.html` (aucun build). Stockfish tourne côté client.
@@ -248,7 +248,7 @@
 - `icons/`, `.github/`.
 
 **Historique récent (du plus récent):**
-  - **v297 (2026-11-02, LOCALE, ni commitee ni en ligne) - le service worker ne touche plus aux
+  - **v297 (2026-11-02, en ligne `7b1ccf2`, verifie live) - le service worker ne touche plus aux
     caches de Harmonic Atlas.** `sw.js` + `index.html` (bump). Trouve en diagnostiquant les
     echantillons mandoline/banjo de Harmonic Atlas sur desktop.
     - **Le defaut.** Cache Storage est par ORIGINE, et `kkjsf.github.io` heberge les deux apps.
@@ -269,6 +269,9 @@
       `v297` puis `v297b` sont supprimes. Une sonde `?v=` posee dans `chess-analyst-v297` est servie
       par le cache (le serveur repond 404), la meme posee dans `harmonic-atlas-test` ne l'est plus.
       App chargee, 27 entrees precachees, aucune erreur console hors la sonde. `test_core` 228/228.
+      **En ligne** : Harmonic Atlas v92 ouvert d'abord dans un navigateur neuf (runtime 114
+      entrees, coquille 9), puis chess-analyst : v297 installe, active et aux commandes, les deux
+      caches `harmonic-atlas-*` intacts, aucune erreur console.
     - **Le deploiement suffit** : c'est l'`activate` de la NOUVELLE version qui tourne, donc meme
       un appareil reste en v296 ne vide plus rien en passant en v297. Harmonic Atlas, de son cote,
       filtrait deja sur `harmonic-atlas-` ; son `caches.match` reste global mais sans `ignoreSearch`,
